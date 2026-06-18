@@ -1,0 +1,41 @@
+{
+  "name": "authlete-node-authz-server",
+  "version": "1.0.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "postbuild": "cp -r public dist/public && cp -r src/views dist/views",
+    "start": "node dist/server.js",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "@authlete/typescript-sdk": "^1.1.6",
+    "body-parser": "^2.3.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "ejs": "^6.0.1",
+    "express": "^5.2.1",
+    "express-request-id": "^1.1.0",
+    "express-session": "^1.17.3",
+    "jsonwebtoken": "^9.0.3",
+    "jwk-to-pem": "^2.0.7",
+    "jwks-rsa": "^4.0.1",
+    "morgan": "^1.10.1",
+    "winston": "^3.18.3",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.3",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.17.7",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/jwk-to-pem": "^2.0.3",
+    "@types/morgan": "^1.9.10",
+    "patch-package": "^8.0.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^6.0.3"
+  }
+}

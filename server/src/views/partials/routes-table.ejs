@@ -1,0 +1,96 @@
+<div class="routes-table-wrap">
+  <table class="routes-table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Path</th>
+        <th>Description</th>
+        <th class="hide-mobile">Request Body</th>
+        <th>curl</th>
+      </tr>
+    </thead>
+    <tbody id="routes-body">
+      <tr><td colspan="5" class="routes-loading">Loading routes...</td></tr>
+    </tbody>
+  </table>
+</div>
+<script>
+(async function() {
+  try {
+    const res = await fetch('/api/routes.json');
+    const data = await res.json();
+    const base = data.base || (location.protocol + '//' + location.host);
+    const tbody = document.getElementById('routes-body');
+    tbody.innerHTML = '';
+    (data.routes || []).forEach(r => {
+      const full = base + r.path;
+      const tr = document.createElement('tr');
+
+      // Method
+      const tdM = document.createElement('td');
+      tdM.innerHTML = `<span class="method ${r.method}">${r.method}</span>`;
+      tr.appendChild(tdM);
+
+      // Path
+      const tdP = document.createElement('td');
+      tdP.className = 'path';
+      if (r.method === 'GET') {
+        tdP.innerHTML = `<a href="${full}" target="_blank">${esc(r.path)}</a>`;
+      } else {
+        tdP.innerHTML = `<code>${esc(r.path)}</code>`;
+      }
+      tr.appendChild(tdP);
+
+      // Description
+      const tdD = document.createElement('td');
+      tdD.className = 'desc';
+      tdD.textContent = r.description || '';
+      tr.appendChild(tdD);
+
+      // Request Body (hidden on mobile)
+      const tdB = document.createElement('td');
+      tdB.className = 'hide-mobile body-cell';
+      if (r.body) {
+        const c = document.createElement('code');
+        c.textContent = r.body;
+        tdB.appendChild(c);
+      } else {
+        tdB.textContent = '—';
+      }
+      tr.appendChild(tdB);
+
+      // curl
+      const tdC = document.createElement('td');
+      tdC.className = 'curl-cell';
+      let curl = `curl -X ${r.method} ${full}`;
+      if (r.body) {
+        curl += ` \\\n  -H "Content-Type: application/x-www-form-urlencoded" \\\n  -d "${r.body}"`;
+      } else if (r.method === 'POST' || r.method === 'PATCH' || r.method === 'DELETE') {
+        curl += ` \\\n  -H "Content-Type: application/x-www-form-urlencoded" \\\n  -d "..."`;
+      }
+      const pre = document.createElement('pre');
+      pre.textContent = curl;
+      tdC.appendChild(pre);
+      if (r.method === 'POST' || r.method === 'PATCH' || r.method === 'DELETE') {
+        const btn = document.createElement('button');
+        btn.className = 'copy';
+        btn.textContent = 'Copy';
+        btn.addEventListener('click', () => {
+          navigator.clipboard && navigator.clipboard.writeText(curl).then(() => {
+            btn.textContent = 'Copied';
+            setTimeout(() => btn.textContent = 'Copy', 1200);
+          });
+        });
+        tdC.appendChild(btn);
+      }
+      tr.appendChild(tdC);
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error(err);
+    document.getElementById('routes-body').innerHTML =
+      '<tr><td colspan="5" class="routes-error">Failed to load routes</td></tr>';
+  }
+})();
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+</script>

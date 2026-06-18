@@ -1,0 +1,22 @@
+<%- include('partials/head', { title: title || 'Error' }) %>
+<body>
+  <div class="card">
+    <h1><%= title || 'Error' %></h1>
+    <p class="lead"><%= message || 'An error occurred. Please try again.' %></p>
+    
+    <% if (details) { %>
+      <details style="margin-top:16px;">
+        <summary style="cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;">Stack Trace</summary>
+        <pre style="background:#cf1a1a;padding:10px;border-radius:8px;overflow-x:auto;font-size:12px;margin-top:8px;"><%= details %></pre>
+      </details>
+    <% } %>
+    
+    <div style="margin-top:16px;">
+      <a href="/" class="primary" style="display:inline-block;margin-right:8px;">Go Home</a>
+      <button onclick="window.history.back()" class="secondary" style="display:inline-block;">Go Back</button>
+    </div>
+    
+    <div class="foot">If the problem persists, open GitHub issue.</div>
+  </div>
+</body>
+</html>

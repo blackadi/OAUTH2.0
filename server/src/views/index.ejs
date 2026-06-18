@@ -1,0 +1,71 @@
+<%- include('partials/head', { title: title || 'Default' }) %>
+<body>
+  <div class="dashboard">
+    <% if (code && code !== "No code provided") { %>
+      <header class="hero">
+        <h1><%= title || 'Default' %></h1>
+      </header>
+      <div class="card">
+        <label>Query Parameters</label>
+        <p class="base"><strong>code:</strong> <i><%= code %></i></p>
+        <p class="base"><strong>state:</strong> <i><%= state %></i></p>
+        <p class="base"><strong>iss:</strong> <i><%= iss %></i></p>
+        <div class="foot">
+          <p class="base">Next, exchange the authorization code for a token using your client or any REST tool like cURL or Postman.</p>
+        </div>
+      </div>
+    <% } else { %>
+      <header class="hero">
+        <h1>Authlete OAuth 2.0 &amp; OpenID Connect</h1>
+        <p class="hero-sub">Authorization server powered by <a href="https://authlete.com" class="badge">Authlete</a></p>
+        <p class="hero-desc">DB-less, cloud-native OAuth 2.0 / OIDC server. Manage everything via the Authlete console.</p>
+      </header>
+
+      <section class="section" aria-label="API Routes">
+        <div class="section-header">
+          <h2>API Routes</h2>
+          <a href="/api/routes" class="section-link">View standalone &rarr;</a>
+        </div>
+        <%- include('partials/routes-table') %>
+      </section>
+
+      <section class="section links-grid" aria-label="Resources">
+        <a href="https://console.authlete.com/register" class="link-card">
+          <h3>Management Console</h3>
+          <p>Manage service settings, clients, and tokens</p>
+        </a>
+        <a href="https://github.com/blackadi/authlete-node-authz-server" class="link-card">
+          <h3>Source Code</h3>
+          <p>GitHub repository for this authorization server</p>
+        </a>
+        <a href="https://github.com/authlete/authlete-typescript-sdk" class="link-card">
+          <h3>Libraries</h3>
+          <p>Authlete TypeScript SDK on GitHub</p>
+        </a>
+      </section>
+
+      <section class="section" aria-label="Getting Started">
+        <h2>Getting Started</h2>
+        <ol class="steps">
+          <li><span>Use your client to request authorization from the authorization server.</span></li>
+          <li><span>Receive an authorization code.</span></li>
+          <li><span>Exchange the code for a token via <code>/api/token</code>.</span></li>
+          <li><span>Use the token to access <code>/api/userinfo</code> and other protected resources.</span></li>
+          <li><span>Refresh the token when it expires via <code>grant_type=refresh_token</code>.</span></li>
+        </ol>
+      </section>
+
+      <section class="section" aria-label="Learn More">
+        <h2>About This Server</h2>
+        <ul class="about-list">
+          <li><a href="https://www.authlete.com/">Authlete</a> is an OAuth 2.0 &amp; OpenID Connect implementation on cloud.</li>
+          <li>This authorization server is written using Authlete's open source libraries.</li>
+          <li>DB-less — authorization data are stored on cloud via Authlete.</li>
+          <li>Manage settings via <a href="https://console.authlete.com/">Service Owner Console</a>.</li>
+          <li>Manage client applications via <a href="https://www.authlete.com/developers/getting_started/">Developer Console</a>.</li>
+        </ul>
+      </section>
+    <% } %>
+  </div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: authlete-node-authz-server
+    env: node
+    # Build both client and server; server `postbuild` copies static assets
+    buildCommand: "npm --prefix client run build && npm --prefix server run build"
+    startCommand: "npm --prefix server run start"
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+    # Optional: health check path
+    healthCheckPath: "/"

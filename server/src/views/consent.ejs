@@ -1,0 +1,24 @@
+<%- include('partials/head', { title: 'Consent' }) %>
+<body>
+  <div class="card">
+    <header>
+      <div>
+        <h1>Application Consent</h1>
+        <div class="client">Client: <strong><%= clientName || 'Unknown' %></strong></div>
+      </div>
+    </header>
+    <p class="lead">The application is requesting the following permissions. Please review and choose whether to allow access.</p>
+    <form method="POST" action="/api/session/consent">
+      <ul class="scopes">
+        <% (scopes || ['Access your profile information', 'Access your email address', 'Perform actions on your behalf']).forEach(function(scope) { %>
+          <li><%= scope %></li>
+        <% }) %>
+      </ul>
+      <div class="buttons">
+        <button type="submit" name="decision" value="approve" class="approve">Approve</button>
+        <button type="submit" name="decision" value="deny" class="deny">Deny</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

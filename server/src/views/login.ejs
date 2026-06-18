@@ -1,0 +1,20 @@
+<%- include('partials/head', { title: 'Sign In' }) %>
+<body>
+  <div class="card">
+    <h1>Sign in to continue</h1>
+    <p class="lead">Enter your username and password to proceed with authorization.</p>
+    <form method="POST" action="/api/session/login">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" placeholder="jane@example.com" value="<%= username || '' %>" required />
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" placeholder="••••••••" value="<%= password || '' %>" required />
+      <div class="actions">
+        <button type="submit" name="login" value="submit" class="primary">Sign in</button>
+        <button type="submit" name="login" value="cancel" class="secondary">Cancel</button>
+      </div>
+    </form>
+    <div class="foot">Use the default test account for development.</div>
+  </div>
+  <script>document.getElementById('username')?.focus();</script>
+</body>
+</html>

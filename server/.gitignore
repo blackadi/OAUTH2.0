@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+# Ignore everything inside the logs folder
+logs/*
+# Do not ignore the .gitkeep file in the logs folder
+!logs/.gitkeep

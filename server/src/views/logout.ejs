@@ -1,0 +1,17 @@
+<%- include('partials/head', { title: 'Logout' }) %>
+<body>
+  <div class="card_table">
+    <h1>Logged out</h1>
+    <p class="lead">You have been successfully logged out.</p>
+    <p class="lead"><a href="http://localhost:3000/api/authorization?client_id=<%= client_id || '' %>&redirect_uri=<%= redirect_uri || '' %>&scope=<%= scope || '' %>&response_type=code&state=<%= state || '' %>&nonce=<%= nonce || '' %>&code_challenge=<%= code_challenge || '' %>&code_challenge_method=<%= code_challenge_method || '' %>" class="primary">You can sign in again using the below query parameters using PKCE</a></p>
+    <p class="base"><strong>client_id:</strong> <i><%= client_id || 'Cannot read client_id.' %></i></p>
+    <p class="base"><strong>redirect_uri:</strong> <i><%= redirect_uri || 'Cannot read redirect_uri.' %></i></p>
+    <p class="base"><strong>scope:</strong> <i><%= scope || 'Cannot read scope.' %></i></p>
+    <p class="base"><strong>state:</strong> <i><%= state || 'Cannot read state.' %></i></p>
+    <p class="base"><strong>nonce:</strong> <i><%= nonce || 'Cannot read nonce.' %></i></p>
+    <p class="base"><strong>code_challenge:</strong> <i><%= code_challenge || 'Cannot read code_challenge.' %></i></p>
+    <p class="base"><strong>code_challenge_method:</strong> <i><%= code_challenge_method || 'Cannot read code_challenge_method.' %></i></p>
+    <p class="base"><strong>code_verifier:</strong><i> <%= code_verifier || 'Cannot read code_verifier.' %></i></p>
+  </div>
+</body>
+</html>

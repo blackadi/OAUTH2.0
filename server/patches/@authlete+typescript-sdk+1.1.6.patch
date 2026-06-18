@@ -1,0 +1,79 @@
+diff --git a/node_modules/@authlete/typescript-sdk/dist/commonjs/models/operations/serviceconfigurationapi.js b/node_modules/@authlete/typescript-sdk/dist/commonjs/models/operations/serviceconfigurationapi.js
+index 5699440..84af469 100644
+--- a/node_modules/@authlete/typescript-sdk/dist/commonjs/models/operations/serviceconfigurationapi.js
++++ b/node_modules/@authlete/typescript-sdk/dist/commonjs/models/operations/serviceconfigurationapi.js
+@@ -51,7 +51,7 @@ function serviceConfigurationApiRequestToJSON(serviceConfigurationApiRequest) {
+     return JSON.stringify(exports.ServiceConfigurationApiRequest$outboundSchema.parse(serviceConfigurationApiRequest));
+ }
+ /** @internal */
+-exports.ServiceConfigurationApiResponse$inboundSchema = z.object({});
++exports.ServiceConfigurationApiResponse$inboundSchema = z.object({}).passthrough();
+ function serviceConfigurationApiResponseFromJSON(jsonString) {
+     return (0, schemas_js_1.safeParse)(jsonString, (x) => exports.ServiceConfigurationApiResponse$inboundSchema.parse(JSON.parse(x)), `Failed to parse 'ServiceConfigurationApiResponse' from JSON`);
+ }
+diff --git a/node_modules/@authlete/typescript-sdk/dist/commonjs/models/servicejwksgetresponse.js b/node_modules/@authlete/typescript-sdk/dist/commonjs/models/servicejwksgetresponse.js
+index b7ac36d..022f36a 100644
+--- a/node_modules/@authlete/typescript-sdk/dist/commonjs/models/servicejwksgetresponse.js
++++ b/node_modules/@authlete/typescript-sdk/dist/commonjs/models/servicejwksgetresponse.js
+@@ -43,7 +43,8 @@ const z = __importStar(require("zod/v3"));
+ const schemas_js_1 = require("../lib/schemas.js");
+ /** @internal */
+ exports.Key$inboundSchema = z
+-    .object({});
++    .object({}).passthrough();
++
+ function keyFromJSON(jsonString) {
+     return (0, schemas_js_1.safeParse)(jsonString, (x) => exports.Key$inboundSchema.parse(JSON.parse(x)), `Failed to parse 'Key' from JSON`);
+ }
+diff --git a/node_modules/@authlete/typescript-sdk/dist/esm/models/operations/serviceconfigurationapi.js b/node_modules/@authlete/typescript-sdk/dist/esm/models/operations/serviceconfigurationapi.js
+index c700bb3..ad423ff 100644
+--- a/node_modules/@authlete/typescript-sdk/dist/esm/models/operations/serviceconfigurationapi.js
++++ b/node_modules/@authlete/typescript-sdk/dist/esm/models/operations/serviceconfigurationapi.js
+@@ -13,7 +13,7 @@ export function serviceConfigurationApiRequestToJSON(serviceConfigurationApiRequ
+     return JSON.stringify(ServiceConfigurationApiRequest$outboundSchema.parse(serviceConfigurationApiRequest));
+ }
+ /** @internal */
+-export const ServiceConfigurationApiResponse$inboundSchema = z.object({});
++export const ServiceConfigurationApiResponse$inboundSchema = z.object({}).passthrough();
+ export function serviceConfigurationApiResponseFromJSON(jsonString) {
+     return safeParse(jsonString, (x) => ServiceConfigurationApiResponse$inboundSchema.parse(JSON.parse(x)), `Failed to parse 'ServiceConfigurationApiResponse' from JSON`);
+ }
+diff --git a/node_modules/@authlete/typescript-sdk/dist/esm/models/servicejwksgetresponse.js b/node_modules/@authlete/typescript-sdk/dist/esm/models/servicejwksgetresponse.js
+index 16234f1..716fadd 100644
+--- a/node_modules/@authlete/typescript-sdk/dist/esm/models/servicejwksgetresponse.js
++++ b/node_modules/@authlete/typescript-sdk/dist/esm/models/servicejwksgetresponse.js
+@@ -5,7 +5,7 @@ import * as z from "zod/v3";
+ import { safeParse } from "../lib/schemas.js";
+ /** @internal */
+ export const Key$inboundSchema = z
+-    .object({});
++    .object({}).passthrough();
+ export function keyFromJSON(jsonString) {
+     return safeParse(jsonString, (x) => Key$inboundSchema.parse(JSON.parse(x)), `Failed to parse 'Key' from JSON`);
+ }
+diff --git a/node_modules/@authlete/typescript-sdk/src/models/operations/serviceconfigurationapi.ts b/node_modules/@authlete/typescript-sdk/src/models/operations/serviceconfigurationapi.ts
+index 419ed1f..c223e98 100644
+--- a/node_modules/@authlete/typescript-sdk/src/models/operations/serviceconfigurationapi.ts
++++ b/node_modules/@authlete/typescript-sdk/src/models/operations/serviceconfigurationapi.ts
+@@ -62,7 +62,7 @@ export const ServiceConfigurationApiResponse$inboundSchema: z.ZodType<
+   ServiceConfigurationApiResponse,
+   z.ZodTypeDef,
+   unknown
+-> = z.object({});
++> = z.object({}).passthrough();
+ 
+ export function serviceConfigurationApiResponseFromJSON(
+   jsonString: string,
+diff --git a/node_modules/@authlete/typescript-sdk/src/models/servicejwksgetresponse.ts b/node_modules/@authlete/typescript-sdk/src/models/servicejwksgetresponse.ts
+index e6171a8..fea552b 100644
+--- a/node_modules/@authlete/typescript-sdk/src/models/servicejwksgetresponse.ts
++++ b/node_modules/@authlete/typescript-sdk/src/models/servicejwksgetresponse.ts
+@@ -23,7 +23,7 @@ export type ServiceJwksGetResponse = {
+ 
+ /** @internal */
+ export const Key$inboundSchema: z.ZodType<Key, z.ZodTypeDef, unknown> = z
+-  .object({});
++  .object({}).passthrough();
+ 
+ export function keyFromJSON(
+   jsonString: string,

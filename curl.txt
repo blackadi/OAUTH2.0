@@ -1,0 +1,58 @@
+curl -X POST http://localhost:3000/api/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \
+  -d "assertion=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImplUVI5aWJiZWtBREUtQmJfc3p6aTNwS0tfV2VMVXZSSjRGbmVIRW5rNHMifQ.eyJpc3MiOjQyODgwMDcxMjQsInN1YiI6ImFkbWluIiwiYXVkIjoiaHR0cDovL2xvY2FsaG9zdDozMDAwL3Rva2VuIiwiaWF0IjoxNzY1NTY0NjM4LCJleHAiOjE3NjU1NjQ5Mzh9.1-AvBo2gEjOmZYLLmHphWUW9w3HyYzliqIcdRPWMV4hyruY85B982VBYlBv9PljuklSjLgur8sIxQ8y3P7A8ZA" \
+  -d "clientId=4288007124" \
+  -d "clientSecret=FGpSN50T6SK7shEuzzwUNAaXsbfFXfqRJmI1VsncPPsUBgEnPsQ7UG7hc6o-NNnjeIScun5_MRnPc-24JGVPRA"
+
+  =====================
+
+  curl -X POST http://localhost:3000/api/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Authorization: Basic NDI4ODAwNzEyNDpGR3BTTjUwVDZTSzdzaEV1enp3VU5BYVhzYmZGWGZxUkptSTFWc25jUFBzVUJnRW5Qc1E3VUc3aGM2by1OTm5qZUlTY3VuNV9NUm5QYy0yNEpHVlBSQQ==" \
+  -d "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \
+  -d "assertion=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImplUVI5aWJiZWtBREUtQmJfc3p6aTNwS0tfV2VMVXZSSjRGbmVIRW5rNHMifQ.eyJpc3MiOiJodHRwczovL2JsYWNrYWRpLmRldiIsInN1YiI6ImFkbWluIiwiYXVkIjpbImh0dHBzOi8vYXV0aGxldGUtbm9kZS1hdXRoei1zZXJ2ZXIub25yZW5kZXIuY29tL2FwaS90b2tlbiJdLCJpYXQiOjE3NjU2MTE5MDksImV4cCI6MTc2NTYxMjIwOX0.7YtqaYEzMksOjT0EJEFT3eRLSgCOdsSFsWtIOp-1uw9w1ZF1JKZ7tm6kUMyvF6gi-FotYuB6BPBccrjNd3ZwvQ" \
+  -d scope=email
+
+
+  =====================
+
+    curl -X POST http://localhost:3000/api/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Authorization: Basic NDI4ODAwNzEyNDpGR3BTTjUwVDZTSzdzaEV1enp3VU5BYVhzYmZGWGZxUkptSTFWc25jUFBzVUJnRW5Qc1E3VUc3aGM2by1OTm5qZUlTY3VuNV9NUm5QYy0yNEpHVlBSQQ==" \
+  -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+  -d "subject_token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImplUVI5aWJiZWtBREUtQmJfc3p6aTNwS0tfV2VMVXZSSjRGbmVIRW5rNHMifQ.eyJpc3MiOiJodHRwczovL2JsYWNrYWRpLmRldiIsInN1YiI6ImFkbWluIiwiYXVkIjpbImh0dHBzOi8vYXV0aGxldGUtbm9kZS1hdXRoei1zZXJ2ZXIub25yZW5kZXIuY29tL2FwaS90b2tlbiJdLCJpYXQiOjE3NjU3MDUzMjAsImV4cCI6MTc2NTcwNTYyMH0.JqFkA0aVPm6UInUiIXecyCNrgirQWaiVgcg1u2ADExuDZ2SfUOKPtB1CXdlb9G8cxataQeaRqAalPO7bDD-6rg" \
+  -d "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
+  -d "requested_token_type=urn:ietf:params:oauth:token-type:id_token" \
+  -d "scope=email"
+
+  curl -X POST http://localhost:3000/api/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "Authorization: Basic NDI4ODAwNzEyNDpGR3BTTjUwVDZTSzdzaEV1enp3VU5BYVhzYmZGWGZxUkptSTFWc25jUFBzVUJnRW5Qc1E3VUc3aGM2by1OTm5qZUlTY3VuNV9NUm5QYy0yNEpHVlBSQQ==" \
+  -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+  -d "subject_token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImplUVI5aWJiZWtBREUtQmJfc3p6aTNwS0tfV2VMVXZSSjRGbmVIRW5rNHMifQ.eyJpc3MiOiJodHRwczovL2JsYWNrYWRpLmRldiIsInN1YiI6ImFkbWluIiwiYXVkIjpbImh0dHBzOi8vYXV0aGxldGUtbm9kZS1hdXRoei1zZXJ2ZXIub25yZW5kZXIuY29tL2FwaS90b2tlbiJdLCJpYXQiOjE3NjU3MTM0MDEsImV4cCI6MTc2NTcxMzcwMX0.o0e_eQPfNJ0BtKY4D_tJ8Evl2zxyucfkdKnCPczLdKGy8XSwXNwuRNwGQbteErJful4SpQvd_mrt4VQrqez8GQ" \
+  -d "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
+  -d "scope=email"
+
+  curl -X POST http://localhost:3000/api/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+  -d "subject_token=5Uba6ZYRXPEasszo-53LgUpLdiXZ-qpysc3WDXGzJL0" \
+  -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
+  -d "client_id=4288007124" \
+  -d "scope=email"
+
+
+  =============
+  curl -X POST http://localhost:3000/api/token/create \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+   -H "Authorization: Basic NDI4ODAwNzEyNDpGR3BTTjUwVDZTSzdzaEV1enp3VU5BYVhzYmZGWGZxUkptSTFWc25jUFBzVUJnRW5Qc1E3VUc3aGM2by1OTm5qZUlTY3VuNV9NUm5QYy0yNEpHVlBSQQ==" \
+  -d "grant_type=client_credentials" \
+  -d "scope=email"
+
+  curl -X PATCH http://localhost:3000/api/token/update \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "accessToken=IErOaTwPmKFLBi6KN5VALJPQg4112PJsNwSqbmh6fLk" \
+  -d "scope=email profile"
+
+  curl -X DELETE http://localhost:3000/api/token/delete/IErOaTwPmKFLBi6KN5VALJPQg4112PJsNwSqbmh6fLk

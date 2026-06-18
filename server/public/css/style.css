@@ -1,0 +1,408 @@
+:root {
+  --bg: #0b1120;
+  --card-bg: #0f172a;
+  --surface: #1e293b;
+  --text: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --muted: #64748b;
+  --accent: #6ee7b7;
+  --accent2: #60a5fa;
+  --border: rgba(148, 163, 184, 0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* ── Dashboard Layout ────────────────────────────────── */
+.dashboard {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ── Hero ────────────────────────────────────────────── */
+.hero { text-align: center; padding: 24px 0 0; }
+.hero h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.25rem, 4vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.hero-sub {
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+.hero-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.badge {
+  display: inline-block;
+  background: linear-gradient(90deg, var(--accent), #34d399);
+  color: #063a3a;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+/* ── Sections ────────────────────────────────────────── */
+.section { display: flex; flex-direction: column; gap: 12px; }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.section h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.section-link {
+  font-size: 0.82rem;
+  color: var(--accent2);
+  text-decoration: none;
+}
+.section-link:hover { text-decoration: underline; }
+
+/* ── Link Cards Grid ─────────────────────────────────── */
+.links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.link-card {
+  display: block;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.link-card:hover {
+  border-color: var(--accent2);
+  transform: translateY(-1px);
+}
+.link-card h3 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  color: var(--accent2);
+}
+.link-card p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ── Routes Table ────────────────────────────────────── */
+.routes-table-wrap { overflow-x: auto; }
+.routes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.routes-table thead th {
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+  padding: 10px 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.routes-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.routes-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+.routes-table td {
+  padding: 10px 10px;
+  vertical-align: middle;
+}
+.routes-loading, .routes-error {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px !important;
+}
+.routes-error { color: #f87171; }
+
+/* Method badges */
+.method {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 3px 7px;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+.method.GET  { background: #2563eb; }
+.method.POST { background: #16a34a; }
+.method.DELETE { background: #dc2626; }
+.method.PATCH { background: #d97706; }
+
+.path a {
+  color: var(--accent2);
+  text-decoration: none;
+  font-weight: 500;
+  word-break: break-all;
+}
+.path a:hover { text-decoration: underline; }
+.path code {
+  font-size: 0.78rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.desc { color: var(--text-secondary); font-size: 0.78rem; }
+
+.body-cell code {
+  font-size: 0.7rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+/* curl cell */
+.curl-cell pre {
+  margin: 0;
+  font-size: 0.65rem;
+  line-height: 1.4;
+  color: #9fb3d0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 240px;
+}
+.copy {
+  margin-top: 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+.copy:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── Getting Started / Steps ─────────────────────────── */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.steps li {
+  counter-increment: step;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+.steps li::before {
+  content: counter(step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent2);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.steps li span { flex: 1; }
+.steps code {
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+/* ── About List ──────────────────────────────────────── */
+.about-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.about-list li {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  padding-left: 16px;
+  position: relative;
+}
+.about-list li::before {
+  content: "•";
+  position: absolute;
+  left: 4px;
+  color: var(--accent2);
+}
+.about-list a { color: var(--accent2); text-decoration: none; }
+.about-list a:hover { text-decoration: underline; }
+
+/* ── Code Display Page (query params) ────────────────── */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.card label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.card .base {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.foot {
+  margin-top: 16px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ── Utility ──────────────────────────────────────────── */
+.base { color: var(--text-secondary); }
+.foot { text-align: center; }
+
+/* ── Standalone routes page ──────────────────────────── */
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.wrap header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wrap header h1 { margin: 0; font-size: 1.2rem; }
+.wrap footer {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* ── Mobile: hide Request Body column, compact layout ── */
+@media (max-width: 720px) {
+  .hide-mobile { display: none; }
+  .dashboard { padding: 16px 12px 48px; gap: 24px; }
+  .routes-table { font-size: 0.75rem; }
+  .routes-table td, .routes-table th { padding: 8px 6px; }
+  .method { font-size: 0.65rem; padding: 2px 5px; }
+  .curl-cell pre { max-width: 140px; font-size: 0.6rem; }
+  .wrap { padding: 16px 12px; }
+  .links-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .dashboard { padding: 12px 8px 32px; gap: 20px; }
+  .routes-table td, .routes-table th { padding: 6px 4px; }
+  .curl-cell pre { max-width: 100px; }
+}
+
+/* ── Styling for login/consent pages ─────────────────── */
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+}
+input:focus { outline: none; border-color: var(--accent2); }
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+button.primary, .primary {
+  background: var(--accent);
+  color: #063a3a;
+  border: none;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+button.secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+button.approve {
+  background: var(--accent2);
+  border: none;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+button.deny {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+.buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+ul.scopes {
+  padding-left: 20px;
+  margin: 12px 0;
+  color: var(--text);
+}
+.client { font-size: 0.82rem; color: var(--muted); }
