@@ -11,11 +11,11 @@ Two independent packages:
 | Directory | Purpose | Stack |
 |-----------|---------|-------|
 | `server/` | Authorization server (backend) | Express + Authlete SDK + EJS views |
-| `client/` | Demo SPA acting as OAuth client | React + Vite + SWC |
+| `client/` | Testing dashboard for all OAuth/OIDC endpoints | React + Vite + SWC |
 
 ## Features
 
-- **OAuth 2.0 grants**: Authorization Code (confidential + PKCE), Client Credentials, Refresh Token
+- **OAuth 2.0 grants**: Authorization Code (confidential + PKCE), Client Credentials, Password (ROPC), Refresh Token
 - **OpenID Connect**: Discovery (`/.well-known/openid-configuration`), JWKS, Userinfo (signed JWT), ID Token, RP-Initiated Logout
 - **Token management**: Introspection (RFC 7662 + Authlete-specific), Revocation (RFC 7009), token CRUD via Authlete management API
 - **Interactive flow**: Server-rendered login and consent pages (EJS) with session state
@@ -84,7 +84,7 @@ The server starts on `http://localhost:3000`. Open `http://localhost:3000/api/ro
 npm --prefix client run dev
 ```
 
-The client SPA starts on `http://localhost:3001` and proxies `/api` to the server.
+The client SPA starts on `http://localhost:3001`. In development, Vite proxies `/api` requests to the server. The client also supports absolute URLs via `VITE_API_BASE_URL`.
 
 ## Architecture
 
@@ -109,7 +109,7 @@ The client SPA starts on `http://localhost:3001` and proxies `/api` to the serve
 
 - The server **never stores tokens, clients, or user data locally** — all OAuth state lives in Authlete's cloud.
 - The Authlete SDK (`@authlete/typescript-sdk`) wraps the Authlete REST API. Controllers call SDK methods; the SDK calls Authlete; the server formats the response.
-- The React SPA in `client/` is a public OAuth client demonstrating Authorization Code + PKCE. It never has access to the Authlete API key.
+- The React SPA in `client/` is a comprehensive testing dashboard exercising all OAuth/OIDC endpoints, grant types, and token management operations. It never has access to the Authlete API key.
 
 ## File Structure
 
@@ -189,14 +189,26 @@ server/
 └── package.json                         # postinstall: patch-package
 
 client/
-└── src/
-    ├── main.tsx                         # React entry point
-    ├── App.tsx                          # Router + pages
-    ├── config.ts                        # Env-based endpoint config
-    ├── services/api.ts                  # API service (exchangeCodeForToken, getJwks)
-    └── pages/
-        ├── HomePage.tsx                 # Start authorization
-        └── CallbackPage.tsx             # Handle redirect + PKCE exchange
+├── src/
+│   ├── main.tsx                         # React entry point
+│   ├── App.tsx                          # Router + TokenProvider wrapper
+│   ├── config.ts                        # Env-based endpoint config
+│   ├── styles.css                       # Global styles (dark theme)
+│   ├── pkce.ts                          # PKCE verifier/challenge generation
+│   ├── context/
+│   │   └── TokenContext.tsx             # Global token state + sessionStorage
+│   ├── services/
+│   │   └── api.ts                       # All OAuth/OIDC API methods
+│   ├── pages/
+│   │   ├── Dashboard.tsx                # Main dashboard with all sections
+│   │   └── CallbackPage.tsx             # Auth code callback + PKCE exchange
+│   └── components/
+│       ├── TokenVault.tsx               # Stored token display + copy/decode
+│       ├── AuthFlowsSection.tsx         # 4 grant types in one form
+│       ├── TokenOpsSection.tsx          # UserInfo, introspection, revocation
+│       ├── AdminSection.tsx             # Token management CRUD ops
+│       ├── LogoutSection.tsx            # RP-Initiated Logout test
+│       └── DiscoverySection.tsx         # OIDC config + JWKS fetchers
 ```
 
 ## API Routes
@@ -380,8 +392,9 @@ npm --prefix server run build && npm --prefix client run build
 ## Testing
 
 ```bash
-# End-to-end curl test suite
-bash CURL-TEST.md  # or run each section individually
+# End-to-end curl test suite — copy-paste each section or run as a standalone script
+# Note: Replace the example client IDs with your own Authlete credentials
+source CURL-TEST.md  # or run each section individually
 ```
 
 See [`CURL-TEST.md`](CURL-TEST.md) for the full test suite covering OpenID Discovery, JWKS, all grant types, introspection, revocation, token management, and RP-initiated logout.

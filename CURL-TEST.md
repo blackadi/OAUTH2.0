@@ -2,11 +2,13 @@
 
 Copy-paste these commands to verify every endpoint. Replace `<BASE>` with your server URL (default `http://localhost:3000`).
 
+> **Important:** The client IDs below are examples from a specific Authlete service. Replace `CID`, `SEC`, and `PUB_CID` with clients registered in **your** Authlete service. The `REDIR` points to the server directly (bypassing the SPA) — for the client app use `http://localhost:3001/callback`.
+
 ```bash
 BASE="http://localhost:3000"
-CID="4288007124"                                    # confidential client (has secret)
-SEC="FGpSN50T6SK7shEuzzwUNAaXsbfFXfqRJmI1VsncPPsUBgEnPsQ7UG7hc6o-NNnjeIScun5_MRnPc-24JGVPRA"
-PUB_CID="3322138582"                                # public client (no secret, PKCE)
+CID="4288007124"                                    # ← REPLACE with your confidential client ID
+SEC="FGpSN50T6SK7shEuzzwUNAaXsbfFXfqRJmI1VsncPPsUBgEnPsQ7UG7hc6o-NNnjeIScun5_MRnPc-24JGVPRA"  # ← REPLACE
+PUB_CID="3322138582"                                # ← REPLACE with your public client ID
 REDIR="http://localhost:3000"
 ```
 
@@ -298,6 +300,8 @@ Expected: `access_token`, `id_token`, `token_type: Bearer`.
 
 Create, update, list, revoke, and reissue tokens via Authlete's management API.
 
+> **Auth requirement:** If `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` are set in your `.env`, all management endpoints require Basic auth with those credentials (separate from OAuth client credentials). If unset, the endpoints are unprotected. The examples below assume mgmt auth is **unset** — add `-u "MGMT_ID:MGMT_SEC"` if needed.
+
 ### List tokens
 
 ```bash
@@ -306,7 +310,7 @@ curl -s "${BASE}/api/token/list" | jq
 
 ### Create token
 
-> **Auth method:** Basic auth (`-u`) — uses the **confidential** client (`CID`/`SEC`).
+> **Auth method:** Basic auth (`-u`) — uses the **confidential** client (`CID`/`SEC`). If `MGMT_CLIENT_ID` is set, replace with mgmt credentials instead.
 
 ```bash
 CREATE_RESP=$(curl -s -X POST "${BASE}/api/token/create" \
@@ -364,7 +368,7 @@ Expected: `200` (renders logout confirmation page) or `302` (redirect immediatel
 
 ## Quick smoke test (single script)
 
-Run all flows in sequence with a single command:
+Save this section as `smoke-test.sh`, make it executable (`chmod +x smoke-test.sh`), then run it. If your server has `MGMT_CLIENT_ID` set, add `-u "MGMT_ID:MGMT_SEC"` to the management API calls in step 10.
 
 ```bash
 #!/usr/bin/env bash
