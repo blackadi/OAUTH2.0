@@ -46,7 +46,7 @@ services:
     autoDeployTrigger: commit
     rootDir: server
 
-  - type: static_site
+  - type: web
     name: client
     runtime: static
     repo: https://github.com/blackadi/OAUTH2.0
