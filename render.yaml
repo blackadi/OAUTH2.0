@@ -1,32 +1,52 @@
-services:
-  - type: web
-    name: OAUTH2.0
-    env: node
-    region: oregon
-    plan: free
-    branch: main
-    autoDeploy: true
-    buildCommand: npm --prefix client run build && npm --prefix server run build
-    startCommand: npm --prefix server run start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: "10000"
-      - key: AUTHLETE_BEARER_TOKEN
-        sync: false
-      - key: AUTHLETE_BASE_URL
-        sync: false
-      - key: AUTHLETE_SERVICE_ID
-        sync: false
-      - key: SESSION_SECRET
-        sync: false
-      - key: ALLOWED_ORIGINS
-        value: https://oauth2-0-jf2y.onrender.com,http://localhost:3000,http://localhost:3001
-      - key: LOGOUT_REDIRECT_URI
-        sync: false
-      - key: MGMT_CLIENT_ID
-        sync: false
-      - key: MGMT_CLIENT_SECRET
-        sync: false
+# Exported from Render on 2026-06-20T04:58:04Z
+version: "1"
+projects:
+  - name: My project
+    environments:
+      - name: Production
+        services:
+          - type: web
+            name: OAUTH2.0
+            runtime: node
+            repo: https://github.com/blackadi/OAUTH2.0
+            plan: free
+            envVars:
+              - key: JWKS_URI
+                sync: false
+              - key: JWT_ISSUER
+                sync: false
+              - key: JWT_SELF_SIGNED_CERT_PEM
+                sync: false
+              - key: JWT_PRIVATE_KEY_PEM
+                sync: false
+              - key: JWT_PUBLIC_KEY_PEM
+                sync: false
+              - key: AUTH_USERS
+                sync: false
+              - key: LOGOUT_REDIRECT_URI
+                sync: false
+              - key: LOGOUT_CLIENT_ID
+                sync: false
+              - key: ALLOWED_ORIGINS
+                sync: false
+              - key: SESSION_SECRET
+                sync: false
+              - key: LOG_LEVEL
+                sync: false
+              - key: MORGAN_FORMAT
+                sync: false
+              - key: NODE_ENV
+                sync: false
+              - key: PORT
+                sync: false
+              - key: AUTHLETE_SERVICE_ID
+                sync: false
+              - key: AUTHLETE_BASE_URL
+                sync: false
+              - key: AUTHLETE_BEARER_TOKEN
+                sync: false
+            region: frankfurt
+            buildCommand: npm install && npm run build
+            startCommand: npm start
+            autoDeployTrigger: commit
+            rootDir: server
