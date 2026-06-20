@@ -50,3 +50,20 @@ projects:
             startCommand: npm start
             autoDeployTrigger: commit
             rootDir: server
+
+          - type: static_site
+            name: client
+            runtime: static
+            repo: https://github.com/blackadi/OAUTH2.0
+            buildCommand: npm install && npm run build
+            staticPublishPath: dist
+            pullRequestPreviewsEnabled: true
+            envVars:
+              - key: VITE_API_BASE_URL
+                value: https://oauth2-0-ekh2.onrender.com/
+              - key: VITE_REDIRECT_URI
+                sync: false
+              - key: VITE_SCOPES
+                value: openid profile email
+            rootDir: client
+            autoDeployTrigger: commit
