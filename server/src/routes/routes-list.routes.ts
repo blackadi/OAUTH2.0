@@ -16,28 +16,12 @@ const ROUTES: RouteEntry[] = [
     path: "/api/authorization",
     description: "OAuth authorization endpoint — renders login page (requires ?response_type, ?client_id, ?redirect_uri, ?scope)",
   },
-  {
-    method: "POST",
-    path: "/api/authorization/issue",
-    description: "Authorization issue response (Authlete callback)",
-  },
-
   // ── Token ──────────────────────────────────────────────────
   {
     method: "POST",
     path: "/api/token",
     description: "OAuth token endpoint — exchange code, refresh token, or client credentials",
     body: "grant_type=authorization_code&code=...&redirect_uri=...&client_id=...&code_verifier=...",
-  },
-  {
-    method: "POST",
-    path: "/api/token/issue",
-    description: "Token issue (Authlete callback)",
-  },
-  {
-    method: "POST",
-    path: "/api/token/fail",
-    description: "Token fail (Authlete callback)",
   },
   {
     method: "POST",
@@ -90,11 +74,6 @@ const ROUTES: RouteEntry[] = [
     path: "/api/userinfo",
     description: "UserInfo endpoint — token in form body or Authorization header",
     body: "access_token=...",
-  },
-  {
-    method: "POST",
-    path: "/api/userinfo/issue",
-    description: "UserInfo issue (Authlete callback)",
   },
 
   // ── Introspection ──────────────────────────────────────────

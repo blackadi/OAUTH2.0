@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CLIENT_ID, getRedirectUri } from '../config';
-import { apiService, TokenResponse } from '../services/api';
-import { jwtDecode, JwtPayload } from 'jwt-decode';
+import { apiService, type TokenResponse } from '../services/api';
+import { jwtDecode, type JwtPayload } from 'jwt-decode';
+import { useToken } from '../context/TokenContext';
 
 const CallbackPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { setTokenSet } = useToken();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tokenResponse, setTokenResponse] = useState<TokenResponse | null>(null);
@@ -16,7 +18,6 @@ const CallbackPage: React.FC = () => {
     const url = new URL(window.location.href);
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
-    const iss = url.searchParams.get('iss');
     const errorParam = url.searchParams.get('error');
 
     if (errorParam) {
@@ -47,24 +48,23 @@ const CallbackPage: React.FC = () => {
 
     const exchange = async () => {
       try {
+        const storedClientId = sessionStorage.getItem('authz_client_id') || CLIENT_ID;
         const redirectUri = getRedirectUri();
-        
         const tokenRequest = {
           grant_type: 'authorization_code',
           code,
           redirect_uri: redirectUri,
-          client_id: CLIENT_ID,
+          client_id: storedClientId,
           code_verifier: codeVerifier,
         };
 
         const body = await apiService.exchangeCodeForToken(tokenRequest);
 
         setTokenResponse(body);
-        sessionStorage.setItem('token_response', JSON.stringify(body));
+        setTokenSet(body);
 
-        const token = body.id_token??"";
+        const token = body.id_token ?? "";
         const decoded = jwtDecode(token);
-        console.log(decoded);
         setDecodedIDToken(decoded);
       } catch (e: any) {
         setError(e?.message || 'Failed to exchange code for token');
@@ -76,10 +76,6 @@ const CallbackPage: React.FC = () => {
     exchange();
   }, [location]);
 
-  const backHome = () => {
-    navigate('/');
-  };
-
   return (
     <div className="card">
       <h1>Callback</h1>
@@ -88,30 +84,15 @@ const CallbackPage: React.FC = () => {
       {!loading && !error && tokenResponse && (
         <>
           <p>Successfully obtained tokens from the authorization server.</p>
-          <pre
-            style={{
-              backgroundColor: '#020617',
-              padding: '1rem',
-              borderRadius: '0.75rem',
-              overflowX: 'auto',
-              fontSize: '0.8rem',
-            }}
-          >
+          <pre className="json-block">
             {JSON.stringify(tokenResponse, null, 2)}
-
-            <p style={{paddingTop: '1rem'}}>Decoded ID Token:{JSON.stringify(decodedIDToken, null, 2)}</p>
-            
+            <p style={{ paddingTop: '1rem' }}>Decoded ID Token:{JSON.stringify(decodedIDToken, null, 2)}</p>
           </pre>
         </>
       )}
       {!loading && (
-        <button
-          type="button"
-          className="button secondary"
-          style={{ marginTop: '1rem' }}
-          onClick={backHome}
-        >
-          Back to client
+        <button type="button" className="button secondary" style={{ marginTop: '1rem' }} onClick={() => navigate('/')}>
+          Return to Dashboard
         </button>
       )}
     </div>

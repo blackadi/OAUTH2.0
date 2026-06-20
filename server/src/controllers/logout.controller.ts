@@ -6,9 +6,16 @@ import jwt from "jsonwebtoken";
 import { JwksClient } from "../utils/jwksClient";
 import { jwks } from "../config/authlete.config";
 
-export async function rpInitiatedLogout(req: Request & { session: Partial<session.SessionData> }, res: Response): Promise<void> {
-    const logoutService = new rpInitiatedLogoutService();
-    await logoutService.rpInitiatedLogout(req, res);
+export async function rpInitiatedLogout(req: Request & { session: Partial<session.SessionData> }, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const logoutService = new rpInitiatedLogoutService();
+        await logoutService.rpInitiatedLogout(req, res);
+    } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        const log = req.logger || logger;
+        log.error("RP-Initiated Logout error", { message: error.message });
+        next(error);
+    }
 }
 
 export async function opBackchannelLogout(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -1,11 +1,32 @@
 import { NextFunction, Request, Response } from "express";
 import { TokenManagementService } from "../services/token.operations.service";
 import logger from "../utils/logger";
-import { error } from "winston";
+import { server } from "../config/app.config";
 import { jwt } from "../config/authlete.config";
 import { Scope } from "@authlete/typescript-sdk/models";
 
 const tokenManagementService = new TokenManagementService();
+
+function requireBasicAuth(req: Request, res: Response): boolean {
+  const mgmtClientId = process.env.MGMT_CLIENT_ID;
+  const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
+  if (!mgmtClientId || !mgmtClientSecret) return true; // skip if unconfigured
+
+  const { authorization } = req.headers;
+  if (!authorization?.startsWith("Basic ")) {
+    res.setHeader("WWW-Authenticate", 'Basic realm="token_management"');
+    res.status(401).json({ error: "invalid_client", error_description: "Client authentication required" });
+    return false;
+  }
+  const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
+  const [id, secret] = credentials.split(":");
+  if (id !== mgmtClientId || secret !== mgmtClientSecret) {
+    res.setHeader("WWW-Authenticate", 'Basic realm="token_management"');
+    res.status(401).json({ error: "invalid_client", error_description: "Invalid client credentials" });
+    return false;
+  }
+  return true;
+}
 
 export const tokenCreateController = {
   handleCreateToken: async (
@@ -14,6 +35,7 @@ export const tokenCreateController = {
     next: NextFunction
   ) => {
     try {
+      if (!requireBasicAuth(req, res)) return;
       const result = await tokenManagementService.create(req);
 
       switch (result.action) {
@@ -54,6 +76,7 @@ export const tokenDeleteController = {
     next: NextFunction
   ) => {
     try {
+      if (!requireBasicAuth(req, res)) return;
       const accessTokenIdentifier = req.params.accessTokenIdentifier as string;
       const log = req.logger || logger;
       log(
@@ -91,6 +114,7 @@ export const tokenUpdateController = {
     next: NextFunction
   ) => {
     try {
+      if (!requireBasicAuth(req, res)) return;
       const result = await tokenManagementService.update(req);
 
       switch (result.action) {
@@ -131,6 +155,7 @@ export const tokenUpdateController = {
 export const tokensListController = {
   handleListTokens: async (req: Request, res: Response, next: NextFunction) => {
     try {
+      if (!requireBasicAuth(req, res)) return;
       const result = await tokenManagementService.list();
       res.setHeader("Content-Type", "application/json");
       return res.status(200).send(result);
@@ -150,6 +175,7 @@ export const tokenRevokeToken = {
     next: NextFunction
   ) => {
     try {
+      if (!requireBasicAuth(req, res)) return;
       const result = await tokenManagementService.revoke(req);
 
       switch (result.resultCode) {
@@ -200,6 +226,7 @@ export const tokenReissueIdToken = {
     next: NextFunction
   ) => {
     try {
+      if (!requireBasicAuth(req, res)) return;
       const result = await tokenManagementService.reissueIdToken(req);
 
       switch (result.action) {
@@ -238,6 +265,9 @@ export const localSignedToken = {
     next: NextFunction
   ) => {
     try {
+      if (server.nodeEnv !== "development") {
+        return res.status(404).json({ error: "not_found" });
+      }
       const { ...reqBody } = req.query;
       logger("Local Signed Token parameters", { reqBody });
       //read iss parameter from env if not provided

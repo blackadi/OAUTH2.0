@@ -12,55 +12,38 @@ import logger from "../utils/logger";
 
 export class TokenService {
   async process(req: Request): Promise<TokenResponse> {
-    // Extract known Authlete TokenRequest fields, everything else goes into otherBody
-    let {
-      clientId,
-      clientSecret,
-      clientCertificate,
-      clientCertificatePath,
-      htm,
-      htu,
-      accessToken,
-      jwtAtClaims,
-      accessTokenDuration,
-      dpop,
-      dpopNonceRequired,
-      oauthClientAttestation,
-      oauthClientAttestationPop,
-      properties,
-      refreshTokenDuration,
-      ...otherBody
-    }: TokenRequest = req.body;
-
     const log = req.logger || logger;
-    log("TokenService: received body", { clientId, otherBody });
 
-    // Decode Basic auth if present
+    // Only extract OAuth params from the body. Server-determined fields
+    // (htm, htu, dpop, etc.) come from HTTP headers, never from the body.
+    const { client_id: bodyClientId, client_secret: bodyClientSecret, ...remainingParams } = req.body as Record<string, unknown>;
+
+    // Determine clientId/clientSecret — Basic auth takes priority,
+    // then client_secret_post (body), then public client.
+    let clientId = (req.body.clientId ?? bodyClientId) as string | undefined;
+    let clientSecret = (req.body.clientSecret ?? bodyClientSecret) as string | undefined;
+
     const { authorization } = req.headers;
-    if (authorization && authorization.startsWith("Basic ")) {
-      const base64Credentials = authorization.slice("Basic ".length);
-      const credentials = Buffer.from(base64Credentials, "base64").toString(
-        "utf-8"
-      );
+    if (authorization?.startsWith("Basic ")) {
+      const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
       [clientId, clientSecret] = credentials.split(":");
       log("TokenService: decoded Basic auth", { clientId });
     }
 
-    // Prefer the raw request body if it was captured by the body parser's
-    // `verify` hook. This preserves exact encoding and parameter order for
-    // Authlete's requirement that `parameters` be the entire
-    // application/x-www-form-urlencoded entity body.
+    log("TokenService: received body", { clientId });
+
+    // Prefer raw request body captured by body-parser's verify hook.
+    // This preserves exact encoding and parameter order for Authlete.
     let parameters: string | undefined = (req as any).rawBody;
 
     if (!parameters) {
-      // Fallback: rebuild parameters from parsed body (may reorder/encode
-      // slightly differently than the original entity).
+      // Fallback: rebuild from all remaining params.
+      // Exclude fields we already extracted separately.
+      const excluded = new Set(["clientId", "clientSecret", "client_id", "client_secret"]);
       const params = new URLSearchParams();
-      if (otherBody && typeof otherBody === "object") {
-        for (const [key, value] of Object.entries(otherBody)) {
-          if (value !== undefined && value !== null) {
-            params.append(key, String(value));
-          }
+      for (const [key, value] of Object.entries(remainingParams)) {
+        if (value !== undefined && value !== null && !excluded.has(key)) {
+          params.append(key, String(value));
         }
       }
       parameters = params.toString();
@@ -71,33 +54,35 @@ export class TokenService {
       body: parameters,
     });
 
-    // Build Authlete TokenRequest
+    // Build Authlete TokenRequest — only send what's needed
     const reqBody: TokenRequest = {
       parameters,
       clientId,
       clientSecret,
-      clientCertificate,
-      clientCertificatePath,
-      htm,
-      htu,
-      accessToken,
-      jwtAtClaims,
-      accessTokenDuration,
-      dpop,
-      dpopNonceRequired,
-      oauthClientAttestation,
-      oauthClientAttestationPop,
-      properties,
-      refreshTokenDuration,
-    } as TokenRequest;
+    };
+
+    // DPoP support — fields come from HTTP headers, not the body
+    const dpopHeader = req.headers["dpop"] as string | undefined;
+    if (dpopHeader) {
+      reqBody.dpop = dpopHeader;
+      reqBody.htm = req.method;
+      const protocol = req.protocol;
+      const host = req.get("host") || "";
+      reqBody.htu = `${protocol}://${host}${req.originalUrl}`;
+    }
+
+    // Client attestation headers (OAuth 2.0 Attestation-Based Client Authentication)
+    const attJkt = req.headers["oauth-client-attestation"] as string | undefined;
+    const attPop = req.headers["oauth-client-attestation-pop"] as string | undefined;
+    if (attJkt) reqBody.oauthClientAttestation = attJkt;
+    if (attPop) reqBody.oauthClientAttestationPop = attPop;
 
     log("TokenService: calling Authlete token endpoint", {
       clientId,
+      hasDpop: !!dpopHeader,
       parametersLength: parameters.length,
-      parameters,
     });
 
-    // Call Authlete /token API (always through SDK)
     const response = await authleteApi.token.process({
       serviceId,
       tokenRequest: reqBody,

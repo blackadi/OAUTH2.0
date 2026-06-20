@@ -9,18 +9,13 @@ import logger from "../utils/logger";
 export class RevocationService {
   async process(req: Request): Promise<RevocationResponse> {
     const log = req.logger || logger;
-
     const body = req.body as Record<string, unknown>;
 
-    const clientCertificate = body.clientCertificate as string | undefined;
-    const clientCertificatePath = body.clientCertificatePath as string[] | undefined;
-    const oauthClientAttestation = body.oauthClientAttestation as string | undefined;
-    const oauthClientAttestationPop = body.oauthClientAttestationPop as string | undefined;
-
+    // clientId/clientSecret from body as fallback for client_secret_post
     let clientId = body.clientId as string | undefined;
     let clientSecret = body.clientSecret as string | undefined;
 
-    // Decode Basic auth BEFORE building the request — takes priority over body
+    // Decode Basic auth — takes priority over body
     const { authorization } = req.headers;
     if (authorization?.startsWith("Basic ")) {
       const credentials = Buffer.from(
@@ -30,6 +25,10 @@ export class RevocationService {
       [clientId, clientSecret] = credentials.split(":");
       log("RevocationService: decoded Basic auth", { clientId });
     }
+
+    // Client attestation from HTTP headers, not from body
+    const oauthClientAttestation = req.headers["oauth-client-attestation"] as string | undefined;
+    const oauthClientAttestationPop = req.headers["oauth-client-attestation-pop"] as string | undefined;
 
     // Capture raw body, or reconstruct from parsed fields
     let parameters: string | undefined = (req as any).rawBody;
@@ -66,8 +65,6 @@ export class RevocationService {
 
     const reqBody: RevocationRequest = {
       parameters,
-      clientCertificate,
-      clientCertificatePath,
       clientId,
       clientSecret,
       oauthClientAttestation,

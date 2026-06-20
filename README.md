@@ -299,12 +299,26 @@ curl -s -X POST http://localhost:3000/api/introspection/standard \
 
 ### Revocation (RFC 7009)
 
+Choose the auth method that matches your client type (see [CURL-TEST.md](./CURL-TEST.md#client-types--what-you-need-to-know)):
+
+**Option A — Confidential client** (authenticates via `client_secret_basic`):
+
 ```bash
 curl -s -X POST http://localhost:3000/api/revocation \
   -u "YOUR_CLIENT_ID:YOUR_CLIENT_SECRET" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=ACCESS_TOKEN"
 ```
+
+**Option B — Public client** (no secret, auth method = `none`):
+
+```bash
+curl -s -X POST http://localhost:3000/api/revocation \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "token=ACCESS_TOKEN&client_id=YOUR_PUBLIC_CLIENT_ID"
+```
+
+> **Common mistake:** Using Basic auth (`-u`) with a **public** client returns `invalid_client` (error `A157303`). Public clients have no secret — pass `client_id` in the request body instead.
 
 See [`CURL-TEST.md`](CURL-TEST.md) for a complete test suite covering all endpoints.
 

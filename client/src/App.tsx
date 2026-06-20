@@ -1,26 +1,26 @@
-import React from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
-import HomePage from './pages/HomePage';
+import { TokenProvider } from './context/TokenContext';
+import Dashboard from './pages/Dashboard';
 import CallbackPage from './pages/CallbackPage';
 
 const App: React.FC = () => {
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header-title">Authlete OAuth2 / OIDC Demo</div>
-        <nav>
-          <Link to="/" className="small">
-            Home
-          </Link>
-        </nav>
-      </header>
-      <main className="app-main">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/callback" element={<CallbackPage />} />
-        </Routes>
-      </main>
-    </div>
+    <TokenProvider>
+      <div className="app-shell">
+        <header className="app-header">
+          <div className="app-header-title">OAuth2 / OIDC Testing Dashboard</div>
+          <nav>
+            <Link to="/">Dashboard</Link>
+          </nav>
+        </header>
+        <main className="app-main">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/callback" element={<CallbackPage />} />
+          </Routes>
+        </main>
+      </div>
+    </TokenProvider>
   );
 };
 

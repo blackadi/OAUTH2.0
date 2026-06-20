@@ -13,9 +13,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // Proxy API requests to the server during development
         '/api': {
-          target: 'http://localhost:3000', // Node Authorization Server 
+          target: 'http://localhost:3000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },
     },
