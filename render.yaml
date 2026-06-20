@@ -1,15 +1,32 @@
 services:
   - type: web
-    name: authlete-node-authz-server
+    name: OAUTH2.0
     env: node
-    # Build both client and server; server `postbuild` copies static assets
-    buildCommand: "npm --prefix client run build && npm --prefix server run build"
-    startCommand: "npm --prefix server run start"
+    region: oregon
     plan: free
+    branch: main
+    autoDeploy: true
+    buildCommand: npm --prefix client run build && npm --prefix server run build
+    startCommand: npm --prefix server run start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: "10000"
-    # Optional: health check path
-    healthCheckPath: "/"
+      - key: AUTHLETE_BEARER_TOKEN
+        sync: false
+      - key: AUTHLETE_BASE_URL
+        sync: false
+      - key: AUTHLETE_SERVICE_ID
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://oauth2-0-jf2y.onrender.com,http://localhost:3000,http://localhost:3001
+      - key: LOGOUT_REDIRECT_URI
+        sync: false
+      - key: MGMT_CLIENT_ID
+        sync: false
+      - key: MGMT_CLIENT_SECRET
+        sync: false
