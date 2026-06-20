@@ -58,6 +58,10 @@ projects:
             buildCommand: npm install && npm run build
             staticPublishPath: dist
             pullRequestPreviewsEnabled: true
+            routes:
+              - source: /*
+                destination: /index.html
+                type: rewrite
             envVars:
               - key: VITE_API_BASE_URL
                 value: https://oauth2-0-ekh2.onrender.com/
