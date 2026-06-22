@@ -50,10 +50,10 @@ export const revocationController = {
 
         default:
           // Authlete never returns undefined actions unless misconfigured
-          req.logger?.error("Unknown revokation action", {
+          req.logger?.error("Unknown revocation action", {
             action: result.action,
           });
-          logger.error("Unknown revokation action", { action: result.action });
+          logger.error("Unknown revocation action", { action: result.action });
           return res.status(500).send(result);
       }
     } catch (err) {

@@ -66,7 +66,12 @@ const AuthFlowsSection: React.FC = () => {
     }
   };
 
-  const callToken = async (fn: () => Promise<TokenResponse>) => {
+  const saveClientCredentials = (clientId: string, clientSecret: string) => {
+    sessionStorage.setItem('active_client_id', clientId);
+    if (clientSecret) sessionStorage.setItem('active_client_secret', clientSecret);
+  };
+
+  const callToken = async (clientId: string, clientSecret: string, fn: () => Promise<TokenResponse>) => {
     setError(null);
     setResult(null);
     setLoading(true);
@@ -74,6 +79,7 @@ const AuthFlowsSection: React.FC = () => {
       const res = await fn();
       setResult(res);
       setTokenSet(res);
+      saveClientCredentials(clientId, clientSecret);
     } catch (e: any) {
       setError(e?.message || 'Request failed');
     } finally {
@@ -110,7 +116,7 @@ const AuthFlowsSection: React.FC = () => {
           <div className="field"><label className="label">Client ID</label><input className="input" value={ccId} onChange={e => setCcId(e.target.value)} /></div>
           <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={ccSecret} onChange={e => setCcSecret(e.target.value)} /></div>
           <div className="field"><label className="label">Scope</label><input className="input" value={ccScope} onChange={e => setCcScope(e.target.value)} /></div>
-          <button className="button" onClick={() => callToken(() => apiService.clientCredentials(ccId, ccSecret, ccScope))} disabled={loading}>
+          <button className="button" onClick={() => callToken(ccId, ccSecret, () => apiService.clientCredentials(ccId, ccSecret, ccScope))} disabled={loading}>
             {loading ? 'Loading…' : 'Get Token'}
           </button>
         </div>
@@ -123,7 +129,7 @@ const AuthFlowsSection: React.FC = () => {
           <div className="field"><label className="label">Client ID</label><input className="input" value={pwId} onChange={e => setPwId(e.target.value)} /></div>
           <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={pwSecret} onChange={e => setPwSecret(e.target.value)} /></div>
           <div className="field"><label className="label">Scope</label><input className="input" value={pwScope} onChange={e => setPwScope(e.target.value)} /></div>
-          <button className="button" onClick={() => callToken(() => apiService.passwordGrant(pwUser, pwPass, pwId, pwSecret, pwScope))} disabled={loading}>
+          <button className="button" onClick={() => callToken(pwId, pwSecret, () => apiService.passwordGrant(pwUser, pwPass, pwId, pwSecret, pwScope))} disabled={loading}>
             {loading ? 'Loading…' : 'Get Token'}
           </button>
         </div>
@@ -134,7 +140,7 @@ const AuthFlowsSection: React.FC = () => {
           <div className="field"><label className="label">Refresh Token</label><input className="input" value={rtToken} onChange={e => setRtToken(e.target.value)} /></div>
           <div className="field"><label className="label">Client ID</label><input className="input" value={rtId} onChange={e => setRtId(e.target.value)} /></div>
           <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={rtSecret} onChange={e => setRtSecret(e.target.value)} /></div>
-          <button className="button" onClick={() => callToken(() => apiService.refreshToken(rtToken, rtId, rtSecret))} disabled={loading}>
+          <button className="button" onClick={() => callToken(rtId, rtSecret, () => apiService.refreshToken(rtToken, rtId, rtSecret))} disabled={loading}>
             {loading ? 'Loading…' : 'Refresh Token'}
           </button>
         </div>

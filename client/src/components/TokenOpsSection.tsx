@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useToken } from '../context/TokenContext';
 import { apiService } from '../services/api';
+import { CLIENT_ID } from '../config';
 
 const TokenOpsSection: React.FC = () => {
   const { tokenSet } = useToken();
@@ -9,8 +10,12 @@ const TokenOpsSection: React.FC = () => {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [revClientId, setRevClientId] = useState('');
-  const [revClientSecret, setRevClientSecret] = useState('');
+  const [revClientId, setRevClientId] = useState(
+    sessionStorage.getItem('active_client_id') || CLIENT_ID
+  );
+  const [revClientSecret, setRevClientSecret] = useState(
+    sessionStorage.getItem('active_client_secret') || ''
+  );
 
   const call = async (label: string, fn: () => Promise<any>) => {
     setError(null);
@@ -43,7 +48,7 @@ const TokenOpsSection: React.FC = () => {
 
       <div className="field"><label className="label">Revocation Client ID</label><input className="input" value={revClientId} onChange={e => setRevClientId(e.target.value)} /></div>
       <div className="field"><label className="label">Revocation Client Secret</label><input className="input" type="password" value={revClientSecret} onChange={e => setRevClientSecret(e.target.value)} /></div>
-      <button className="button" disabled={!at || loading !== null} onClick={() => call('revoke', () => apiService.revocation(at!, revClientId || undefined, revClientSecret || undefined))}>
+      <button className="button" disabled={!at || loading !== null} onClick={() => call('revoke', () => apiService.revocation(at!, revClientId || undefined, revClientSecret || undefined, 'access_token'))}>
         {loading === 'revoke' ? 'Loading…' : 'Revoke Token'}
       </button>
 

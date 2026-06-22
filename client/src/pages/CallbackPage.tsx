@@ -62,6 +62,7 @@ const CallbackPage: React.FC = () => {
 
         setTokenResponse(body);
         setTokenSet(body);
+        sessionStorage.setItem('active_client_id', storedClientId);
 
         const token = body.id_token ?? "";
         const decoded = jwtDecode(token);

@@ -80,8 +80,11 @@ class ApiService {
     return this.postForm(INTROSPECTION_STANDARD_ENDPOINT, new URLSearchParams({ token }));
   }
 
-  async revocation(token: string, clientId?: string, clientSecret?: string): Promise<void> {
+  async revocation(token: string, clientId?: string, clientSecret?: string, tokenTypeHint?: string): Promise<void> {
     const params = new URLSearchParams({ token });
+    if (tokenTypeHint) {
+      params.append('token_type_hint', tokenTypeHint);
+    }
     if (clientId && clientSecret) {
       const response = await fetch(REVOCATION_ENDPOINT, {
         method: 'POST',
