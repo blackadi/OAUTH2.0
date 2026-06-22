@@ -17,9 +17,6 @@ export const revocationController = {
           if (result.responseContent) {
             res.setHeader("Content-Type", "application/json");
             return res.status(200).send(result.responseContent);
-          } else if(result.resultMessage){
-            res.setHeader("Content-Type", "application/json");
-            return res.status(200).send(result.resultMessage);
           }
           return res.status(200).end();
 
