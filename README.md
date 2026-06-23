@@ -15,8 +15,13 @@ Two independent packages:
 
 ## Features
 
-- **OAuth 2.0 grants**: Authorization Code (confidential + PKCE), Client Credentials, Password (ROPC), Refresh Token
+- **OAuth 2.0 grants**: Authorization Code (confidential + PKCE), Client Credentials, Password (ROPC), Refresh Token, JWT Bearer (`urn:ietf:params:oauth:grant-type:jwt-bearer`), Token Exchange (`urn:ietf:params:oauth:grant-type:token-exchange`)
 - **OpenID Connect**: Discovery (`/.well-known/openid-configuration`), JWKS, Userinfo (signed JWT), ID Token, RP-Initiated Logout
+- **Backchannel Logout**: Issue and deliver logout tokens following OIDC Back-Channel Logout 1.0 spec — standalone token generation, single-client deliver, deliver-to-all, and automatic trigger via `?backchannel=true` on RP-Initiated Logout
+- **Grant Management for OAuth 2.0**: Query and revoke grants via RESTful API (`GET`/`DELETE /api/gm/:grantId`)
+- **Dynamic Client Registration (DCR)**: Register, get, update, and delete OAuth clients per RFC 7591 / RFC 7592 (`/api/client/dcr/*`)
+- **CIBA (Client-Initiated Backchannel Authentication)**: Backchannel authentication, issue, fail, and complete endpoints — poll/ping/push delivery modes
+- **Client Management API**: Full CRUD for OAuth clients — list, get, create, update, delete, rotate secrets, manage authorizations and scopes (`/api/client/*`)
 - **Token management**: Introspection (RFC 7662 + Authlete-specific), Revocation (RFC 7009), token CRUD via Authlete management API
 - **Interactive flow**: Server-rendered login and consent pages (EJS) with session state
 - **Logging**: Per-request unique IDs, structured Winston logging, Morgan HTTP access logs
@@ -67,8 +72,14 @@ Optional variables:
 | `LOGOUT_CLIENT_ID` | — | Client ID for logout view |
 | `LOGOUT_REDIRECT_URI` | — | Post-logout redirect |
 | `LOG_LEVEL` | `debug` (dev), `info` (prod) | Winston log level |
+| `MORGAN_FORMAT` | `combined` | Morgan HTTP access log format |
+| `MGMT_CLIENT_ID` | — | Basic auth user for management APIs (token mgmt, DCR register, backchannel logout, client mgmt) |
+| `MGMT_CLIENT_SECRET` | — | Basic auth password for management APIs |
+| `JWKS_URI` | — | External JWKS URI to validate JWT Bearer assertions |
 | `JWT_PUBLIC_KEY_PEM` | — | Required if `ACCESS_TOKEN_TYPE=jwt` |
 | `JWT_PRIVATE_KEY_PEM` | — | Required if `ACCESS_TOKEN_TYPE=jwt` |
+| `JWT_SELF_SIGNED_CERT_PEM` | — | Self-signed cert for JWT client auth |
+| `JWT_ISSUER` | — | JWT issuer for locally-signed tokens |
 
 ### 3. Start the server
 
@@ -108,8 +119,9 @@ The client SPA starts on `http://localhost:3001`. In development, Vite proxies `
 ```
 
 - The server **never stores tokens, clients, or user data locally** — all OAuth state lives in Authlete's cloud.
-- The Authlete SDK (`@authlete/typescript-sdk`) wraps the Authlete REST API. Controllers call SDK methods; the SDK calls Authlete; the server formats the response.
-- The React SPA in `client/` is a comprehensive testing dashboard exercising all OAuth/OIDC endpoints, grant types, and token management operations. It never has access to the Authlete API key.
+- The Authlete SDK (`@authlete/typescript-sdk`) wraps the Authlete REST API. Controllers call SDK methods; the SDK calls Authlete; the server formats the response. Some endpoints (backchannel logout issuing, health check) use raw `fetch()` to Authlete when the SDK does not expose the necessary method.
+- Admin-protected endpoints (token management, DCR register, backchannel logout, client management) are gated by HTTP Basic auth with `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` — if those env vars are unset, the endpoints are unprotected.
+- The React SPA in `client/` is a comprehensive testing dashboard exercising all OAuth/OIDC endpoints, grant types, DCR, CIBA, token management, and backchannel logout. It never has access to the Authlete API key.
 
 ## File Structure
 
@@ -141,11 +153,23 @@ server/
 │   │   ├── revocation.controller.ts
 │   │   ├── logout.controller.ts
 │   │   ├── discovery.controller.ts
-│   │   └── jwks.controller.ts
+│   │   ├── jwks.controller.ts
+│   │   ├── grant-management.controller.ts       # Grant Management API handlers
+│   │   ├── backchannel-logout.controller.ts      # Backchannel Logout (issue/deliver/deliver-all)
+│   │   ├── dcr.controller.ts                    # Dynamic Client Registration (register/get/update/delete)
+│   │   ├── ciba.controller.ts                   # CIBA (authentication/issue/fail/complete)
+│   │   ├── client.management.controller.ts      # Client CRUD + secrets + scopes + authorizations
+│   │   └── health.controller.ts                 # Health Check (server + Authlete)
 │   ├── services/
 │   │   ├── authlete.service.ts          # Authlete API client singleton
 │   │   ├── token.operations.service.ts  # Token management CRUD
-│   │   └── userinfo.service.ts          # Userinfo processing + issuing
+│   │   ├── userinfo.service.ts          # Userinfo processing + issuing
+│   │   ├── grant-management.service.ts     # Grant Management SDK wrapper
+│   │   ├── backchannel-logout.service.ts    # Backchannel Logout (Authlete API via fetch)
+│   │   ├── dcr.service.ts                  # Dynamic Client Registration SDK wrapper
+│   │   ├── ciba.service.ts                 # CIBA SDK wrapper (authentication/issue/fail/complete)
+│   │   ├── client.management.service.ts    # Client CRUD + secrets + scopes + authorizations
+│   │   └── health.service.ts               # Health Check (Authlete API via fetch)
 │   ├── routes/                          # Express Router definitions
 │   │   ├── authorization.routes.ts
 │   │   ├── token.routes.ts
@@ -156,8 +180,14 @@ server/
 │   │   ├── jwks.routes.ts
 │   │   ├── discovery.routes.ts
 │   │   ├── logout.routes.ts
-│   │   ├── routes-list.routes.ts        # /api/routes and /api/routes.json
-│   │   └── default.routes.ts            # Catch-all for index page
+│   │   ├── grant-management.routes.ts       # GET/DELETE /api/gm/:grantId
+│   │   ├── backchannel-logout.routes.ts     # POST /api/backchannel_logout/issue|deliver|deliver-all
+│   │   ├── dcr.routes.ts                   # POST /api/client/dcr/register|get|update|delete
+│   │   ├── ciba.routes.ts                  # POST /api/ciba/authentication|issue|fail|complete
+│   │   ├── client.routes.ts                # GET/POST/PATCH/DELETE /api/client/* (CRUD + secrets + scopes)
+│   │   ├── health.routes.ts                # GET /api/health and /api/health/authlete
+│   │   ├── routes-list.routes.ts           # /api/routes and /api/routes.json
+│   │   └── default.routes.ts               # Catch-all for index page
 │   ├── middleware/
 │   │   ├── session.ts                   # express-session config
 │   │   └── errorHandler.ts              # Global error handler (JSON for /api/*)
@@ -207,41 +237,117 @@ client/
 │       ├── AuthFlowsSection.tsx         # 4 grant types in one form
 │       ├── TokenOpsSection.tsx          # UserInfo, introspection, revocation
 │       ├── AdminSection.tsx             # Token management CRUD ops
-│       ├── LogoutSection.tsx            # RP-Initiated Logout test
-│       └── DiscoverySection.tsx         # OIDC config + JWKS fetchers
+│       ├── GrantManagementSection.tsx        # Grant Management (query/revoke)
+│       ├── BackchannelLogoutSection.tsx       # Backchannel Logout (issue/deliver/deliver-all + JWT decoder)
+│       ├── DcrSection.tsx                    # Dynamic Client Registration (register/get/update/delete)
+│       ├── CibaSection.tsx                   # CIBA (authentication/issue/fail/complete)
+│       ├── HealthSection.tsx                 # Health Check (server + Authlete)
+│       ├── LogoutSection.tsx                 # RP-Initiated Logout test
+│       ├── DiscoverySection.tsx              # OIDC config + JWKS fetchers
+│       └── HelpPopover.tsx                   # Reusable documentation popover
 ```
 
 ## API Routes
 
+### OAuth / OIDC Core
+
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/authorization` | OAuth authorization endpoint (triggers login flow) |
-| `POST` | `/api/authorization/issue` | Authlete callback — authorization issue |
-| `POST` | `/api/token` | Token endpoint — code exchange, refresh, client credentials |
-| `POST` | `/api/token/issue` | Authlete callback — token issue |
-| `POST` | `/api/token/fail` | Authlete callback — token failure |
-| `POST` | `/api/token/create` | Create token via management API |
-| `DELETE` | `/api/token/delete/:id` | Delete token by identifier |
-| `GET` | `/api/token/list` | List tokens |
+| `POST` | `/api/token` | Token endpoint — supports `authorization_code`, `client_credentials`, `password`, `refresh_token`, `urn:ietf:params:oauth:grant-type:jwt-bearer`, `urn:ietf:params:oauth:grant-type:token-exchange`, `urn:openid:params:grant-type:ciba` |
+| `GET` / `POST` | `/api/userinfo` | Userinfo (signed JWT) — token in Authorization header or form body |
+| `POST` | `/api/introspection/standard` | RFC 7662 token introspection |
+| `POST` | `/api/introspection` | Authlete-specific token introspection (extended response) |
+| `POST` | `/api/revocation` | RFC 7009 token revocation (works with confidential or public clients) |
+| `GET` | `/api/logout` | RP-initiated logout (add `&backchannel=true` to auto-deliver backchannel logout) |
+| `GET` | `/api/.well-known/openid-configuration` | OIDC Discovery document (RFC 8414) |
+| `GET` | `/api/.well-known/jwks.json` | JSON Web Key Set (RFC 7517) |
+
+### Interactive Session (Login / Consent)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` / `POST` | `/api/session/login` | Login page and form submission |
+| `GET` / `POST` | `/api/session/consent` | Consent page and form submission |
+
+### Token Management API
+
+Protected by `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth if configured.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/token/list` | List all tokens |
+| `POST` | `/api/token/create` | Create a token |
 | `PATCH` | `/api/token/update` | Update token scopes |
-| `POST` | `/api/token/revoke` | Revoke token via management API |
+| `POST` | `/api/token/revoke` | Revoke a token (by identifier) |
+| `DELETE` | `/api/token/delete/:accessTokenIdentifier` | Delete a token by identifier |
 | `POST` | `/api/token/reissue` | Reissue ID token |
-| `GET` | `/api/token/createLocalToken` | Create locally-signed JWT |
-| `GET` | `/api/userinfo` | Userinfo (token in Authorization header) |
-| `POST` | `/api/userinfo` | Userinfo (token in body or header) |
-| `POST` | `/api/userinfo/issue` | Authlete callback — userinfo issue |
-| `POST` | `/api/introspection` | Authlete-specific token introspection |
-| `POST` | `/api/introspection/standard` | RFC 7662 introspection |
-| `POST` | `/api/revocation` | RFC 7009 token revocation |
-| `GET` | `/api/session/login` | Login page |
-| `POST` | `/api/session/login` | Login form submission |
-| `GET` | `/api/session/consent` | Consent page |
-| `POST` | `/api/session/consent` | Consent form submission |
-| `GET` | `/.well-known/openid-configuration` | OIDC Discovery document |
-| `GET` | `/.well-known/jwks.json` | JSON Web Key Set |
-| `GET` | `/api/logout` | RP-initiated logout |
-| `POST` | `/api/backchannel_logout` | Backchannel logout callback |
-| `GET` | `/api/routes` | Routes dashboard |
+| `GET` | `/api/token/createLocalToken` | Create a locally-signed JWT (no Authlete call) |
+
+### Dynamic Client Registration (RFC 7591 / RFC 7592)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/client/dcr/register` | Register a new client — requires Basic auth (MGMT credentials) |
+| `POST` | `/api/client/dcr/get` | Get registered client by registration access token |
+| `POST` | `/api/client/dcr/update` | Update registered client |
+| `POST` | `/api/client/dcr/delete` | Delete registered client |
+
+### CIBA — Client-Initiated Backchannel Authentication
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/ciba/authentication` | Initiate backchannel authentication (pass `parameters`, `clientId`, `clientSecret` in body) |
+| `POST` | `/api/ciba/issue` | Issue `auth_req_id` from a validated ticket |
+| `POST` | `/api/ciba/fail` | Fail a backchannel authentication request with a reason |
+| `POST` | `/api/ciba/complete` | Complete backchannel authentication with end-user result |
+
+### Grant Management for OAuth 2.0
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/gm/:grantId` | Query grant status (Bearer token with `grant_management_query` scope) |
+| `DELETE` | `/api/gm/:grantId` | Revoke a grant (Bearer token with `grant_management_revoke` scope) |
+
+### Backchannel Logout (OIDC Back-Channel Logout 1.0)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/backchannel_logout/issue` | Issue a logout token JWT — requires Basic auth (MGMT credentials) |
+| `POST` | `/api/backchannel_logout/deliver` | Issue + deliver to one client |
+| `POST` | `/api/backchannel_logout/deliver-all` | Issue + deliver to all clients with `backchannelLogoutUri` configured |
+| `POST` | `/api/backchannel_logout` | Receiving endpoint — handles incoming logout tokens from other OPs |
+
+### Client Management API
+
+Protected by `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth if configured.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/client/list` | List all registered clients |
+| `GET` | `/api/client/get/:clientId` | Get a single client by ID |
+| `POST` | `/api/client/create` | Create a new client |
+| `PATCH` | `/api/client/update/:clientId` | Update an existing client |
+| `DELETE` | `/api/client/delete/:clientId` | Delete a client |
+| `PATCH` | `/api/client/flag/:clientIdentifier` | Update lock flag on a client |
+| `POST` | `/api/client/secret/refresh/:clientIdentifier` | Rotate client secret |
+| `PUT` | `/api/client/secret/update/:clientIdentifier` | Set client secret to a specific value |
+| `GET` | `/api/client/auth/list/:subject` | List authorizations for a subject |
+| `POST` | `/api/client/auth/update/:clientId` | Update authorizations for a client |
+| `DELETE` | `/api/client/auth/delete/:clientId/:subject` | Delete authorizations for a client/subject pair |
+| `GET` | `/api/client/scopes/granted/:clientId/:subject` | Get granted scopes |
+| `DELETE` | `/api/client/scopes/granted/:clientId/:subject` | Delete granted scopes |
+| `GET` | `/api/client/scopes/requestable/:clientId` | Get requestable scopes |
+| `PUT` | `/api/client/scopes/requestable/:clientId` | Update requestable scopes |
+| `DELETE` | `/api/client/scopes/requestable/:clientId` | Delete requestable scopes |
+
+### Health & Utility
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Server health check — status, uptime, timestamp (no auth) |
+| `GET` | `/api/health/authlete` | Authlete connectivity check (add `?extended=true` for DB check) |
+| `GET` | `/api/routes` | Routes dashboard (HTML) |
 | `GET` | `/api/routes.json` | Routes as JSON |
 
 ## Example Flows
@@ -332,7 +438,50 @@ curl -s -X POST http://localhost:3000/api/revocation \
 
 > **Common mistake:** Using Basic auth (`-u`) with a **public** client returns `invalid_client` (error `A157303`). Public clients have no secret — pass `client_id` in the request body instead.
 
-See [`CURL-TEST.md`](CURL-TEST.md) for a complete test suite covering all endpoints.
+### Dynamic Client Registration (RFC 7591)
+
+Register a new OAuth client dynamically:
+
+```bash
+curl -s -X POST http://localhost:3000/api/client/dcr/register \
+  -u "MGMT_CLIENT_ID:MGMT_CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"json": "{\"client_name\": \"My App\", \"redirect_uris\": [\"http://localhost:3001/callback\"], \"grant_types\": [\"AUTHORIZATION_CODE\"]}"}' | jq
+```
+
+Expected: `action: "CREATED"` with `responseContent` containing `client_id`, `client_secret`, `registration_access_token`.
+
+### CIBA — Backchannel Authentication
+
+Step 1 — Initiate backchannel authentication:
+
+```bash
+CIBA_RESP=$(curl -s -X POST http://localhost:3000/api/ciba/authentication \
+  -H "Content-Type: application/json" \
+  -d '{"parameters": "login_hint=admin&scope=openid", "clientId": "YOUR_CLIENT_ID", "clientSecret": "YOUR_CLIENT_SECRET"}')
+echo "$CIBA_RESP" | jq
+CIBA_TICKET=$(echo "$CIBA_RESP" | jq -r '.ticket')
+```
+
+Step 2 — Issue `auth_req_id` from the ticket (after end-user identification):
+
+```bash
+curl -s -X POST http://localhost:3000/api/ciba/issue \
+  -H "Content-Type: application/json" \
+  -d "{\"ticket\": \"${CIBA_TICKET}\"}" | jq
+```
+
+Step 3 — Client polls the token endpoint with the `auth_req_id`:
+
+```bash
+curl -s -X POST http://localhost:3000/api/token \
+  -u "YOUR_CLIENT_ID:YOUR_CLIENT_SECRET" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=urn:openid:params:grant-type:ciba" \
+  -d "auth_req_id=AUTH_REQ_ID"
+```
+
+See [`CURL-TEST.md`](CURL-TEST.md) and [`test-all.sh`](test-all.sh) for a complete test suite covering all endpoints.
 
 ## Session Handling
 
@@ -391,13 +540,34 @@ npm --prefix server run build && npm --prefix client run build
 
 ## Testing
 
+Two test suites are provided:
+
+### 1. Interactive curl test suite ([`CURL-TEST.md`](CURL-TEST.md))
+
+Copy-paste individual curl commands to test each endpoint manually. Covers all 16 sections: Discovery, JWKS, all grant types, introspection, revocation, PKCE, token management, logout, grant management, backchannel logout, DCR, CIBA, and health. The embedded smoke test at the bottom can be saved as a standalone script.
+
 ```bash
-# End-to-end curl test suite — copy-paste each section or run as a standalone script
-# Note: Replace the example client IDs with your own Authlete credentials
-source CURL-TEST.md  # or run each section individually
+source CURL-TEST.md
 ```
 
-See [`CURL-TEST.md`](CURL-TEST.md) for the full test suite covering OpenID Discovery, JWKS, all grant types, introspection, revocation, token management, and RP-initiated logout.
+### 2. Automated test suite ([`test-all.sh`](test-all.sh))
+
+Bash script with pass/fail assertions, formatted JSON output, and a summary report. Skips tests when required client types aren't configured.
+
+```bash
+./test-all.sh
+```
+
+Configure via environment variables:
+
+```bash
+export BASE="http://localhost:3000"
+export CID="your_confidential_client_id"
+export SEC="your_confidential_client_secret"
+export PUB_CID="your_public_client_id"
+export VERBOSE=1  # show full raw responses
+./test-all.sh
+```
 
 ## Known Limitations
 
@@ -405,6 +575,9 @@ See [`CURL-TEST.md`](CURL-TEST.md) for the full test suite covering OpenID Disco
 - **No persistent session store**: In-memory sessions are lost on server restart. Configure Redis for production.
 - **No CSRF protection**: The login/consent forms lack CSRF tokens. Not suitable for production without additional hardening.
 - **Single-user demo auth**: The built-in auth uses a static user list from `AUTH_USERS` env var. Replace with a real identity provider for production.
+- **CIBA must be enabled in Authlete Console**: The backchannel authentication endpoints return 404/400 if CIBA is not enabled on your Authlete service. Enable it via Authlete Console under Service > Authorization > CIBA settings.
+- **DCR requires mgmt auth**: The `register` endpoint requires `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` to be configured (or unprotected if empty). The `get`/`update`/`delete` endpoints use the registration access token instead.
+- **No notification delivery for CIBA push mode**: When CIBA complete returns `NOTIFICATION`, the server should POST to `clientNotificationEndpoint`. This is not implemented — the response is returned to the caller instead.
 
 ## License
 

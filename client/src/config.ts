@@ -32,6 +32,41 @@ export const TOKEN_DELETE_ENDPOINT = `${API_BASE_URL}/api/token/delete`;
 export const TOKEN_REISSUE_ENDPOINT = `${API_BASE_URL}/api/token/reissue`;
 export const TOKEN_LOCAL_ENDPOINT = `${API_BASE_URL}/api/token/createLocalToken`;
 
+export const CLIENT_LIST_ENDPOINT = `${API_BASE_URL}/api/client/list`;
+export const CLIENT_GET_ENDPOINT = `${API_BASE_URL}/api/client/get`;
+export const CLIENT_CREATE_ENDPOINT = `${API_BASE_URL}/api/client/create`;
+export const CLIENT_UPDATE_ENDPOINT = `${API_BASE_URL}/api/client/update`;
+export const CLIENT_DELETE_ENDPOINT = `${API_BASE_URL}/api/client/delete`;
+export const CLIENT_FLAG_ENDPOINT = `${API_BASE_URL}/api/client/flag`;
+export const CLIENT_SECRET_REFRESH_ENDPOINT = `${API_BASE_URL}/api/client/secret/refresh`;
+export const CLIENT_SECRET_UPDATE_ENDPOINT = `${API_BASE_URL}/api/client/secret/update`;
+export const CLIENT_AUTH_LIST_ENDPOINT = `${API_BASE_URL}/api/client/auth/list`;
+export const CLIENT_AUTH_UPDATE_ENDPOINT = `${API_BASE_URL}/api/client/auth/update`;
+export const CLIENT_AUTH_DELETE_ENDPOINT = `${API_BASE_URL}/api/client/auth/delete`;
+export const CLIENT_SCOPES_GRANTED_ENDPOINT = `${API_BASE_URL}/api/client/scopes/granted`;
+export const CLIENT_SCOPES_REQUESTABLE_ENDPOINT = `${API_BASE_URL}/api/client/scopes/requestable`;
+
+export const GRANT_MANAGEMENT_ENDPOINT = `${API_BASE_URL}/api/gm`;
+
+export const BACKCHANNEL_LOGOUT_ISSUE_ENDPOINT = `${API_BASE_URL}/api/backchannel_logout/issue`;
+export const BACKCHANNEL_LOGOUT_DELIVER_ENDPOINT = `${API_BASE_URL}/api/backchannel_logout/deliver`;
+export const BACKCHANNEL_LOGOUT_DELIVER_ALL_ENDPOINT = `${API_BASE_URL}/api/backchannel_logout/deliver-all`;
+
+export const DCR_REGISTER_ENDPOINT = `${API_BASE_URL}/api/client/dcr/register`;
+export const DCR_GET_ENDPOINT = `${API_BASE_URL}/api/client/dcr/get`;
+export const DCR_UPDATE_ENDPOINT = `${API_BASE_URL}/api/client/dcr/update`;
+export const DCR_DELETE_ENDPOINT = `${API_BASE_URL}/api/client/dcr/delete`;
+
+export const CIBA_AUTHENTICATION_ENDPOINT = `${API_BASE_URL}/api/ciba/authentication`;
+export const CIBA_ISSUE_ENDPOINT = `${API_BASE_URL}/api/ciba/issue`;
+export const CIBA_FAIL_ENDPOINT = `${API_BASE_URL}/api/ciba/fail`;
+export const CIBA_COMPLETE_ENDPOINT = `${API_BASE_URL}/api/ciba/complete`;
+
+export const PAR_ENDPOINT = `${API_BASE_URL}/api/par`;
+
+export const HEALTH_ENDPOINT = `${API_BASE_URL}/api/health`;
+export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;
+
 export const DEV_SERVER = {
   port: parseInt(getEnvVar("VITE_DEV_CLIENT_PORT", "3001")),
   host: getEnvVar("VITE_DEV_CLIENT_HOST", "localhost"),

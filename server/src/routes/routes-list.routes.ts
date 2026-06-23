@@ -134,16 +134,119 @@ const ROUTES: RouteEntry[] = [
     description: "JSON Web Key Set (RFC 7517)",
   },
 
+  // ── Dynamic Client Registration (RFC 7591/7592) ──────────────────────
+  {
+    method: "POST",
+    path: "/api/client/dcr/register",
+    description: "RFC 7591 Dynamic Client Registration — requires Basic auth (MGMT_CLIENT_ID/MGMT_CLIENT_SECRET)",
+    body: JSON.stringify({ json: '{ "client_name": "My App", "redirect_uris": ["http://localhost:3001/callback"], "grant_types": ["AUTHORIZATION_CODE"] }' }),
+  },
+  {
+    method: "POST",
+    path: "/api/client/dcr/get",
+    description: "RFC 7592 Dynamic Client Registration Management — get client (requires registration_access_token in body, no admin auth)",
+    body: JSON.stringify({ token: "registration_access_token", clientId: "client_id" }),
+  },
+  {
+    method: "POST",
+    path: "/api/client/dcr/update",
+    description: "RFC 7592 Dynamic Client Registration Management — update client (requires registration_access_token in body, no admin auth)",
+    body: JSON.stringify({ json: '{ "client_name": "Updated Name" }', token: "registration_access_token", clientId: "client_id" }),
+  },
+  {
+    method: "POST",
+    path: "/api/client/dcr/delete",
+    description: "RFC 7592 Dynamic Client Registration Management — delete client (requires registration_access_token in body, no admin auth)",
+    body: JSON.stringify({ token: "registration_access_token", clientId: "client_id" }),
+  },
+
+  // ── CIBA (Client-Initiated Backchannel Authentication) ────────────────
+  {
+    method: "POST",
+    path: "/api/ciba/authentication",
+    description: "CIBA backchannel authentication — process auth request from client (requires parameters, clientId, clientSecret)",
+    body: JSON.stringify({ parameters: "login_hint=admin&scope=openid", clientId: "your_client_id", clientSecret: "your_client_secret" }),
+  },
+  {
+    method: "POST",
+    path: "/api/ciba/issue",
+    description: "Issue auth_req_id for a validated backchannel authentication ticket",
+    body: JSON.stringify({ ticket: "ticket_from_authentication_response" }),
+  },
+  {
+    method: "POST",
+    path: "/api/ciba/fail",
+    description: "Fail a backchannel authentication request with a reason",
+    body: JSON.stringify({ ticket: "ticket_from_authentication_response", reason: "ACCESS_DENIED" }),
+  },
+  {
+    method: "POST",
+    path: "/api/ciba/complete",
+    description: "Complete backchannel authentication with end-user result (AUTHORIZED, ACCESS_DENIED, or TRANSACTION_FAILED)",
+    body: JSON.stringify({ ticket: "ticket_from_authentication_response", result: "AUTHORIZED", subject: "admin" }),
+  },
+
+  // ── PAR (RFC 9126 — Pushed Authorization Requests) ────────────────────────────
+  {
+    method: "POST",
+    path: "/api/par",
+    description: "RFC 9126 Pushed Authorization Request — client sends full OAuth params via PAR, gets back a request_uri, then uses it in /authorize?request_uri=<uri> (no admin auth; clientId/clientSecret in body)",
+    body: JSON.stringify({ parameters: "response_type=code&client_id=your_client_id&redirect_uri=http://localhost:3000&scope=openid&state=par_state&code_challenge_method=S256&code_challenge=...", clientId: "your_client_id", clientSecret: "your_client_secret" }),
+  },
+  // ── Grant Management ─────────────────────────────────────────────────
+  {
+    method: "GET",
+    path: "/api/gm/:grantId",
+    description: "Grant Management for OAuth 2.0 — query grant status (requires Bearer token with grant_management_query scope)",
+  },
+  {
+    method: "DELETE",
+    path: "/api/gm/:grantId",
+    description: "Grant Management for OAuth 2.0 — revoke a grant (requires Bearer token with grant_management_revoke scope)",
+  },
+
   // ── Logout ─────────────────────────────────────────────────
   {
     method: "GET",
     path: "/api/logout",
-    description: "RP-initiated logout — requires ?client_id and ?post_logout_redirect_uri",
+    description: "RP-initiated logout — requires ?client_id and ?post_logout_redirect_uri (add &backchannel=true to deliver backchannel logout tokens to all clients)",
   },
   {
     method: "POST",
     path: "/api/backchannel_logout",
-    description: "OP-initiated backchannel logout (Authlete callback)",
+    description: "OP-initiated backchannel logout (receiving endpoint — handles incoming logout tokens from other OPs)",
+  },
+
+  // ── Backchannel Logout Issuing ──────────────────────────────
+  {
+    method: "POST",
+    path: "/api/backchannel_logout/issue",
+    description: "Issue a backchannel logout token (requires Basic auth with MGMT_CLIENT_ID/MGMT_CLIENT_SECRET)",
+    body: JSON.stringify({ clientIdentifier: "your_client_id", subject: "user_subject", sessionId: "optional_session_id" }),
+  },
+  {
+    method: "POST",
+    path: "/api/backchannel_logout/deliver",
+    description: "Issue and deliver a backchannel logout token to one client (requires Basic auth)",
+    body: JSON.stringify({ clientIdentifier: "your_client_id", subject: "user_subject" }),
+  },
+  {
+    method: "POST",
+    path: "/api/backchannel_logout/deliver-all",
+    description: "Issue and deliver backchannel logout tokens to ALL clients with a backchannelLogoutUri configured (requires Basic auth)",
+    body: JSON.stringify({ subject: "user_subject" }),
+  },
+
+  // ── Health ──────────────────────────────────────────────────
+  {
+    method: "GET",
+    path: "/api/health",
+    description: "Server health check — returns status, uptime, and timestamp (no auth required)",
+  },
+  {
+    method: "GET",
+    path: "/api/health/authlete",
+    description: "Authlete connectivity health check — proxies to Authlete's /api/lifecycle/healthcheck (no auth required, add ?extended=true for DB check)",
   },
 ];
 

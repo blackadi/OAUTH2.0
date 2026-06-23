@@ -17,6 +17,13 @@ import sessionRoutes from "./routes/session.routes";
 import jwksRoutes from "./routes/jwks.routes";
 import discoveryRoutes from "./routes/discovery.routes";
 import logoutRoutes from "./routes/logout.routes";
+import clientRoutes from "./routes/client.routes";
+import grantManagementRoutes from "./routes/grant-management.routes";
+import backchannelLogoutRoutes from "./routes/backchannel-logout.routes";
+import dcrRoutes from "./routes/dcr.routes";
+import cibaRoutes from "./routes/ciba.routes";
+import parRoutes from "./routes/par.routes";
+import healthRoutes from "./routes/health.routes";
 import routesList from "./routes/routes-list.routes";
 import DefaultRoutes from "./routes/default.routes";
 
@@ -122,6 +129,13 @@ app.use(routerURL, sessionRoutes);
 app.use(routerURL, jwksRoutes);
 app.use(routerURL, discoveryRoutes);
 app.use(routerURL, logoutRoutes);
+app.use(routerURL, clientRoutes);
+app.use(routerURL, grantManagementRoutes);
+app.use(routerURL, backchannelLogoutRoutes);
+app.use(routerURL, dcrRoutes);
+app.use(routerURL, cibaRoutes);
+app.use(routerURL, parRoutes);
+app.use(routerURL, healthRoutes);
 app.use("/", DefaultRoutes); // For rendering the index page at root /*
 
 // Error Handler

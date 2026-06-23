@@ -366,7 +366,315 @@ Expected: `200` (renders logout confirmation page) or `302` (redirect immediatel
 
 ---
 
-## Quick smoke test (single script)
+## 12. Grant Management for OAuth 2.0 (Draft)
+
+> **Auth method:** Bearer token — uses the access token from section 4 (or any token with `grant_management_query` / `grant_management_revoke` scope).
+
+The Grant Management API lets clients manage their grants (authorizations). You need a `grant_id` which is returned in the token response when the authorization request includes `grant_management_action=create`.
+
+### 12a. Query grant status
+
+```bash
+curl -s "${BASE}/api/gm/${GRANT_ID}" \
+  -H "Authorization: Bearer ${AT}" | jq
+```
+
+Expected (if the grant exists): JSON with `scopes`, `claims`, `authorization_details`, `created_at`, etc.
+Expected (if not found): HTTP 404.
+
+### 12b. Revoke a grant
+
+```bash
+curl -s -o /dev/null -w "HTTP %{http_code}" -X DELETE \
+  "${BASE}/api/gm/${GRANT_ID}" \
+  -H "Authorization: Bearer ${AT}"
+```
+
+Expected: `HTTP 204` (No Content).
+
+---
+
+## 13. Backchannel Logout (OIDC Back-Channel Logout 1.0)
+
+> **Auth method:** Basic auth with `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (if configured). The same admin credentials used for client management. If unset, the endpoint is unprotected.
+>
+> Substitute `MGMT_ID:MGMT_SEC` with your admin credentials, or omit `-u` if mgmt auth is not configured.
+
+### 13a. Issue a backchannel logout token
+
+Generates a logout token JWT for the specified client without delivering it.
+
+```bash
+curl -s -X POST "${BASE}/api/backchannel_logout/issue" \
+  -u "MGMT_ID:MGMT_SEC" \
+  -H "Content-Type: application/json" \
+  -d '{"clientIdentifier": "'"${CID}"'", "subject": "alice"}' | jq
+```
+
+Expected: JSON with `action: "OK"`, `logoutToken` (JWT string with `typ: "logout+jwt"`), and `backchannelLogoutUri`.
+
+Decode the logout token payload:
+
+```bash
+curl -s -X POST "${BASE}/api/backchannel_logout/issue" \
+  -u "MGMT_ID:MGMT_SEC" \
+  -H "Content-Type: application/json" \
+  -d '{"clientIdentifier": "'"${CID}"'", "subject": "alice"}' | jq -r '.logoutToken' | python3 -c "
+import sys, base64, json
+jwt = sys.stdin.read().strip()
+parts = jwt.split('.')
+if len(parts) == 3:
+    p = parts[1]
+    pad = 4 - len(p) % 4
+    if pad != 4: p += '=' * pad
+    print(json.dumps(json.loads(base64.urlsafe_b64decode(p)), indent=2))
+"
+```
+
+Expected JWT payload: `typ: "logout+jwt"`, `sub: "alice"`, `aud: [CID]`, `iss`, `iat`, `jti`, `events: { "http://schemas.openid.net/event/backchannel-logout": {} }`.
+
+### 13b. Issue and deliver to one client
+
+Issues a logout token and POSTs it to the client's `backchannelLogoutUri` (the client must have `backchannelLogoutUri` configured in Authlete).
+
+```bash
+curl -s -X POST "${BASE}/api/backchannel_logout/deliver" \
+  -u "MGMT_ID:MGMT_SEC" \
+  -H "Content-Type: application/json" \
+  -d '{"clientIdentifier": "'"${CID}"'", "subject": "alice"}' | jq
+```
+
+Expected: JSON with `clientId`, `success: true` (or `false` if delivery failed), `statusCode` (from the RP's response), and `backchannelLogoutUri`.
+
+### 13c. Issue and deliver to all clients
+
+Iterates all clients in the Authlete service and delivers logout tokens to every client with a `backchannelLogoutUri`.
+
+```bash
+curl -s -X POST "${BASE}/api/backchannel_logout/deliver-all" \
+  -u "MGMT_ID:MGMT_SEC" \
+  -H "Content-Type: application/json" \
+  -d '{"subject": "alice"}' | jq
+```
+
+Expected: JSON array of delivery results, one per client with `backchannelLogoutUri`. Each result has `clientId`, `clientName`, `success`, and either `statusCode` or `error`.
+
+### 13d. Automatic deliver-all via RP-Initiated Logout
+
+Add `&backchannel=true` to the normal RP-Initiated Logout URL to automatically issue and deliver backchannel logout tokens to all clients after the session is destroyed.
+
+```bash
+curl -s -o /dev/null -w "HTTP %{http_code}" \
+  "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}&backchannel=true"
+```
+
+Expected: `200` or `302` (same as normal logout — delivery happens server-side before the redirect).
+
+---
+
+## 14. Health Check
+
+Two health check endpoints: one for the server itself, one that proxies to Authlete's `/api/lifecycle/healthcheck`.
+
+### 14a. Server health (liveness probe)
+
+Returns basic server status without any external dependencies.
+
+```bash
+curl -s "${BASE}/api/health" | jq
+```
+
+Expected: `{ "status": "ok", "uptime": <seconds>, "timestamp": "..." }`.
+
+### 14b. Authlete connectivity
+
+Proxies to Authlete's health check endpoint to verify the Authlete API is reachable.
+
+```bash
+curl -s "${BASE}/api/health/authlete" | jq
+```
+
+Expected: `{ "healthy": true, "statusCode": 200, "body": "OK", "extended": false }`.
+
+### 14c. Extended check (includes database)
+
+Adds `?extended=true` to test database connectivity on the Authlete side.
+
+```bash
+curl -s "${BASE}/api/health/authlete?extended=true" | jq
+```
+
+Expected: `{ "healthy": true, "statusCode": 200, "body": "...", "extended": true }`.
+
+---
+
+## 15. Dynamic Client Registration (RFC 7591 / RFC 7592)
+
+> **Auth method for register:** Basic auth with `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (if configured). Same admin credentials used for backchannel logout. If unset, the endpoint is unprotected.
+>
+> **Auth method for get/update/delete:** No admin auth — these endpoints identify the client via `registration_access_token` + `clientId` in the request body.
+
+### 15a. Register a new client
+
+```bash
+DCR_REG=$(curl -s -X POST "${BASE}/api/client/dcr/register" \
+  -u "MGMT_ID:MGMT_SEC" \
+  -H "Content-Type: application/json" \
+  -d '{"json": "{\"client_name\": \"My DCR App\", \"redirect_uris\": [\"http://localhost:3001/callback\"], \"grant_types\": [\"AUTHORIZATION_CODE\"]}"}')
+echo "$DCR_REG" | jq
+DCR_CID=$(echo "$DCR_REG" | jq -r '.responseContent' | python3 -c "import sys,json; print(json.load(sys.stdin).get('client_id',''))" 2>/dev/null || echo "")
+DCR_TOKEN=$(echo "$DCR_REG" | jq -r '.responseContent' | python3 -c "import sys,json; print(json.load(sys.stdin).get('registration_access_token',''))" 2>/dev/null || echo "")
+echo "Client ID: $DCR_CID"
+echo "Reg Access Token: $DCR_TOKEN"
+```
+
+Expected: `action: "CREATED"` with client metadata in `responseContent`.
+
+### 15b. Get client
+
+```bash
+curl -s -X POST "${BASE}/api/client/dcr/get" \
+  -H "Content-Type: application/json" \
+  -d "{\"token\": \"${DCR_TOKEN}\", \"clientId\": \"${DCR_CID}\"}" | jq
+```
+
+Expected: `action: "OK"` with client metadata in `responseContent`.
+
+### 15c. Update client
+
+```bash
+curl -s -X POST "${BASE}/api/client/dcr/update" \
+  -H "Content-Type: application/json" \
+  -d "{\"json\": \"{\\\"client_name\\\": \\\"Updated DCR App\\\"}\", \"token\": \"${DCR_TOKEN}\", \"clientId\": \"${DCR_CID}\"}" | jq
+```
+
+Expected: `action: "UPDATED"`.
+
+### 15d. Delete client
+
+```bash
+curl -s -o /dev/null -w "HTTP %{http_code}" -X POST "${BASE}/api/client/dcr/delete" \
+  -H "Content-Type: application/json" \
+  -d "{\"token\": \"${DCR_TOKEN}\", \"clientId\": \"${DCR_CID}\"}"
+```
+
+Expected: `HTTP 204` (No Content).
+
+---
+
+## 16. CIBA — Client-Initiated Backchannel Authentication
+
+> **Auth method:** No admin or Basic auth. The client authenticates by passing `clientId`/`clientSecret` in the JSON body (not via HTTP header).
+
+### 16a. Backchannel authentication
+
+```bash
+CIBA_RESP=$(curl -s -X POST "${BASE}/api/ciba/authentication" \
+  -H "Content-Type: application/json" \
+  -d "{\"parameters\": \"login_hint=admin&scope=openid\", \"clientId\": \"${CID}\", \"clientSecret\": \"${SEC}\"}")
+echo "$CIBA_RESP" | jq
+CIBA_TICKET=$(echo "$CIBA_RESP" | jq -r '.ticket // empty')
+echo "Ticket: ${CIBA_TICKET:-(no ticket)}"
+```
+
+Expected: `action: "USER_IDENTIFICATION"` with `ticket`, `hintType`, `deliveryMode` (if CIBA enabled on the Authlete service).
+
+### 16b. Issue auth_req_id
+
+```bash
+curl -s -X POST "${BASE}/api/ciba/issue" \
+  -H "Content-Type: application/json" \
+  -d "{\"ticket\": \"${CIBA_TICKET}\"}" | jq
+```
+
+Expected: `action: "OK"`, `authReqId`, `expiresIn`, `interval`.
+
+### 16c. Fail authentication
+
+```bash
+curl -s -X POST "${BASE}/api/ciba/fail" \
+  -H "Content-Type: application/json" \
+  -d "{\"ticket\": \"${CIBA_TICKET}\", \"reason\": \"ACCESS_DENIED\"}" | jq
+```
+
+Expected: `action: "FORBIDDEN"`.
+
+### 16d. Complete authentication
+
+```bash
+curl -s -X POST "${BASE}/api/ciba/complete" \
+  -H "Content-Type: application/json" \
+  -d "{\"ticket\": \"${CIBA_TICKET}\", \"result\": \"AUTHORIZED\", \"subject\": \"admin\"}" | jq
+```
+
+Expected: `action: "NO_ACTION"` (poll/ping mode) or `"NOTIFICATION"` (push mode).
+
+---
+
+## 17. PAR — Pushed Authorization Requests (RFC 9126)
+
+> **Auth method for client at PAR endpoint:** Pass `clientId`/`clientSecret` in the JSON body (matching CIBA pattern). Per RFC 9126 §3, client authentication is REQUIRED at the PAR endpoint. Confidential clients MUST provide a `clientSecret` (or omit for public clients that don't use a secret). No admin Basic auth is required.
+>
+> **Auth method for the subsequent /authorize call:** Follows the same rules as a normal authorization request. The `client_id` in /authorize MUST match the one used in the PAR request.
+
+Instead of sending the full authorization request via the browser redirect, the client POSTs it to the PAR endpoint and gets back a `request_uri` (a short-lived, opaque reference). The client then redirects the browser to `/authorize?request_uri=<uri>`. The server resolves the PAR request server-side via Authlete, not by re-fetching the URI. This is defined in [RFC 9126 — OAuth 2.0 Pushed Authorization Requests](https://www.rfc-editor.org/rfc/rfc9126).
+
+### 17a. Push authorization request (confidential client)
+
+Pushes the OAuth parameters to the PAR endpoint. The `parameters` field is URL-encoded and contains the same set of parameters normally sent to `/authorize`. Client authentication is REQUIRED per RFC 9126.
+
+```bash
+PAR_RESP=$(curl -s -X POST "${BASE}/api/par"   -H "Content-Type: application/json"   -d "{\"parameters\": \"response_type=code&client_id=${CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=par_state\", \"clientId\": \"${CID}\", \"clientSecret\": \"${SEC}\"}")
+echo "$PAR_RESP" | jq
+PAR_URI=$(echo "$PAR_RESP" | jq -r '.requestUri // empty')
+echo "Request URI: ${PAR_URI:-(no request_uri)}"
+```
+
+Expected: `action: "CREATED"` (HTTP 201), `requestUri` (e.g. `urn:ietf:params:oauth:request_uri:CAK9YEtNorwXE3U...`), `responseContent` (JSON string with `expires_in` and `request_uri`).
+
+### 17b. Push authorization request (public client with PKCE)
+
+For public clients (SPAs, mobile apps), use PKCE (S256) with the PAR request. Client authentication is done by passing `clientId` in the body without a secret (or using the `client_id` parameter itself).
+
+```bash
+PAR_CODE_VERIFIER="dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXkdBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+PAR_CODE_CHALLENGE=$(echo -n "$PAR_CODE_VERIFIER" | openssl dgst -sha256 -binary | base64 | tr '+/' '-_' | tr -d '=')
+
+PAR_RESP_PKCE=$(curl -s -X POST "${BASE}/api/par"   -H "Content-Type: application/json"   -d "{\"parameters\": \"response_type=code&client_id=${PUB_CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=par_pkce_state&code_challenge_method=S256&code_challenge=${PAR_CODE_CHALLENGE}\", \"clientId\": \"${PUB_CID}\"}")
+echo "$PAR_RESP_PKCE" | jq
+PAR_URI_PKCE=$(echo "$PAR_RESP_PKCE" | jq -r '.requestUri // empty')
+echo "Request URI: ${PAR_URI_PKCE:-(no request_uri)}"
+```
+
+Expected: Same as 17a, but using a public client with PKCE.
+
+### 17c. Use request_uri in authorization
+
+Once you have a `request_uri`, use it instead of the full parameter set in the authorization URL. The /authorize endpoint sends the `request_uri` to Authlete, which looks up the stored PAR request and processes it as if all parameters were sent directly.
+
+**For the confidential client (no PKCE):**
+```bash
+curl -s -c /tmp/par_cj.txt -b /tmp/par_cj.txt   "${BASE}/api/authorization?client_id=${CID}&request_uri=${PAR_URI}"
+```
+
+**For the public client (with PKCE — use the code_verifier to exchange):**
+```bash
+curl -s -c /tmp/par_pkce_cj.txt -b /tmp/par_pkce_cj.txt   "${BASE}/api/authorization?client_id=${PUB_CID}&request_uri=${PAR_URI_PKCE}"
+
+# Then login + consent + exchange with code_verifier (same as PKCE flow in section 9)
+```
+
+Expected: Redirects to login/consent page (or directly to callback if interaction is not needed). The authorization code flow proceeds as normal from there.
+
+### 17d. Error case — missing parameters
+
+```bash
+curl -s -X POST "${BASE}/api/par"   -H "Content-Type: application/json"   -d '{}' | jq
+```
+
+Expected: HTTP 400 with error about missing `parameters` field.
+
+---
 
 Save this section as `smoke-test.sh`, make it executable (`chmod +x smoke-test.sh`), then run it. If your server has `MGMT_CLIENT_ID` set, add `-u "MGMT_ID:MGMT_SEC"` to the management API calls in step 10.
 
@@ -426,5 +734,15 @@ curl -s -X PATCH "${BASE}/api/token/update" -H "Content-Type: application/x-www-
 curl -s -X POST "${BASE}/api/token/revoke" -H "Content-Type: application/x-www-form-urlencoded" -d "accessTokenIdentifier=${AT_CREATED}" | jq '.resultCode'
 echo "=== 11. Logout ==="
 curl -s -o /dev/null -w "HTTP %{http_code}\n" "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}"
+echo "=== 12. Grant Management ==="
+# Query a known grant (requires a real grant_id from a previous token response with grant_management_action=create)
+# Uncomment and replace GRANT_ID with an actual value:
+# curl -s "${BASE}/api/gm/GRANT_ID" -H "Authorization: Bearer ${AT}" | jq '.scopes'
+echo "=== 15. DCR Register ==="
+curl -s -X POST "${BASE}/api/client/dcr/register" -H "Content-Type: application/json" -d '{"json": "{\"client_name\":\"Smoke Test\",\"redirect_uris\":[\"http://localhost:3001/callback\"],\"grant_types\":[\"AUTHORIZATION_CODE\"]}"}' | jq -r '.action'
+echo "=== 16. CIBA Authentication ==="
+echo "=== 17. PAR ==="
+curl -s -X POST "${BASE}/api/par" -H "Content-Type: application/json" -d "{\"parameters\":\"response_type=code&client_id=${CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=smoke\",\"clientId\":\"${CID}\",\"clientSecret\":\"${SEC}\"}" | jq -r '.action // .error'
+curl -s -X POST "${BASE}/api/ciba/authentication" -H "Content-Type: application/json" -d "{\"parameters\":\"login_hint=admin&scope=openid\",\"clientId\":\"${CID}\",\"clientSecret\":\"${SEC}\"}" | jq -r '.action // .error'
 echo "=== ALL DONE ==="
 ```

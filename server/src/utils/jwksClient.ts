@@ -70,4 +70,9 @@ export class JwksClient {
     // Convert JWK → PEM
     return jwkToPem(jwk as any);
   }
+
+  async getAllPublicKeys(): Promise<string[]> {
+    const keys = await this.fetchJwks();
+    return keys.map((jwk) => jwkToPem(jwk as any));
+  }
 }

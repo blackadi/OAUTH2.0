@@ -5,6 +5,26 @@ import {
   TOKEN_CREATE_ENDPOINT, TOKEN_LIST_ENDPOINT, TOKEN_UPDATE_ENDPOINT,
   TOKEN_REVOKE_ENDPOINT, TOKEN_DELETE_ENDPOINT, TOKEN_REISSUE_ENDPOINT,
   TOKEN_LOCAL_ENDPOINT,
+  CLIENT_LIST_ENDPOINT, CLIENT_GET_ENDPOINT, CLIENT_CREATE_ENDPOINT,
+  CLIENT_UPDATE_ENDPOINT, CLIENT_DELETE_ENDPOINT, CLIENT_FLAG_ENDPOINT,
+  CLIENT_SECRET_REFRESH_ENDPOINT, CLIENT_SECRET_UPDATE_ENDPOINT,
+  CLIENT_AUTH_LIST_ENDPOINT, CLIENT_AUTH_UPDATE_ENDPOINT, CLIENT_AUTH_DELETE_ENDPOINT,
+  CLIENT_SCOPES_GRANTED_ENDPOINT, CLIENT_SCOPES_REQUESTABLE_ENDPOINT,
+  GRANT_MANAGEMENT_ENDPOINT,
+  BACKCHANNEL_LOGOUT_ISSUE_ENDPOINT,
+  BACKCHANNEL_LOGOUT_DELIVER_ENDPOINT,
+  BACKCHANNEL_LOGOUT_DELIVER_ALL_ENDPOINT,
+  DCR_REGISTER_ENDPOINT,
+  DCR_GET_ENDPOINT,
+  DCR_UPDATE_ENDPOINT,
+  DCR_DELETE_ENDPOINT,
+  CIBA_AUTHENTICATION_ENDPOINT,
+  CIBA_ISSUE_ENDPOINT,
+  CIBA_FAIL_ENDPOINT,
+  CIBA_COMPLETE_ENDPOINT,
+  PAR_ENDPOINT,
+  HEALTH_ENDPOINT,
+  HEALTH_AUTHLETE_ENDPOINT,
 } from '../config';
 
 export interface TokenRequest {
@@ -167,43 +187,79 @@ class ApiService {
     return data as JwksResponse;
   }
 
-  async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    const response = await fetch('http://localhost:3000/health', {
-      headers: { Accept: 'application/json' },
+  async clientList(auth: string, start?: number, end?: number): Promise<any> {
+    let url = CLIENT_LIST_ENDPOINT;
+    const params = new URLSearchParams();
+    if (start !== undefined) params.set('start', String(start));
+    if (end !== undefined) params.set('end', String(end));
+    const qs = params.toString();
+    if (qs) url += `?${qs}`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
     });
-    if (!response.ok) throw new Error(`Health check failed with status ${response.status}`);
+    if (!response.ok) throw new Error(await response.text());
     return response.json();
   }
 
-  private async postForm(url: string, params: URLSearchParams): Promise<any> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
+  async clientGet(clientId: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_GET_ENDPOINT}/${encodeURIComponent(clientId)}`, {
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
     });
     if (!response.ok) throw new Error(await response.text());
-    const text = await response.text();
-    try { return JSON.parse(text); }
-    catch { throw new Error(text || 'Endpoint did not return JSON'); }
+    return response.json();
   }
 
-  private async postBasicAuth(url: string, params: URLSearchParams, clientId: string, clientSecret: string): Promise<any> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-      },
-      body: params.toString(),
+  async clientCreate(body: Record<string, unknown>, auth: string): Promise<any> {
+    return this.postAdmin(CLIENT_CREATE_ENDPOINT, body, auth);
+  }
+
+  async clientUpdate(clientId: string, body: Record<string, unknown>, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_UPDATE_ENDPOINT}/${encodeURIComponent(clientId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error(await response.text());
-    const text = await response.text();
-    try { return JSON.parse(text); }
-    catch { throw new Error(text || 'Endpoint did not return JSON'); }
+    return response.json();
   }
 
-  private async postAdmin(url: string, body: Record<string, string>, auth: string): Promise<any> {
-    const response = await fetch(url, {
+  async clientDelete(clientId: string, auth: string): Promise<void> {
+    const response = await fetch(`${CLIENT_DELETE_ENDPOINT}/${encodeURIComponent(clientId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    if (!response.ok) throw new Error(await response.text());
+  }
+
+  async clientLockFlag(clientIdentifier: string, locked: boolean, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_FLAG_ENDPOINT}/${encodeURIComponent(clientIdentifier)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify({ clientLocked: locked }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientRefreshSecret(clientIdentifier: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_SECRET_REFRESH_ENDPOINT}/${encodeURIComponent(clientIdentifier)}`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientListAuth(subject: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_AUTH_LIST_ENDPOINT}/${encodeURIComponent(subject)}`, {
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientUpdateAuth(clientId: string, body: Record<string, unknown>, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_AUTH_UPDATE_ENDPOINT}/${encodeURIComponent(clientId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
       body: JSON.stringify(body),
@@ -211,6 +267,139 @@ class ApiService {
     if (!response.ok) throw new Error(await response.text());
     return response.json();
   }
+
+  async clientDeleteAuth(clientId: string, subject: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_AUTH_DELETE_ENDPOINT}/${encodeURIComponent(clientId)}/${encodeURIComponent(subject)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientGetGrantedScopes(clientId: string, subject: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_SCOPES_GRANTED_ENDPOINT}/${encodeURIComponent(clientId)}/${encodeURIComponent(subject)}`, {
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientDeleteGrantedScopes(clientId: string, subject: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_SCOPES_GRANTED_ENDPOINT}/${encodeURIComponent(clientId)}/${encodeURIComponent(subject)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientGetRequestableScopes(clientId: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_SCOPES_REQUESTABLE_ENDPOINT}/${encodeURIComponent(clientId)}`, {
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientUpdateRequestableScopes(clientId: string, body: Record<string, unknown>, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_SCOPES_REQUESTABLE_ENDPOINT}/${encodeURIComponent(clientId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async clientDeleteRequestableScopes(clientId: string, auth: string): Promise<void> {
+    const response = await fetch(`${CLIENT_SCOPES_REQUESTABLE_ENDPOINT}/${encodeURIComponent(clientId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    if (!response.ok) throw new Error(await response.text());
+  }
+
+  async clientUpdateSecret(clientIdentifier: string, clientSecret: string, auth: string): Promise<any> {
+    const response = await fetch(`${CLIENT_SECRET_UPDATE_ENDPOINT}/${encodeURIComponent(clientIdentifier)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify({ clientSecret }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async healthCheck(): Promise<{ status: string; uptime: number; timestamp: string }> {
+    const response = await fetch(HEALTH_ENDPOINT, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`Health check failed with status ${response.status}`);
+    return response.json();
+  }
+
+  async cibaBackchannelAuthentication(body: Record<string, string>): Promise<any> {
+    const response = await fetch(CIBA_AUTHENTICATION_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async cibaIssue(ticket: string): Promise<any> {
+    const response = await fetch(CIBA_ISSUE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const text = await response.text();
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch { return text; }
+  }
+
+  async cibaFail(ticket: string, reason: string): Promise<any> {
+    const response = await fetch(CIBA_FAIL_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket, reason }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const text = await response.text();
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch { return text; }
+  }
+
+  async cibaComplete(ticket: string, result: string, subject: string): Promise<any> {
+    const response = await fetch(CIBA_COMPLETE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket, result, subject }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const text = await response.text();
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch { return text; }
+  }
+
+  async pushedAuthorization(body: Record<string, string>): Promise<any> {
+    const response = await fetch(PAR_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const text = await response.text();
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch { return text; }
+  }
+
 }
 
 export const apiService = new ApiService();

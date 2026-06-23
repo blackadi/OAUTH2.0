@@ -14,6 +14,9 @@ export function validateRequired(
 export function validateAuthorizationParams(
   query: Record<string, unknown>
 ): string | null {
+  if (query.request_uri) {
+    return validateRequired(query, ["client_id", "request_uri"]);
+  }
   return validateRequired(query, ["response_type", "client_id", "redirect_uri"]);
 }
 

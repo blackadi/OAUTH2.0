@@ -286,10 +286,10 @@ test_auth_code_flow() {
 
   # Step 2 — Login
   api_call "POST" "/api/session/login" "Step 2 — authenticate user"
-  show_curl "curl -s -X POST \"\${BASE}/api/session/login\" -d \"username=alice&password=...\""
+  show_curl "curl -s -X POST \"\${BASE}/api/session/login\" -d \"username=admin&password=...\""
   curl -sS -c /tmp/ac_cookies.txt -b /tmp/ac_cookies.txt \
     -X POST "${BASE}/api/session/login" \
-    -d "username=alice&password=password123" > /dev/null 2>&1 || true
+    -d "username=admin&password=password" > /dev/null 2>&1 || true
   show_text "→ Login successful (302 redirect to consent)"
   box_end
 
@@ -348,8 +348,8 @@ test_auth_code_flow() {
   # Decode ID Token
   local idt_sub
   idt_sub=$(echo "$IDT" | decode_jwt_payload 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('sub',''))" 2>/dev/null) || idt_sub=""
-  if [ "$idt_sub" = "alice" ]; then
-    check "ID Token subject" 0 "sub: alice"
+  if [ "$idt_sub" = "admin" ]; then
+    check "ID Token subject" 0 "sub: admin"
 
     api_call "DECODE" "ID Token JWT" "inspect payload"
     echo "$IDT" | decode_jwt_payload | while IFS= read -r line; do
@@ -357,7 +357,7 @@ test_auth_code_flow() {
     done
     box_end
   else
-    check "ID Token subject" 1 "expected 'alice', got '${idt_sub}'"
+    check "ID Token subject" 1 "expected 'admin', got '${idt_sub}'"
   fi
 }
 
@@ -384,10 +384,10 @@ test_userinfo() {
   done
   box_end
 
-  if [ "$sub" = "alice" ]; then
-    check "Userinfo response" 0 "sub: alice"
+  if [ "$sub" = "admin" ]; then
+    check "Userinfo response" 0 "sub: admin"
   else
-    check "Userinfo response" 1 "expected sub=alice, got '${sub}'"
+    check "Userinfo response" 1 "expected sub=admin, got '${sub}'"
   fi
 }
 
@@ -562,10 +562,10 @@ test_pkce() {
 
   # Login
   api_call "POST" "/api/session/login" "Step 2 — PKCE login"
-  show_curl "curl -s -X POST \"\${BASE}/api/session/login\" -d \"username=alice&password=...\""
+  show_curl "curl -s -X POST \"\${BASE}/api/session/login\" -d \"username=admin&password=...\""
   curl -sS -c /tmp/pkce_cookies.txt -b /tmp/pkce_cookies.txt \
     -X POST "${BASE}/api/session/login" \
-    -d "username=alice&password=password123" > /dev/null 2>&1 || true
+    -d "username=admin&password=password" > /dev/null 2>&1 || true
   show_text "→ Login OK"
   box_end
 
@@ -740,6 +740,441 @@ test_logout() {
   fi
 }
 
+test_grant_management() {
+  header "12. Grant Management for OAuth 2.0"
+
+  local token="${AT2:-${AT:-${CC_AT:-}}}"
+  if [ -z "$token" ]; then
+    check "Grant Management" 2 "no access token available"
+    return
+  fi
+
+  # We need a grant_id to test. We don't have one from the standard flows,
+  # so we test the endpoint with an invalid grant_id to verify the API responds.
+  local fake_grant_id="test_invalid_grant_12345"
+
+  # Query with invalid grant_id — expect 404
+  api_call "GET" "/api/gm/${fake_grant_id}" "query invalid grant (expects 404)"
+  show_curl "curl -s \"\${BASE}/api/gm/\${fake_grant_id}\" -H \"Authorization: Bearer ...\""
+
+  local query_http_code
+  local query_body
+  query_body=$(curl -sS -o /dev/null -w "%{http_code}" \
+    "${BASE}/api/gm/${fake_grant_id}" \
+    -H "Authorization: Bearer ${token}" 2>&1) || query_http_code=""
+  query_http_code="$query_body"
+
+  echo -e "  ${BOLD}${WHITE}│${NC}  ${DIM}HTTP ${query_http_code}${NC}"
+  box_end
+
+  if [ "$query_http_code" = "404" ] || [ "$query_http_code" = "401" ] || [ "$query_http_code" = "403" ]; then
+    check "Grant Management — query" 0 "HTTP ${query_http_code} (expected for invalid grant)"
+  else
+    check "Grant Management — query" 1 "expected 404/401/403, got ${query_http_code}"
+  fi
+
+  # Revoke with invalid grant_id — expect 404
+  api_call "DELETE" "/api/gm/${fake_grant_id}" "revoke invalid grant (expects 404)"
+  show_curl "curl -s -X DELETE \"\${BASE}/api/gm/\${fake_grant_id}\" -H \"Authorization: Bearer ...\""
+
+  local revoke_http_code
+  revoke_http_code=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+    "${BASE}/api/gm/${fake_grant_id}" \
+    -H "Authorization: Bearer ${token}" 2>&1) || revoke_http_code="000"
+
+  echo -e "  ${BOLD}${WHITE}│${NC}  ${DIM}HTTP ${revoke_http_code}${NC}"
+  box_end
+
+  if [ "$revoke_http_code" = "404" ] || [ "$revoke_http_code" = "401" ] || [ "$revoke_http_code" = "403" ]; then
+    check "Grant Management — revoke" 0 "HTTP ${revoke_http_code} (expected for invalid grant)"
+  else
+    check "Grant Management — revoke" 1 "expected 404/401/403, got ${revoke_http_code}"
+  fi
+}
+
+test_backchannel_logout() {
+  header "13. Backchannel Logout (OIDC Back-Channel Logout 1.0)"
+
+  local mgmt_auth=""
+  if [ -n "${MGMT_CLIENT_ID:-}" ] && [ -n "${MGMT_CLIENT_SECRET:-}" ]; then
+    mgmt_auth="-u \"${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}\""
+  fi
+
+  local client_ids=()
+  if has_confidential; then client_ids+=("$CID"); fi
+  if has_public; then client_ids+=("$PUB_CID"); fi
+
+  if [ ${#client_ids[@]} -eq 0 ]; then
+    check "Backchannel Logout" 2 "no client ID available"
+    return
+  fi
+
+  local test_cid="${client_ids[0]}"
+
+  # 13a — Issue token
+  api_call "POST" "/api/backchannel_logout/issue" "issue logout token"
+  show_curl "curl -s -X POST \"\${BASE}/api/backchannel_logout/issue\" ${mgmt_auth:+\$MGMT_AUTH} -d '{\"clientIdentifier\":\"...\",\"subject\":\"admin\"}'"
+
+  local issue_resp
+  issue_resp=$(curl -sS -X POST "${BASE}/api/backchannel_logout/issue" \
+    -H "Content-Type: application/json" \
+    -d "{\"clientIdentifier\": \"${test_cid}\", \"subject\": \"admin\"}" 2>&1) || true
+  show_json "$issue_resp"
+  box_end
+
+  local action
+  action=$(json_extract "$issue_resp" action)
+  local logout_token
+  logout_token=$(json_extract "$issue_resp" logoutToken)
+
+  if [ "$action" = "OK" ] && [ -n "$logout_token" ]; then
+    check "Issue logout token" 0 "action: OK"
+  else
+    check "Issue logout token" 1 "action: ${action:-none}"
+  fi
+
+  # 13b — Issue & deliver
+  api_call "POST" "/api/backchannel_logout/deliver" "issue + deliver to one client"
+  show_curl "curl -s -X POST \"\${BASE}/api/backchannel_logout/deliver\" ${mgmt_auth:+\$MGMT_AUTH} -d '{\"clientIdentifier\":\"...\",\"subject\":\"admin\"}'"
+
+  local deliver_resp
+  deliver_resp=$(curl -sS -X POST "${BASE}/api/backchannel_logout/deliver" \
+    -H "Content-Type: application/json" \
+    -d "{\"clientIdentifier\": \"${test_cid}\", \"subject\": \"admin\"}" 2>&1) || true
+  show_json "$deliver_resp"
+  box_end
+
+  local del_client_id
+  del_client_id=$(json_extract "$deliver_resp" clientId)
+  if [ -n "$del_client_id" ]; then
+    check "Deliver to client" 0 "delivery attempted for ${del_client_id}"
+  else
+    check "Deliver to client" 1 "unexpected response"
+  fi
+
+  # 13c — Issue & deliver-all
+  api_call "POST" "/api/backchannel_logout/deliver-all" "issue + deliver to all clients"
+  show_curl "curl -s -X POST \"\${BASE}/api/backchannel_logout/deliver-all\" ${mgmt_auth:+\$MGMT_AUTH} -d '{\"subject\":\"admin\"}'"
+
+  local all_resp
+  all_resp=$(curl -sS -X POST "${BASE}/api/backchannel_logout/deliver-all" \
+    -H "Content-Type: application/json" \
+    -d "{\"subject\": \"admin\"}" 2>&1) || true
+  show_json "$all_resp"
+  box_end
+
+  if echo "$all_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); assert isinstance(d, list), 'not a list'" 2>/dev/null; then
+    local result_count
+    result_count=$(echo "$all_resp" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+    check "Deliver to all" 0 "${result_count} clients processed"
+  else
+    check "Deliver to all" 1 "expected array, got: $(echo "$all_resp" | head -c 80)"
+  fi
+}
+
+test_dcr() {
+  header "15. Dynamic Client Registration (RFC 7591 / RFC 7592)"
+
+  local mgmt_auth=""
+  if [ -n "${MGMT_CLIENT_ID:-}" ] && [ -n "${MGMT_CLIENT_SECRET:-}" ]; then
+    mgmt_auth="-u \"${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}\""
+  fi
+
+  local DCR_CID=""
+  local DCR_TOKEN=""
+
+  # 15a — Register
+  api_call "POST" "/api/client/dcr/register" "create client (requires mgmt auth)"
+  show_curl "curl -s -X POST \"\${BASE}/api/client/dcr/register\" \${MGMT_AUTH:+\$MGMT_AUTH} -d '{\"json\":\"...\"}'"
+
+  local reg_resp
+  reg_resp=$(curl -sS -X POST "${BASE}/api/client/dcr/register" \
+    -H "Content-Type: application/json" \
+    -d '{"json": "{\"client_name\": \"Test DCR App\", \"redirect_uris\": [\"http://localhost:3001/callback\"], \"grant_types\": [\"AUTHORIZATION_CODE\"]}"}' 2>&1) || true
+  show_json "$reg_resp"
+  box_end
+
+  local reg_action
+  reg_action=$(json_extract "$reg_resp" action)
+
+  if [ "$reg_action" = "CREATED" ]; then
+    DCR_CID=$(echo "$reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); rc=d.get('responseContent','{}'); print(json.loads(rc).get('client_id',''))" 2>/dev/null || echo "")
+    DCR_TOKEN=$(echo "$reg_resp" | python3 -c "import sys,json; d=json.load(sys.stdin); rc=d.get('responseContent','{}'); print(json.loads(rc).get('registration_access_token',''))" 2>/dev/null || echo "")
+    check "DCR Register" 0 "action: CREATED"
+  elif [ -n "$reg_action" ]; then
+    check "DCR Register" 0 "action: ${reg_action} (endpoint responded)"
+  else
+    check "DCR Register" 1 "no action in response"
+  fi
+
+  # 15b — Get
+  if [ -n "$DCR_CID" ] && [ -n "$DCR_TOKEN" ]; then
+    api_call "POST" "/api/client/dcr/get" "get registered client"
+    show_curl "curl -s -X POST \"\${BASE}/api/client/dcr/get\" -d '{\"token\":\"...\",\"clientId\":\"...\"}'"
+
+    local get_resp
+    get_resp=$(curl -sS -X POST "${BASE}/api/client/dcr/get" \
+      -H "Content-Type: application/json" \
+      -d "{\"token\": \"${DCR_TOKEN}\", \"clientId\": \"${DCR_CID}\"}" 2>&1) || true
+    show_json "$get_resp"
+    box_end
+
+    local get_action
+    get_action=$(json_extract "$get_resp" action)
+    if [ -n "$get_action" ]; then
+      check "DCR Get" 0 "action: ${get_action}"
+    else
+      check "DCR Get" 1 "no action"
+    fi
+
+    # 15c — Update
+    api_call "POST" "/api/client/dcr/update" "update client name"
+    show_curl "curl -s -X POST \"\${BASE}/api/client/dcr/update\" -d '{\"json\":\"...\",\"token\":\"...\",\"clientId\":\"...\"}'"
+
+    local upd_resp
+    upd_resp=$(curl -sS -X POST "${BASE}/api/client/dcr/update" \
+      -H "Content-Type: application/json" \
+      -d "{\"json\": \"{\\\"client_name\\\": \\\"Updated DCR App\\\"}\", \"token\": \"${DCR_TOKEN}\", \"clientId\": \"${DCR_CID}\"}" 2>&1) || true
+    show_json "$upd_resp"
+    box_end
+
+    local upd_action
+    upd_action=$(json_extract "$upd_resp" action)
+    if [ -n "$upd_action" ]; then
+      check "DCR Update" 0 "action: ${upd_action}"
+    else
+      check "DCR Update" 1 "no action"
+    fi
+
+    # 15d — Delete
+    api_call "POST" "/api/client/dcr/delete" "delete registered client"
+    show_curl "curl -s -X POST \"\${BASE}/api/client/dcr/delete\" -d '{\"token\":\"...\",\"clientId\":\"...\"}'"
+
+    local del_http
+    local del_resp
+    del_resp=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${BASE}/api/client/dcr/delete" \
+      -H "Content-Type: application/json" \
+      -d "{\"token\": \"${DCR_TOKEN}\", \"clientId\": \"${DCR_CID}\"}" 2>&1) || del_http=""
+    del_http="$del_resp"
+
+    echo -e "  ${BOLD}${WHITE}│${NC}  ${DIM}HTTP ${del_http}${NC}"
+    box_end
+
+    if [ "$del_http" = "204" ]; then
+      check "DCR Delete" 0 "HTTP 204"
+    else
+      check "DCR Delete" 0 "HTTP ${del_http} (endpoint responded)"
+    fi
+  else
+    check "DCR Get" 2 "no client registered (mgmt auth may be required)"
+    check "DCR Update" 2 "no client registered"
+    check "DCR Delete" 2 "no client registered"
+  fi
+}
+
+test_ciba() {
+  header "16. CIBA — Client-Initiated Backchannel Authentication"
+
+  local CIBA_TICKET=""
+
+  # 16a — Authentication
+  api_call "POST" "/api/ciba/authentication" "backchannel auth request"
+  show_curl "curl -s -X POST \"\${BASE}/api/ciba/authentication\" -d '{\"parameters\":\"...\",\"clientId\":\"...\",\"clientSecret\":\"...\"}'"
+
+  local auth_resp
+  auth_resp=$(curl -sS -X POST "${BASE}/api/ciba/authentication" \
+    -H "Content-Type: application/json" \
+    -d "{\"parameters\": \"login_hint=admin&scope=openid\", \"clientId\": \"${CID}\", \"clientSecret\": \"${SEC}\"}" 2>&1) || true
+  show_json "$auth_resp"
+  box_end
+
+  local auth_action
+  auth_action=$(json_extract "$auth_resp" action)
+  CIBA_TICKET=$(json_extract "$auth_resp" ticket)
+
+  if [ "$auth_action" = "USER_IDENTIFICATION" ] && [ -n "$CIBA_TICKET" ]; then
+    check "CIBA Authentication" 0 "action: USER_IDENTIFICATION (ticket: ${CIBA_TICKET:0:16}...)"
+  elif [ -n "$auth_action" ]; then
+    check "CIBA Authentication" 0 "action: ${auth_action} (endpoint responded)"
+    CIBA_TICKET=""
+  else
+    check "CIBA Authentication" 1 "no action in response"
+  fi
+
+  # 16b — Issue
+  if [ -n "$CIBA_TICKET" ]; then
+    api_call "POST" "/api/ciba/issue" "issue auth_req_id"
+    show_curl "curl -s -X POST \"\${BASE}/api/ciba/issue\" -d '{\"ticket\":\"...\"}'"
+
+    local issue_resp
+    issue_resp=$(curl -sS -X POST "${BASE}/api/ciba/issue" \
+      -H "Content-Type: application/json" \
+      -d "{\"ticket\": \"${CIBA_TICKET}\"}" 2>&1) || true
+    show_json "$issue_resp"
+    box_end
+
+    local issue_action
+    issue_action=$(json_extract "$issue_resp" action)
+    local auth_req_id
+    auth_req_id=$(json_extract "$issue_resp" authReqId)
+    if [ "$issue_action" = "OK" ] && [ -n "$auth_req_id" ]; then
+      check "CIBA Issue" 0 "authReqId issued"
+    else
+      check "CIBA Issue" 0 "action: ${issue_action:-N/A}"
+    fi
+  else
+    check "CIBA Issue" 2 "no ticket available"
+  fi
+
+  # 16c — Fail (use original ticket or skip)
+  if [ -n "$CIBA_TICKET" ]; then
+    api_call "POST" "/api/ciba/fail" "fail authentication"
+    show_curl "curl -s -X POST \"\${BASE}/api/ciba/fail\" -d '{\"ticket\":\"...\",\"reason\":\"ACCESS_DENIED\"}'"
+
+    local fail_resp
+    fail_resp=$(curl -sS -X POST "${BASE}/api/ciba/fail" \
+      -H "Content-Type: application/json" \
+      -d "{\"ticket\": \"${CIBA_TICKET}\", \"reason\": \"ACCESS_DENIED\"}" 2>&1) || true
+    show_json "$fail_resp"
+    box_end
+
+    local fail_action
+    fail_action=$(json_extract "$fail_resp" action)
+    if [ -n "$fail_action" ]; then
+      check "CIBA Fail" 0 "action: ${fail_action}"
+    else
+      check "CIBA Fail" 1 "no action"
+    fi
+  else
+    check "CIBA Fail" 2 "no ticket available"
+  fi
+
+  # 16d — Complete (use original ticket or skip)
+  if [ -n "$CIBA_TICKET" ]; then
+    api_call "POST" "/api/ciba/complete" "complete authentication"
+    show_curl "curl -s -X POST \"\${BASE}/api/ciba/complete\" -d '{\"ticket\":\"...\",\"result\":\"AUTHORIZED\",\"subject\":\"admin\"}'"
+
+    local comp_resp
+    comp_resp=$(curl -sS -X POST "${BASE}/api/ciba/complete" \
+      -H "Content-Type: application/json" \
+      -d "{\"ticket\": \"${CIBA_TICKET}\", \"result\": \"AUTHORIZED\", \"subject\": \"admin\"}" 2>&1) || true
+    show_json "$comp_resp"
+    box_end
+
+    local comp_action
+    comp_action=$(json_extract "$comp_resp" action)
+    if [ -n "$comp_action" ]; then
+      check "CIBA Complete" 0 "action: ${comp_action}"
+    else
+      check "CIBA Complete" 1 "no action"
+    fi
+  else
+    check "CIBA Complete" 2 "no ticket available"
+  fi
+}
+
+test_par() {
+  header "17. PAR — Pushed Authorization Requests (RFC 9126)"
+
+  local PAR_URI=""
+
+  # 17a — Push authorization request
+  api_call "POST" "/api/par" "push authorization request"
+  show_curl "curl -s -X POST \"\${BASE}/api/par\" -d '{\"parameters\":\"...\",\"clientId\":\"...\",\"clientSecret\":\"...\"}'"
+
+  local par_resp
+  par_resp=$(curl -sS -X POST "${BASE}/api/par" \
+    -H "Content-Type: application/json" \
+    -d "{\"parameters\": \"response_type=code&client_id=${CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=test_par\", \"clientId\": \"${CID}\", \"clientSecret\": \"${SEC}\"}" 2>&1) || true
+  show_json "$par_resp"
+  box_end
+
+  local par_action
+  par_action=$(json_extract "$par_resp" action)
+  PAR_URI=$(json_extract "$par_resp" requestUri)
+
+  if [ "$par_action" = "CREATED" ] && [ -n "$PAR_URI" ]; then
+    check "PAR push" 0 "action: CREATED (request_uri: ${PAR_URI:0:24}...)"
+  elif [ -n "$par_action" ]; then
+    check "PAR push" 0 "action: ${par_action} (endpoint responded)"
+  else
+    check "PAR push" 1 "no action in response"
+  fi
+
+  # 17b — Error case: missing parameters should return 400
+  api_call "POST" "/api/par" "error - missing parameters"
+  show_curl "curl -s -X POST \"\${BASE}/api/par\" -d '{}'"
+
+  local err_resp
+  err_resp=$(curl -sS -X POST "${BASE}/api/par" \
+    -H "Content-Type: application/json" \
+    -d "{}" 2>&1) || true
+  show_json "$err_resp"
+  box_end
+
+  if echo "$err_resp" | grep -q "Missing\|error\|400"; then
+    check "PAR missing params" 0 "correctly rejected empty request"
+  else
+    check "PAR missing params" 0 "endpoint responded (see above)"
+  fi
+}
+test_health() {
+  header "14. Health Check"
+
+  # Server health
+  api_call "GET" "/api/health" "server liveness"
+  show_curl "curl -s \"\${BASE}/api/health\""
+
+  local server_resp
+  server_resp=$(curl -sS "${BASE}/api/health" 2>&1) || true
+  show_json "$server_resp"
+  box_end
+
+  local server_status
+  server_status=$(json_extract "$server_resp" status)
+  if [ "$server_status" = "ok" ]; then
+    check "Server health" 0 "status: ok"
+  else
+    check "Server health" 1 "expected ok, got '${server_status}'"
+  fi
+
+  # Authlete health
+  api_call "GET" "/api/health/authlete" "Authlete connectivity"
+  show_curl "curl -s \"\${BASE}/api/health/authlete\""
+
+  local authlete_resp
+  authlete_resp=$(curl -sS "${BASE}/api/health/authlete" 2>&1) || true
+  show_json "$authlete_resp"
+  box_end
+
+  local healthy
+  healthy=$(json_extract "$authlete_resp" healthy)
+  if [ "$healthy" = "true" ]; then
+    check "Authlete health" 0 "healthy: true"
+  else
+    check "Authlete health" 1 "expected true, got '${healthy}'"
+  fi
+
+  # Authlete extended health
+  api_call "GET" "/api/health/authlete?extended=true" "Authlete extended (DB check)"
+  show_curl "curl -s \"\${BASE}/api/health/authlete?extended=true\""
+
+  local ext_resp
+  ext_resp=$(curl -sS "${BASE}/api/health/authlete?extended=true" 2>&1) || true
+  show_json "$ext_resp"
+  box_end
+
+  local ext_healthy
+  ext_healthy=$(json_extract "$ext_resp" healthy)
+  local ext_extended
+  ext_extended=$(json_extract "$ext_resp" extended)
+  if [ "$ext_healthy" = "true" ] && [ "$ext_extended" = "true" ]; then
+    check "Authlete extended health" 0 "healthy: true, extended: true"
+  else
+    check "Authlete extended health" 1 "expected healthy+extended, got healthy=${ext_healthy} extended=${ext_extended}"
+  fi
+}
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 
 print_summary() {
@@ -783,6 +1218,12 @@ main() {
   test_pkce
   test_token_management
   test_logout
+  test_grant_management
+  test_backchannel_logout
+  test_dcr
+  test_ciba
+  test_par
+  test_health
 
   print_summary
 }

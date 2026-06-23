@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import session from "express-session";
 import jwt from "jsonwebtoken";
 import logger from "../utils/logger";
+import { BackchannelLogoutService } from "./backchannel-logout.service";
 
 export class rpInitiatedLogoutService {
   async rpInitiatedLogout(
@@ -10,7 +11,7 @@ export class rpInitiatedLogoutService {
   ) {
     const log = req.logger || logger;
 
-    const { id_token_hint, post_logout_redirect_uri, state, client_id } =
+    const { id_token_hint, post_logout_redirect_uri, state, client_id, backchannel } =
       req.query as Record<string, string | undefined>;
 
     // 1. Identify the user — from local session or id_token_hint
@@ -32,15 +33,31 @@ export class rpInitiatedLogoutService {
       subject,
       hasPostLogoutRedirectUri: !!post_logout_redirect_uri,
       clientId: client_id,
+      backchannel: !!backchannel,
     });
 
-    // 2. Destroy the local session and clear cookie
+    // 2. If backchannel=true, fire deliver-all BEFORE session destruction
+    //    so we can log the subject while it's still available
+    let backchannelResults: unknown = null;
+    if (backchannel === "true" && subject) {
+      try {
+        const bclService = new BackchannelLogoutService();
+        backchannelResults = await bclService.issueAndDeliverToAll(subject);
+        log("Backchannel logout deliver-all completed", { subject });
+      } catch (err) {
+        log.error("Backchannel logout deliver-all failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // 3. Destroy the local session and clear cookie
     req.session.destroy((err) => {
       if (err) log.error("Failed to destroy session", { err });
     });
     res.clearCookie("connect.sid", { path: "/" });
 
-    // 3. Validate post_logout_redirect_uri against allowed URIs
+    // 4. Validate post_logout_redirect_uri against allowed URIs
     const allowedRedirectUri = process.env.LOGOUT_REDIRECT_URI || "http://localhost:3000";
 
     if (post_logout_redirect_uri) {
@@ -67,11 +84,12 @@ export class rpInitiatedLogoutService {
       });
     }
 
-    // 4. No valid redirect — render logout confirmation
+    // 5. No valid redirect — render logout confirmation
     return res.render("logout", {
       client_id: client_id || process.env.LOGOUT_CLIENT_ID || "",
       post_logout_redirect_uri: allowedRedirectUri,
       subject: subject || "",
+      backchannelResults: backchannelResults ? JSON.stringify(backchannelResults, null, 2) : null,
     });
   }
 }

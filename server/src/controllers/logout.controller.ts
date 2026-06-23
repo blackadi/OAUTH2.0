@@ -42,18 +42,42 @@ export async function opBackchannelLogout(req: Request, res: Response, next: Nex
             return;
         }
 
+        if (!jwks.uri) {
+            throw new Error("JWKS_URI must be configured to verify backchannel logout tokens");
+        }
+
+        const client = new JwksClient(jwks.uri);
         const kid = decoded.header.kid;
-        if (kid && jwks.uri) {
-            const client = new JwksClient(jwks.uri);
+
+        if (kid) {
             const publicKey = await client.getPublicKey(kid);
-            if (publicKey) {
-                jwt.verify(logoutToken, publicKey, { algorithms: ["RS256", "ES256"] });
+            if (!publicKey) {
+                throw new Error(`No JWK found with kid '${kid}' in JWKS`);
+            }
+            jwt.verify(logoutToken, publicKey, { algorithms: ["RS256", "ES256"] });
+        } else {
+            const keys = await client.getAllPublicKeys();
+            let verified = false;
+            for (const key of keys) {
+                try {
+                    jwt.verify(logoutToken, key, { algorithms: ["RS256", "ES256"] });
+                    verified = true;
+                    break;
+                } catch { continue; }
+            }
+            if (!verified) {
+                throw new Error("Logout token signature could not be verified with any JWKS key");
             }
         }
 
         const subject = payload.sub;
-        if (subject && req.session && req.sessionStore) {
+        if (subject) {
             log("Backchannel logout: destroying session for subject", { subject });
+            if (req.session) {
+                req.session.destroy((err) => {
+                    if (err) log.error("Failed to destroy session on backchannel logout", { err });
+                });
+            }
         }
 
         res.status(200).end();

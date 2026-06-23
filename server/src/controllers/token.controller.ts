@@ -12,12 +12,9 @@ import {
 import { handleTokenExchange } from "./token-exchange-response.handler";
 import { sendTokenFailResponse } from "./token-fail-response.handler";
 import { sendTokenIssueResponse } from "./token-issue-response.handler";
-import { jwks, jwt } from "../config/authlete.config";
-import {
-  validateJwtAssertionWithJwks,
-  JwtValidationResult,
-} from "../utils/jwtAssertionValidator";
 import { validateTokenParams } from "../utils/validate";
+import { authleteApi, serviceId } from "../services/authlete.service";
+import jwt from "jsonwebtoken";
 
 const tokenService = new TokenService();
 const loginService = new LoginService();
@@ -78,25 +75,46 @@ export const tokenController = {
             });
           }
 
-          const jwksUri = jwks.uri;
+          if (result.clientId === undefined && !result.clientIdAlias) {
+            return res.status(500).json({
+              error: "server_error",
+              error_description: "Client identifier not available from token response",
+            });
+          }
+          const clientIdentifier = result.clientIdAlias ?? String(result.clientId);
 
-          // Validate JWT using JWKS
-          const { valid, payload, error } = await validateJwtAssertionWithJwks(
-            assertion,
-            jwksUri
-          );
+          const verifyResp = await authleteApi.joseObject.joseVerifyApi({
+            serviceId,
+            joseVerifyRequest: {
+              jose: assertion,
+              clientIdentifier,
+              signedByClient: true,
+              mandatoryClaims: ["iss", "sub", "aud"],
+            },
+          });
 
-          if (!valid) {
-            logger.error("JWT assertion validation failed:", error);
+          if (!verifyResp.valid || !verifyResp.signatureValid) {
+            logger.error("JWT assertion verification failed via Authlete", {
+              errorDescriptions: verifyResp.errorDescriptions,
+            });
             return res.status(400).json({
               error: "invalid_request",
               error_description: "Invalid assertion",
             });
           }
 
-          const subject = payload!.sub;
-          const issuer = payload!.iss;
-          const audience = payload!.aud;
+          // Authlete verified signature + claims; just decode to extract values
+          const decoded = jwt.decode(assertion, { complete: true });
+          if (!decoded || typeof decoded === "string" || !decoded.payload) {
+            return res.status(400).json({
+              error: "invalid_request",
+              error_description: "Invalid assertion format",
+            });
+          }
+          const decodedPayload = decoded.payload as jwt.JwtPayload;
+          const subject = decodedPayload.sub;
+          const issuer = decodedPayload.iss;
+          const audience = decodedPayload.aud;
 
           // Build Authlete TokenCreateRequest
           const createRequest = {

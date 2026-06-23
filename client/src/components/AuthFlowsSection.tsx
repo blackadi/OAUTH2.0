@@ -5,6 +5,8 @@ import {
 import { createPkcePair } from '../pkce';
 import { useToken } from '../context/TokenContext';
 import { apiService, type TokenResponse } from '../services/api';
+import { getDoc } from '../data/operationDocs';
+import HelpPopover from './HelpPopover';
 
 type GrantType = 'authorization_code' | 'client_credentials' | 'password' | 'refresh_token';
 
@@ -38,6 +40,8 @@ const AuthFlowsSection: React.FC = () => {
   const [rtToken, setRtToken] = useState(tokenSet?.refresh_token || '');
   const [rtId, setRtId] = useState(CLIENT_ID);
   const [rtSecret, setRtSecret] = useState(CLIENT_SECRET);
+
+  const doc = getDoc('auth-flows', grantType);
 
   const startAuthCode = async () => {
     setError(null);
@@ -101,47 +105,52 @@ const AuthFlowsSection: React.FC = () => {
 
       {error && <div className="error">{error}</div>}
 
+      <div className="op-description">
+        <span className="op-description-text">{doc?.description}</span>
+        {doc && <HelpPopover title={doc.title} description={doc.description} params={doc.params} returns={doc.returns} tips={doc.tips} />}
+      </div>
+
       {grantType === 'authorization_code' && (
         <div>
-          <div className="field"><label className="label">Client ID</label><input className="input" value={acId} onChange={e => setAcId(e.target.value)} /></div>
-          <div className="field"><label className="label">Redirect URI</label><input className="input" value={acRedirectUri} onChange={e => setAcRedirectUri(e.target.value)} /></div>
+          <div className="field"><label className="label">Client ID</label><input className="input" value={acId} onChange={e => setAcId(e.target.value)} placeholder="Client identifier registered in Authlete" /></div>
+          <div className="field"><label className="label">Redirect URI</label><input className="input" value={acRedirectUri} onChange={e => setAcRedirectUri(e.target.value)} placeholder="Must match a registered redirect URI" /></div>
           <button className="button" onClick={startAuthCode} disabled={loading}>
-            {loading ? 'Redirecting…' : 'Start Authorization Code Flow'}
+            {loading ? 'Redirecting\u2026' : 'Start Authorization Code Flow'}
           </button>
         </div>
       )}
 
       {grantType === 'client_credentials' && (
         <div>
-          <div className="field"><label className="label">Client ID</label><input className="input" value={ccId} onChange={e => setCcId(e.target.value)} /></div>
-          <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={ccSecret} onChange={e => setCcSecret(e.target.value)} /></div>
-          <div className="field"><label className="label">Scope</label><input className="input" value={ccScope} onChange={e => setCcScope(e.target.value)} /></div>
+          <div className="field"><label className="label">Client ID</label><input className="input" value={ccId} onChange={e => setCcId(e.target.value)} placeholder="Your registered client ID" /></div>
+          <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={ccSecret} onChange={e => setCcSecret(e.target.value)} placeholder="Keep this confidential" /></div>
+          <div className="field"><label className="label">Scope</label><input className="input" value={ccScope} onChange={e => setCcScope(e.target.value)} placeholder="e.g. openid profile email" /></div>
           <button className="button" onClick={() => callToken(ccId, ccSecret, () => apiService.clientCredentials(ccId, ccSecret, ccScope))} disabled={loading}>
-            {loading ? 'Loading…' : 'Get Token'}
+            {loading ? 'Loading\u2026' : 'Get Token'}
           </button>
         </div>
       )}
 
       {grantType === 'password' && (
         <div>
-          <div className="field"><label className="label">Username</label><input className="input" value={pwUser} onChange={e => setPwUser(e.target.value)} /></div>
-          <div className="field"><label className="label">Password</label><input className="input" type="password" value={pwPass} onChange={e => setPwPass(e.target.value)} /></div>
-          <div className="field"><label className="label">Client ID</label><input className="input" value={pwId} onChange={e => setPwId(e.target.value)} /></div>
-          <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={pwSecret} onChange={e => setPwSecret(e.target.value)} /></div>
-          <div className="field"><label className="label">Scope</label><input className="input" value={pwScope} onChange={e => setPwScope(e.target.value)} /></div>
+          <div className="field"><label className="label">Username</label><input className="input" value={pwUser} onChange={e => setPwUser(e.target.value)} placeholder="e.g. admin" /></div>
+          <div className="field"><label className="label">Password</label><input className="input" type="password" value={pwPass} onChange={e => setPwPass(e.target.value)} placeholder="User password" /></div>
+          <div className="field"><label className="label">Client ID</label><input className="input" value={pwId} onChange={e => setPwId(e.target.value)} placeholder="Your registered client ID" /></div>
+          <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={pwSecret} onChange={e => setPwSecret(e.target.value)} placeholder="Client secret for confidential clients" /></div>
+          <div className="field"><label className="label">Scope</label><input className="input" value={pwScope} onChange={e => setPwScope(e.target.value)} placeholder="e.g. openid profile email" /></div>
           <button className="button" onClick={() => callToken(pwId, pwSecret, () => apiService.passwordGrant(pwUser, pwPass, pwId, pwSecret, pwScope))} disabled={loading}>
-            {loading ? 'Loading…' : 'Get Token'}
+            {loading ? 'Loading\u2026' : 'Get Token'}
           </button>
         </div>
       )}
 
       {grantType === 'refresh_token' && (
         <div>
-          <div className="field"><label className="label">Refresh Token</label><input className="input" value={rtToken} onChange={e => setRtToken(e.target.value)} /></div>
-          <div className="field"><label className="label">Client ID</label><input className="input" value={rtId} onChange={e => setRtId(e.target.value)} /></div>
-          <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={rtSecret} onChange={e => setRtSecret(e.target.value)} /></div>
+          <div className="field"><label className="label">Refresh Token</label><input className="input" value={rtToken} onChange={e => setRtToken(e.target.value)} placeholder="Paste a refresh token from a previous flow" /></div>
+          <div className="field"><label className="label">Client ID</label><input className="input" value={rtId} onChange={e => setRtId(e.target.value)} placeholder="Your registered client ID" /></div>
+          <div className="field"><label className="label">Client Secret</label><input className="input" type="password" value={rtSecret} onChange={e => setRtSecret(e.target.value)} placeholder="Client secret for confidential clients" /></div>
           <button className="button" onClick={() => callToken(rtId, rtSecret, () => apiService.refreshToken(rtToken, rtId, rtSecret))} disabled={loading}>
-            {loading ? 'Loading…' : 'Refresh Token'}
+            {loading ? 'Loading\u2026' : 'Refresh Token'}
           </button>
         </div>
       )}
