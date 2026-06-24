@@ -2,11 +2,14 @@ import {
   BackchannelAuthenticationCompleteRequestResult,
   BackchannelAuthenticationFailRequestReason,
 } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 
 export class CibaService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async process(req: Request): Promise<any> {
     const log = req.logger || logger;
     const { parameters, clientId, clientSecret } = req.body as {
@@ -23,7 +26,7 @@ export class CibaService {
 
     log("CibaService: calling Authlete backchannel authentication endpoint");
 
-    const response = await authleteApi.ciba.processAuthentication({
+    const response = await this.authleteApi.ciba.processAuthentication({
       serviceId,
       backchannelAuthenticationRequest: {
         parameters,
@@ -36,7 +39,7 @@ export class CibaService {
   }
 
   async issue(ticket: string): Promise<any> {
-    const response = await authleteApi.ciba.issue({
+    const response = await this.authleteApi.ciba.issue({
       serviceId,
       backchannelAuthenticationIssueRequest: { ticket },
     });
@@ -45,7 +48,7 @@ export class CibaService {
   }
 
   async fail(ticket: string, reason: string): Promise<any> {
-    const response = await authleteApi.ciba.fail({
+    const response = await this.authleteApi.ciba.fail({
       serviceId,
       backchannelAuthenticationFailRequest: { ticket, reason: reason as BackchannelAuthenticationFailRequestReason },
     });
@@ -64,7 +67,7 @@ export class CibaService {
       claims?: string;
     }
   ): Promise<any> {
-    const response = await authleteApi.ciba.complete({
+    const response = await this.authleteApi.ciba.complete({
       serviceId,
       backchannelAuthenticationCompleteRequest: {
         ticket,

@@ -33,9 +33,14 @@ export const errorHandler = (
       details: isDevelopment ? err?.stack : null,
     });
   } else {
-    // Respond with JSON for API requests
+    // Respond with JSON for API requests — map status to appropriate error type
+    const errorType = status >= 500 ? "Internal Server Error"
+      : status === 404 ? "Not Found"
+      : status === 403 ? "Forbidden"
+      : status === 401 ? "Unauthorized"
+      : "Bad Request";
     res.status(status).json({
-      error: "Internal Server Error",
+      error: errorType,
       message,
       ...(isDevelopment && { stack: err?.stack }),
     });

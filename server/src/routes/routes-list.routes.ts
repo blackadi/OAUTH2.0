@@ -108,7 +108,7 @@ const ROUTES: RouteEntry[] = [
     method: "POST",
     path: "/api/session/login",
     description: "Submit username/password for login",
-    body: "username=alice&password=password123",
+    body: "username=admin&password=password",
   },
   {
     method: "GET",

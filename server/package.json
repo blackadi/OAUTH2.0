@@ -7,6 +7,12 @@
     "build": "tsc",
     "postbuild": "cp -r public dist/public && cp -r src/views dist/views",
     "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "postinstall": "patch-package"
   },
   "dependencies": {
@@ -34,8 +40,13 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/jwk-to-pem": "^2.0.3",
     "@types/morgan": "^1.9.10",
+    "@types/node": "^26.0.0",
+    "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "patch-package": "^8.0.1",
+    "supertest": "^7.2.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

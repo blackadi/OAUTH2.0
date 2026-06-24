@@ -1,4 +1,4 @@
-import { authleteConfig } from "../config/authlete.config";
+import { authleteConfig as defaultConfig } from "../config/authlete.config";
 
 export interface BackchannelLogoutTokenResponse {
   resultCode?: string;
@@ -18,12 +18,14 @@ export interface DeliveryResult {
 }
 
 export class BackchannelLogoutService {
+  constructor(private config: { baseUrl: string; serviceId: string; AccessToken: string } = defaultConfig) {}
+
   private async callAuthleteIssueToken(
     clientIdentifier: string,
     subject?: string,
     sessionId?: string,
   ): Promise<BackchannelLogoutTokenResponse> {
-    const url = `${authleteConfig.baseUrl}/api/${authleteConfig.serviceId}/backchannel/logout/token`;
+    const url = `${this.config.baseUrl}/api/${this.config.serviceId}/backchannel/logout/token`;
 
     const body: Record<string, string> = { clientIdentifier };
     if (subject) body.subject = subject;
@@ -32,7 +34,7 @@ export class BackchannelLogoutService {
     const res = await fetch(url, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${authleteConfig.AccessToken}`,
+        Authorization: `Bearer ${this.config.AccessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -114,16 +116,18 @@ export class BackchannelLogoutService {
     sessionId?: string,
   ): Promise<DeliveryResult[]> {
     const results: DeliveryResult[] = [];
+    const delivered = new Set<string>();
 
     let start = 0;
-    const end = 100;
+    const pageSize = 100;
+    let end = pageSize;
     let hasMore = true;
 
     while (hasMore) {
-      const listUrl = `${authleteConfig.baseUrl}/api/${authleteConfig.serviceId}/client/get/list?start=${start}&end=${end}`;
+      const listUrl = `${this.config.baseUrl}/api/${this.config.serviceId}/client/get/list?start=${start}&end=${end}`;
       const listRes = await fetch(listUrl, {
         headers: {
-          Authorization: `Bearer ${authleteConfig.AccessToken}`,
+          Authorization: `Bearer ${this.config.AccessToken}`,
         },
       });
 
@@ -151,12 +155,16 @@ export class BackchannelLogoutService {
         if (!client.backchannelLogoutUri) continue;
 
         const identifier = client.clientIdAlias || String(client.clientId);
+        if (delivered.has(identifier)) continue;
+        delivered.add(identifier);
+
         const result = await this.issueAndDeliver(identifier, subject, sessionId);
         result.clientName = client.clientName;
         results.push(result);
       }
 
       start = end;
+      end += pageSize;
       if (start >= (listData.totalCount || 0)) {
         hasMore = false;
       }

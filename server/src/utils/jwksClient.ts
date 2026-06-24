@@ -17,24 +17,21 @@ interface JwksResponse {
   keys: JwkKey[];
 }
 
-// Simple in-memory cache
-const jwksCache: Record<string, { expires: number; keys: JwkKey[] }> = {};
-
 export class JwksClient {
   constructor(private jwksUri: string, private cacheTtlMs: number = 300_000) {}
+
+  private cache: { expires: number; keys: JwkKey[] } | null = null;
 
   private async fetchJwks(): Promise<JwkKey[]> {
     const now = Date.now();
 
     // Cache hit
-    const cached = jwksCache[this.jwksUri];
-    if (cached && cached.expires > now) {
-      return cached.keys;
+    if (this.cache && this.cache.expires > now) {
+      return this.cache.keys;
     }
 
     // Fetch JWKS fresh
     const resp = await fetch(this.jwksUri);
-    // const resp = await axios.get<JwksResponse>(this.jwksUri);
 
     if (!resp.ok) {
       logger.error("Failed to fetch service configuration", {
@@ -48,15 +45,10 @@ export class JwksClient {
 
     const data = await resp.json();
 
-    jwksCache[this.jwksUri] = {
+    this.cache = {
       keys: data.keys,
       expires: now + this.cacheTtlMs,
     };
-
-    // jwksCache[this.jwksUri] = {
-    //   keys: resp.data.keys,
-    //   expires: now + this.cacheTtlMs,
-    // };
 
     return data.keys;
   }

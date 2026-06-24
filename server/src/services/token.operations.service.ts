@@ -4,7 +4,8 @@ import {
   TokenUpdateRequest,
   TokenUpdateResponse,
 } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 import {
@@ -17,6 +18,8 @@ import {
 import createLocalJWT from "../utils/createLocalJWT";
 
 export class TokenManagementService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   private normalizeGrantType(raw: string): string {
     const GRANT_TYPE_MAP: Record<string, string> = {
       authorization_code: "AUTHORIZATION_CODE",
@@ -96,7 +99,7 @@ export class TokenManagementService {
       hasSubject: !!reqBody.subject,
     });
 
-    const response = await authleteApi.token.management.create({
+    const response = await this.authleteApi.token.management.create({
       serviceId,
       tokenCreateRequest: reqBody,
     });
@@ -140,7 +143,7 @@ export class TokenManagementService {
       hasAccessToken: !!reqBody.accessToken,
     });
 
-    const response = await authleteApi.token.management.update({
+    const response = await this.authleteApi.token.management.update({
       serviceId,
       tokenUpdateRequest: reqBody,
     });
@@ -149,7 +152,7 @@ export class TokenManagementService {
   }
 
   async delete(accessTokenIdentifier: string): Promise<void> {
-    const response = await authleteApi.token.management.delete({
+    const response = await this.authleteApi.token.management.delete({
       serviceId,
       accessTokenIdentifier,
     });
@@ -160,7 +163,7 @@ export class TokenManagementService {
   async list(): Promise<TokenGetListResponse> {
     logger("TokenListService: calling Authlete token management endpoint");
 
-    const response = await authleteApi.token.management.list({
+    const response = await this.authleteApi.token.management.list({
       serviceId,
     });
 
@@ -180,7 +183,7 @@ export class TokenManagementService {
       throw err;
     }
 
-    const response = await authleteApi.token.management.reissueIdToken({
+    const response = await this.authleteApi.token.management.reissueIdToken({
       serviceId,
       idtokenReissueRequest: { accessToken, refreshToken, sub, claims, idtHeaderParams, idTokenAudType },
     });
@@ -195,7 +198,7 @@ export class TokenManagementService {
       { accessTokenIdentifier, hasRefreshTokenIdentifier: !!refreshTokenIdentifier }
     );
 
-    const response = await authleteApi.token.management.revoke({
+    const response = await this.authleteApi.token.management.revoke({
       serviceId,
       tokenRevokeRequest: { accessTokenIdentifier, refreshTokenIdentifier, clientIdentifier, subject },
     });

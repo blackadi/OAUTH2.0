@@ -400,6 +400,38 @@ class ApiService {
     catch { return text; }
   }
 
+  private async postForm(url: string, params: URLSearchParams): Promise<any> {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  private async postBasicAuth(url: string, params: URLSearchParams, clientId: string, clientSecret: string): Promise<any> {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+      },
+      body: params.toString(),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  private async postAdmin(url: string, body: Record<string, unknown>, auth: string): Promise<any> {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();

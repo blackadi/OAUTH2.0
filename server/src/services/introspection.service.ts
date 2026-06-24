@@ -1,5 +1,6 @@
 import { Request } from "express";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import logger from "../utils/logger";
 import {
   IntrospectionRequest,
@@ -9,6 +10,8 @@ import {
 } from "@authlete/typescript-sdk/models";
 
 export class IntrospectionService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async process(req: Request): Promise<IntrospectionResponse> {
     const log = req.logger || logger;
     const body = req.body as Record<string, unknown>;
@@ -62,7 +65,7 @@ export class IntrospectionService {
 
     log("Introspection parameters", { token: "[redacted]", hasDpop: !!dpopHeader });
 
-    const response = await authleteApi.introspection.process({
+    const response = await this.authleteApi.introspection.process({
       serviceId,
       introspectionRequest: reqBody,
     });
@@ -129,7 +132,7 @@ export class IntrospectionService {
       reqBody.withHiddenProperties = Boolean(body.withHiddenProperties);
     }
 
-    const response = await authleteApi.introspection.standardProcess({
+    const response = await this.authleteApi.introspection.standardProcess({
       serviceId,
       standardIntrospectionRequest: reqBody,
     });

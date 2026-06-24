@@ -15,7 +15,7 @@ Two independent packages:
 
 ## Features
 
-- **OAuth 2.0 grants**: Authorization Code (confidential + PKCE), Client Credentials, Password (ROPC), Refresh Token, JWT Bearer (`urn:ietf:params:oauth:grant-type:jwt-bearer`), Token Exchange (`urn:ietf:params:oauth:grant-type:token-exchange`)
+- **OAuth 2.0 grants**: Authorization Code (confidential + PKCE), Client Credentials, Resource Owner Password (ROPC), Refresh Token, JWT Bearer (`urn:ietf:params:oauth:grant-type:jwt-bearer`), Token Exchange (`urn:ietf:params:oauth:grant-type:token-exchange`)
 - **OpenID Connect**: Discovery (`/.well-known/openid-configuration`), JWKS, Userinfo (signed JWT), ID Token, RP-Initiated Logout
 - **Backchannel Logout**: Issue and deliver logout tokens following OIDC Back-Channel Logout 1.0 spec — standalone token generation, single-client deliver, deliver-to-all, and automatic trigger via `?backchannel=true` on RP-Initiated Logout
 - **Grant Management for OAuth 2.0**: Query and revoke grants via RESTful API (`GET`/`DELETE /api/gm/:grantId`)
@@ -69,17 +69,39 @@ Optional variables:
 | `NODE_ENV` | `development` | Enables production HSTS headers when `production` |
 | `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:3001` | CORS origins |
 | `AUTH_USERS` | `admin:password` | Demo users in `subject:username:password:name;...` format |
+| `LOGOUT_REDIRECT_URI` | `http://localhost:3000` | Default post-logout redirect URI |
 | `LOGOUT_CLIENT_ID` | — | Client ID for logout view |
-| `LOGOUT_REDIRECT_URI` | — | Post-logout redirect |
 | `LOG_LEVEL` | `debug` (dev), `info` (prod) | Winston log level |
 | `MORGAN_FORMAT` | `combined` | Morgan HTTP access log format |
 | `MGMT_CLIENT_ID` | — | Basic auth user for management APIs (token mgmt, DCR register, backchannel logout, client mgmt) |
 | `MGMT_CLIENT_SECRET` | — | Basic auth password for management APIs |
-| `JWKS_URI` | — | External JWKS URI to validate JWT Bearer assertions |
-| `JWT_PUBLIC_KEY_PEM` | — | Required if `ACCESS_TOKEN_TYPE=jwt` |
-| `JWT_PRIVATE_KEY_PEM` | — | Required if `ACCESS_TOKEN_TYPE=jwt` |
-| `JWT_SELF_SIGNED_CERT_PEM` | — | Self-signed cert for JWT client auth |
-| `JWT_ISSUER` | — | JWT issuer for locally-signed tokens |
+| `JWKS_URI` | — | External JWKS URI to verify incoming backchannel logout tokens |
+| `JWT_PUBLIC_KEY_PEM` | — | Public key for locally-signed JWTs (dev only) |
+| `JWT_PRIVATE_KEY_PEM` | — | Private key for locally-signed JWTs (dev only) |
+| `JWT_ISSUER` | — | JWT issuer for locally-signed tokens (dev only) |
+
+Optional variables in `client/.env`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE_URL` | `http://localhost:3000` | Authlete server URL for API calls |
+| `VITE_CLIENT_ID` | `your_client_id` | Pre-fills the client ID on the dashboard |
+| `VITE_CLIENT_SECRET` | `your_client_secret` | Pre-fills the client secret on the dashboard |
+| `VITE_REDIRECT_URI` | `http://localhost:3001/callback` | OAuth redirect URI for the test dashboard |
+| `VITE_SCOPES` | `openid profile email` | Default scopes for test flows |
+| `VITE_DEV_CLIENT_PORT` | `3001` | Dev server port for Vite |
+| `VITE_DEV_CLIENT_HOST` | `localhost` | Dev server host for Vite |
+| `VITE_PROD_API_BASE_URL` | (falls back to `VITE_API_BASE_URL`) | Production API base URL override |
+| `VITE_PROD_REDIRECT_URI` | (falls back to `VITE_REDIRECT_URI`) | Production redirect URI override |
+
+E2E test env vars (set in shell, not in `.env`):
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `CID` | Yes (for E2E) | Confidential client ID registered in Authlete |
+| `SEC` | Yes (for E2E) | Confidential client secret |
+| `PUB_CID` | Yes (for E2E) | Public client ID registered in Authlete |
+| `REDIR` | No | Redirect URI for E2E flows (default: `http://localhost:3000`) |
 
 ### 3. Start the server
 
@@ -128,94 +150,152 @@ The client SPA starts on `http://localhost:3001`. In development, Vite proxies `
 ```
 server/
 ├── src/
-│   ├── server.ts                        # Entry point
-│   ├── app.ts                           # Express app (middleware stack, route mounting)
+│   ├── server.ts                             # Entry point — listens on PORT
+│   ├── app.ts                                # Express app factory (createApp)
 │   ├── config/
-│   │   ├── app.config.ts                # Env var loading via dotenv
-│   │   └── authlete.config.ts           # Authlete SDK client initialization
-│   ├── controllers/                     # Request handlers per endpoint
-│   │   ├── authorization.controller.ts
-│   │   ├── authorization-response.controller.ts
-│   │   ├── authorization-response.handler.ts
-│   │   ├── token.controller.ts
-│   │   ├── token-issue.controller.ts
-│   │   ├── token-fail.controller.ts
-│   │   ├── token-exchange-response.handler.ts
-│   │   ├── token-fail-response.handler.ts
-│   │   ├── token-issue-response.handler.ts
-│   │   ├── token.management.controller.ts
-│   │   ├── session.controller.ts
-│   │   ├── userinfo.controller.ts
-│   │   ├── userinfo-issue.controller.ts
-│   │   ├── userinfo-issue-response.handler.ts
-│   │   ├── introspection.controller.ts
-│   │   ├── introspection-standard.controller.ts
-│   │   ├── revocation.controller.ts
-│   │   ├── logout.controller.ts
-│   │   ├── discovery.controller.ts
-│   │   ├── jwks.controller.ts
-│   │   ├── grant-management.controller.ts       # Grant Management API handlers
-│   │   ├── backchannel-logout.controller.ts      # Backchannel Logout (issue/deliver/deliver-all)
-│   │   ├── dcr.controller.ts                    # Dynamic Client Registration (register/get/update/delete)
-│   │   ├── ciba.controller.ts                   # CIBA (authentication/issue/fail/complete)
-│   │   ├── client.management.controller.ts      # Client CRUD + secrets + scopes + authorizations
-│   │   └── health.controller.ts                 # Health Check (server + Authlete)
-│   ├── services/
-│   │   ├── authlete.service.ts          # Authlete API client singleton
-│   │   ├── token.operations.service.ts  # Token management CRUD
-│   │   ├── userinfo.service.ts          # Userinfo processing + issuing
-│   │   ├── grant-management.service.ts     # Grant Management SDK wrapper
-│   │   ├── backchannel-logout.service.ts    # Backchannel Logout (Authlete API via fetch)
-│   │   ├── dcr.service.ts                  # Dynamic Client Registration SDK wrapper
-│   │   ├── ciba.service.ts                 # CIBA SDK wrapper (authentication/issue/fail/complete)
-│   │   ├── client.management.service.ts    # Client CRUD + secrets + scopes + authorizations
-│   │   └── health.service.ts               # Health Check (Authlete API via fetch)
-│   ├── routes/                          # Express Router definitions
+│   │   ├── app.config.ts                     # Env var loading via dotenv, server config
+│   │   └── authlete.config.ts               # Authlete SDK config + JWT JWKS settings
+│   ├── controllers/                          # Request handlers
+│   │   ├── authorization.controller.ts       # GET /api/authorization
+│   │   ├── authorization-response.handler.ts # Shared authz response helper
+│   │   ├── backchannel-logout.controller.ts  # POST /api/backchannel_logout/{issue,deliver,deliver-all}
+│   │   ├── ciba.controller.ts               # CIBA authentication/issue/fail/complete
+│   │   ├── client.management.controller.ts   # Client CRUD + secrets + scopes + authorizations
+│   │   ├── dcr.controller.ts                # Dynamic Client Registration
+│   │   ├── default.controller.ts            # GET /* — renders index.ejs
+│   │   ├── discovery.controller.ts          # GET /.well-known/openid-configuration
+│   │   ├── grant-management.controller.ts   # GET/DELETE /api/gm/:grantId
+│   │   ├── health.controller.ts             # GET /api/health, GET /api/health/authlete
+│   │   ├── introspection.controller.ts      # POST /api/introspection (Authlete-specific)
+│   │   ├── introspection-standard.controller.ts # POST /api/introspection/standard (RFC 7662)
+│   │   ├── jwks.controller.ts              # GET /.well-known/jwks.json
+│   │   ├── logout.controller.ts            # RP-initiated logout + incoming backchannel logout
+│   │   ├── par.controller.ts               # POST /api/par (RFC 9126)
+│   │   ├── revocation.controller.ts        # POST /api/revocation (RFC 7009)
+│   │   ├── session.controller.ts           # Login + consent form display and handling
+│   │   ├── token.controller.ts             # POST /api/token (all grant types)
+│   │   ├── token-fail-response.handler.ts  # Token fail response helper
+│   │   ├── token-issue-response.handler.ts # Token issue response helper
+│   │   ├── token-exchange-response.handler.ts # Token exchange response helper
+│   │   ├── token.management.controller.ts  # Token CRUD + reissue + local signed JWT
+│   │   ├── userinfo.controller.ts          # GET/POST /api/userinfo
+│   │   ├── userinfo-issue-response.handler.ts # Userinfo issue response helper
+│   │   └── userinfo-issue.controller.ts    # Userinfo issue helper
+│   ├── services/                            # Business logic (all DI-friendly)
+│   │   ├── authlete.service.ts             # Authlete SDK singleton
+│   │   ├── authorization.service.ts        # Authlete authorization API wrapper
+│   │   ├── backchannel-logout.service.ts   # Raw fetch() for logout token API
+│   │   ├── ciba.service.ts                # CIBA SDK wrapper
+│   │   ├── client.management.service.ts    # Client CRUD + secrets + scopes via SDK
+│   │   ├── dcr.service.ts                 # DCR SDK wrapper
+│   │   ├── discovery.service.ts           # Discovery SDK wrapper
+│   │   ├── grant-management.service.ts    # Grant Management SDK wrapper
+│   │   ├── health.service.ts             # Authlete health via raw fetch()
+│   │   ├── introspection.service.ts      # Introspection + standard via SDK
+│   │   ├── jwks.service.ts              # JWKS SDK wrapper
+│   │   ├── jwt-verification.service.ts  # JWT bearer assertion verification (JWT_BEARER grant type)
+│   │   ├── login.service.ts            # AUTH_USERS-based credential validation
+│   │   ├── logout.service.ts           # RP-initiated logout + redirect validation
+│   │   ├── par.service.ts             # PAR SDK wrapper
+│   │   ├── revocation.service.ts      # Revocation SDK wrapper
+│   │   ├── token.operations.service.ts # Token management CRUD via SDK
+│   │   ├── token.service.ts           # Token endpoint via SDK
+│   │   └── userinfo.service.ts        # Userinfo via SDK
+│   ├── routes/                             # Express Router definitions
 │   │   ├── authorization.routes.ts
-│   │   ├── token.routes.ts
-│   │   ├── userinfo.routes.ts
-│   │   ├── introspection.routes.ts
-│   │   ├── revocation.routes.ts
-│   │   ├── session.routes.ts
-│   │   ├── jwks.routes.ts
+│   │   ├── backchannel-logout.routes.ts
+│   │   ├── ciba.routes.ts
+│   │   ├── client.routes.ts               # 17 endpoints: CRUD + secrets + scopes + auth
+│   │   ├── dcr.routes.ts
+│   │   ├── default.routes.ts
 │   │   ├── discovery.routes.ts
-│   │   ├── logout.routes.ts
-│   │   ├── grant-management.routes.ts       # GET/DELETE /api/gm/:grantId
-│   │   ├── backchannel-logout.routes.ts     # POST /api/backchannel_logout/issue|deliver|deliver-all
-│   │   ├── dcr.routes.ts                   # POST /api/client/dcr/register|get|update|delete
-│   │   ├── ciba.routes.ts                  # POST /api/ciba/authentication|issue|fail|complete
-│   │   ├── client.routes.ts                # GET/POST/PATCH/DELETE /api/client/* (CRUD + secrets + scopes)
-│   │   ├── health.routes.ts                # GET /api/health and /api/health/authlete
-│   │   ├── routes-list.routes.ts           # /api/routes and /api/routes.json
-│   │   └── default.routes.ts               # Catch-all for index page
+│   │   ├── grant-management.routes.ts
+│   │   ├── health.routes.ts
+│   │   ├── introspection.routes.ts
+│   │   ├── jwks.routes.ts
+│   │   ├── logout.routes.ts               # RP-initiated + incoming backchannel logout
+│   │   ├── par.routes.ts
+│   │   ├── revocation.routes.ts
+│   │   ├── routes-list.routes.ts          # /api/routes and /api/routes.json
+│   │   ├── session.routes.ts
+│   │   ├── token.routes.ts                # Token + management endpoints
+│   │   └── userinfo.routes.ts
 │   ├── middleware/
-│   │   ├── session.ts                   # express-session config
-│   │   └── errorHandler.ts              # Global error handler (JSON for /api/*)
-│   ├── views/                           # EJS templates
-│   │   ├── index.ejs                    # Dashboard page
-│   │   ├── login.ejs                    # Login form
-│   │   ├── consent.ejs                  # Consent form
-│   │   ├── logout.ejs                   # Logout page
-│   │   ├── error.ejs                    # Error page
-│   │   ├── routes.ejs                   # Standalone routes page
-│   │   └── partials/
-│   │       ├── head.ejs                 # HTML head + CSS
-│   │       └── routes-table.ejs         # Reusable routes table partial
+│   │   ├── session.ts                     # express-session config (30-min, secure in prod)
+│   │   └── errorHandler.ts                # JSON for /api/*, EJS for HTML routes
 │   ├── types/
-│   │   ├── express.d.ts                 # req.id / req.logger augmentation
-│   │   └── express-session.d.ts         # Session shape
-│   └── utils/
-│       ├── logger.ts                    # Winston logger
-│       ├── crypto.ts                    # PKCE helpers
-│       ├── jwksClient.ts                # JWKS fetch utilities
-│       ├── jwtAssertionValidator.ts     # JWT assertion validation
-│       └── createLocalJWT.ts            # Local JWT creation
+│   │   ├── express.d.ts                   # req.id / req.logger augmentation
+│   │   └── express-session.d.ts           # Session shape (user, authorization, secret)
+│   ├── utils/
+│   │   ├── createLocalJWT.ts             # Dev-only local JWT signer
+│   │   ├── crypto.ts                     # PKCE verifier/challenge helpers
+│   │   ├── env.ts                        # Shared required() helper for env vars
+│   │   ├── jwksClient.ts                # JWKS fetcher with cache
+│   │   ├── logger.ts                    # Winston logger (daily rotation)
+│   │   └── validate.ts                  # Request parameter validation
+│   └── views/                            # EJS templates
+│       ├── index.ejs                    # Dashboard
+│       ├── login.ejs                    # Login form
+│       ├── consent.ejs                  # Consent form
+│       ├── logout.ejs                   # Logout page
+│       ├── error.ejs                    # Error page
+│       ├── routes.ejs                   # Routes listing
+│       └── partials/
+│           ├── head.ejs                 # HTML head + CSS
+│           └── routes-table.ejs         # Reusable routes table
+├── tests/                                # Test suites
+│   ├── setup.ts                         # Global test env defaults
+│   ├── helpers/
+│   │   ├── mock-authlete.ts             # SDK mock for all 15+ SDK methods
+│   ├── helpers/
+│   │   └── mock-authlete.ts             # SDK mock for all 15+ SDK methods
+│   ├── fixtures/                         # Reusable test data
+│   │   ├── sample-jwks.json
+│   │   └── sample-keys.ts               # RSA key pair + JWKS for tests
+│   ├── unit/services/                   # 18 files, 59 tests
+│   │   ├── authorization.service.test.ts
+│   │   ├── backchannel-logout.service.test.ts
+│   │   ├── ciba.service.test.ts
+│   │   ├── client.management.service.test.ts
+│   │   ├── dcr.service.test.ts
+│   │   ├── discovery.service.test.ts
+│   │   ├── grant-management.service.test.ts
+│   │   ├── health.service.test.ts
+│   │   ├── introspection.service.test.ts
+│   │   ├── jwks.service.test.ts
+│   │   ├── jwt-verification.service.test.ts
+│   │   ├── login.service.test.ts
+│   │   ├── logout.service.test.ts
+│   │   ├── par.service.test.ts
+│   │   ├── revocation.service.test.ts
+│   │   ├── token.operations.service.test.ts
+│   │   ├── token.service.test.ts
+│   │   └── userinfo.service.test.ts
+│   ├── unit/controllers/               # 4 files, 30 tests
+│   │   ├── authorization.controller.test.ts
+│   │   ├── backchannel-logout.controller.test.ts
+│   │   ├── dcr.controller.test.ts
+│   │   └── token.controller.test.ts
+│   ├── unit/middleware/                # 2 files, 14 tests
+│   │   ├── errorHandler.test.ts
+│   │   └── session.test.ts
+│   ├── unit/utils/                     # 4 files, 26 tests
+│   │   ├── crypto.test.ts
+│   │   ├── createLocalJWT.test.ts
+│   │   ├── jwksClient.test.ts
+│   │   └── validate.test.ts
+│   ├── integration/
+│   │   └── routes.test.ts               # 23 tests, full Express stack with mocked SDK
+│   └── e2e/
+│       └── e2e.test.ts                  # 37 tests, real Authlete API
 ├── public/
 │   └── css/style.css                    # All styles (responsive, dark theme)
 ├── patches/
 │   └── @authlete+typescript-sdk+1.1.6.patch  # SDK Zod passthrough fix
 ├── logs/                                # Daily-rotated log files (gitignored)
 ├── .env.example
+├── vitest.config.ts                     # Unit + integration test config
+├── vitest.e2e.config.ts                # E2E test config
 └── package.json                         # postinstall: patch-package
 
 client/
@@ -301,6 +381,12 @@ Protected by `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth if configured.
 | `POST` | `/api/ciba/issue` | Issue `auth_req_id` from a validated ticket |
 | `POST` | `/api/ciba/fail` | Fail a backchannel authentication request with a reason |
 | `POST` | `/api/ciba/complete` | Complete backchannel authentication with end-user result |
+
+### PAR — Pushed Authorization Requests (RFC 9126)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/par` | Push authorization parameters — returns `request_uri` for use in the authorization endpoint |
 
 ### Grant Management for OAuth 2.0
 
@@ -481,7 +567,23 @@ curl -s -X POST http://localhost:3000/api/token \
   -d "auth_req_id=AUTH_REQ_ID"
 ```
 
-See [`CURL-TEST.md`](CURL-TEST.md) and [`test-all.sh`](test-all.sh) for a complete test suite covering all endpoints.
+### PAR — Pushed Authorization Requests (RFC 9126)
+
+Push authorization parameters to get a `request_uri`, then use it in the authorization endpoint:
+
+```bash
+PAR_RESP=$(curl -s -X POST http://localhost:3000/api/par \
+  -H "Content-Type: application/json" \
+  -d "{\"parameters\":\"response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000/callback&scope=openid%20profile&state=par1\",\"clientId\":\"YOUR_CLIENT_ID\",\"clientSecret\":\"YOUR_CLIENT_SECRET\"}")
+echo "$PAR_RESP" | jq -r '.requestUri'
+```
+
+Then use the `request_uri` in the authorization URL:
+```
+http://localhost:3000/api/authorization?client_id=YOUR_CLIENT_ID&request_uri=REQUEST_URI
+```
+
+See [`CURL-TEST.md`](CURL-TEST.md) and the [Vitest E2E suite](tests/e2e/e2e.test.ts) for complete test coverage.
 
 ## Session Handling
 
@@ -540,34 +642,50 @@ npm --prefix server run build && npm --prefix client run build
 
 ## Testing
 
-Two test suites are provided:
+Three testing approaches are provided:
 
-### 1. Interactive curl test suite ([`CURL-TEST.md`](CURL-TEST.md))
+### 1. Vitest (unit + integration) — 173 tests
 
-Copy-paste individual curl commands to test each endpoint manually. Covers all 16 sections: Discovery, JWKS, all grant types, introspection, revocation, PKCE, token management, logout, grant management, backchannel logout, DCR, CIBA, and health. The embedded smoke test at the bottom can be saved as a standalone script.
+**28 unit test files** in four categories:
 
-```bash
-source CURL-TEST.md
-```
+| Category | Files | Tests | What's Tested |
+|----------|-------|-------|---------------|
+| Services | 18 | 59 | Each service in isolation with mocked Authlete SDK |
+| Controllers | 4 | 30 | Request handlers (token, authorization, DCR, backchannel-logout) |
+| Middleware | 2 | 14 | Error handler and session middleware |
+| Utils | 4 | 26 | crypto, createLocalJWT, jwksClient, validate |
 
-### 2. Automated test suite ([`test-all.sh`](test-all.sh))
-
-Bash script with pass/fail assertions, formatted JSON output, and a summary report. Skips tests when required client types aren't configured.
-
-```bash
-./test-all.sh
-```
-
-Configure via environment variables:
+**1 integration file** (23 tests): Full Express stack via Supertest with SDK mocked at module level.
 
 ```bash
-export BASE="http://localhost:3000"
-export CID="your_confidential_client_id"
-export SEC="your_confidential_client_secret"
-export PUB_CID="your_public_client_id"
-export VERBOSE=1  # show full raw responses
-./test-all.sh
+# Run all unit + integration tests
+npm --prefix server run test
+
+# Watch mode
+npm --prefix server run test:watch
+
+# Coverage report
+npm --prefix server run test:coverage
+
+# Unit tests only
+npm --prefix server run test:unit
+
+# Integration tests only
+npm --prefix server run test:integration
 ```
+
+### 2. Vitest E2E — 37 tests (real Authlete API)
+
+Tests all 17 OAuth flows end-to-end against a running server with real Authlete credentials. Gracefully skips tests where credentials are missing.
+
+```bash
+# Requires real Authlete credentials in server/.env
+npm --prefix server run test:e2e
+```
+
+### 3. Interactive curl test suite ([`CURL-TEST.md`](CURL-TEST.md))
+
+Copy-paste individual curl commands to test each endpoint manually. Covers all OAuth/OIDC flows, grant types, PKCE, DCR, CIBA, PAR, token management, backchannel logout, and health. The embedded smoke test script at the bottom requires `CID`, `SEC`, and `PUB_CID` env vars. See [`CURL-TEST.md`](CURL-TEST.md) for details.
 
 ## Known Limitations
 

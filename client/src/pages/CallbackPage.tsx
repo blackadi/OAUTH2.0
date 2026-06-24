@@ -64,9 +64,10 @@ const CallbackPage: React.FC = () => {
         setTokenSet(body);
         sessionStorage.setItem('active_client_id', storedClientId);
 
-        const token = body.id_token ?? "";
-        const decoded = jwtDecode(token);
-        setDecodedIDToken(decoded);
+        if (body.id_token) {
+          const decoded = jwtDecode(body.id_token);
+          setDecodedIDToken(decoded);
+        }
       } catch (e: any) {
         setError(e?.message || 'Failed to exchange code for token');
       } finally {

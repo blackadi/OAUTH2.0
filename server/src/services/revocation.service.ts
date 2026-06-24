@@ -3,10 +3,13 @@ import {
   RevocationResponse,
   RevocationRequest,
 } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import logger from "../utils/logger";
 
 export class RevocationService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async process(req: Request): Promise<RevocationResponse> {
     const log = req.logger || logger;
     const body = req.body as Record<string, unknown>;
@@ -76,7 +79,7 @@ export class RevocationService {
       parametersLength: parameters.length,
     });
 
-    const response = await authleteApi.revocation.process({
+    const response = await this.authleteApi.revocation.process({
       serviceId,
       revocationRequest: reqBody,
     });

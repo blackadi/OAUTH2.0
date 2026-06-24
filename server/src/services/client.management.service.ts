@@ -1,4 +1,5 @@
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@authlete/typescript-sdk/models";
 
 export class ClientManagementService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
   async list(req: Request): Promise<ClientGetListResponse> {
     const log = req.logger || logger;
     const body = req.body as Record<string, unknown> | undefined;
@@ -27,7 +29,7 @@ export class ClientManagementService {
 
     log("ClientListService: calling Authlete client list endpoint", { start, end, developer });
 
-    const response = await authleteApi.client.list({
+    const response = await this.authleteApi.client.list({
       serviceId,
       start,
       end,
@@ -49,7 +51,7 @@ export class ClientManagementService {
 
     log("ClientGetService: calling Authlete client get endpoint", { clientId });
 
-    const response = await authleteApi.client.get({
+    const response = await this.authleteApi.client.get({
       serviceId,
       clientId,
     });
@@ -75,7 +77,7 @@ export class ClientManagementService {
       grantTypes: clientInput.grantTypes,
     });
 
-    const response = await authleteApi.client.create({
+    const response = await this.authleteApi.client.create({
       serviceId,
       client: clientInput,
     });
@@ -99,7 +101,7 @@ export class ClientManagementService {
 
     log("ClientUpdateService: calling Authlete client update endpoint", { clientId });
 
-    const response = await authleteApi.client.update({
+    const response = await this.authleteApi.client.update({
       serviceId,
       clientId,
       client: clientInput,
@@ -120,7 +122,7 @@ export class ClientManagementService {
 
     log("ClientDeleteService: calling Authlete client delete endpoint", { clientId });
 
-    const response = await authleteApi.client.delete({
+    const response = await this.authleteApi.client.delete({
       serviceId,
       clientId,
     });
@@ -146,7 +148,7 @@ export class ClientManagementService {
       clientLocked,
     });
 
-    const response = await authleteApi.client.management.updateLockFlag({
+    const response = await this.authleteApi.client.management.updateLockFlag({
       serviceId,
       clientIdentifier,
       clientFlagUpdateRequest: { clientLocked },
@@ -169,7 +171,7 @@ export class ClientManagementService {
       clientIdentifier,
     });
 
-    const response = await authleteApi.client.management.refreshSecret({
+    const response = await this.authleteApi.client.management.refreshSecret({
       serviceId,
       clientIdentifier,
     });
@@ -199,7 +201,7 @@ export class ClientManagementService {
       clientIdentifier,
     });
 
-    const response = await authleteApi.client.management.updateSecret({
+    const response = await this.authleteApi.client.management.updateSecret({
       serviceId,
       clientIdentifier,
       clientSecretUpdateRequest: { clientSecret },
@@ -226,7 +228,7 @@ export class ClientManagementService {
 
     log("ClientListAuthorizationsService: calling Authlete", { subject, start, end });
 
-    const response = await authleteApi.client.management.listAuthorizations({
+    const response = await this.authleteApi.client.management.listAuthorizations({
       serviceId,
       subjectPathParameter: subject,
       subjectQueryParameter: subject,
@@ -264,7 +266,7 @@ export class ClientManagementService {
 
     log("ClientUpdateAuthorizationsService: calling Authlete", { clientId, subject });
 
-    const response = await authleteApi.client.management.updateAuthorizations({
+    const response = await this.authleteApi.client.management.updateAuthorizations({
       serviceId,
       clientId,
       clientAuthorizationUpdateRequest: { subject, scopes: scopeArray },
@@ -291,7 +293,7 @@ export class ClientManagementService {
 
     log("ClientDeleteAuthorizationsService: calling Authlete", { clientId, subject });
 
-    const response = await authleteApi.client.management.deleteAuthorizations({
+    const response = await this.authleteApi.client.management.deleteAuthorizations({
       serviceId,
       clientId,
       subjectPathParameter: subject,
@@ -319,7 +321,7 @@ export class ClientManagementService {
 
     log("ClientGetGrantedScopesService: calling Authlete", { clientId, subject });
 
-    const response = await authleteApi.client.management.getGrantedScopes({
+    const response = await this.authleteApi.client.management.getGrantedScopes({
       serviceId,
       clientId,
       subjectPathParameter: subject,
@@ -347,7 +349,7 @@ export class ClientManagementService {
 
     log("ClientDeleteGrantedScopesService: calling Authlete", { clientId, subject });
 
-    const response = await authleteApi.client.management.deleteGrantedScopes({
+    const response = await this.authleteApi.client.management.deleteGrantedScopes({
       serviceId,
       clientId,
       subjectPathParameter: subject,
@@ -369,7 +371,7 @@ export class ClientManagementService {
 
     log("ClientGetRequestableScopesService: calling Authlete", { clientId });
 
-    const response = await authleteApi.client.management.getRequestableScopes({
+    const response = await this.authleteApi.client.management.getRequestableScopes({
       serviceId,
       clientId,
     });
@@ -397,7 +399,7 @@ export class ClientManagementService {
 
     log("ClientUpdateRequestableScopesService: calling Authlete", { clientId });
 
-    const response = await authleteApi.client.management.updateRequestableScopes({
+    const response = await this.authleteApi.client.management.updateRequestableScopes({
       serviceId,
       clientId,
       clientExtensionRequestableScopesUpdateRequest: { requestableScopes: scopeArray },
@@ -418,7 +420,7 @@ export class ClientManagementService {
 
     log("ClientDeleteRequestableScopesService: calling Authlete", { clientId });
 
-    const response = await authleteApi.client.management.deleteRequestableScopes({
+    const response = await this.authleteApi.client.management.deleteRequestableScopes({
       serviceId,
       clientId,
     });

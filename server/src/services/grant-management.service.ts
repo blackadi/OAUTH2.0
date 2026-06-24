@@ -1,16 +1,19 @@
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 import { GMResponse } from "@authlete/typescript-sdk/models";
 
 export class GrantManagementService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async query(req: Request, grantId: string): Promise<GMResponse> {
     const log = req.logger || logger;
     const accessToken = extractBearerToken(req);
 
     log("GrantManagement: query grant", { grantId });
 
-    const response = await authleteApi.grantManagement.processRequest({
+    const response = await this.authleteApi.grantManagement.processRequest({
       serviceId,
       gMRequest: {
         accessToken,
@@ -28,7 +31,7 @@ export class GrantManagementService {
 
     log("GrantManagement: revoke grant", { grantId });
 
-    const response = await authleteApi.grantManagement.processRequest({
+    const response = await this.authleteApi.grantManagement.processRequest({
       serviceId,
       gMRequest: {
         accessToken,

@@ -1,10 +1,4 @@
-function required(name: string): string {
-  const val = process.env[name];
-  if (!val || val.trim() === "") {
-    throw new Error(`${name} is required but not set. Check your .env file.`);
-  }
-  return val;
-}
+import { required } from "../utils/env";
 
 export const authleteConfig = {
   baseUrl: required("AUTHLETE_BASE_URL"),

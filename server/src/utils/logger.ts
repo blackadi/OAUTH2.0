@@ -1,4 +1,4 @@
-import { createLogger, format, transports } from "winston";
+import { createLogger, format, transports, Logger } from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 import { server } from "../config/app.config";
 
@@ -26,25 +26,33 @@ const errorFileTransport = new DailyRotateFile({
   zippedArchive: true,
 });
 
-const logger = createLogger({
+const baseLogger = createLogger({
   level: server.logLevel,
   format: format.combine(
     format.timestamp(),
     format.printf(({ level, message, timestamp, reqId }) => {
-      return `${timestamp} [${level.toUpperCase()}]: ${reqId} ${message}`;
+      return `${timestamp} [${level.toUpperCase()}]: ${reqId || ""} ${message}`;
     })
   ),
   transports: [consoleTransport, fileTransport, errorFileTransport],
   exitOnError: false,
 });
 
-// 1. Create the primary dynamic function alias
-// This function determines whether to use .info() or .debug() dynamically.
-const primaryLogFunction = (logger as any)[server.logLevel].bind(logger);
+export interface CallableLogger {
+  (msg: string, meta?: Record<string, unknown>): void;
+  error: (msg: string, meta?: Record<string, unknown>) => void;
+  child: (opts: { reqId?: string }) => CallableLogger;
+}
 
-// 2. Attach the .error method explicitly to the primary function object
-// This allows you to call logger.error() reliably regardless of the dynamic level.
-primaryLogFunction.error = logger.error.bind(logger);
+export function createCallableLogger(winstonLogger: Logger): CallableLogger {
+  const dynamicLevel = server.logLevel === "debug" ? "debug" : "info";
+  const fn = (winstonLogger as any)[dynamicLevel].bind(winstonLogger) as CallableLogger;
+  fn.error = winstonLogger.error.bind(winstonLogger);
+  fn.child = (opts: { reqId?: string }) => createCallableLogger(winstonLogger.child(opts));
+  return fn;
+}
 
-// Export the customized function
-export default primaryLogFunction;
+const defaultLogger = createCallableLogger(baseLogger);
+
+export { baseLogger };
+export default defaultLogger;

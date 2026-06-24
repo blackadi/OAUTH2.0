@@ -1,9 +1,12 @@
 import { ServiceJwksGetResponse } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 
 export class JwksService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async serviceJwksGetApi(): Promise<ServiceJwksGetResponse | undefined> {
-    const response = await authleteApi.jwkSetEndpoint.serviceJwksGetApi({
+    const response = await this.authleteApi.jwkSetEndpoint.serviceJwksGetApi({
       serviceId: serviceId,
       pretty: true,
     });

@@ -18,6 +18,14 @@ npm --prefix server run dev
 # Server production build + start
 npm --prefix server run build && npm --prefix server run start
 
+# Server tests
+npm --prefix server run test              # unit + integration (74 tests)
+npm --prefix server run test:watch        # watch mode
+npm --prefix server run test:coverage     # run with coverage report
+npm --prefix server run test:unit         # unit tests only
+npm --prefix server run test:integration  # integration tests only
+npm --prefix server run test:e2e          # E2E (requires real Authlete creds)
+
 # Client dev (Vite on :3001, proxies /api -> localhost:3000)
 npm --prefix client run dev
 
@@ -41,6 +49,21 @@ npm --prefix client run build && npm --prefix server run build
 6. Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars
 7. Client `.env` should set `VITE_CLIENT_ID`, `VITE_REDIRECT_URI` — defaults to `your_client_id` placeholder
 
+## Testing architecture
+
+- **Vitest** runner, **Supertest** for HTTP integration tests
+- 15 Authlete-dependent services accept `authleteApi` as optional constructor param (defaults to real SDK client)
+- 2 services using raw `fetch()` (`health`, `backchannel-logout`) accept config as optional constructor param
+- `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
+- Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
+- Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
+- **Unit tests**: 15 files in `tests/unit/services/*.test.ts` (51 tests) — each service tested in isolation
+- **Integration tests**: 1 file `tests/integration/routes.test.ts` (23 tests) — full Express stack with mocked SDK
+- **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (37 tests) — real Authlete API, skips gracefully if creds missing
+- Run with `npm --prefix server run test` — 74 tests across 18 files, completes in ~1.5s
+- E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
+- E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
+
 ## Architecture notes
 
 - All API routes under `/api` prefix (defined in `server/src/app.ts`)
@@ -63,7 +86,6 @@ npm --prefix client run build && npm --prefix server run build
 
 ## Quirks & gotchas
 
-- **No tests exist** in either package
 - **No linter configured.** Type checking is enforced at build time (tsconfig target: ES2022)
 - `server/tsconfig.json` compiles to CommonJS; `client/tsconfig.json` uses ESNext modules (bundler)
 - Build copies `public/` and `src/views/` into `dist/` via `postbuild` script — if you rename/move them, update that script

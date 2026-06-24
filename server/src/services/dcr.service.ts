@@ -1,8 +1,11 @@
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 
 export class DcrService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async register(req: Request): Promise<any> {
     const log = req.logger || logger;
     const { json } = req.body as { json?: string };
@@ -15,7 +18,7 @@ export class DcrService {
 
     log("DcrRegisterService: calling Authlete DCR register endpoint");
 
-    const response = await authleteApi.dynamicClientRegistration.register({
+    const response = await this.authleteApi.dynamicClientRegistration.register({
       serviceId,
       requestBody: { json },
     });
@@ -41,7 +44,7 @@ export class DcrService {
 
     log("DcrGetService: calling Authlete DCR get endpoint", { clientId });
 
-    const response = await authleteApi.dynamicClientRegistration.get({
+    const response = await this.authleteApi.dynamicClientRegistration.get({
       serviceId,
       requestBody: { token, clientId },
     });
@@ -73,7 +76,7 @@ export class DcrService {
 
     log("DcrUpdateService: calling Authlete DCR update endpoint", { clientId });
 
-    const response = await authleteApi.dynamicClientRegistration.update({
+    const response = await this.authleteApi.dynamicClientRegistration.update({
       serviceId,
       requestBody: { json, token, clientId },
     });
@@ -99,7 +102,7 @@ export class DcrService {
 
     log("DcrDeleteService: calling Authlete DCR delete endpoint", { clientId });
 
-    const response = await authleteApi.dynamicClientRegistration.delete({
+    const response = await this.authleteApi.dynamicClientRegistration.delete({
       serviceId,
       requestBody: { token, clientId },
     });

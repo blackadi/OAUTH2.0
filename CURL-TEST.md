@@ -83,10 +83,10 @@ The full interactive flow through the browser: authorization, login, consent, co
 curl -s -c /tmp/cj.txt -b /tmp/cj.txt \
   "${BASE}/api/authorization?response_type=code&client_id=${CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=s1"
 
-# Step 2 — Login (submit alice / password123)
+# Step 2 — Login (submit admin / password)
 curl -s -c /tmp/cj.txt -b /tmp/cj.txt \
   -X POST "${BASE}/api/session/login" \
-  -d "username=alice&password=password123"
+  -d "username=admin&password=password"
 
 # Step 3 — Consent (approve the requested scopes, capture the code from redirect)
 curl -s -c /tmp/cj.txt -b /tmp/cj.txt \
@@ -129,7 +129,7 @@ else:
 "
 ```
 
-Expected JWT payload: `sub: alice`, `iss`, `aud`, `s_hash`, `auth_time`, `exp`, `iat`.
+Expected JWT payload: `sub: admin` (or your configured user subject), `iss`, `aud`, `s_hash`, `auth_time`, `exp`, `iat`.
 
 ---
 
@@ -159,7 +159,7 @@ else:
 "
 ```
 
-Expected JWT payload: `sub: alice`, `name: Alice Smith`, `iss`, `aud`, `exp`, `iat`.
+Expected JWT payload: `sub: admin`, `name: Administrator`, `iss`, `aud`, `exp`, `iat`.
 
 ### POST (token in form body)
 
@@ -206,7 +206,7 @@ curl -s -X POST "${BASE}/api/introspection/standard" \
   -d "token=${AT2}" | jq
 ```
 
-Expected: `active: true`, `scope: openid profile`, `sub: alice`, `client_id`, `token_type: Bearer`.
+Expected: `active: true`, `scope: openid profile`, `sub: admin`, `client_id`, `token_type: Bearer`.
 
 ### Non-standard introspection (Authlete-specific — more detail)
 
@@ -216,7 +216,7 @@ curl -s -X POST "${BASE}/api/introspection" \
   -d "token=${AT2}" | jq
 ```
 
-Expected: `action: OK`, `existent: true`, `usable: true`, `subject: alice`.
+Expected: `action: OK`, `existent: true`, `usable: true`, `subject: admin`.
 
 ---
 
@@ -273,7 +273,7 @@ curl -s -c /tmp/pkce_cj.txt -b /tmp/pkce_cj.txt \
 # Step 2 — Login
 curl -s -c /tmp/pkce_cj.txt -b /tmp/pkce_cj.txt \
   -X POST "${BASE}/api/session/login" \
-  -d "username=alice&password=password123"
+  -d "username=admin&password=password"
 
 # Step 3 — Consent (capture code from Location header)
 curl -s -c /tmp/pkce_cj.txt -b /tmp/pkce_cj.txt \
@@ -408,7 +408,7 @@ Generates a logout token JWT for the specified client without delivering it.
 curl -s -X POST "${BASE}/api/backchannel_logout/issue" \
   -u "MGMT_ID:MGMT_SEC" \
   -H "Content-Type: application/json" \
-  -d '{"clientIdentifier": "'"${CID}"'", "subject": "alice"}' | jq
+  -d '{"clientIdentifier": "'"${CID}"'", "subject": "admin"}' | jq
 ```
 
 Expected: JSON with `action: "OK"`, `logoutToken` (JWT string with `typ: "logout+jwt"`), and `backchannelLogoutUri`.
@@ -419,7 +419,7 @@ Decode the logout token payload:
 curl -s -X POST "${BASE}/api/backchannel_logout/issue" \
   -u "MGMT_ID:MGMT_SEC" \
   -H "Content-Type: application/json" \
-  -d '{"clientIdentifier": "'"${CID}"'", "subject": "alice"}' | jq -r '.logoutToken' | python3 -c "
+  -d '{"clientIdentifier": "'"${CID}"'", "subject": "admin"}' | jq -r '.logoutToken' | python3 -c "
 import sys, base64, json
 jwt = sys.stdin.read().strip()
 parts = jwt.split('.')
@@ -431,7 +431,7 @@ if len(parts) == 3:
 "
 ```
 
-Expected JWT payload: `typ: "logout+jwt"`, `sub: "alice"`, `aud: [CID]`, `iss`, `iat`, `jti`, `events: { "http://schemas.openid.net/event/backchannel-logout": {} }`.
+Expected JWT payload: `typ: "logout+jwt"`, `sub: "admin"`, `aud: [CID]`, `iss`, `iat`, `jti`, `events: { "http://schemas.openid.net/event/backchannel-logout": {} }`.
 
 ### 13b. Issue and deliver to one client
 
@@ -441,7 +441,7 @@ Issues a logout token and POSTs it to the client's `backchannelLogoutUri` (the c
 curl -s -X POST "${BASE}/api/backchannel_logout/deliver" \
   -u "MGMT_ID:MGMT_SEC" \
   -H "Content-Type: application/json" \
-  -d '{"clientIdentifier": "'"${CID}"'", "subject": "alice"}' | jq
+  -d '{"clientIdentifier": "'"${CID}"'", "subject": "admin"}' | jq
 ```
 
 Expected: JSON with `clientId`, `success: true` (or `false` if delivery failed), `statusCode` (from the RP's response), and `backchannelLogoutUri`.
@@ -454,7 +454,7 @@ Iterates all clients in the Authlete service and delivers logout tokens to every
 curl -s -X POST "${BASE}/api/backchannel_logout/deliver-all" \
   -u "MGMT_ID:MGMT_SEC" \
   -H "Content-Type: application/json" \
-  -d '{"subject": "alice"}' | jq
+  -d '{"subject": "admin"}' | jq
 ```
 
 Expected: JSON array of delivery results, one per client with `backchannelLogoutUri`. Each result has `clientId`, `clientName`, `success`, and either `statusCode` or `error`.
@@ -611,6 +611,19 @@ Expected: `action: "NO_ACTION"` (poll/ping mode) or `"NOTIFICATION"` (push mode)
 
 ---
 
+## Automated E2E Testing
+
+This project includes a **Vitest-based E2E test suite** at `server/tests/e2e/e2e.test.ts` that covers all 17 sections above programmatically with proper assertions. It automatically skips tests where required credentials are missing.
+
+```bash
+# Requires real Authlete credentials in server/.env
+npm --prefix server run test:e2e
+```
+
+See [`server/tests/e2e/e2e.test.ts`](server/tests/e2e/e2e.test.ts) for the full test source.
+
+---
+
 ## 17. PAR — Pushed Authorization Requests (RFC 9126)
 
 > **Auth method for client at PAR endpoint:** Pass `clientId`/`clientSecret` in the JSON body (matching CIBA pattern). Per RFC 9126 §3, client authentication is REQUIRED at the PAR endpoint. Confidential clients MUST provide a `clientSecret` (or omit for public clients that don't use a secret). No admin Basic auth is required.
@@ -680,12 +693,16 @@ Save this section as `smoke-test.sh`, make it executable (`chmod +x smoke-test.s
 
 ```bash
 #!/usr/bin/env bash
+# =============================================================================
+# Quick smoke test — run with: bash CURL-TEST.md (source this file)
+# Prerequisites: CID, SEC, PUB_CID env vars set to real Authlete clients
+# =============================================================================
 set -euo pipefail
-BASE="http://localhost:3000"
-CID="4288007124"
-SEC="FGpSN50T6SK7shEuzzwUNAaXsbfFXfqRJmI1VsncPPsUBgEnPsQ7UG7hc6o-NNnjeIScun5_MRnPc-24JGVPRA"
-PUB_CID="3322138582"
-REDIR="http://localhost:3000"
+BASE="${BASE:-http://localhost:3000}"
+CID="${CID:?CID required}"
+SEC="${SEC:?SEC required}"
+PUB_CID="${PUB_CID}"
+REDIR="${REDIR:-http://localhost:3000}"
 
 echo "=== 1. OpenID Discovery ==="
 curl -s "${BASE}/api/.well-known/openid-configuration" | jq '.issuer'
@@ -698,7 +715,7 @@ CC_AT=$(echo "$CC_RESP" | jq -r '.access_token')
 echo "=== 4. Auth Code ==="
 rm -f /tmp/cj.txt
 curl -s -c /tmp/cj.txt -b /tmp/cj.txt "${BASE}/api/authorization?response_type=code&client_id=${CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=s3" > /dev/null
-curl -s -c /tmp/cj.txt -b /tmp/cj.txt -X POST "${BASE}/api/session/login" -d "username=alice&password=password123" > /dev/null
+curl -s -c /tmp/cj.txt -b /tmp/cj.txt -X POST "${BASE}/api/session/login" -d "username=admin&password=password" > /dev/null
 curl -s -c /tmp/cj.txt -b /tmp/cj.txt -D /tmp/headers.txt -o /dev/null -X POST "${BASE}/api/session/consent" -d "decision=approve"
 CODE=$(grep -oP 'code=\K[^&\s]+' /tmp/headers.txt)
 TOK_RESP=$(curl -s -X POST "${BASE}/api/token" -u "${CID}:${SEC}" -H "Content-Type: application/x-www-form-urlencoded" -d "grant_type=authorization_code&code=${CODE}&redirect_uri=${REDIR}")
@@ -722,7 +739,7 @@ CV="dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXkdBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW
 CC=$(echo -n "$CV" | openssl dgst -sha256 -binary | base64 | tr '+/' '-_' | tr -d '=')
 rm -f /tmp/pkce_cj.txt
 curl -s -c /tmp/pkce_cj.txt -b /tmp/pkce_cj.txt "${BASE}/api/authorization?response_type=code&client_id=${PUB_CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=s4&code_challenge=${CC}&code_challenge_method=S256" > /dev/null
-curl -s -c /tmp/pkce_cj.txt -b /tmp/pkce_cj.txt -X POST "${BASE}/api/session/login" -d "username=alice&password=password123" > /dev/null
+curl -s -c /tmp/pkce_cj.txt -b /tmp/pkce_cj.txt -X POST "${BASE}/api/session/login" -d "username=admin&password=password" > /dev/null
 curl -s -c /tmp/pkce_cj.txt -b /tmp/pkce_cj.txt -D /tmp/pkce_headers.txt -o /dev/null -X POST "${BASE}/api/session/consent" -d "decision=approve"
 PKCE_CODE=$(grep -oP 'code=\K[^&\s]+' /tmp/pkce_headers.txt)
 curl -s -X POST "${BASE}/api/token" -H "Content-Type: application/x-www-form-urlencoded" -d "grant_type=authorization_code&code=${PKCE_CODE}&redirect_uri=${REDIR}&client_id=${PUB_CID}&code_verifier=${CV}" | jq -r '.token_type'
@@ -734,15 +751,12 @@ curl -s -X PATCH "${BASE}/api/token/update" -H "Content-Type: application/x-www-
 curl -s -X POST "${BASE}/api/token/revoke" -H "Content-Type: application/x-www-form-urlencoded" -d "accessTokenIdentifier=${AT_CREATED}" | jq '.resultCode'
 echo "=== 11. Logout ==="
 curl -s -o /dev/null -w "HTTP %{http_code}\n" "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}"
-echo "=== 12. Grant Management ==="
-# Query a known grant (requires a real grant_id from a previous token response with grant_management_action=create)
-# Uncomment and replace GRANT_ID with an actual value:
-# curl -s "${BASE}/api/gm/GRANT_ID" -H "Authorization: Bearer ${AT}" | jq '.scopes'
 echo "=== 15. DCR Register ==="
+# Add -u "MGMT_ID:MGMT_SEC" if MGMT_CLIENT_ID/MGMT_CLIENT_SECRET are set in your .env
 curl -s -X POST "${BASE}/api/client/dcr/register" -H "Content-Type: application/json" -d '{"json": "{\"client_name\":\"Smoke Test\",\"redirect_uris\":[\"http://localhost:3001/callback\"],\"grant_types\":[\"AUTHORIZATION_CODE\"]}"}' | jq -r '.action'
 echo "=== 16. CIBA Authentication ==="
+curl -s -X POST "${BASE}/api/ciba/authentication" -H "Content-Type: application/json" -d "{\"parameters\":\"login_hint=admin&scope=openid\",\"clientId\":\"${CID}\",\"clientSecret\":\"${SEC}\"}" | jq -r '.action // .error'
 echo "=== 17. PAR ==="
 curl -s -X POST "${BASE}/api/par" -H "Content-Type: application/json" -d "{\"parameters\":\"response_type=code&client_id=${CID}&redirect_uri=${REDIR}&scope=openid%20profile&state=smoke\",\"clientId\":\"${CID}\",\"clientSecret\":\"${SEC}\"}" | jq -r '.action // .error'
-curl -s -X POST "${BASE}/api/ciba/authentication" -H "Content-Type: application/json" -d "{\"parameters\":\"login_hint=admin&scope=openid\",\"clientId\":\"${CID}\",\"clientSecret\":\"${SEC}\"}" | jq -r '.action // .error'
 echo "=== ALL DONE ==="
 ```

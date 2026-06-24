@@ -285,8 +285,7 @@ export const localSignedToken = {
       reqBody.aud =
         (typeof reqBody.aud === "string" ? reqBody.aud : "")
           .split(/\s+/)
-          .filter(Boolean)
-          .map((s: any) => s as any) ?? [];
+          .filter(Boolean) ?? [];
 
       logger("Local Signed Token parameters", { reqBody });
 

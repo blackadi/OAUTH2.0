@@ -1,4 +1,4 @@
-import { authleteConfig } from "../config/authlete.config";
+import { authleteConfig as defaultConfig } from "../config/authlete.config";
 
 export interface AuthleteHealthResponse {
   healthy: boolean;
@@ -9,8 +9,10 @@ export interface AuthleteHealthResponse {
 }
 
 export class HealthService {
+  constructor(private config: { baseUrl: string } = defaultConfig) {}
+
   async checkAuthlete(extended = false): Promise<AuthleteHealthResponse> {
-    const url = `${authleteConfig.baseUrl}/api/lifecycle/healthcheck${extended ? "?extended=true" : ""}`;
+    const url = `${this.config.baseUrl}/api/lifecycle/healthcheck${extended ? "?extended=true" : ""}`;
 
     try {
       const res = await fetch(url);

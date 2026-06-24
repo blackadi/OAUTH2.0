@@ -5,10 +5,13 @@ import {
   UserinfoRequest,
   UserinfoResponse,
 } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import logger from "../utils/logger";
 
 export class UserInfoService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async process(req: Request): Promise<UserinfoResponse> {
     const reqBody: UserinfoRequest =
       req.method === "GET" ? {} : req.body ?? {};
@@ -21,7 +24,7 @@ export class UserInfoService {
     log("Userinfo parameters", { reqBody });
 
     // Call Authlete /userinfo API
-    const response = await authleteApi.userinfo.process({
+    const response = await this.authleteApi.userinfo.process({
       serviceId,
       userinfoRequest: reqBody,
     });
@@ -34,7 +37,7 @@ export class UserInfoService {
     issueRequest: UserinfoIssueRequest
   ): Promise<UserinfoIssueResponse> {
     // Call Authlete /userinfo API to issue user info
-    const response = await authleteApi.userinfo.issue({
+    const response = await this.authleteApi.userinfo.issue({
       serviceId,
       userinfoIssueRequest: issueRequest,
     });

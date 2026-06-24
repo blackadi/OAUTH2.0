@@ -5,7 +5,6 @@ import { LoginService } from "../services/login.service";
 import session from "express-session";
 import logger from "../utils/logger";
 import {
-  TokenCreateRequest,
   TokenFailRequest,
   TokenIssueRequest,
 } from "@authlete/typescript-sdk/models";
@@ -13,12 +12,12 @@ import { handleTokenExchange } from "./token-exchange-response.handler";
 import { sendTokenFailResponse } from "./token-fail-response.handler";
 import { sendTokenIssueResponse } from "./token-issue-response.handler";
 import { validateTokenParams } from "../utils/validate";
-import { authleteApi, serviceId } from "../services/authlete.service";
-import jwt from "jsonwebtoken";
+import { JwtVerificationService } from "../services/jwt-verification.service";
 
 const tokenService = new TokenService();
 const loginService = new LoginService();
 const tokenManagementService = new TokenManagementService();
+const jwtVerificationService = new JwtVerificationService();
 
 export const tokenController = {
   handleToken: async (
@@ -67,90 +66,20 @@ export const tokenController = {
           return res.status(500).send(result.responseContent ?? result);
 
         case "JWT_BEARER":
-          const assertion = result.assertion;
-          if (!assertion) {
-            return res.status(400).json({
-              error: "invalid_request",
-              error_description: "Missing assertion",
+          const jwtResult = await jwtVerificationService.processJwtBearer(result);
+          if (jwtResult.ok) {
+            res.setHeader("Content-Type", "application/json");
+            const body = JSON.stringify({
+              access_token: jwtResult.accessToken,
+              token_type: jwtResult.tokenType,
+              expires_in: jwtResult.expiresIn,
+              scope: jwtResult.scope,
+              client_id: jwtResult.clientId,
+              subject: jwtResult.subject,
             });
+            return res.status(200).send(body);
           }
-
-          if (result.clientId === undefined && !result.clientIdAlias) {
-            return res.status(500).json({
-              error: "server_error",
-              error_description: "Client identifier not available from token response",
-            });
-          }
-          const clientIdentifier = result.clientIdAlias ?? String(result.clientId);
-
-          const verifyResp = await authleteApi.joseObject.joseVerifyApi({
-            serviceId,
-            joseVerifyRequest: {
-              jose: assertion,
-              clientIdentifier,
-              signedByClient: true,
-              mandatoryClaims: ["iss", "sub", "aud"],
-            },
-          });
-
-          if (!verifyResp.valid || !verifyResp.signatureValid) {
-            logger.error("JWT assertion verification failed via Authlete", {
-              errorDescriptions: verifyResp.errorDescriptions,
-            });
-            return res.status(400).json({
-              error: "invalid_request",
-              error_description: "Invalid assertion",
-            });
-          }
-
-          // Authlete verified signature + claims; just decode to extract values
-          const decoded = jwt.decode(assertion, { complete: true });
-          if (!decoded || typeof decoded === "string" || !decoded.payload) {
-            return res.status(400).json({
-              error: "invalid_request",
-              error_description: "Invalid assertion format",
-            });
-          }
-          const decodedPayload = decoded.payload as jwt.JwtPayload;
-          const subject = decodedPayload.sub;
-          const issuer = decodedPayload.iss;
-          const audience = decodedPayload.aud;
-
-          // Build Authlete TokenCreateRequest
-          const createRequest = {
-            grantType: "JWT_BEARER",
-            subject,
-            clientId: result.clientId,
-            issuer,
-            audience: Array.isArray(audience) ? audience : [audience],
-            scopes: result.scopes,
-          } as TokenCreateRequest;
-
-          const createResp = await tokenManagementService.create(createRequest);
-
-          switch (createResp.action) {
-            case "OK": {
-              res.setHeader("Content-Type", "application/json");
-              const body = JSON.stringify({
-                access_token: createResp.accessToken,
-                token_type: createResp.tokenType || "Bearer",
-                expires_in: createResp.expiresIn,
-                scope: createResp.scopes?.join(" ") || "",
-                client_id: createResp.clientId,
-                subject: createResp.subject,
-              });
-              return res.status(200).send(body);
-            }
-            case "BAD_REQUEST":
-              res.setHeader("Content-Type", "application/json");
-              return res.status(400).json(createResp);
-            case "FORBIDDEN":
-              res.setHeader("Content-Type", "application/json");
-              return res.status(403).json(createResp);
-            default:
-              res.setHeader("Content-Type", "application/json");
-              return res.status(500).json(createResp);
-          }
+          return res.status(jwtResult.status).json(jwtResult.body);
 
         case "OK":
           res.setHeader("Content-Type", "application/json");

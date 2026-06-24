@@ -1,18 +1,12 @@
 import { configDotenv } from "dotenv";
 configDotenv();
 
+import { required } from "../utils/env";
+
 export const appConfig = {
   loginUrl: "/api/session/login",
   consentUrl: "/api/session/consent",
 };
-
-function required(name: string): string {
-  const val = process.env[name];
-  if (!val || val.trim() === "") {
-    throw new Error(`${name} is required but not set. Check your .env file.`);
-  }
-  return val;
-}
 
 export const server = {
   port: Number(process.env.PORT || 3000),

@@ -5,6 +5,8 @@ import logger from "../utils/logger";
 import { BackchannelLogoutService } from "./backchannel-logout.service";
 
 export class rpInitiatedLogoutService {
+  constructor(private backchannelLogoutService: BackchannelLogoutService = new BackchannelLogoutService()) {}
+
   async rpInitiatedLogout(
     req: Request & { session: Partial<session.SessionData> },
     res: Response
@@ -41,8 +43,7 @@ export class rpInitiatedLogoutService {
     let backchannelResults: unknown = null;
     if (backchannel === "true" && subject) {
       try {
-        const bclService = new BackchannelLogoutService();
-        backchannelResults = await bclService.issueAndDeliverToAll(subject);
+        backchannelResults = await this.backchannelLogoutService.issueAndDeliverToAll(subject);
         log("Backchannel logout deliver-all completed", { subject });
       } catch (err) {
         log.error("Backchannel logout deliver-all failed", {

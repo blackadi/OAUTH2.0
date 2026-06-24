@@ -7,11 +7,14 @@ import {
   AuthorizationRequest,
   AuthorizationResponse,
 } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import session from "express-session";
 import logger from "../utils/logger";
 
 export class AuthorizationService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async process(req: Request): Promise<AuthorizationResponse> {
     // Convert Express request into a query string
     const { context, ...reqBody }: AuthorizationRequest =
@@ -29,7 +32,7 @@ export class AuthorizationService {
 
     reqBody.parameters = params.toString();
     // Call Authlete /authorization API
-    const response = await authleteApi.authorization.processRequest({
+    const response = await this.authleteApi.authorization.processRequest({
       serviceId: serviceId,
       authorizationRequest: reqBody,
     });
@@ -41,7 +44,7 @@ export class AuthorizationService {
     ticket: string,
     reason: AuthorizationFailRequestReason
   ): Promise<AuthorizationFailResponse> {
-    const response = await authleteApi.authorization.fail({
+    const response = await this.authleteApi.authorization.fail({
       serviceId,
       authorizationFailRequest: {
         ticket,
@@ -89,7 +92,7 @@ export class AuthorizationService {
 
       logger("Issue authorization request parameters", { params: reqBody });
 
-      const response = await authleteApi.authorization.issue({
+      const response = await this.authleteApi.authorization.issue({
         serviceId,
         authorizationIssueRequest: reqBody,
       });

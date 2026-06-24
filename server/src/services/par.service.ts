@@ -1,9 +1,12 @@
 import { PushedAuthorizationRequest } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 
 export class ParService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async process(req: Request): Promise<any> {
     const log = req.logger || logger;
     const { parameters, clientId, clientSecret } = req.body as {
@@ -26,7 +29,7 @@ export class ParService {
       clientSecret,
     };
 
-    const response = await authleteApi.pushedAuthorization.create({
+    const response = await this.authleteApi.pushedAuthorization.create({
       serviceId,
       pushedAuthorizationRequest: requestBody,
     });

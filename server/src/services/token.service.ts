@@ -6,11 +6,14 @@ import {
   TokenRequest,
   TokenResponse,
 } from "@authlete/typescript-sdk/models";
-import { authleteApi, serviceId } from "./authlete.service";
+import { Authlete } from "@authlete/typescript-sdk";
+import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 
 export class TokenService {
+  constructor(private authleteApi: Authlete = defaultApi) {}
+
   async process(req: Request): Promise<TokenResponse> {
     const log = req.logger || logger;
 
@@ -83,7 +86,7 @@ export class TokenService {
       parametersLength: parameters.length,
     });
 
-    const response = await authleteApi.token.process({
+    const response = await this.authleteApi.token.process({
       serviceId,
       tokenRequest: reqBody,
     });
@@ -92,7 +95,7 @@ export class TokenService {
   }
 
   async fail(req: TokenFailRequest): Promise<TokenFailResponse> {
-    const response = await authleteApi.token.fail({
+    const response = await this.authleteApi.token.fail({
       serviceId,
       tokenFailRequest: req,
     });
@@ -101,7 +104,7 @@ export class TokenService {
   }
 
   async issue(req: TokenIssueRequest): Promise<TokenIssueResponse> {
-    const response = await authleteApi.token.issue({
+    const response = await this.authleteApi.token.issue({
       serviceId,
       tokenIssueRequest: req,
     });

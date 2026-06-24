@@ -4,6 +4,10 @@ import logger from "../utils/logger";
 
 const dcrService = new DcrService();
 
+function safeParseJSON(str: string): unknown {
+  try { return JSON.parse(str); } catch { return str; }
+}
+
 function requireBasicAuth(req: Request, res: Response): boolean {
   const mgmtClientId = process.env.MGMT_CLIENT_ID;
   const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
@@ -48,7 +52,7 @@ export const dcrRegisterController = {
         return res.status(status).send();
       }
       const body = result.responseContent
-        ? { ...result, responseContent: (() => { try { return JSON.parse(result.responseContent); } catch { return result.responseContent; } })() }
+        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
         : result;
       return res.status(status).json(body);
     } catch (err) {
@@ -69,7 +73,7 @@ export const dcrGetController = {
         return res.status(status).send();
       }
       const body = result.responseContent
-        ? { ...result, responseContent: (() => { try { return JSON.parse(result.responseContent); } catch { return result.responseContent; } })() }
+        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
         : result;
       return res.status(status).json(body);
     } catch (err) {
@@ -90,7 +94,7 @@ export const dcrUpdateController = {
         return res.status(status).send();
       }
       const body = result.responseContent
-        ? { ...result, responseContent: (() => { try { return JSON.parse(result.responseContent); } catch { return result.responseContent; } })() }
+        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
         : result;
       return res.status(status).json(body);
     } catch (err) {
@@ -111,7 +115,7 @@ export const dcrDeleteController = {
         return res.status(status).send();
       }
       const body = result.responseContent
-        ? { ...result, responseContent: (() => { try { return JSON.parse(result.responseContent); } catch { return result.responseContent; } })() }
+        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
         : result;
       return res.status(status).json(body);
     } catch (err) {
