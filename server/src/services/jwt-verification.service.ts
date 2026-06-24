@@ -9,8 +9,7 @@ import jwt from "jsonwebtoken";
 
 export type JwtBearerResult =
   | { ok: true; response: TokenCreateResponse; accessToken: string; tokenType: string; expiresIn: number; scope: string; clientId: string | number; subject: string }
-  | { ok: false; status: 400; body: { error: string; error_description: string } }
-  | { ok: false; status: 500; body: { error: string; error_description: string } };
+  | { ok: false; status: 400 | 403 | 500; body: TokenCreateResponse | { error: string; error_description: string } };
 
 export class JwtVerificationService {
   constructor(
@@ -87,12 +86,12 @@ export class JwtVerificationService {
         return {
           ok: true,
           response: createResp,
-          accessToken: createResp.accessToken,
+          accessToken: createResp.accessToken ?? "",
           tokenType: createResp.tokenType || "Bearer",
-          expiresIn: createResp.expiresIn,
+          expiresIn: createResp.expiresIn ?? 0,
           scope: createResp.scopes?.join(" ") || "",
-          clientId: createResp.clientId,
-          subject: createResp.subject,
+          clientId: createResp.clientId ?? 0,
+          subject: createResp.subject ?? "",
         };
       case "BAD_REQUEST":
         return { ok: false, status: 400, body: createResp };

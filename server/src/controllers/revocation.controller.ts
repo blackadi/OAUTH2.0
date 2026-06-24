@@ -49,11 +49,8 @@ export const revocationController = {
           return res.status(500).send(result.responseContent ?? "");
 
         default:
-          // Authlete never returns undefined actions unless misconfigured
-          req.logger?.error("Unknown revocation action", {
-            action: result.action,
-          });
-          logger.error("Unknown revocation action", { action: result.action });
+          const log = req.logger || logger;
+          log.error("Unknown revocation action", { action: result.action });
           return res.status(500).send(result);
       }
     } catch (err) {
@@ -66,7 +63,8 @@ export const revocationController = {
         return res.status(400).json({ error: "invalid_request", error_description: "The revocation request body is empty." });
       }
 
-      logger.error("Revocation Response Error", { message: error.message });
+      const log = req.logger || logger;
+      log.error("Revocation Response Error", { message: error.message });
       return next(error);
     }
   },

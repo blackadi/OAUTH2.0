@@ -13,7 +13,8 @@ export const discoveryController = {
       res.status(200).send(result);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      logger.error("Discovery Response Error", { message: error.message });
+      const log = req.logger || logger;
+      log.error("Discovery Response Error", { message: error.message });
       return next(error);
     }
   }

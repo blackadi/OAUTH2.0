@@ -2,6 +2,8 @@ import { NextFunction, Request, Response } from "express";
 import { GrantManagementService } from "../services/grant-management.service";
 import logger from "../utils/logger";
 
+function getLog(req: Request) { return req.logger || logger; }
+
 const grantManagementService = new GrantManagementService();
 
 export const grantManagementQueryController = {
@@ -47,6 +49,9 @@ export const grantManagementQueryController = {
           return res.status(500).json({ error: "server_error" });
       }
     } catch (err) {
+      const log = getLog(req);
+      const error = err instanceof Error ? err : new Error(String(err));
+      log.error("Grant management query error", { message: error.message });
       next(err);
     }
   },
@@ -90,6 +95,9 @@ export const grantManagementRevokeController = {
           return res.status(500).json({ error: "server_error" });
       }
     } catch (err) {
+      const log = getLog(req);
+      const error = err instanceof Error ? err : new Error(String(err));
+      log.error("Grant management revoke error", { message: error.message });
       next(err);
     }
   },

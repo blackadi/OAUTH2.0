@@ -51,8 +51,8 @@ export const introspectionController = {
           return res.json(result);
 
         default:
-          req.logger?.error("Unknown introspection action", { action: result.action });
-          logger.error("Unknown introspection action from Authlete /introspection", { action: result.action });
+          const log = req.logger || logger;
+          log.error("Unknown introspection action", { action: result.action });
           return res.status(500).send("Unknown introspection action from Authlete /introspection");
       }
     } catch (err) {

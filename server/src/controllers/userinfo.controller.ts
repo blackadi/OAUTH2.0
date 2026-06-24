@@ -55,13 +55,8 @@ export const userinfoController = {
           const claimNames: string[] = result.claims || [];
 
           if (!subject) {
-            req.logger?.error(
-              "Userinfo OK but no subject returned by Authlete",
-              { result }
-            );
-            logger.error("Userinfo OK but no subject returned by Authlete", {
-              result,
-            });
+            const log1 = req.logger || logger;
+            log1.error("Userinfo OK but no subject returned by Authlete", { result });
             res.setHeader(
               "WWW-Authenticate",
               'Bearer error="server_error", error_description="No subject returned"'
@@ -119,10 +114,8 @@ export const userinfoController = {
             return senduserInfoIssueResponse(res, issueResponse);
           } catch (e) {
             const err = e instanceof Error ? e : new Error(String(e));
-            req.logger?.error("Failed to issue userinfo", {
-              message: err.message,
-            });
-            logger.error("Failed to issue userinfo", { message: err.message });
+            const log2 = req.logger || logger;
+            log2.error("Failed to issue userinfo", { message: err.message });
             res.setHeader(
               "WWW-Authenticate",
               'Bearer error="server_error", error_description="Failed to extract information about the subject from the database."'
@@ -137,10 +130,8 @@ export const userinfoController = {
           }
 
         default:
-          req.logger?.error("Unknown userinfo action", {
-            action: result.action,
-          });
-          logger.error("Unknown userinfo action", { action: result.action });
+          const log3 = req.logger || logger;
+          log3.error("Unknown userinfo action", { action: result.action });
           return res.status(500).send("Unknown userinfo action");
       }
     } catch (err) {

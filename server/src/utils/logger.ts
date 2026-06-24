@@ -41,6 +41,7 @@ const baseLogger = createLogger({
 export interface CallableLogger {
   (msg: string, meta?: Record<string, unknown>): void;
   error: (msg: string, meta?: Record<string, unknown>) => void;
+  warn: (msg: string, meta?: Record<string, unknown>) => void;
   child: (opts: { reqId?: string }) => CallableLogger;
 }
 
@@ -48,6 +49,7 @@ export function createCallableLogger(winstonLogger: Logger): CallableLogger {
   const dynamicLevel = server.logLevel === "debug" ? "debug" : "info";
   const fn = (winstonLogger as any)[dynamicLevel].bind(winstonLogger) as CallableLogger;
   fn.error = winstonLogger.error.bind(winstonLogger);
+  fn.warn = winstonLogger.warn.bind(winstonLogger);
   fn.child = (opts: { reqId?: string }) => createCallableLogger(winstonLogger.child(opts));
   return fn;
 }

@@ -125,12 +125,8 @@ export const tokenController = {
             return sendTokenIssueResponse(res, issueResp);
           } catch (e) {
             const err = e instanceof Error ? e : new Error(String(e));
-            req.logger?.error("Password grant handling failed", {
-              message: err.message,
-            });
-            logger.error("Password grant handling failed", {
-              message: err.message,
-            });
+            const log1 = req.logger || logger;
+            log1.error("Password grant handling failed", { message: err.message });
             res.setHeader("Content-Type", "application/json");
             res.setHeader("Cache-Control", "no-store");
             res.setHeader("Pragma", "no-cache");
@@ -143,8 +139,8 @@ export const tokenController = {
           return handleTokenExchange(req, res, result, next);
 
         default:
-          req.logger?.error("Unknown token action", { action: result.action });
-          logger.error("Unknown token action", { action: result.action });
+          const log2 = req.logger || logger;
+          log2.error("Unknown token action", { action: result.action });
           return res.status(500).send("Unknown token action");
       }
     } catch (err) {
