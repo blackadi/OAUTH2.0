@@ -330,6 +330,15 @@ class ApiService {
     return response.json();
   }
 
+  async authleteHealth(extended: boolean): Promise<any> {
+    const url = extended ? `${HEALTH_AUTHLETE_ENDPOINT}?extended=true` : HEALTH_AUTHLETE_ENDPOINT;
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
   async healthCheck(): Promise<{ status: string; uptime: number; timestamp: string }> {
     const response = await fetch(HEALTH_ENDPOINT, {
       headers: { Accept: 'application/json' },
