@@ -23,7 +23,7 @@ const BackchannelLogoutSection: React.FC = () => {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const auth = btoa(`${mgmtClientId}:${mgmtClientSecret}`);
+  const mgmtAuth = mgmtClientId && mgmtClientSecret ? btoa(`${mgmtClientId}:${mgmtClientSecret}`) : '';
 
   const call = async (fn: () => Promise<any>) => {
     setError(null);
@@ -42,13 +42,13 @@ const BackchannelLogoutSection: React.FC = () => {
   const active = loading ? 'Loading\u2026' : 'Run';
 
   const handleIssue = () =>
-    call(() => apiService.backchannelLogoutIssue({ clientIdentifier, subject, sessionId }, auth));
+    call(() => apiService.backchannelLogoutIssue({ clientIdentifier, subject, sessionId }, mgmtAuth));
 
   const handleDeliver = () =>
-    call(() => apiService.backchannelLogoutDeliver({ clientIdentifier, subject, sessionId }, auth));
+    call(() => apiService.backchannelLogoutDeliver({ clientIdentifier, subject, sessionId }, mgmtAuth));
 
   const handleDeliverAll = () =>
-    call(() => apiService.backchannelLogoutDeliverAll({ subject, sessionId }, auth));
+    call(() => apiService.backchannelLogoutDeliverAll({ subject, sessionId }, mgmtAuth));
 
   const decodedLogoutToken = result?.logoutToken ? decodeJwtPayload(result.logoutToken) : null;
   const hasTokenResult = !!(result?.logoutToken);
@@ -69,23 +69,23 @@ const BackchannelLogoutSection: React.FC = () => {
       </div>
       <div className="field">
         <label className="label">Subject</label>
-        <input className="input" value={subject} onChange={e => setSubject(e.target.value)} placeholder="End-user subject (required for deliver-all)" />
+        <input className="input" value={subject} onChange={e => setSubject(e.target.value)} placeholder="End-user subject — required per OIDC spec (or use Session ID)" />
       </div>
       <div className="field">
         <label className="label">Session ID</label>
-        <input className="input" value={sessionId} onChange={e => setSessionId(e.target.value)} placeholder="Optional session identifier (alternative to subject)" />
+        <input className="input" value={sessionId} onChange={e => setSessionId(e.target.value)} placeholder="Session identifier — alternative to subject" />
       </div>
 
       {error && <div className="error">{error}</div>}
 
       <div className="chip-row">
-        <button className="chip" onClick={handleIssue} disabled={!auth || !clientIdentifier || loading}>
+        <button className="chip" onClick={handleIssue} disabled={!mgmtAuth || !clientIdentifier || loading}>
           {active === 'Run' ? 'Issue Token' : active}
         </button>
-        <button className="chip" onClick={handleDeliver} disabled={!auth || !clientIdentifier || loading}>
+        <button className="chip" onClick={handleDeliver} disabled={!mgmtAuth || !clientIdentifier || loading}>
           {active === 'Run' ? 'Issue & Deliver' : active}
         </button>
-        <button className="chip" onClick={handleDeliverAll} disabled={!auth || (!subject && !sessionId) || loading}>
+        <button className="chip" onClick={handleDeliverAll} disabled={!mgmtAuth || (!subject && !sessionId) || loading}>
           {active === 'Run' ? 'Issue & Deliver All' : active}
         </button>
       </div>

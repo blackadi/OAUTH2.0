@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LOGOUT_ENDPOINT } from '../config';
+import { LOGOUT_ENDPOINT, CLIENT_ID } from '../config';
 import { useToken } from '../context/TokenContext';
 import { getDoc } from '../data/operationDocs';
 import HelpPopover from './HelpPopover';
@@ -7,8 +7,8 @@ import HelpPopover from './HelpPopover';
 const LogoutSection: React.FC = () => {
   const { tokenSet, clearTokens } = useToken();
   const [idTokenHint, setIdTokenHint] = useState(tokenSet?.id_token || '');
-  const [postLogoutUri, setPostLogoutUri] = useState('http://localhost:3001');
-  const [state, setState] = useState(() => crypto.randomUUID());
+  const [postLogoutUri, setPostLogoutUri] = useState(() => window.location.origin);
+  const [state, setState] = useState<string>(() => crypto.randomUUID());
 
   const doc = getDoc('logout', 'logout');
 
@@ -18,6 +18,7 @@ const LogoutSection: React.FC = () => {
     if (idTokenHint) params.set('id_token_hint', idTokenHint);
     if (postLogoutUri) params.set('post_logout_redirect_uri', postLogoutUri);
     if (state) params.set('state', state);
+    if (CLIENT_ID && CLIENT_ID !== 'your_client_id') params.set('client_id', CLIENT_ID);
     window.location.href = `${LOGOUT_ENDPOINT}?${params.toString()}`;
   };
 

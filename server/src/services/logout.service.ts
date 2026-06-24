@@ -67,7 +67,7 @@ export class rpInitiatedLogoutService {
       );
       const isAllowed =
         post_logout_redirect_uri === allowedRedirectUri ||
-        post_logout_redirect_uri.startsWith("http://localhost:") ||
+        (process.env.NODE_ENV !== "production" && post_logout_redirect_uri.startsWith("http://localhost:")) ||
         [...allowedOrigins].some((origin) => post_logout_redirect_uri?.startsWith(origin));
 
       if (isAllowed) {

@@ -330,6 +330,69 @@ class ApiService {
     return response.json();
   }
 
+  async backchannelLogoutIssue(body: Record<string, string>, auth: string): Promise<any> {
+    return this.postAdmin(BACKCHANNEL_LOGOUT_ISSUE_ENDPOINT, body, auth);
+  }
+
+  async backchannelLogoutDeliver(body: Record<string, string>, auth: string): Promise<any> {
+    return this.postAdmin(BACKCHANNEL_LOGOUT_DELIVER_ENDPOINT, body, auth);
+  }
+
+  async backchannelLogoutDeliverAll(body: Record<string, string>, auth: string): Promise<any> {
+    return this.postAdmin(BACKCHANNEL_LOGOUT_DELIVER_ALL_ENDPOINT, body, auth);
+  }
+
+  async queryGrant(accessToken: string, grantId: string): Promise<any> {
+    const response = await fetch(`${GRANT_MANAGEMENT_ENDPOINT}/${encodeURIComponent(grantId)}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async revokeGrant(accessToken: string, grantId: string): Promise<any> {
+    const response = await fetch(`${GRANT_MANAGEMENT_ENDPOINT}/${encodeURIComponent(grantId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async dcrRegister(body: Record<string, string>, auth: string): Promise<any> {
+    return this.postAdmin(DCR_REGISTER_ENDPOINT, body, auth);
+  }
+
+  async dcrGet(token: string, clientId: string): Promise<any> {
+    const response = await fetch(DCR_GET_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, clientId }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async dcrUpdate(json: string, token: string, clientId: string): Promise<any> {
+    const response = await fetch(DCR_UPDATE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ json, token, clientId }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
+  async dcrDelete(token: string, clientId: string): Promise<any> {
+    const response = await fetch(DCR_DELETE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, clientId }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json();
+  }
+
   async authleteHealth(extended: boolean): Promise<any> {
     const url = extended ? `${HEALTH_AUTHLETE_ENDPOINT}?extended=true` : HEALTH_AUTHLETE_ENDPOINT;
     const response = await fetch(url, {
