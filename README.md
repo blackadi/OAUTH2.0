@@ -228,7 +228,6 @@ server/
 │   │   └── express-session.d.ts           # Session shape (user, authorization, secret)
 │   ├── utils/
 │   │   ├── createLocalJWT.ts             # Dev-only local JWT signer
-│   │   ├── crypto.ts                     # PKCE verifier/challenge helpers
 │   │   ├── env.ts                        # Shared required() helper for env vars
 │   │   ├── jwksClient.ts                # JWKS fetcher with cache
 │   │   ├── logger.ts                    # Winston logger (daily rotation)
@@ -249,9 +248,6 @@ server/
 │   │   ├── mock-authlete.ts             # SDK mock for all 15+ SDK methods
 │   ├── helpers/
 │   │   └── mock-authlete.ts             # SDK mock for all 15+ SDK methods
-│   ├── fixtures/                         # Reusable test data
-│   │   ├── sample-jwks.json
-│   │   └── sample-keys.ts               # RSA key pair + JWKS for tests
 │   ├── unit/services/                   # 18 files, 59 tests
 │   │   ├── authorization.service.test.ts
 │   │   ├── backchannel-logout.service.test.ts
@@ -279,8 +275,7 @@ server/
 │   ├── unit/middleware/                # 2 files, 14 tests
 │   │   ├── errorHandler.test.ts
 │   │   └── session.test.ts
-│   ├── unit/utils/                     # 4 files, 26 tests
-│   │   ├── crypto.test.ts
+│   ├── unit/utils/                     # 3 files, 19 tests
 │   │   ├── createLocalJWT.test.ts
 │   │   ├── jwksClient.test.ts
 │   │   └── validate.test.ts
@@ -644,16 +639,16 @@ npm --prefix server run build && npm --prefix client run build
 
 Three testing approaches are provided:
 
-### 1. Vitest (unit + integration) — 173 tests
+### 1. Vitest (unit + integration) — 166 tests
 
-**28 unit test files** in four categories:
+**27 unit test files** in four categories:
 
 | Category | Files | Tests | What's Tested |
 |----------|-------|-------|---------------|
 | Services | 18 | 59 | Each service in isolation with mocked Authlete SDK |
 | Controllers | 4 | 30 | Request handlers (token, authorization, DCR, backchannel-logout) |
 | Middleware | 2 | 14 | Error handler and session middleware |
-| Utils | 4 | 26 | crypto, createLocalJWT, jwksClient, validate |
+| Utils | 3 | 19 | createLocalJWT, jwksClient, validate |
 
 **1 integration file** (23 tests): Full Express stack via Supertest with SDK mocked at module level.
 

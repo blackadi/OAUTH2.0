@@ -7,39 +7,6 @@ import {
 import { TokenManagementService } from "../services/token.operations.service";
 
 const tokenManagementService = new TokenManagementService();
-export async function handleJwtBearerGrant(
-  res: Response,
-  result: TokenResponse,
-  next: NextFunction
-) {
-  try {
-    const action = result.action;
-    switch (action) {
-      case "INTERNAL_SERVER_ERROR":
-        res.setHeader("Content-Type", "application/json");
-        res.setHeader("Cache-Control", "no-store");
-        res.setHeader("Pragma", "no-cache");
-        return res.status(500).send(result.responseContent ?? result);
-
-      case "BAD_REQUEST":
-        res.setHeader("Content-Type", "application/json");
-        res.setHeader("Cache-Control", "no-store");
-        res.setHeader("Pragma", "no-cache");
-        return res.status(400).send(result.responseContent ?? result);
-
-      default:
-        // req.logger?.error("Unknown token.fail action", { action: result.action });
-        logger.error("Unknown token.fail action", { action: result.action });
-        return res.status(500).send("Unknown token.fail action");
-    }
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    logger.error("handleJwtBearerGrant Response Error", {
-      message: error.message,
-    });
-    return next(error);
-  }
-}
 
 export async function handleTokenExchange(
   req: Request,
@@ -121,4 +88,4 @@ export async function handleTokenExchange(
   }
 }
 
-export default { handleJwtBearerGrant, handleTokenExchange };
+export default { handleTokenExchange };

@@ -3,7 +3,6 @@ import { UserInfoService } from "../services/userinfo.service";
 import logger from "../utils/logger";
 import {
   UserinfoIssueRequest,
-  UserinfoResponse,
 } from "@authlete/typescript-sdk/models";
 import { senduserInfoIssueResponse } from "./userinfo-issue-response.handler";
 

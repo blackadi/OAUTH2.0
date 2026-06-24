@@ -3,7 +3,6 @@ import { TokenManagementService } from "../services/token.operations.service";
 import logger from "../utils/logger";
 import { server } from "../config/app.config";
 import { jwt } from "../config/authlete.config";
-import { Scope } from "@authlete/typescript-sdk/models";
 
 const tokenManagementService = new TokenManagementService();
 
