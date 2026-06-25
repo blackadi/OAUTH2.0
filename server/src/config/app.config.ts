@@ -16,4 +16,5 @@ export const server = {
   logLevel:
     process.env.LOG_LEVEL ||
     (process.env.NODE_ENV !== "production" ? "debug" : "info"),
+  redisUrl: process.env.REDIS_URL || "",
 };
