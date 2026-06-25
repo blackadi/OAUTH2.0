@@ -19,11 +19,12 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (74 tests)
+npm --prefix server run test              # unit + integration (188 tests)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
 npm --prefix server run test:unit         # unit tests only
 npm --prefix server run test:integration  # integration tests only
+npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, no output)
 npm --prefix server run test:e2e          # E2E (requires real Authlete creds)
 
 # Client dev (Vite on :3001, proxies /api -> localhost:3000)
@@ -52,15 +53,19 @@ npm --prefix client run build && npm --prefix server run build
 ## Testing architecture
 
 - **Vitest** runner, **Supertest** for HTTP integration tests
-- 15 Authlete-dependent services accept `authleteApi` as optional constructor param (defaults to real SDK client)
+- 16 Authlete-dependent services accept `authleteApi` as optional constructor param (defaults to real SDK client)
 - 2 services using raw `fetch()` (`health`, `backchannel-logout`) accept config as optional constructor param
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 15 files in `tests/unit/services/*.test.ts` (51 tests) — each service tested in isolation
+- **Unit tests**: 29 files across 4 categories (165 tests):
+  - `tests/unit/services/` — 19 files (64 tests), each service in isolation with mocked SDK
+  - `tests/unit/controllers/` — 6 files (53 tests), token/authorization/DCR/backchannel-logout/device/device-session
+  - `tests/unit/middleware/` — 2 files (14 tests), error handler + session
+  - `tests/unit/utils/` — 3 files (19 tests), createLocalJWT/jwksClient/validate
 - **Integration tests**: 1 file `tests/integration/routes.test.ts` (23 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (37 tests) — real Authlete API, skips gracefully if creds missing
-- Run with `npm --prefix server run test` — 74 tests across 18 files, completes in ~1.5s
+- Run with `npm --prefix server run test` — 188 tests across 30 files, completes in ~1.8s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -73,6 +78,7 @@ npm --prefix client run build && npm --prefix server run build
 - Session-based (express-session, in-memory store, 30-min expiry)
 - Each request gets a unique ID (`req.id`) and per-request logger (`req.logger`)
 - Server accepts both `application/json` and `application/x-www-form-urlencoded` on token endpoint
+- `resolveHost` middleware strips `x-forwarded-for` to prevent spoofing in dev; `trust proxy` enabled
 - `client/` Vite dev server proxies `/api` → `http://localhost:3000`
 - Security headers set globally (X-Content-Type-Options, X-Frame-Options, XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS in production)
 - CORS restricted to `http://localhost:3000,http://localhost:3001` by default (configurable via `ALLOWED_ORIGINS`)
@@ -83,6 +89,7 @@ npm --prefix client run build && npm --prefix server run build
 - **Dynamic Client Registration (DCR)**: Four POST endpoints at `/api/client/dcr/{register,get,update,delete}`. Delegates to `authleteApi.dynamicClientRegistration.*` (SDK v1.1.6 includes these natively). `register` requires admin Basic auth (`MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`); `get`/`update`/`delete` use the registration access token in the request body (no admin auth). The `action` field in Authlete's response is mapped to HTTP status: `CREATED`→201, `OK`/`UPDATED`→200, `DELETED`→204, `BAD_REQUEST`→400, `UNAUTHORIZED`→401, `INTERNAL_SERVER_ERROR`→500. The `responseContent` field is returned as the response body. See `DcrSection.tsx` in the client for the testing UI.
 - **CIBA (Client-Initiated Backchannel Authentication)**: Four POST endpoints at `/api/ciba/{authentication,issue,fail,complete}`. Delegates to `authleteApi.ciba.*` (backchannel authentication, issue, fail, complete). No admin auth required — client authentication is via `clientId`/`clientSecret` in the request body (passed to Authlete). The authentication endpoint receives URL-encoded `parameters` (containing `login_hint`, `scope`, etc.) plus `clientId`/`clientSecret`. It returns `USER_IDENTIFICATION` → 200 with `ticket`, `hintType`, `hint`, `deliveryMode`; or error statuses (500, 400, 401). The `issue` endpoint takes a `ticket` and returns `OK` → 200 with `authReqId`, `expiresIn`, `interval`. The `fail` endpoint takes `ticket` + `reason` and returns `FORBIDDEN` → 403, `BAD_REQUEST`→400, `INTERNAL_SERVER_ERROR`→500. The `complete` endpoint takes `ticket` + `result` + `subject` and returns `NO_ACTION`→200 (poll mode) or `NOTIFICATION`→200 (ping/push mode). See `CibaSection.tsx` in the client for the testing UI. The Authlete Token endpoint natively supports `grant_type=urn:openid:params:grant-type:ciba` — no custom token endpoint needed for the polling phase.
 - **PAR (Pushed Authorization Requests — RFC 9126)**: Single POST endpoint at `/api/par`. Delegates to `authleteApi.pushedAuthorization.*` (SDK v1.1.6 includes this natively). Accepts `parameters` (URL-encoded OAuth params), `clientId`, `clientSecret` in JSON body. No admin auth required — client authentication is via `clientId`/`clientSecret` in the request body. Action mapped to HTTP status: `CREATED`→201, `BAD_REQUEST`→400, `UNAUTHORIZED`→401, `FORBIDDEN`→403, `PAYLOAD_TOO_LARGE`→413, `INTERNAL_SERVER_ERROR`→500. The response includes `requestUri` (the `request_uri` for the authorization call), `responseContent` (JSON with `expires_in`, `request_uri`). See `ParSection.tsx` in the client for the testing UI.
+- **Device Flow (RFC 8628)**: Three POST API endpoints at `/api/device/{authorization,verification,complete}` plus three browser paths at `/device` (GET show form, POST verify code, POST /device/consent authenticate+complete). Delegates to `authleteApi.deviceFlow.*` (SDK v1.1.6 includes natively). No admin auth required — client authentication is via `clientId`/`clientSecret` in the request body. The authorization endpoint validates `parameters` is present and returns `OK` → 200 with `deviceCode`, `userCode`, `verificationUri`, `expiresIn`, `interval`. The verification endpoint returns `VALID` → 200, `NOT_EXIST` → 404, `EXPIRED` → 400. The complete endpoint returns `SUCCESS` → 200, `ACCESS_DENIED` → 403, `USER_CODE_NOT_EXIST` → 404, `USER_CODE_EXPIRED` → 400. Service must have `supportedGrantTypes` including `DEVICE_CODE`, plus `deviceAuthorizationEndpoint`, `deviceVerificationUri`, `deviceFlowCodeDuration`, and `deviceFlowPollingInterval` configured. See `DeviceSection.tsx` in the client for the testing UI. The Authlete Token endpoint natively supports `grant_type=urn:ietf:params:oauth:grant-type:device_code` — no custom token endpoint needed for polling.
 
 ## Quirks & gotchas
 
@@ -96,3 +103,8 @@ npm --prefix client run build && npm --prefix server run build
 - All logging uses `const log = req.logger || logger;` pattern (no more `req.logger(...) || logger(...)` double-calls)
 - No hardcoded credentials in source — login template passes empty strings
 - Login page credentials moved to env var `AUTH_USERS` (defaults to `admin:password` demo user)
+- **Logging**: `const log = req.logger || logger;` — `CallableLogger` is callable (`logger("msg")`) + has `.error()`, `.warn()`, `.child()`. No `.info()` method.
+- **`resolveHost`** middleware deletes `x-forwarded-for` to prevent spoofing in dev; `trust proxy` is enabled for production reverse proxies
+- **`server/coverage/`** is gitignored — generated report dir (was 1.4MB tracked)
+- **`crypto.ts`** (`server/src/utils/crypto.ts`) was deleted — unused (referenced only by its own deleted test). The client-side `pkce.ts` handles PKCE
+- **Controller tests** (under `tests/unit/controllers/`) use `vi.hoisted()` to set up mutable mocks for config-dependent behavior

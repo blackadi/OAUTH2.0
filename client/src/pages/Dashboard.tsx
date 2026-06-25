@@ -9,6 +9,7 @@ import GrantManagementSection from '../components/GrantManagementSection';
 import DcrSection from '../components/DcrSection';
 import CibaSection from '../components/CibaSection';
 import ParSection from '../components/ParSection';
+import DeviceSection from '../components/DeviceSection';
 import BackchannelLogoutSection from '../components/BackchannelLogoutSection';
 import HealthSection from '../components/HealthSection';
 
@@ -70,6 +71,13 @@ const Dashboard: React.FC = () => {
         <summary className="section-summary">PAR (Pushed Authorization Requests)</summary>
         <div className="section-body">
           <ParSection />
+        </div>
+      </details>
+
+      <details className="section" open>
+        <summary className="section-summary">Device Flow (RFC 8628)</summary>
+        <div className="section-body">
+          <DeviceSection />
         </div>
       </details>
 

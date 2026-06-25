@@ -21,6 +21,7 @@ Two independent packages:
 - **Grant Management for OAuth 2.0**: Query and revoke grants via RESTful API (`GET`/`DELETE /api/gm/:grantId`)
 - **Dynamic Client Registration (DCR)**: Register, get, update, and delete OAuth clients per RFC 7591 / RFC 7592 (`/api/client/dcr/*`)
 - **CIBA (Client-Initiated Backchannel Authentication)**: Backchannel authentication, issue, fail, and complete endpoints — poll/ping/push delivery modes
+- **Device Flow (RFC 8628)**: Device authorization, verification, and complete endpoints — also includes an interactive browser verification page at `/device` for end-users to enter codes and authorize
 - **Client Management API**: Full CRUD for OAuth clients — list, get, create, update, delete, rotate secrets, manage authorizations and scopes (`/api/client/*`)
 - **Token management**: Introspection (RFC 7662 + Authlete-specific), Revocation (RFC 7009), token CRUD via Authlete management API
 - **Interactive flow**: Server-rendered login and consent pages (EJS) with session state
@@ -383,6 +384,17 @@ Protected by `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth if configured.
 |--------|------|-------------|
 | `POST` | `/api/par` | Push authorization parameters — returns `request_uri` for use in the authorization endpoint |
 
+### Device Flow (RFC 8628)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/device/authorization` | Initiate device flow — returns `device_code`, `user_code`, `verification_uri` |
+| `POST` | `/api/device/verification` | Verify a `user_code` — returns client info on VALID |
+| `POST` | `/api/device/complete` | Complete device flow — `AUTHORIZED`, `ACCESS_DENIED`, or `TRANSACTION_FAILED` |
+| `GET` | `/device` | Browser form for end-user code entry |
+| `POST` | `/device` | Submit user_code for verification |
+| `POST` | `/device/consent` | Authenticate user + complete authorization in one step |
+
 ### Grant Management for OAuth 2.0
 
 | Method | Path | Description |
@@ -689,6 +701,7 @@ Copy-paste individual curl commands to test each endpoint manually. Covers all O
 - **No CSRF protection**: The login/consent forms lack CSRF tokens. Not suitable for production without additional hardening.
 - **Single-user demo auth**: The built-in auth uses a static user list from `AUTH_USERS` env var. Replace with a real identity provider for production.
 - **CIBA must be enabled in Authlete Console**: The backchannel authentication endpoints return 404/400 if CIBA is not enabled on your Authlete service. Enable it via Authlete Console under Service > Authorization > CIBA settings.
+- **Device Flow requires Authlete service configuration**: The `deviceAuthorizationEndpoint`, `deviceVerificationUri`, `deviceFlowCodeDuration`, `deviceFlowPollingInterval`, and `supportedGrantTypes` (including `DEVICE_CODE`) must be configured via the Authlete admin API or Authlete Console. The server exposes no admin UI for this — configure it using the service update API or the Console.
 - **DCR requires mgmt auth**: The `register` endpoint requires `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` to be configured (or unprotected if empty). The `get`/`update`/`delete` endpoints use the registration access token instead.
 - **No notification delivery for CIBA push mode**: When CIBA complete returns `NOTIFICATION`, the server should POST to `clientNotificationEndpoint`. This is not implemented — the response is returned to the caller instead.
 

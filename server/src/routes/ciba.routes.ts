@@ -5,12 +5,13 @@ import {
   cibaFailController,
   cibaCompleteController,
 } from "../controllers/ciba.controller";
+import { generalLimiter } from "../middleware/rate-limit";
 
 const router = Router();
 
-router.post("/ciba/authentication", cibaAuthenticationController.handle);
-router.post("/ciba/issue", cibaIssueController.handle);
-router.post("/ciba/fail", cibaFailController.handle);
-router.post("/ciba/complete", cibaCompleteController.handle);
+router.post("/ciba/authentication", generalLimiter, cibaAuthenticationController.handle);
+router.post("/ciba/issue", generalLimiter, cibaIssueController.handle);
+router.post("/ciba/fail", generalLimiter, cibaFailController.handle);
+router.post("/ciba/complete", generalLimiter, cibaCompleteController.handle);
 
 export default router;

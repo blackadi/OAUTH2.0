@@ -1,0 +1,55 @@
+<%- include('partials/head', { title: 'Device Verification' }) %>
+<body>
+  <div class="container">
+    <h1>Device Verification</h1>
+
+    <% if (done) { %>
+      <div class="result <%= success ? 'success' : 'error' %>">
+        <p><%= success || error %></p>
+      </div>
+    <% } else if (!clientName) { %>
+      <% if (error) { %>
+        <div class="error"><p><%= error %></p></div>
+      <% } %>
+      <p>Enter the code displayed on your device to sign in.</p>
+      <form method="post" action="/device">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="form-group">
+          <label for="user_code">User Code</label>
+          <input type="text" id="user_code" name="user_code"
+                 value="<%= userCode || '' %>"
+                 placeholder="e.g. ABCD-1234" required autofocus
+                 style="font-size: 1.5em; letter-spacing: 0.25em; text-align: center; max-width: 300px;" />
+        </div>
+        <button type="submit">Verify</button>
+      </form>
+    <% } else { %>
+      <p>Device <strong><%= clientName %></strong> is requesting access to your account.</p>
+
+      <% if (scopes && scopes.length > 0) { %>
+        <p>This application would like to:</p>
+        <ul>
+          <% scopes.forEach(function(scope) { %>
+            <li><%= typeof scope === 'object' ? scope.name : scope %></li>
+          <% }) %>
+        </ul>
+      <% } %>
+
+      <form method="post" action="/device/consent">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="user_code" value="<%= userCode %>" />
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required />
+        </div>
+        <button type="submit" name="result" value="AUTHORIZED">Authorize</button>
+        <button type="submit" name="result" value="ACCESS_DENIED" class="btn-danger">Deny</button>
+      </form>
+    <% } %>
+  </div>
+</body>
+</html>

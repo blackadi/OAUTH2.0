@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
+    "typecheck": "tsc --noEmit",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "postinstall": "patch-package"
   },
@@ -23,6 +24,7 @@
     "dotenv": "^17.2.3",
     "ejs": "^6.0.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
     "express-request-id": "^1.1.0",
     "express-session": "^1.17.3",
     "jsonwebtoken": "^9.0.3",

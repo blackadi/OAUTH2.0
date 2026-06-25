@@ -4,6 +4,7 @@ import session from "express-session";
 import { appConfig } from "../config/app.config";
 import { AuthorizationService } from "../services/authorization.service";
 import logger from "../utils/logger";
+import { AppError } from "../utils/app-error";
 import { sendAuthorizationIssueResponse } from "./authorization-response.handler";
 
 const loginService = new LoginService();
@@ -25,11 +26,7 @@ export const sessionController = {
       // Must have ticket from OAuth2 authorization request
       const authz = req.session.authorization;
       if (!authz || !authz.authorizationIssueRequest?.ticket) {
-        const err = new Error(
-          "Missing authorization context - session not found"
-        );
-        (err as any).status = 401;
-        return next(err);
+        return next(new AppError("Missing authorization context - session not found", 401));
       }
 
       const loginDecision = req.body.login; // "submit" or "cancel"
@@ -49,16 +46,12 @@ export const sessionController = {
       }
 
       if (!username || !password) {
-        const err = new Error("Missing username or password");
-        (err as any).status = 400;
-        return next(err);
+        return next(new AppError("Missing username or password", 400));
       }
 
       const user = await loginService.validateUser(username, password);
       if (!user) {
-        const err = new Error("Invalid username or password");
-        (err as any).status = 401;
-        return next(err);
+        return next(new AppError("Invalid username or password", 401));
       }
 
       // Save user subject in session (used as the Authlete subject parameter)
@@ -88,9 +81,7 @@ export const sessionController = {
   ) => {
     // Show the consent UI
     if (!req.session.user || !req.session.authorization) {
-      const err = new Error("Unauthorized - no ticket in session");
-      (err as any).status = 403;
-      return next(err);
+      return next(new AppError("Unauthorized - no ticket in session", 403));
     }
     const { clientName = "", authorizationIssueRequest: { scopes = [] } = {} } =
       req.session.authorization || {};
@@ -104,9 +95,7 @@ export const sessionController = {
   ) => {
     try {
       if (!req.session.user || !req.session.authorization) {
-        const err = new Error("Unauthorized - no ticket in session");
-        (err as any).status = 403;
-        return next(err);
+        return next(new AppError("Unauthorized - no ticket in session", 403));
       }
 
       const decision = req.body.decision; // "approve" or "deny"

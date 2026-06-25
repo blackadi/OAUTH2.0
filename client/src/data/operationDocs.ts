@@ -493,7 +493,40 @@ const docs: Record<string, Record<string, OpDoc>> = {
   },
 
   'discovery': {
-    'discovery': {
+  'device': {
+    'authorization': {
+      title: 'Device Authorization (RFC 8628)',
+      description: 'Initiates the OAuth 2.0 Device Authorization Grant (Device Flow). The client sends the requested scopes and its client credentials. Authlete validates the request and returns a device_code, user_code, verification_uri, expires_in, and polling interval. The device_code is used by the device to poll for tokens; the user_code is displayed to the end-user who visits the verification_uri on another device to enter the code and authorize.',
+      params: [
+        { name: 'Client ID', desc: 'The client identifier registered in Authlete.' },
+        { name: 'Client Secret', desc: 'The client secret (required for confidential clients with client_secret_basic or client_secret_post auth).' },
+        { name: 'Parameters', desc: 'URL-encoded OAuth parameters (e.g. client_id=xxx&scope=openid+profile). Must include client_id and scope.' },
+      ],
+      returns: 'JSON with action, deviceCode, userCode, verificationUri, expiresIn (seconds), interval (polling interval in seconds), and responseContent. On success, action is "OK".',
+      tips: 'Display the user_code and verification_uri to the user. The device polls the token endpoint with grant_type=urn:ietf:params:oauth:grant-type:device_code using the device_code. The user_code expires after expiresIn seconds.',
+    },
+    'verification': {
+      title: 'Verify User Code',
+      description: 'Verifies a user_code entered by the end-user on the verification page. Authlete checks if the user_code is valid, not expired, and returns the associated client information including client name and requested scopes. This is used by the browser-based verification page (GET /device) to display client info before asking the user to authorize.',
+      params: [
+        { name: 'User Code', desc: 'The user_code entered by the end-user (e.g. ABCD-1234). Retrieved from the device flow initiation response.' },
+      ],
+      returns: 'JSON with action (VALID, NOT_EXIST, or EXPIRED), clientId, clientName, and scopes. On VALID, the user should be shown the client name and scopes being requested so they can make an informed decision.',
+      tips: 'Call this after the user enters their code on the verification page. If EXPIRED, tell the user to start a new device flow on their device. The verification page at GET /device demonstrates the browser flow.',
+    },
+    'complete': {
+      title: 'Complete Device Flow',
+      description: 'Completes the device flow after the end-user has authenticated and made an authorization decision. The result indicates whether the user AUTHORIZED the request, ACCESS_DENIED it, or if there was a TRANSACTION_FAILED. On AUTHORIZED, Authlete stores the authorization so the device can obtain tokens by polling the token endpoint.',
+      params: [
+        { name: 'User Code', desc: 'The user_code from the device flow initiation.' },
+        { name: 'Result', desc: "The end-user's decision: AUTHORIZED (user approved), ACCESS_DENIED (user rejected), or TRANSACTION_FAILED (error)." },
+        { name: 'Subject', desc: 'The end-user subject (unique identifier) — required when result is AUTHORIZED. Represents the authenticated user.' },
+      ],
+      returns: 'JSON with action (SUCCESS, ACCESS_DENIED, USER_CODE_NOT_EXIST, USER_CODE_EXPIRED, or SERVER_ERROR) and resultCode/resultMessage.',
+      tips: 'After AUTHORIZED, the device polls the token endpoint with grant_type=urn:ietf:params:oauth:grant-type:device_code and the device_code. Authlete returns tokens once the flow is complete.',
+    },
+  },
+  'discovery': {
       title: 'OpenID Discovery',
       description: 'Fetches the OpenID Connect Discovery document (also known as the OIDC Configuration). This JSON document describes all the endpoints, supported scopes, response types, and capabilities of the authorization server. Complies with OpenID Connect Discovery 1.0.',
       params: [],

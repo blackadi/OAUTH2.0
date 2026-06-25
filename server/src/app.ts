@@ -23,12 +23,14 @@ import backchannelLogoutRoutes from "./routes/backchannel-logout.routes";
 import dcrRoutes from "./routes/dcr.routes";
 import cibaRoutes from "./routes/ciba.routes";
 import parRoutes from "./routes/par.routes";
+import deviceRoutes from "./routes/device.routes";
 import healthRoutes from "./routes/health.routes";
 import routesList from "./routes/routes-list.routes";
 import DefaultRoutes from "./routes/default.routes";
 
 import { server } from "./config/app.config";
 import { errorHandler } from "./middleware/errorHandler";
+import { requestTimeout } from "./middleware/request-timeout";
 
 export function createApp() {
   const app = express();
@@ -119,6 +121,9 @@ export function createApp() {
 
   // Routes
   const routerURL = "/api";
+
+  // Request timeout for API routes (30s)
+  app.use(routerURL, requestTimeout(30000));
   app.use(routerURL, routesList);
   app.use(routerURL, authorizationRoutes);
   app.use(routerURL, tokenRoutes);
@@ -135,6 +140,7 @@ export function createApp() {
   app.use(routerURL, dcrRoutes);
   app.use(routerURL, cibaRoutes);
   app.use(routerURL, parRoutes);
+  app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths)
   app.use(routerURL, healthRoutes);
   app.use("/", DefaultRoutes); // For rendering the index page at root /*
 

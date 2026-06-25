@@ -48,6 +48,7 @@ export interface MockAuthleteApi {
     }
   }
   joseObject: { joseVerifyApi: MockFn }
+  deviceFlow: { authorization: MockFn; verification: MockFn; complete: MockFn }
 }
 
 export function createMockAuthlete(overrides?: Partial<MockAuthleteApi>) {
@@ -108,6 +109,11 @@ export function createMockAuthlete(overrides?: Partial<MockAuthleteApi>) {
       },
     },
     joseObject: { joseVerifyApi: fn() },
+    deviceFlow: {
+      authorization: fn(),
+      verification: fn(),
+      complete: fn(),
+    },
     ...overrides,
   }
 

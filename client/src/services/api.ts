@@ -23,6 +23,9 @@ import {
   CIBA_FAIL_ENDPOINT,
   CIBA_COMPLETE_ENDPOINT,
   PAR_ENDPOINT,
+  DEVICE_AUTHORIZATION_ENDPOINT,
+  DEVICE_VERIFICATION_ENDPOINT,
+  DEVICE_COMPLETE_ENDPOINT,
   HEALTH_ENDPOINT,
   HEALTH_AUTHLETE_ENDPOINT,
 } from '../config';
@@ -464,6 +467,45 @@ class ApiService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const text = await response.text();
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch { return text; }
+  }
+
+  async deviceAuthorization(body: Record<string, string>): Promise<any> {
+    const response = await fetch(DEVICE_AUTHORIZATION_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const text = await response.text();
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch { return text; }
+  }
+
+  async deviceVerification(userCode: string): Promise<any> {
+    const response = await fetch(DEVICE_VERIFICATION_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userCode }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const text = await response.text();
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch { return text; }
+  }
+
+  async deviceComplete(userCode: string, result: string, subject: string): Promise<any> {
+    const response = await fetch(DEVICE_COMPLETE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userCode, result, subject }),
     });
     if (!response.ok) throw new Error(await response.text());
     const text = await response.text();

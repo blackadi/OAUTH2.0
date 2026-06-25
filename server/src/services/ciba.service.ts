@@ -6,6 +6,7 @@ import { Authlete } from "@authlete/typescript-sdk";
 import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
+import { AppError } from "../utils/app-error";
 
 export class CibaService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -19,9 +20,7 @@ export class CibaService {
     };
 
     if (!parameters) {
-      const err = new Error("Missing required body field: parameters");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: parameters", 400);
     }
 
     log("CibaService: calling Authlete backchannel authentication endpoint");

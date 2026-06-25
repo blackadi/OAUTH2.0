@@ -2,6 +2,7 @@ import { Authlete } from "@authlete/typescript-sdk";
 import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
+import { AppError } from "../utils/app-error";
 import {
   ClientGetListResponse,
   ClientSecretRefreshResponse,
@@ -44,9 +45,7 @@ export class ClientManagementService {
     const clientId = String(req.params.clientId);
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientGetService: calling Authlete client get endpoint", { clientId });
@@ -65,9 +64,7 @@ export class ClientManagementService {
     const clientPayload = body.client as Record<string, unknown> | undefined;
 
     if (!clientPayload || Object.keys(clientPayload).length === 0) {
-      const err = new Error("Missing required body field: client");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     const clientInput: ClientInput = this.buildClientInput(clientPayload);
@@ -92,9 +89,7 @@ export class ClientManagementService {
     const clientPayload = body.client as Record<string, unknown> | undefined;
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     const clientInput: ClientInput = this.buildClientInput(clientPayload || body);
@@ -115,9 +110,7 @@ export class ClientManagementService {
     const clientId = String(req.params.clientId);
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientDeleteService: calling Authlete client delete endpoint", { clientId });
@@ -136,9 +129,7 @@ export class ClientManagementService {
     const body = req.body as Record<string, unknown>;
 
     if (!clientIdentifier) {
-      const err = new Error("Missing required parameter: clientIdentifier");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     const clientLocked = body.clientLocked === true || body.clientLocked === "true";
@@ -162,9 +153,7 @@ export class ClientManagementService {
     const clientIdentifier = String(req.params.clientIdentifier);
 
     if (!clientIdentifier) {
-      const err = new Error("Missing required parameter: clientIdentifier");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientSecretRefreshService: calling Authlete client secret refresh endpoint", {
@@ -186,15 +175,11 @@ export class ClientManagementService {
     const clientSecret = body.clientSecret as string;
 
     if (!clientIdentifier) {
-      const err = new Error("Missing required parameter: clientIdentifier");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     if (!clientSecret) {
-      const err = new Error("Missing required body field: clientSecret");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientSecretUpdateService: calling Authlete client secret update endpoint", {
@@ -221,9 +206,7 @@ export class ClientManagementService {
     const end = Number(body?.end ?? query.end ?? 5);
 
     if (!subject) {
-      const err = new Error("Missing required parameter: subject");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientListAuthorizationsService: calling Authlete", { subject, start, end });
@@ -248,14 +231,10 @@ export class ClientManagementService {
     const scopes = body.scopes as string | string[] | undefined;
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
     if (!subject) {
-      const err = new Error("Missing required body field: subject");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     const scopeArray = Array.isArray(scopes)
@@ -281,14 +260,10 @@ export class ClientManagementService {
     const subject = String(req.params.subject);
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
     if (!subject) {
-      const err = new Error("Missing required parameter: subject");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientDeleteAuthorizationsService: calling Authlete", { clientId, subject });
@@ -309,14 +284,10 @@ export class ClientManagementService {
     const subject = String(req.params.subject);
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
     if (!subject) {
-      const err = new Error("Missing required parameter: subject");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientGetGrantedScopesService: calling Authlete", { clientId, subject });
@@ -337,14 +308,10 @@ export class ClientManagementService {
     const subject = String(req.params.subject);
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
     if (!subject) {
-      const err = new Error("Missing required parameter: subject");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientDeleteGrantedScopesService: calling Authlete", { clientId, subject });
@@ -364,9 +331,7 @@ export class ClientManagementService {
     const clientId = String(req.params.clientId);
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientGetRequestableScopesService: calling Authlete", { clientId });
@@ -386,9 +351,7 @@ export class ClientManagementService {
     const scopes = body.requestableScopes as string | string[] | undefined;
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     const scopeArray = Array.isArray(scopes)
@@ -413,9 +376,7 @@ export class ClientManagementService {
     const clientId = String(req.params.clientId);
 
     if (!clientId) {
-      const err = new Error("Missing required parameter: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("", 400);
     }
 
     log("ClientDeleteRequestableScopesService: calling Authlete", { clientId });

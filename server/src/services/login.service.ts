@@ -16,7 +16,7 @@ function requiredUsers(): Array<{ subject: string; username: string; password: s
 const users = requiredUsers();
 
 export class LoginService {
-  async validateUser(username: string, password: string) {
+  validateUser(username: string, password: string) {
     const user = users.find(
       (u) => u.username === username && u.password === password
     );

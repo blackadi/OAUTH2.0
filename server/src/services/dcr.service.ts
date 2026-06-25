@@ -2,6 +2,7 @@ import { Authlete } from "@authlete/typescript-sdk";
 import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
+import { AppError } from "../utils/app-error";
 
 export class DcrService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -11,9 +12,7 @@ export class DcrService {
     const { json } = req.body as { json?: string };
 
     if (!json) {
-      const err = new Error("Missing required body field: json");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: json", 400);
     }
 
     log("DcrRegisterService: calling Authlete DCR register endpoint");
@@ -31,15 +30,11 @@ export class DcrService {
     const { token, clientId } = req.body as { token?: string; clientId?: string };
 
     if (!token) {
-      const err = new Error("Missing required body field: token");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: token", 400);
     }
 
     if (!clientId) {
-      const err = new Error("Missing required body field: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: clientId", 400);
     }
 
     log("DcrGetService: calling Authlete DCR get endpoint", { clientId });
@@ -57,21 +52,15 @@ export class DcrService {
     const { json, token, clientId } = req.body as { json?: string; token?: string; clientId?: string };
 
     if (!json) {
-      const err = new Error("Missing required body field: json");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: json", 400);
     }
 
     if (!token) {
-      const err = new Error("Missing required body field: token");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: token", 400);
     }
 
     if (!clientId) {
-      const err = new Error("Missing required body field: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: clientId", 400);
     }
 
     log("DcrUpdateService: calling Authlete DCR update endpoint", { clientId });
@@ -89,15 +78,11 @@ export class DcrService {
     const { token, clientId } = req.body as { token?: string; clientId?: string };
 
     if (!token) {
-      const err = new Error("Missing required body field: token");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: token", 400);
     }
 
     if (!clientId) {
-      const err = new Error("Missing required body field: clientId");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required body field: clientId", 400);
     }
 
     log("DcrDeleteService: calling Authlete DCR delete endpoint", { clientId });

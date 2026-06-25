@@ -8,6 +8,7 @@ import { Authlete } from "@authlete/typescript-sdk";
 import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
+import { AppError } from "../utils/app-error";
 import {
   GrantType,
   IdtokenReissueResponse,
@@ -178,9 +179,7 @@ export class TokenManagementService {
     );
 
     if (!accessToken || !refreshToken) {
-      const err = new Error("Missing required parameters: accessToken and refreshToken");
-      (err as any).status = 400;
-      throw err;
+      throw new AppError("Missing required parameters: accessToken and refreshToken", 400);
     }
 
     const response = await this.authleteApi.token.management.reissueIdToken({

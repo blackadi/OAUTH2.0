@@ -9,6 +9,7 @@
     </header>
     <p class="lead">The application is requesting the following permissions. Please review and choose whether to allow access.</p>
     <form method="POST" action="/api/session/consent">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <ul class="scopes">
         <% (scopes || ['Access your profile information', 'Access your email address', 'Perform actions on your behalf']).forEach(function(scope) { %>
           <li><%= scope %></li>

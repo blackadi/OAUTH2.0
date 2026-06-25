@@ -64,6 +64,10 @@ export const CIBA_COMPLETE_ENDPOINT = `${API_BASE_URL}/api/ciba/complete`;
 
 export const PAR_ENDPOINT = `${API_BASE_URL}/api/par`;
 
+export const DEVICE_AUTHORIZATION_ENDPOINT = `${API_BASE_URL}/api/device/authorization`;
+export const DEVICE_VERIFICATION_ENDPOINT = `${API_BASE_URL}/api/device/verification`;
+export const DEVICE_COMPLETE_ENDPOINT = `${API_BASE_URL}/api/device/complete`;
+
 export const HEALTH_ENDPOINT = `${API_BASE_URL}/api/health`;
 export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;
 

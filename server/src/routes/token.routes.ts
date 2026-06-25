@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { tokenController } from "../controllers/token.controller";
+import { tokenLimiter } from "../middleware/rate-limit";
 import {
   tokenCreateController,
   tokenDeleteController,
@@ -12,7 +13,7 @@ import {
 
 const router = Router();
 
-router.post("/token", tokenController.handleToken);
+router.post("/token", tokenLimiter, tokenController.handleToken);
 router.post("/token/create", tokenCreateController.handleCreateToken);
 router.delete(
   "/token/delete/:accessTokenIdentifier",

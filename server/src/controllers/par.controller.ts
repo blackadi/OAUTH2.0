@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response } from "express";
-import { PushedAuthorizationResponse, PushedAuthorizationResponseAction } from "@authlete/typescript-sdk/models";
+import { PushedAuthorizationResponseAction } from "@authlete/typescript-sdk/models";
 import { ParService } from "../services/par.service";
+import { sendApiResponse } from "../utils/http-utils";
 import logger from "../utils/logger";
+import { AppError } from "../utils/app-error";
 
 const parService = new ParService();
 
@@ -17,24 +19,16 @@ function mapActionToStatus(action?: string): number {
   }
 }
 
-function sendResponse(res: Response, status: number, result: PushedAuthorizationResponse): void {
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Pragma", "no-cache");
-  res.status(status).json(result);
-}
-
 export const parController = {
   handle: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await parService.process(req);
-      const status = mapActionToStatus(result.action);
-      sendResponse(res, status, result);
+      sendApiResponse(res, mapActionToStatus(result.action), result);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       const log = req.logger || logger;
       log.error("PAR Response Error", { message: error.message });
-      const status = (error as any).status || 500;
+      const status = error instanceof AppError ? error.status : 500;
       if (status >= 400 && status < 500) {
         return res.status(status).json({ error: "invalid_request", error_description: error.message });
       }

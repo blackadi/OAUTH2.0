@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { CibaService } from "../services/ciba.service";
+import { sendApiResponse } from "../utils/http-utils";
 import logger from "../utils/logger";
 
 const cibaService = new CibaService();
@@ -41,24 +42,20 @@ function mapCompleteActionToStatus(action?: string): number {
   }
 }
 
-function sendResponse(res: Response, status: number, result: any): void {
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Pragma", "no-cache");
-  res.status(status).json(result);
+function handleControllerError(err: unknown, req: Request, next: NextFunction, label: string): void {
+  const error = err instanceof Error ? err : new Error(String(err));
+  const log = req.logger || logger;
+  log.error(`CIBA ${label} Error`, { message: error.message });
+  next(error);
 }
 
 export const cibaAuthenticationController = {
   handle: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await cibaService.process(req);
-      const status = mapAuthActionToStatus(result.action);
-      sendResponse(res, status, result);
+      sendApiResponse(res, mapAuthActionToStatus(result.action), result);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("CIBA Authentication Error", { message: error.message });
-      return next(error);
+      handleControllerError(err, req, next, "Authentication");
     }
   },
 };
@@ -71,13 +68,9 @@ export const cibaIssueController = {
         return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: ticket" });
       }
       const result = await cibaService.issue(ticket);
-      const status = mapIssueActionToStatus(result.action);
-      sendResponse(res, status, result);
+      sendApiResponse(res, mapIssueActionToStatus(result.action), result);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("CIBA Issue Error", { message: error.message });
-      return next(error);
+      handleControllerError(err, req, next, "Issue");
     }
   },
 };
@@ -93,13 +86,9 @@ export const cibaFailController = {
         return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: reason" });
       }
       const result = await cibaService.fail(ticket, reason);
-      const status = mapFailActionToStatus(result.action);
-      sendResponse(res, status, result);
+      sendApiResponse(res, mapFailActionToStatus(result.action), result);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("CIBA Fail Error", { message: error.message });
-      return next(error);
+      handleControllerError(err, req, next, "Fail");
     }
   },
 };
@@ -122,13 +111,9 @@ export const cibaCompleteController = {
         return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: subject" });
       }
       const apiResult = await cibaService.complete(ticket, result, subject);
-      const status = mapCompleteActionToStatus(apiResult.action);
-      sendResponse(res, status, apiResult);
+      sendApiResponse(res, mapCompleteActionToStatus(apiResult.action), apiResult);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("CIBA Complete Error", { message: error.message });
-      return next(error);
+      handleControllerError(err, req, next, "Complete");
     }
   },
 };
