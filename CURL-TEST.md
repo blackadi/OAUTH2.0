@@ -689,6 +689,77 @@ Expected: HTTP 400 with error about missing `parameters` field.
 
 ---
 
+## 18. Device Authorization Grant (RFC 8628)
+
+> **Auth method:** No admin or Basic auth. The client authenticates by passing `clientId`/`clientSecret` in the JSON body (matching CIBA/PAR pattern). Public clients omit `clientSecret`.
+
+### 18a. Device authorization
+
+Requests a device code and user code. The device displays the user code to the user, who then visits the verification URI on a separate device.
+
+```bash
+DEVICE_RESP=$(curl -s -X POST "${BASE}/api/device/authorization" \
+  -H "Content-Type: application/json" \
+  -d "{\"parameters\": \"client_id=${CID}&scope=openid%20profile\", \"clientId\": \"${CID}\", \"clientSecret\": \"${SEC}\"}")
+echo "$DEVICE_RESP" | jq
+DEVICE_CODE=$(echo "$DEVICE_RESP" | jq -r '.deviceCode')
+USER_CODE=$(echo "$DEVICE_RESP" | jq -r '.userCode')
+echo "Device code: $DEVICE_CODE"
+echo "User code:   $USER_CODE"
+echo "Verification URI: $(echo "$DEVICE_RESP" | jq -r '.verificationUri')"
+```
+
+Expected: `action: "OK"` with `deviceCode`, `userCode`, `verificationUri`, `expiresIn`, `interval`.
+
+### 18b. Verify user code (server-side check)
+
+```bash
+curl -s -X POST "${BASE}/api/device/verification" \
+  -H "Content-Type: application/json" \
+  -d "{\"userCode\": \"${USER_CODE}\"}" | jq
+```
+
+Expected: `action: "VALID"` with client info and scopes (if the code is still valid and unused).
+
+### 18c. Complete authorization
+
+This simulates what the browser flow at `/device` does — authenticates the user and completes the device flow.
+
+```bash
+curl -s -X POST "${BASE}/api/device/complete" \
+  -H "Content-Type: application/json" \
+  -d "{\"userCode\": \"${USER_CODE}\", \"result\": \"AUTHORIZED\", \"subject\": \"admin\"}" | jq
+```
+
+Expected: `action: "SUCCESS"`.
+
+### 18d. Poll for token (client-side — mimics device polling)
+
+The client polls the token endpoint with `grant_type=urn:ietf:params:oauth:grant-type:device_code` and the `device_code` from step 18a. This should be called **after** the user completes authorization (step 18c).
+
+```bash
+curl -s -X POST "${BASE}/api/token" \
+  -u "${CID}:${SEC}" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=${DEVICE_CODE}" | jq
+```
+
+Expected: `access_token`, `refresh_token`, `token_type: Bearer` (after user completes authorization) or `error: "authorization_pending"` (if user hasn't acted yet).
+
+### 18e. Browser-based flow (manual)
+
+The device verification flow also works through the browser:
+
+1. Open `http://localhost:3000/device` in your browser
+2. Enter the user code from step 18a
+3. Click **Verify**
+4. Log in with `admin` / `password`
+5. Click **Authorize**
+
+After authorization, the token polling in step 18d returns the token.
+
+---
+
 Save this section as `smoke-test.sh`, make it executable (`chmod +x smoke-test.sh`), then run it. If your server has `MGMT_CLIENT_ID` set, add `-u "MGMT_ID:MGMT_SEC"` to the management API calls in step 10.
 
 ```bash
