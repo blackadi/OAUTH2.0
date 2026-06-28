@@ -15,8 +15,12 @@ function TokenVault() {
 
   const hasTokens = tokenSet && (tokenSet.access_token || tokenSet.refresh_token || tokenSet.id_token);
 
-  const decodeIdToken = () => {
+  const toggleDecodeIdToken = () => {
     if (!tokenSet?.id_token) return;
+    if (decodedIdToken) {
+      setDecodedIdToken(null);
+      return;
+    }
     try {
       setDecodedIdToken(jwtDecode(tokenSet.id_token));
     } catch { /* ignore */ }
@@ -95,7 +99,7 @@ function TokenVault() {
                     {entry.label === 'ID Token' && (
                       <div className="flex gap-1">
                         <button
-                          onClick={decodeIdToken}
+                          onClick={toggleDecodeIdToken}
                           className="flex items-center gap-1 text-[0.6rem] text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer bg-transparent border-none"
                         >
                           {decodedIdToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
