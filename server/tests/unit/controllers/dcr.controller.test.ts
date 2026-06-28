@@ -1,18 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { NextFunction, Request, Response } from "express"
+import { createDcrControllers } from "../../../src/controllers/dcr.controller"
 
-const mocks = vi.hoisted(() => ({
-  mockRegister: vi.fn(),
-  mockGet: vi.fn(),
-  mockUpdate: vi.fn(),
-  mockDelete: vi.fn(),
-}))
+const mockDcrService = {
+  register: vi.fn(),
+  get: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+}
 
-vi.mock("../../../src/services/dcr.service", () => ({
-  DcrService: function() { return { register: mocks.mockRegister, get: mocks.mockGet, update: mocks.mockUpdate, delete: mocks.mockDelete } },
-}))
-
-import { dcrRegisterController, dcrGetController, dcrUpdateController, dcrDeleteController } from "../../../src/controllers/dcr.controller"
+const { register, get, update, delete: del } = createDcrControllers(mockDcrService as any)
 
 function mockReq(overrides: Partial<Request> = {}): Request {
   return { body: {}, headers: {}, logger: { error: vi.fn() }, ...overrides } as unknown as Request
@@ -35,6 +32,8 @@ describe("DCR controllers", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.unstubAllEnvs()
+    vi.stubEnv("MGMT_CLIENT_ID", "")
+    vi.stubEnv("MGMT_CLIENT_SECRET", "")
   })
 
   describe("dcrRegisterController.handleDcrRegister", () => {
@@ -45,21 +44,21 @@ describe("DCR controllers", () => {
       const res = mockRes()
       const next = mockNext()
 
-      await dcrRegisterController.handleDcrRegister(req, res, next)
+      await register.handleDcrRegister(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(401)
-      expect(mocks.mockRegister).not.toHaveBeenCalled()
+      expect(mockDcrService.register).not.toHaveBeenCalled()
     })
 
     it("returns 201 on CREATED action", async () => {
       vi.stubEnv("MGMT_CLIENT_ID", "admin")
       vi.stubEnv("MGMT_CLIENT_SECRET", "secret")
-      const req = mockReq({ headers: { authorization: "Basic YWRtaW46c2VjcmV0" } })
+      const req = mockReq({ headers: { authorization: "Basic YWRtaW46c2VjcmV0" }, body: { json: '{"client_name":"test"}' } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockRegister.mockResolvedValue({ action: "CREATED", responseContent: '{"client_id":"c-1"}' })
+      mockDcrService.register.mockResolvedValue({ action: "CREATED", responseContent: '{"client_id":"c-1"}' })
 
-      await dcrRegisterController.handleDcrRegister(req, res, next)
+      await register.handleDcrRegister(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(201)
       expect(res.json).toHaveBeenCalled()
@@ -68,12 +67,12 @@ describe("DCR controllers", () => {
     it("returns 400 on BAD_REQUEST action", async () => {
       vi.stubEnv("MGMT_CLIENT_ID", "admin")
       vi.stubEnv("MGMT_CLIENT_SECRET", "secret")
-      const req = mockReq({ headers: { authorization: "Basic YWRtaW46c2VjcmV0" } })
+      const req = mockReq({ headers: { authorization: "Basic YWRtaW46c2VjcmV0" }, body: { json: '{}' } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockRegister.mockResolvedValue({ action: "BAD_REQUEST", responseContent: null })
+      mockDcrService.register.mockResolvedValue({ action: "BAD_REQUEST", responseContent: null })
 
-      await dcrRegisterController.handleDcrRegister(req, res, next)
+      await register.handleDcrRegister(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(400)
     })
@@ -81,62 +80,82 @@ describe("DCR controllers", () => {
     it("calls next on exception", async () => {
       vi.stubEnv("MGMT_CLIENT_ID", "admin")
       vi.stubEnv("MGMT_CLIENT_SECRET", "secret")
-      const req = mockReq({ headers: { authorization: "Basic YWRtaW46c2VjcmV0" } })
+      const req = mockReq({ headers: { authorization: "Basic YWRtaW46c2VjcmV0" }, body: { json: '{}' } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockRegister.mockRejectedValue(new Error("DCR fail"))
+      mockDcrService.register.mockRejectedValue(new Error("DCR fail"))
 
-      await dcrRegisterController.handleDcrRegister(req, res, next)
+      await register.handleDcrRegister(req, res, next)
 
       expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: "DCR fail" }))
     })
 
     it("skips auth when MGMT vars not set", async () => {
+      const req = mockReq({ body: { json: '{}' } })
+      const res = mockRes()
+      const next = mockNext()
+      mockDcrService.register.mockResolvedValue({ action: "OK", responseContent: null })
+
+      await register.handleDcrRegister(req, res, next)
+
+      expect(mockDcrService.register).toHaveBeenCalled()
+      expect(res.status).toHaveBeenCalledWith(200)
+    })
+
+    it("returns 400 when json is missing", async () => {
       const req = mockReq()
       const res = mockRes()
       const next = mockNext()
-      mocks.mockRegister.mockResolvedValue({ action: "OK", responseContent: null })
 
-      await dcrRegisterController.handleDcrRegister(req, res, next)
+      await register.handleDcrRegister(req, res, next)
 
-      expect(mocks.mockRegister).toHaveBeenCalled()
-      expect(res.status).toHaveBeenCalledWith(200)
+      expect(res.status).toHaveBeenCalledWith(400)
     })
   })
 
   describe("dcrGetController.handleDcrGet", () => {
     it("returns 200 with action OK", async () => {
-      const req = mockReq()
+      const req = mockReq({ body: { token: "t-1", clientId: "c-1" } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockGet.mockResolvedValue({ action: "OK", responseContent: '{"client_id":"c-1"}' })
+      mockDcrService.get.mockResolvedValue({ action: "OK", responseContent: '{"client_id":"c-1"}' })
 
-      await dcrGetController.handleDcrGet(req, res, next)
+      await get.handleDcrGet(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(200)
       expect(res.json).toHaveBeenCalled()
     })
 
     it("calls next on exception", async () => {
-      const req = mockReq()
+      const req = mockReq({ body: { token: "t-1", clientId: "c-1" } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockGet.mockRejectedValue(new Error("get fail"))
+      mockDcrService.get.mockRejectedValue(new Error("get fail"))
 
-      await dcrGetController.handleDcrGet(req, res, next)
+      await get.handleDcrGet(req, res, next)
 
       expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: "get fail" }))
+    })
+
+    it("returns 400 when token is missing", async () => {
+      const req = mockReq({ body: { clientId: "c-1" } })
+      const res = mockRes()
+      const next = mockNext()
+
+      await get.handleDcrGet(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(400)
     })
   })
 
   describe("dcrUpdateController.handleDcrUpdate", () => {
     it("returns 200 on UPDATED action", async () => {
-      const req = mockReq()
+      const req = mockReq({ body: { json: '{}', token: "t-1", clientId: "c-1" } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockUpdate.mockResolvedValue({ action: "UPDATED", responseContent: null })
+      mockDcrService.update.mockResolvedValue({ action: "UPDATED", responseContent: null })
 
-      await dcrUpdateController.handleDcrUpdate(req, res, next)
+      await update.handleDcrUpdate(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(200)
     })
@@ -144,23 +163,23 @@ describe("DCR controllers", () => {
 
   describe("dcrDeleteController.handleDcrDelete", () => {
     it("returns 204 on DELETED action", async () => {
-      const req = mockReq()
+      const req = mockReq({ body: { token: "t-1", clientId: "c-1" } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockDelete.mockResolvedValue({ action: "DELETED" })
+      mockDcrService.delete.mockResolvedValue({ action: "DELETED" })
 
-      await dcrDeleteController.handleDcrDelete(req, res, next)
+      await del.handleDcrDelete(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(204)
     })
 
     it("returns 500 on INTERNAL_SERVER_ERROR", async () => {
-      const req = mockReq()
+      const req = mockReq({ body: { token: "t-1", clientId: "c-1" } })
       const res = mockRes()
       const next = mockNext()
-      mocks.mockDelete.mockResolvedValue({ action: "INTERNAL_SERVER_ERROR", responseContent: null })
+      mockDcrService.delete.mockResolvedValue({ action: "INTERNAL_SERVER_ERROR", responseContent: null })
 
-      await dcrDeleteController.handleDcrDelete(req, res, next)
+      await del.handleDcrDelete(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(500)
     })

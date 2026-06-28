@@ -1,15 +1,20 @@
 <%- include('partials/head', { title: 'Available Routes' }) %>
 <body>
+  <main>
   <div class="wrap">
     <header>
-      <div>
-        <h1><a href="/api/routes" class="link" target="_blank">Available Routes</a></h1>
-        <p class="base">Base URL: <code id="base">loading...</code></p>
-      </div>
+      <h1><a href="/api/routes" class="link" target="_blank">Available Routes</a></h1>
+      <p class="base">Base URL: <code id="base">loading...</code></p>
+      <p class="base route-meta">Click GET links to open. Use the copy button for curl commands.</p>
     </header>
+    <div class="routes-toolbar">
+      <input type="search" id="route-filter" class="route-filter-input" placeholder="Filter by path, method, or description…" aria-label="Filter routes" />
+      <span class="route-count" id="route-count"></span>
+    </div>
     <%- include('partials/routes-table') %>
-    <footer>Click GET links to open in your browser. Use the copy button to copy curl commands for POST/PATCH/DELETE endpoints.</footer>
+    <%- include('partials/footer') %>
   </div>
+  </main>
   <script>
     (async function() {
       try {
@@ -17,6 +22,27 @@
         const data = await res.json();
         document.getElementById('base').textContent = data.base || (location.protocol + '//' + location.host);
       } catch(e) { console.error(e); }
+    })();
+
+    (function() {
+      var filter = document.getElementById('route-filter');
+      var count = document.getElementById('route-count');
+      if (!filter) return;
+      filter.addEventListener('input', function() {
+        var q = this.value.toLowerCase();
+        var rows = document.querySelectorAll('#routes-body tr');
+        var vis = 0;
+        rows.forEach(function(tr) {
+          if (tr.classList.contains('route-group-header')) {
+            tr.style.display = q ? 'none' : '';
+            return;
+          }
+          var match = tr.textContent.toLowerCase().indexOf(q) !== -1;
+          tr.style.display = match ? '' : 'none';
+          if (match) vis++;
+        });
+        if (count) count.textContent = q ? vis + ' matched' : '';
+      });
     })();
   </script>
 </body>

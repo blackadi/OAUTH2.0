@@ -44,7 +44,7 @@ export const userinfoController = {
           res.setHeader("Pragma", "no-cache");
           return res.status(403).send(result.responseContent ?? "Forbidden");
 
-        case "OK":
+        case "OK": {
           if (result.responseContent) {
             res.setHeader("Content-Type", "application/json");
             return res.status(200).send(result.responseContent);
@@ -127,11 +127,13 @@ export const userinfoController = {
                 "Failed to extract information about the subject from the database.",
             });
           }
+        }
 
-        default:
+        default: {
           const log3 = req.logger || logger;
           log3.error("Unknown userinfo action", { action: result.action });
           return res.status(500).send("Unknown userinfo action");
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

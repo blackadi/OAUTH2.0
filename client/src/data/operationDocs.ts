@@ -492,7 +492,6 @@ const docs: Record<string, Record<string, OpDoc>> = {
     },
   },
 
-  'discovery': {
   'device': {
     'authorization': {
       title: 'Device Authorization (RFC 8628)',
@@ -527,6 +526,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
     },
   },
   'discovery': {
+    'discovery': {
       title: 'OpenID Discovery',
       description: 'Fetches the OpenID Connect Discovery document (also known as the OIDC Configuration). This JSON document describes all the endpoints, supported scopes, response types, and capabilities of the authorization server. Complies with OpenID Connect Discovery 1.0.',
       params: [],

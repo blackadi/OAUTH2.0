@@ -1,39 +1,43 @@
 import { Request, Response, NextFunction } from "express";
 import logger from "../utils/logger";
 import { server } from "../config/app.config";
+import { AppError } from "../utils/app-error";
 
 export const errorHandler = (
-  err: Error | any,
+  err: unknown,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ) => {
-  // Log error for debugging (use request-scoped logger when available)
   const log = req.logger || logger;
+
+  const status = err instanceof AppError ? err.status
+    : err && typeof err === "object"
+    ? Number((err as Record<string, unknown>).status || (err as Record<string, unknown>).statusCode || 500)
+    : 500;
+
+  const message = err instanceof Error ? err.message : "Internal Server Error";
+  const code = err instanceof AppError ? err.code : undefined;
+
   log.error("Unhandled error", {
-    message: err?.message || "Unknown error",
-    stack: err?.stack,
+    message,
+    stack: err instanceof Error ? err.stack : undefined,
     path: req.path,
     method: req.method,
   });
 
-  // Extract status code (default to 500)
-  const status = err?.status || err?.statusCode || 500;
-  const message = err?.message || "Internal Server Error";
   const isDevelopment = server.nodeEnv === "development";
-
   const isApiRoute = req.path.startsWith("/api");
 
-  // Always return JSON for API routes, otherwise check Accept header
   if (!isApiRoute && req.accepts("html")) {
-    // Render error view for HTML requests
     res.status(status).render("error", {
       title: `Error ${status}`,
       message,
-      details: isDevelopment ? err?.stack : null,
+      status,
+      path: req.path,
+      details: isDevelopment && err instanceof Error ? err.stack : null,
     });
   } else {
-    // Respond with JSON for API requests — map status to appropriate error type
     const errorType = status >= 500 ? "Internal Server Error"
       : status === 404 ? "Not Found"
       : status === 403 ? "Forbidden"
@@ -41,8 +45,9 @@ export const errorHandler = (
       : "Bad Request";
     res.status(status).json({
       error: errorType,
+      ...(code && { error_code: code }),
       message,
-      ...(isDevelopment && { stack: err?.stack }),
+      ...(isDevelopment && err instanceof Error && err.stack ? { stack: err.stack } : {}),
     });
   }
 };

@@ -9,11 +9,11 @@ vi.mock("../../../src/config/app.config", () => ({
 
 vi.mock("../../../src/utils/logger", () => ({
   default: Object.assign(
-    (msg: string) => {},
+    (_msg: string) => {},
     { error: vi.fn(), child: () => ({ error: vi.fn() }) }
   ),
   createCallableLogger: () => Object.assign(
-    (msg: string) => {},
+    (_msg: string) => {},
     { error: vi.fn(), child: () => ({ error: vi.fn() }) }
   ),
   baseLogger: {} as any,
@@ -74,6 +74,8 @@ describe("errorHandler", () => {
     expect(res.render).toHaveBeenCalledWith("error", {
       title: "Error 500",
       message: "page error",
+      status: 500,
+      path: "/login",
       details: null,
     })
     expect(res.json).not.toHaveBeenCalled()

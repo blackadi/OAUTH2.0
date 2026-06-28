@@ -4,6 +4,7 @@ import { healthController } from "../controllers/health.controller";
 const router = Router();
 
 router.get("/health", healthController.serverHealth);
+router.get("/health/all", healthController.overallHealth);
 router.get("/health/authlete", healthController.authleteHealth);
 
 export default router;

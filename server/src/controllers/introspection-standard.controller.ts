@@ -23,10 +23,11 @@ export const introspectionStandardController = {
           res.setHeader("Content-Type", "application/json");
           return res.send(result.responseContent);
 
-        default:
+        default: {
           const log = req.logger || logger;
           log.error("Unknown introspection action", { action: result.action });
           return res.status(500).send("Unknown introspection action from Authlete /introspection");
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

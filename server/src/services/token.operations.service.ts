@@ -13,7 +13,6 @@ import {
   GrantType,
   IdtokenReissueResponse,
   TokenGetListResponse,
-  TokenRevokeRequest,
   TokenRevokeResponse,
 } from "@authlete/typescript-sdk/models";
 import createLocalJWT from "../utils/createLocalJWT";
@@ -44,16 +43,6 @@ export class TokenManagementService {
     // When called from token.controller.ts (JWT bearer), req is a plain object.
     const hasReqBody = req?.body && typeof req.body === "object";
     const body = hasReqBody ? (req.body as Record<string, unknown>) : (req as Record<string, unknown>);
-
-    // Decode Basic auth when called from the admin API endpoint
-    if (hasReqBody) {
-      const { authorization } = (req as Request).headers;
-      if (authorization?.startsWith("Basic ")) {
-        const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-        const [clientId] = credentials.split(":");
-        body.clientId = Number(clientId);
-      }
-    }
 
     const rawGrantType = (body.grant_type || body.grantType || "") as string;
     const rawScope = (body.scope as string) || "";

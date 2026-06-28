@@ -10,7 +10,8 @@ export function sendAuthorizationIssueResponse(res: Response, result: Authorizat
       return res.status(500).send(result.responseContent);
 
     case "LOCATION":
-      // Authlete returned a redirect URI
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
       return res.redirect(result.responseContent ?? "");
 
     case "FORM":

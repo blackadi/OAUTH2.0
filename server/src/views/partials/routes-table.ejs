@@ -10,7 +10,7 @@
       </tr>
     </thead>
     <tbody id="routes-body">
-      <tr><td colspan="5" class="routes-loading">Loading routes...</td></tr>
+      <tr class="skeleton-row" aria-label="Loading routes"><td colspan="5"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></td></tr>
     </tbody>
   </table>
 </div>
@@ -22,7 +22,21 @@
     const base = data.base || (location.protocol + '//' + location.host);
     const tbody = document.getElementById('routes-body');
     tbody.innerHTML = '';
-    (data.routes || []).forEach(r => {
+    var routeLimit = <%= typeof limit !== 'undefined' ? limit : 'Infinity' %>;
+    var lastGroup = '';
+    function getGroup(path) {
+      var m = path.match(/^\/api\/(?:session\/)?(?:client\/)?([^/]+)/);
+      return m ? m[1].replace(/^\w/, function(c) { return c.toUpperCase(); }) : 'Other';
+    }
+    (data.routes || []).slice(0, routeLimit).forEach(r => {
+      var group = getGroup(r.path);
+      if (group !== lastGroup && <%= typeof limit === 'undefined' ? 'true' : 'false' %>) {
+        lastGroup = group;
+        var gtr = document.createElement('tr');
+        gtr.className = 'route-group-header';
+        gtr.innerHTML = '<td colspan="5">' + esc(group) + '</td>';
+        tbody.appendChild(gtr);
+      }
       const full = base + r.path;
       const tr = document.createElement('tr');
 
@@ -90,6 +104,7 @@
     console.error(err);
     document.getElementById('routes-body').innerHTML =
       '<tr><td colspan="5" class="routes-error">Failed to load routes</td></tr>';
+    var routeLimit = Infinity;
   }
 })();
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }

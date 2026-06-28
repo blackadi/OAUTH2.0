@@ -21,7 +21,8 @@ describe("HealthService", () => {
     const result = await service.checkAuthlete(false)
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://authlete.example.com/api/lifecycle/healthcheck"
+      "https://authlete.example.com/api/lifecycle/healthcheck",
+      { headers: {} }
     )
     expect(result).toEqual({ healthy: true, statusCode: 200, body: "OK", extended: false })
   })
@@ -46,7 +47,8 @@ describe("HealthService", () => {
     await service.checkAuthlete(true)
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://authlete.example.com/api/lifecycle/healthcheck?extended=true"
+      "https://authlete.example.com/api/lifecycle/healthcheck?extended=true",
+      { headers: {} }
     )
   })
 })

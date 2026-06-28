@@ -1,103 +1,124 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CLIENT_ID, getRedirectUri } from '../config';
-import { apiService, type TokenResponse } from '../services/api';
+import { toast } from 'sonner';
+import { CLIENT_ID, getRedirectUri } from '@/config';
+import { tokenService } from '@/services';
 import { jwtDecode, type JwtPayload } from 'jwt-decode';
-import { useToken } from '../context/TokenContext';
+import { useToken } from '@/context/TokenContext';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { JsonBlock } from '@/components/ui/JsonBlock';
+import { Spinner } from '@/components/ui/Spinner';
+import type { TokenResponse } from '@/types';
 
-const CallbackPage: React.FC = () => {
+interface CallbackState {
+  error: string | null;
+  loading: boolean;
+  tokenResponse: TokenResponse | null;
+  decodedIDToken: JwtPayload;
+}
+
+const CallbackPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { setTokenSet } = useToken();
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tokenResponse, setTokenResponse] = useState<TokenResponse | null>(null);
-  const [decodedIDToken, setDecodedIDToken] = useState<JwtPayload>({});
+  const [state, setState] = useState<CallbackState>({
+    error: null,
+    loading: true,
+    tokenResponse: null,
+    decodedIDToken: {},
+  });
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const errorParam = url.searchParams.get('error');
+    const processCallback = async () => {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('code');
+      const stateParam = url.searchParams.get('state');
+      const errorParam = url.searchParams.get('error');
 
-    if (errorParam) {
-      setError(`Authorization error: ${errorParam}`);
-      setLoading(false);
-      return;
-    }
+      if (errorParam) {
+        setState({ error: `Authorization error: ${errorParam}`, loading: false, tokenResponse: null, decodedIDToken: {} });
+        return;
+      }
 
-    if (!code) {
-      setError('Missing authorization code in callback URL');
-      setLoading(false);
-      return;
-    }
+      if (!code) {
+        setState({ error: 'Missing authorization code in callback URL', loading: false, tokenResponse: null, decodedIDToken: {} });
+        return;
+      }
 
-    const expectedState = sessionStorage.getItem('oauth_state');
-    if (expectedState && state && expectedState !== state) {
-      setError('State parameter mismatch; possible CSRF issue');
-      setLoading(false);
-      return;
-    }
+      const expectedState = sessionStorage.getItem('oauth_state');
+      if (expectedState && stateParam && expectedState !== stateParam) {
+        setState({ error: 'State parameter mismatch; possible CSRF issue', loading: false, tokenResponse: null, decodedIDToken: {} });
+        return;
+      }
 
-    const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
-    if (!codeVerifier) {
-      setError('Missing PKCE code verifier in session storage');
-      setLoading(false);
-      return;
-    }
+      const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+      if (!codeVerifier) {
+        setState({ error: 'Missing PKCE code verifier in session storage', loading: false, tokenResponse: null, decodedIDToken: {} });
+        return;
+      }
 
-    const exchange = async () => {
       try {
         const storedClientId = sessionStorage.getItem('authz_client_id') || CLIENT_ID;
         const redirectUri = getRedirectUri();
-        const tokenRequest = {
+        const body = await tokenService.exchangeCodeForToken({
           grant_type: 'authorization_code',
           code,
           redirect_uri: redirectUri,
           client_id: storedClientId,
           code_verifier: codeVerifier,
-        };
+        });
 
-        const body = await apiService.exchangeCodeForToken(tokenRequest);
-
-        setTokenResponse(body);
         setTokenSet(body);
         sessionStorage.setItem('active_client_id', storedClientId);
 
-        if (body.id_token) {
-          const decoded = jwtDecode(body.id_token);
-          setDecodedIDToken(decoded);
-        }
-      } catch (e: any) {
-        setError(e?.message || 'Failed to exchange code for token');
-      } finally {
-        setLoading(false);
+        const decodedIdToken = body.id_token ? jwtDecode<JwtPayload>(body.id_token) : {};
+        setState({
+          error: null,
+          loading: false,
+          tokenResponse: body,
+          decodedIDToken: decodedIdToken,
+        });
+        toast.success('Tokens obtained successfully');
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Failed to exchange code for token';
+        setState({ error: msg, loading: false, tokenResponse: null, decodedIDToken: {} });
+        toast.error(msg);
       }
     };
 
-    exchange();
-  }, [location]);
+    processCallback();
+  }, [location, setTokenSet]);
 
   return (
-    <div className="card">
-      <h1>Callback</h1>
-      {loading && <p>Exchanging authorization code for tokens…</p>}
-      {!loading && error && <div className="error">{error}</div>}
-      {!loading && !error && tokenResponse && (
-        <>
-          <p>Successfully obtained tokens from the authorization server.</p>
-          <pre className="json-block">
-            {JSON.stringify(tokenResponse, null, 2)}
-            <p style={{ paddingTop: '1rem' }}>Decoded ID Token:{JSON.stringify(decodedIDToken, null, 2)}</p>
-          </pre>
-        </>
-      )}
-      {!loading && (
-        <button type="button" className="button secondary" style={{ marginTop: '1rem' }} onClick={() => navigate('/')}>
-          Return to Dashboard
-        </button>
-      )}
-    </div>
+    <Card className="max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle>Callback</CardTitle>
+        {state.loading && <CardDescription>Exchanging authorization code for tokens\u2026</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        {state.loading && (
+          <div className="flex justify-center py-8">
+            <Spinner size="lg" />
+          </div>
+        )}
+        {!state.loading && state.error && <p className="text-sm text-red-400">{state.error}</p>}
+        {!state.loading && !state.error && state.tokenResponse && (
+          <div className="space-y-4">
+            <p className="text-sm text-green-400">Successfully obtained tokens from the authorization server.</p>
+            <JsonBlock data={state.tokenResponse} label="Token Response" />
+            <JsonBlock data={state.decodedIDToken} label="Decoded ID Token" />
+          </div>
+        )}
+        {!state.loading && (
+          <div className="mt-6">
+            <Button variant="secondary" onClick={() => navigate('/')}>
+              Return to Dashboard
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

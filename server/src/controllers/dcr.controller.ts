@@ -1,8 +1,14 @@
 import { NextFunction, Request, Response } from "express";
 import { DcrService } from "../services/dcr.service";
+import {
+  validateOrThrow,
+  dcrRegisterSchema,
+  dcrGetSchema,
+  dcrUpdateSchema,
+  dcrDeleteSchema,
+} from "../utils/validation";
 import logger from "../utils/logger";
-
-const dcrService = new DcrService();
+import { AppError } from "../utils/app-error";
 
 function safeParseJSON(str: string): unknown {
   try { return JSON.parse(str); } catch { return str; }
@@ -42,87 +48,90 @@ function mapActionToStatus(action?: string): number {
   }
 }
 
-export const dcrRegisterController = {
-  handleDcrRegister: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (!requireBasicAuth(req, res)) return;
-      const result = await dcrService.register(req);
-      const status = mapActionToStatus(result.action);
-      if (status === 204) {
-        return res.status(status).send();
-      }
-      const body = result.responseContent
-        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
-        : result;
-      return res.status(status).json(body);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("DCR Register Response Error", { message: error.message });
-      return next(error);
-    }
-  },
-};
+function buildResponse(result: any) {
+  const status = mapActionToStatus(result.action);
+  if (status === 204) {
+    return { status, body: undefined };
+  }
+  const body = result.responseContent
+    ? { ...result, responseContent: safeParseJSON(result.responseContent) }
+    : result;
+  return { status, body };
+}
 
-export const dcrGetController = {
-  handleDcrGet: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await dcrService.get(req);
-      const status = mapActionToStatus(result.action);
-      if (status === 204) {
-        return res.status(status).send();
-      }
-      const body = result.responseContent
-        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
-        : result;
-      return res.status(status).json(body);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("DCR Get Response Error", { message: error.message });
-      return next(error);
-    }
-  },
-};
+function handleDcrError(err: unknown, req: Request, res: Response, next: NextFunction, label: string): void {
+  if (err instanceof AppError && err.status === 400) {
+    const log = req.logger || logger;
+    log.error(`DCR ${label} Validation Error`, { message: err.message });
+    res.status(400).json({ error: "invalid_request", error_description: err.message });
+    return;
+  }
+  const error = err instanceof Error ? err : new Error(String(err));
+  const log = req.logger || logger;
+  log.error(`DCR ${label} Response Error`, { message: error.message });
+  next(error);
+}
 
-export const dcrUpdateController = {
-  handleDcrUpdate: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await dcrService.update(req);
-      const status = mapActionToStatus(result.action);
-      if (status === 204) {
-        return res.status(status).send();
-      }
-      const body = result.responseContent
-        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
-        : result;
-      return res.status(status).json(body);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("DCR Update Response Error", { message: error.message });
-      return next(error);
-    }
-  },
-};
+export function createDcrControllers(dcrServiceInstance = new DcrService()) {
+  return {
+    register: {
+      handleDcrRegister: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          if (!requireBasicAuth(req, res)) return;
+          validateOrThrow(dcrRegisterSchema, req.body);
+          const result = await dcrServiceInstance.register(req);
+          const { status, body } = buildResponse(result);
+          if (status === 204) return res.status(status).send();
+          return res.status(status).json(body);
+        } catch (err) {
+          handleDcrError(err, req, res, next, "Register");
+        }
+      },
+    },
+    get: {
+      handleDcrGet: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          validateOrThrow(dcrGetSchema, req.body);
+          const result = await dcrServiceInstance.get(req);
+          const { status, body } = buildResponse(result);
+          if (status === 204) return res.status(status).send();
+          return res.status(status).json(body);
+        } catch (err) {
+          handleDcrError(err, req, res, next, "Get");
+        }
+      },
+    },
+    update: {
+      handleDcrUpdate: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          validateOrThrow(dcrUpdateSchema, req.body);
+          const result = await dcrServiceInstance.update(req);
+          const { status, body } = buildResponse(result);
+          if (status === 204) return res.status(status).send();
+          return res.status(status).json(body);
+        } catch (err) {
+          handleDcrError(err, req, res, next, "Update");
+        }
+      },
+    },
+    delete: {
+      handleDcrDelete: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          validateOrThrow(dcrDeleteSchema, req.body);
+          const result = await dcrServiceInstance.delete(req);
+          const { status, body } = buildResponse(result);
+          if (status === 204) return res.status(status).send();
+          return res.status(status).json(body);
+        } catch (err) {
+          handleDcrError(err, req, res, next, "Delete");
+        }
+      },
+    },
+  };
+}
 
-export const dcrDeleteController = {
-  handleDcrDelete: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await dcrService.delete(req);
-      const status = mapActionToStatus(result.action);
-      if (status === 204) {
-        return res.status(status).send();
-      }
-      const body = result.responseContent
-        ? { ...result, responseContent: safeParseJSON(result.responseContent) }
-        : result;
-      return res.status(status).json(body);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("DCR Delete Response Error", { message: error.message });
-      return next(error);
-    }
-  },
-};
+const defaultControllers = createDcrControllers();
+export const dcrRegisterController = defaultControllers.register;
+export const dcrGetController = defaultControllers.get;
+export const dcrUpdateController = defaultControllers.update;
+export const dcrDeleteController = defaultControllers.delete;

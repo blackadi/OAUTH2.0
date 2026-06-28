@@ -4,7 +4,6 @@ import {
   AuthorizationFailResponse,
   AuthorizationIssueRequest,
   AuthorizationIssueResponse,
-  AuthorizationRequest,
   AuthorizationResponse,
 } from "@authlete/typescript-sdk/models";
 import { Authlete } from "@authlete/typescript-sdk";
@@ -18,7 +17,7 @@ export class AuthorizationService {
 
   async process(req: Request): Promise<AuthorizationResponse> {
     // Convert Express request into a query string
-    const { context, ...reqBody }: AuthorizationRequest =
+    const reqBody =
       req.method === "GET" ? req.query : req.body;
     const log = req.logger || logger;
     log("Authorization request parameters", { params: reqBody });

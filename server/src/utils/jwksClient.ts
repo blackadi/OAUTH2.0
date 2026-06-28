@@ -13,10 +13,6 @@ interface JwkKey {
   alg?: string;
 }
 
-interface JwksResponse {
-  keys: JwkKey[];
-}
-
 export class JwksClient {
   constructor(private jwksUri: string, private cacheTtlMs: number = 300_000) {}
 

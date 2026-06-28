@@ -8,6 +8,8 @@ declare module "express-session" {
       resultMessage: string;
       clientId?: number;
       clientName?: string;
+      prompt?: string;
+      redirectUri?: string;
       authorizationIssueRequest?: AuthorizationIssueRequest;
     };
     secret?: string;

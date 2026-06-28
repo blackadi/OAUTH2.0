@@ -1,25 +1,37 @@
 <%- include('partials/head', { title: 'Consent' }) %>
 <body>
+  <main>
   <div class="card">
-    <header>
-      <div>
-        <h1>Application Consent</h1>
-        <div class="client">Client: <strong><%= clientName || 'Unknown' %></strong></div>
+    <div class="consent-header">
+      <div class="consent-client-icon"><%= (clientName || '?').charAt(0).toUpperCase() %></div>
+      <div class="consent-client-info">
+        <h2><%= clientName || 'Unknown Client' %></h2>
+        <p>wants to access your account</p>
       </div>
-    </header>
-    <p class="lead">The application is requesting the following permissions. Please review and choose whether to allow access.</p>
+    </div>
+    <p class="lead">This application is requesting the following permissions:</p>
     <form method="POST" action="/api/session/consent">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <ul class="scopes">
-        <% (scopes || ['Access your profile information', 'Access your email address', 'Perform actions on your behalf']).forEach(function(scope) { %>
-          <li><%= scope %></li>
-        <% }) %>
+      <ul class="scope-list">
+        <%- include('partials/scope-list', { scopes: scopes || ['openid', 'profile'] }) %>
       </ul>
+      <% if (redirectUri) { %>
+        <div class="consent-redirect">
+          <span class="consent-redirect-label">Redirect URI</span>
+          <code class="consent-redirect-value"><%= redirectUri %></code>
+        </div>
+      <% } %>
+      <label class="consent-remember">
+        <input type="checkbox" name="remember" value="true" checked />
+        <span>Remember my decision for future requests from this client</span>
+      </label>
       <div class="buttons">
         <button type="submit" name="decision" value="approve" class="approve">Approve</button>
         <button type="submit" name="decision" value="deny" class="deny">Deny</button>
       </div>
     </form>
   </div>
+  </main>
+  <%- include('partials/footer') %>
 </body>
 </html>

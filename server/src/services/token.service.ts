@@ -19,7 +19,7 @@ export class TokenService {
 
     // Only extract OAuth params from the body. Server-determined fields
     // (htm, htu, dpop, etc.) come from HTTP headers, never from the body.
-    const { client_id: bodyClientId, client_secret: bodyClientSecret, ...remainingParams } = req.body as Record<string, unknown>;
+    const { client_id: bodyClientId, client_secret: bodyClientSecret, properties: bodyProperties, ...remainingParams } = req.body as Record<string, unknown>;
 
     // Determine clientId/clientSecret — Basic auth takes priority,
     // then client_secret_post (body), then public client.
@@ -42,7 +42,7 @@ export class TokenService {
     if (!parameters) {
       // Fallback: rebuild from all remaining params.
       // Exclude fields we already extracted separately.
-      const excluded = new Set(["clientId", "clientSecret", "client_id", "client_secret"]);
+      const excluded = new Set(["clientId", "clientSecret", "client_id", "client_secret", "properties"]);
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(remainingParams)) {
         if (value !== undefined && value !== null && !excluded.has(key)) {
@@ -63,6 +63,12 @@ export class TokenService {
       clientId,
       clientSecret,
     };
+
+    if (bodyProperties !== undefined) {
+      reqBody.properties = typeof bodyProperties === 'string'
+        ? bodyProperties
+        : JSON.stringify(bodyProperties);
+    }
 
     // DPoP support — fields come from HTTP headers, not the body
     const dpopHeader = req.headers["dpop"] as string | undefined;

@@ -1,6 +1,5 @@
 import { NextFunction, Request, Response } from "express";
 import { TokenService } from "../services/token.service";
-import { TokenManagementService } from "../services/token.operations.service";
 import { LoginService } from "../services/login.service";
 import session from "express-session";
 import logger from "../utils/logger";
@@ -16,8 +15,21 @@ import { JwtVerificationService } from "../services/jwt-verification.service";
 
 const tokenService = new TokenService();
 const loginService = new LoginService();
-const tokenManagementService = new TokenManagementService();
 const jwtVerificationService = new JwtVerificationService();
+
+function parseProperties(input: unknown): Array<{ key?: string; value?: string; hidden?: boolean }> | undefined {
+  if (!input) return undefined;
+  if (Array.isArray(input)) return input;
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      return Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
 
 export const tokenController = {
   handleToken: async (
@@ -40,7 +52,7 @@ export const tokenController = {
       }
       const result = await tokenService.process(req);
 
-      switch (result.action) {
+      switch (result.action as string) {
         case "BAD_REQUEST":
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Cache-Control", "no-store");
@@ -65,7 +77,7 @@ export const tokenController = {
           res.setHeader("Pragma", "no-cache");
           return res.status(500).send(result.responseContent ?? result);
 
-        case "JWT_BEARER":
+        case "JWT_BEARER": {
           const jwtResult = await jwtVerificationService.processJwtBearer(result);
           if (jwtResult.ok) {
             res.setHeader("Content-Type", "application/json");
@@ -80,6 +92,7 @@ export const tokenController = {
             return res.status(200).send(body);
           }
           return res.status(jwtResult.status).json(jwtResult.body);
+        }
 
         case "OK":
           res.setHeader("Content-Type", "application/json");
@@ -119,6 +132,7 @@ export const tokenController = {
             const issueReq: TokenIssueRequest = {
               ticket,
               subject: user.subject,
+              ...(req.body.properties ? { properties: parseProperties(req.body.properties) } : {}),
             };
             const issueResp = await tokenService.issue(issueReq);
 
@@ -138,10 +152,38 @@ export const tokenController = {
         case "TOKEN_EXCHANGE":
           return handleTokenExchange(req, res, result, next);
 
-        default:
+        case "ID_TOKEN_REISSUABLE": {
+          // Refresh token flow with openid scope — Authlete can reissue
+          // an ID token. Requires a follow-up call to /auth/token/issue
+          // with the ticket and subject from the response.
+          const ticket = result.ticket;
+          if (!ticket) {
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.setHeader("Pragma", "no-cache");
+            return res.status(400).send(result.responseContent ?? result);
+          }
+          const subject = result.subject;
+          if (!subject) {
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.setHeader("Pragma", "no-cache");
+            return res.status(400).send({ error: "invalid_request", error_description: "Missing subject for ID token reissuance" });
+          }
+          const issueReq: TokenIssueRequest = {
+            ticket,
+            subject,
+            ...(req.body.properties ? { properties: parseProperties(req.body.properties) } : {}),
+          };
+          const issueResp = await tokenService.issue(issueReq);
+          return sendTokenIssueResponse(res, issueResp);
+        }
+
+        default: {
           const log2 = req.logger || logger;
           log2.error("Unknown token action", { action: result.action });
           return res.status(500).send("Unknown token action");
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

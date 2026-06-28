@@ -1,3 +1,7 @@
+# ⚠️  Example client IDs, secrets, and JWT assertions below are
+#     development-only values. Replace with your own from Authlete Console.
+#     See CURL-TEST.md for the full test suite with env vars.
+
 curl -X POST http://localhost:3000/api/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \

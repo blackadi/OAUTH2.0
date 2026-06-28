@@ -1,21 +1,70 @@
 <%- include('partials/head', { title: 'Sign In' }) %>
 <body>
-  <div class="card">
-    <h1>Sign in to continue</h1>
-    <p class="lead">Enter your username and password to proceed with authorization.</p>
-    <form method="POST" action="/api/session/login">
+  <main>
+  <div class="card card-narrow">
+    <div class="login-header">
+      <h1>Sign in</h1>
+      <% if (clientName) { %>
+        <p class="login-client-info">Authorize <strong><%= clientName %></strong> to access your account</p>
+      <% } else { %>
+        <p>Enter your credentials to authorize this request.</p>
+      <% } %>
+    </div>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="error-message" role="alert"><span class="error-icon" aria-hidden="true">!</span><%= error %></div>
+    <% } %>
+
+    <form method="POST" action="/api/session/login" id="login-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <label for="username">Username</label>
-      <input id="username" name="username" type="text" placeholder="jane@example.com" value="<%= username || '' %>" required />
+      <input id="username" name="username" type="text" placeholder="jane@example.com" value="<%= username || '' %>" required autocomplete="username" />
       <label for="password">Password</label>
-      <input id="password" name="password" type="password" placeholder="••••••••" value="<%= password || '' %>" required />
+      <div class="password-wrapper">
+        <input id="password" name="password" type="password" placeholder="Enter password" value="<%= password || '' %>" required autocomplete="current-password" />
+        <button type="button" class="password-toggle" id="pw-toggle" aria-label="Toggle password visibility" tabindex="-1">
+          <svg id="pw-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg id="pw-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+        </button>
+      </div>
       <div class="actions">
-        <button type="submit" name="login" value="submit" class="primary">Sign in</button>
+        <button type="submit" name="login" value="submit" class="primary" id="btn-submit">Sign in</button>
         <button type="submit" name="login" value="cancel" class="secondary">Cancel</button>
       </div>
     </form>
-    <div class="foot">Use the default test account for development.</div>
+    <div class="foot">Demo users: <code>admin</code> / <code>password</code> (configurable via <code>AUTH_USERS</code> env var)</div>
   </div>
-  <script>document.getElementById('username')?.focus();</script>
+  </main>
+  <%- include('partials/footer') %>
+  <script>
+    (function(){
+      document.getElementById('username')?.focus();
+
+      var toggle = document.getElementById('pw-toggle');
+      var pw = document.getElementById('password');
+      var eye = document.getElementById('pw-eye');
+      var eyeOff = document.getElementById('pw-eye-off');
+      if (toggle && pw && eye && eyeOff) {
+        toggle.addEventListener('click', function() {
+          var hidden = pw.getAttribute('type') === 'password';
+          pw.setAttribute('type', hidden ? 'text' : 'password');
+          eye.style.display = hidden ? 'none' : '';
+          eyeOff.style.display = hidden ? '' : 'none';
+          toggle.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+        });
+      }
+
+      var form = document.getElementById('login-form');
+      var btn = document.getElementById('btn-submit');
+      if (form && btn) {
+        form.addEventListener('submit', function(e) {
+          var submitter = e.submitter;
+          if (submitter && submitter.value !== 'submit') return;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner"></span> Verifying…';
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-# Authlete OAuth 2.0 / OpenID Connect Testing Dashboard
+# Authlete OAuth 2.0 / OpenID Connect Debugging Dashboard
 
-A comprehensive interactive dashboard for learning, testing, and debugging **OAuth 2.0** and **OpenID Connect (OIDC)** flows against an Authlete-powered authorization server.
+A comprehensive interactive debugging dashboard for learning, testing, and debugging **OAuth 2.0** and **OpenID Connect (OIDC)** flows against an Authlete-powered authorization server.
 
 ## Table of Contents
 
@@ -22,6 +22,7 @@ A comprehensive interactive dashboard for learning, testing, and debugging **OAu
   - [11. Discovery](#11-discovery)
   - [12. Health Checks](#12-health-checks)
   - [13. Token Vault](#13-token-vault)
+- [Server Status Indicator](#server-status-indicator)
 - [Key Distinctions](#key-distinctions)
 - [Troubleshooting](#troubleshooting)
 
@@ -119,21 +120,65 @@ Edit `client/.env`:
 
 ## Dashboard Overview
 
-The dashboard is organized as a series of expandable sections, each focusing on a different OAuth/OIDC capability. Most sections have a **help popover** (?) icon that explains the operation in detail.
+The dashboard is a single-page React application organized into a sidebar with three category groups and 12 interactive sections:
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Token Vault (always visible — shows current tokens) │
-├─────────────────────────────────────────────────────┤
-│  1. Auth Flows        │  8. PAR                     │
-│  2. Token Operations   │  9. RP-Initiated Logout    │
-│  3. Token Management   │ 10. Backchannel Logout     │
-│  4. Client Management  │ 11. Discovery              │
-│  5. DCR                │ 12. Health Checks          │
-│  6. Grant Management   │                            │
-│  7. CIBA               │                            │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ [🔴 Logo] OAuth Debugger        [🟢 Connected] Server   │  ← Sticky header with live status
+├──────────────┬──────────────────────────────────────────┤
+│  OAuth 2.0   │  ┌─ Section Panel ─────────────────────┐  │
+│  ├ Grant Flows│  │                                     │  │
+│  ├ Token Ops  │  │  [Tab Bar] Grant Type Selector     │  │
+│  └ Logout     │  │                                     │  │
+│              │  │  [Flow Diagram] Step-by-step progress│  │
+│  OIDC & Ext.  │  │                                     │  │
+│  ├ DCR       │  │  [Split Pane]                        │  │
+│  ├ CIBA      │  │  ┌─Config──────┐ ┌─Response───────┐ │  │
+│  ├ PAR       │  │  │ Form fields  │ │ JSON result    │ │  │
+│  ├ Device Flow│  │  │ + cURL      │ │ + copy button  │ │  │
+│  ├ BC Logout │  │  │ preview     │ │                │ │  │
+│  └ Discovery │  │  └─────────────┘ └────────────────┘ │  │
+│              │  └───────────────────────────────────────┘  │
+│  Admin       │                                            │
+│  ├ Token Mgmt│                                            │
+│  ├ Client Mgmt│                                            │
+│  ├ Grant Mgmt│                                            │
+│  └ Health    │                                            │
+│              │                                            │
+│  ┌──────────┐│                                            │
+│  │Token Vault││  ← Expandable sidebar panel (always shown)│
+│  └──────────┘│                                            │
+└──────────────┴──────────────────────────────────────────┘
 ```
+
+Key layout features:
+- **Sticky 48px header** with bug-icon logo, navigation menu (mobile), and live server status badge
+- **Collapsible mobile nav** (hidden on desktop) with grouped sections
+- **Desktop sidebar** (56px wide) with 3 category groups, indigo active-state shadows
+- **Main content area** with section panels that include icons, descriptions, tab bars, flow diagrams, and split config/response panes
+- **Token Vault** — pinned at the bottom of the sidebar, expandable to show/copy/decode stored tokens
+
+Each section prominently displays:
+1. **Operation description** — explains what the operation does, with real-world analogies
+2. **Flow diagram** — numbered steps showing the request/response sequence
+3. **Request preview** — HTTP method, URL, headers, body with one-click cURL copy
+4. **Response panel** — formatted JSON with copy button
+
+### Server Status Indicator
+
+The header badge shows the live connection status to the Authlete server:
+
+| State | Dot | Label | Behavior |
+|-------|-----|-------|----------|
+| Connected | Green (with glow) | "Connected" | Server responds within 5s, hover shows uptime |
+| Disconnected | Red (with glow) | "Offline" | Network error, non-200, or timeout >5s |
+| Checking | Yellow (pulsing) | "Checking" | Initial load or retry after failure |
+
+The `useServerStatus` hook (in `hooks/useServerStatus.ts`) polls `GET /api/health`:
+- Every 30s when connected
+- Every 10s on failure (retry interval)
+- 5s request timeout (aborts stale requests)
+- Cleans up on unmount (aborts in-flight fetch + clears interval)
 
 ---
 
@@ -141,7 +186,7 @@ The dashboard is organized as a series of expandable sections, each focusing on 
 
 ### 1. Auth Flows — The Four Standard Grant Types
 
-This section lets you exercise all four standard OAuth 2.0 grant types. Select a grant type, fill in the parameters, and click **Run**. The resulting tokens appear in the **Token Vault** at the top.
+This section lets you exercise all four standard OAuth 2.0 grant types. Select a grant type via the tab bar, fill in the parameters, and click the action button. The resulting tokens appear in the **Token Vault** in the sidebar.
 
 #### Authorization Code + PKCE (Most Secure)
 
@@ -190,7 +235,7 @@ curl -X POST http://localhost:3000/api/token \
   -d "grant_type=client_credentials&scope=openid"
 ```
 
-**Try it**: Enter a confidential client's ID and secret, set scopes (e.g., `openid profile`), click **Run**.
+**Try it**: Enter a confidential client's ID and secret, set scopes (e.g., `openid profile`), click **Get Token**.
 
 #### Password Grant (ROPC) — Legacy
 
@@ -204,7 +249,7 @@ curl -X POST http://localhost:3000/api/token \
 
 **What it does**: Uses a previously obtained refresh token to get a new access token without re-authenticating.
 
-**Try it**: After running Authorization Code or Password flows, the refresh token is pre-filled. Just click **Run**.
+**Try it**: After running Authorization Code or Password flows, the refresh token is pre-filled. Just click **Refresh Token**.
 
 ---
 
@@ -478,7 +523,7 @@ sequenceDiagram
 6. Click **Issue & Deliver** to actually deliver it
 7. Click **Issue & Deliver All** to notify all registered clients
 
-**The `active` loading bug fix note**: Previously, `auth` was computed on every render and was always truthy (`btoa(':') === 'Og=='`), so the disabled button logic never triggered. Now `mgmtAuth` is only computed when both credential fields have values.
+**Admin auth behavior**: MGMT Client ID and Secret are both required for the button to become active. If either field is empty, buttons remain disabled with a tooltip indicating missing credentials.
 
 ---
 
@@ -517,21 +562,41 @@ Two health checks for verifying the server and its connection to Authlete:
 | **Server Health** | The Express server is running and responding. Auto-runs on page load |
 | **Authlete Health** | The Authlete API is reachable and functioning. Can optionally test DB connectivity |
 
+The server status is also shown live in the header badge (see [Server Status Indicator](#server-status-indicator)).
+
 **Try it**: Click **Refresh** next to the server status. Click **Check Authlete Health** to verify Authlete connectivity. Enable **Extended** to also test the Authlete database.
 
 ---
 
 ### 13. Token Vault
 
-The always-visible section at the top of the dashboard. It shows:
+The always-visible Token Vault is pinned at the bottom of the desktop sidebar (or accessible via the expandable mobile nav footer). It shows:
 
 - **Access Token**: The main token for API calls
 - **Refresh Token**: For getting new access tokens
 - **ID Token**: The OIDC identity token (decode it to see user claims)
 
-Each token has a **Copy** button and a **Decode** button (for ID tokens).
+Each token has a **Copy** button and a truncated preview. The **ID Token** has a **Decode** button that displays the full decoded JWT payload in a formatted JSON block.
 
-Tokens persist in `sessionStorage` — they survive page refreshes but are cleared when the browser tab is closed.
+Tokens persist in `sessionStorage` — they survive page refreshes but are cleared when the browser tab is closed. A green dot on the vault icon indicates active tokens.
+
+---
+
+## Server Status Indicator
+
+The header always shows a live connectivity badge. The `useServerStatus` hook (at `hooks/useServerStatus.ts`) handles the polling:
+
+```typescript
+const { status, isOnline, uptime } = useServerStatus();
+// status: 'connected' | 'disconnected' | 'checking'
+// isOnline: boolean
+// uptime: number | null (seconds since last check)
+```
+
+- Polls `GET /api/health` (no auth, no external dependencies — pure liveness probe)
+- 30s interval when connected, 10s retry on failure
+- 5s per-request timeout, aborted on unmount or stale
+- Tooltip on hover shows server uptime when connected
 
 ---
 
@@ -620,6 +685,7 @@ Both use the authorization endpoint, but:
 - Ensure the server is running on the expected port (default: `localhost:3000`)
 - Check `ALLOWED_ORIGINS` on the server includes your client URL (default: `http://localhost:3000,http://localhost:3001`)
 - For production, set `VITE_PROD_API_BASE_URL` to the deployed server URL
+- The header's server status indicator shows red ("Offline") if the server is unreachable
 
 ### "invalid_client" errors
 
@@ -644,7 +710,7 @@ Both use the authorization endpoint, but:
 
 - **Auth flows**: Client ID is required
 - **Admin sections**: MGMT Client ID and Secret are both required
-- **Backchannel logout**: Both MGMT credentials are now required (fixed: previously `auth` was erroneously always truthy)
+- **Backchannel logout**: Both MGMT credentials are required (buttons disabled when either field is empty)
 - **DCR Get/Update/Delete**: Registration access token and Client ID are required
 
 ### The authorization flow doesn't redirect back
@@ -685,33 +751,52 @@ Both use the authorization endpoint, but:
 │                      Browser (localhost:3001)                    │
 │                                                                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Authlete Testing Dashboard                               │  │
+│  │  Authlete Debugging Dashboard                             │  │
 │  │                                                           │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │  │
-│  │  │ Auth     │ │ Token    │ │ Admin    │ │ Client     │  │  │
-│  │  │ Flows    │ │ Ops      │ │ Token    │ │ Management │  │  │
-│  │  └──────────┘ └──────────┘ └──────────┘ └────────────┘  │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │  │
-│  │  │ DCR      │ │ CIBA     │ │ PAR      │ │ Logout     │  │  │
-│  │  └──────────┘ └──────────┘ └──────────┘ └────────────┘  │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │  │
-│  │  │ Back-    │ │ Discov-  │ │ Health   │ │ Grant      │  │  │
-│  │  │ channel  │ │ ery      │ │          │ │ Management │  │  │
-│  │  │ Logout   │ │          │ │          │ │            │  │  │
-│  │  └──────────┘ └──────────┘ └──────────┘ └────────────┘  │  │
+│  │  ┌─────── Header (sticky) ─────────────────────────────┐ │  │
+│  │  │  [🪲 Logo] OAuth Debugger      [🟢 Connected] Server │ │  │
+│  │  └─────────────────────────────────────────────────────┘ │  │
 │  │                                                           │  │
-│  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │  Token Vault (displays all stored tokens)           │  │  │
-│  │  └─────────────────────────────────────────────────────┘  │  │
+│  │  ┌────────────┬────────────────────────────────────────┐ │  │
+│  │  │ Sidebar     │ Section Panel                         │ │  │
+│  │  │ (desktop)   │  ┌────────────────────────────────┐  │ │  │
+│  │  │             │  │ Icon + Title + Actions         │  │ │  │
+│  │  │ OAuth 2.0   │  │                                │  │ │  │
+│  │  │  ├ Grant    │  │ [TabBar] flow selector         │  │ │  │
+│  │  │  │ Flows    │  │                                │  │ │  │
+│  │  │  ├ Token    │  │ [FlowDiagram] steps            │  │ │  │
+│  │  │  │ Ops      │  │                                │  │ │  │
+│  │  │  └ Logout   │  │ [SplitPane]                    │  │ │  │
+│  │  │             │  │  ┌─Config──┐ ┌─Response─────┐ │  │ │  │
+│  │  │ OIDC/Ext.  │  │  │ Forms   │ │ JSON result  │ │  │ │  │
+│  │  │  ├ DCR     │  │  │ + cURL  │ │ + copy       │ │  │ │  │
+│  │  │  ├ CIBA    │  │  └─────────┘ └──────────────┘ │  │ │  │
+│  │  │  ├ PAR     │  └────────────────────────────────┘  │ │  │
+│  │  │  ├ Device  │                                       │ │  │
+│  │  │  ├ BC      │                                       │ │  │
+│  │  │  │ Logout  │                                       │ │  │
+│  │  │  └ Discov. │                                       │ │  │
+│  │  │             │                                       │ │  │
+│  │  │ Admin       │                                       │ │  │
+│  │  │  ├ Token   │                                       │ │  │
+│  │  │  ├ Client  │                                       │ │  │
+│  │  │  ├ Grant   │                                       │ │  │
+│  │  │  └ Health  │                                       │ │  │
+│  │  │             │                                       │ │  │
+│  │  │ ┌─────────┐│                                       │ │  │
+│  │  │ │Token    ││                                       │ │  │
+│  │  │ │Vault  ◀─┤├─────── Stored tokens                  │ │  │
+│  │  │ └─────────┘│                                       │ │  │
+│  │  └────────────┴────────────────────────────────────────┘ │  │
+│  │                                                           │  │
+│  │              │ HTTP requests (via service modules)        │  │
+│  │              ▼                                            │  │
+│  │  ┌─────────────────────────────┐                         │  │
+│  │  │ Authlete Node Server        │                         │  │
+│  │  │ (localhost:3000 or deployed)│                         │  │
+│  │  └─────────────────────────────┘                         │  │
 │  └───────────────────────────────────────────────────────────┘  │
-│                              │                                   │
-│                              │ HTTP requests (via ApiService)    │
-│                              ▼                                   │
-│              ┌──────────────────────────────┐                    │
-│              │  Authlete Node Server        │                    │
-│              │  (localhost:3000 or deployed) │                    │
-│              └──────────────────────────────┘                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-The dashboard is a single-page React application that communicates with the Authlete Node authorization server via HTTP. All OAuth/OIDC logic is handled server-side — the dashboard is purely a testing UI that makes API calls through the `ApiService` class.
+The dashboard is a single-page React application that communicates with the Authlete Node authorization server via HTTP. All OAuth/OIDC logic is handled server-side — the dashboard is purely a testing UI that makes API calls through service modules (`services/token.service.ts`, `services/admin.service.ts`, etc.).

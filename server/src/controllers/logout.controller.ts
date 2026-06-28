@@ -18,7 +18,7 @@ export async function rpInitiatedLogout(req: Request & { session: Partial<sessio
     }
 }
 
-export async function opBackchannelLogout(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function opBackchannelLogout(req: Request, res: Response, _next: NextFunction): Promise<void> {
     const log = req.logger || logger;
     const logoutToken: string | undefined = req.body.logout_token;
 

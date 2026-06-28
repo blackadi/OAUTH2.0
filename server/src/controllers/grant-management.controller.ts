@@ -31,13 +31,16 @@ export const grantManagementQueryController = {
           return res.status(204).send();
 
         case "UNAUTHORIZED":
-          return res.status(401).type("application/json").send(result.responseContent || "");
+          if (result.responseContent) {
+            res.setHeader("WWW-Authenticate", result.responseContent);
+          }
+          return res.status(401).json({ error: "invalid_token", error_description: "Access token is invalid or expired" });
 
         case "FORBIDDEN":
-          return res.status(403).type("application/json").send(result.responseContent || "");
+          return res.status(403).json({ error: "access_denied", error_description: result.responseContent || "Access denied" });
 
         case "NOT_FOUND":
-          return res.status(404).type("application/json").send(result.responseContent || "");
+          return res.status(404).json({ error: "not_found", error_description: "Grant not found" });
 
         case "CALLER_ERROR":
           return res.status(400).json(result);
@@ -77,13 +80,16 @@ export const grantManagementRevokeController = {
           return res.status(204).send();
 
         case "UNAUTHORIZED":
-          return res.status(401).type("application/json").send(result.responseContent || "");
+          if (result.responseContent) {
+            res.setHeader("WWW-Authenticate", result.responseContent);
+          }
+          return res.status(401).json({ error: "invalid_token", error_description: "Access token is invalid or expired" });
 
         case "FORBIDDEN":
-          return res.status(403).type("application/json").send(result.responseContent || "");
+          return res.status(403).json({ error: "access_denied", error_description: result.responseContent || "Access denied" });
 
         case "NOT_FOUND":
-          return res.status(404).type("application/json").send(result.responseContent || "");
+          return res.status(404).json({ error: "not_found", error_description: "Grant not found" });
 
         case "CALLER_ERROR":
           return res.status(400).json(result);

@@ -300,7 +300,7 @@ Expected: `access_token`, `id_token`, `token_type: Bearer`.
 
 Create, update, list, revoke, and reissue tokens via Authlete's management API.
 
-> **Auth requirement:** If `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` are set in your `.env`, all management endpoints require Basic auth with those credentials (separate from OAuth client credentials). If unset, the endpoints are unprotected. The examples below assume mgmt auth is **unset** — add `-u "MGMT_ID:MGMT_SEC"` if needed.
+> **Auth requirement:** If `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` are set in your `.env`, all management endpoints require Basic auth with those credentials (separate from OAuth client credentials). If unset, the endpoints are unprotected. The examples below assume mgmt auth is **unset** — add `-u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}"` if needed.
 
 ### List tokens
 
@@ -398,7 +398,7 @@ Expected: `HTTP 204` (No Content).
 
 > **Auth method:** Basic auth with `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (if configured). The same admin credentials used for client management. If unset, the endpoint is unprotected.
 >
-> Substitute `MGMT_ID:MGMT_SEC` with your admin credentials, or omit `-u` if mgmt auth is not configured.
+> Substitute `${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}` with your admin credentials, or omit `-u` if mgmt auth is not configured.
 
 ### 13a. Issue a backchannel logout token
 
@@ -406,7 +406,7 @@ Generates a logout token JWT for the specified client without delivering it.
 
 ```bash
 curl -s -X POST "${BASE}/api/backchannel_logout/issue" \
-  -u "MGMT_ID:MGMT_SEC" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
   -H "Content-Type: application/json" \
   -d '{"clientIdentifier": "'"${CID}"'", "subject": "admin"}' | jq
 ```
@@ -417,7 +417,7 @@ Decode the logout token payload:
 
 ```bash
 curl -s -X POST "${BASE}/api/backchannel_logout/issue" \
-  -u "MGMT_ID:MGMT_SEC" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
   -H "Content-Type: application/json" \
   -d '{"clientIdentifier": "'"${CID}"'", "subject": "admin"}' | jq -r '.logoutToken' | python3 -c "
 import sys, base64, json
@@ -439,7 +439,7 @@ Issues a logout token and POSTs it to the client's `backchannelLogoutUri` (the c
 
 ```bash
 curl -s -X POST "${BASE}/api/backchannel_logout/deliver" \
-  -u "MGMT_ID:MGMT_SEC" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
   -H "Content-Type: application/json" \
   -d '{"clientIdentifier": "'"${CID}"'", "subject": "admin"}' | jq
 ```
@@ -452,7 +452,7 @@ Iterates all clients in the Authlete service and delivers logout tokens to every
 
 ```bash
 curl -s -X POST "${BASE}/api/backchannel_logout/deliver-all" \
-  -u "MGMT_ID:MGMT_SEC" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
   -H "Content-Type: application/json" \
   -d '{"subject": "admin"}' | jq
 ```
@@ -518,7 +518,7 @@ Expected: `{ "healthy": true, "statusCode": 200, "body": "...", "extended": true
 
 ```bash
 DCR_REG=$(curl -s -X POST "${BASE}/api/client/dcr/register" \
-  -u "MGMT_ID:MGMT_SEC" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
   -H "Content-Type: application/json" \
   -d '{"json": "{\"client_name\": \"My DCR App\", \"redirect_uris\": [\"http://localhost:3001/callback\"], \"grant_types\": [\"AUTHORIZATION_CODE\"]}"}')
 echo "$DCR_REG" | jq
@@ -760,7 +760,7 @@ After authorization, the token polling in step 18d returns the token.
 
 ---
 
-Save this section as `smoke-test.sh`, make it executable (`chmod +x smoke-test.sh`), then run it. If your server has `MGMT_CLIENT_ID` set, add `-u "MGMT_ID:MGMT_SEC"` to the management API calls in step 10.
+Save this section as `smoke-test.sh`, make it executable (`chmod +x smoke-test.sh`), then run it. If your server has `MGMT_CLIENT_ID` set, add `-u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}"` to the management API calls in step 10.
 
 ```bash
 #!/usr/bin/env bash
@@ -823,7 +823,7 @@ curl -s -X POST "${BASE}/api/token/revoke" -H "Content-Type: application/x-www-f
 echo "=== 11. Logout ==="
 curl -s -o /dev/null -w "HTTP %{http_code}\n" "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}"
 echo "=== 15. DCR Register ==="
-# Add -u "MGMT_ID:MGMT_SEC" if MGMT_CLIENT_ID/MGMT_CLIENT_SECRET are set in your .env
+# Add -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" if MGMT_CLIENT_ID/MGMT_CLIENT_SECRET are set in your .env
 curl -s -X POST "${BASE}/api/client/dcr/register" -H "Content-Type: application/json" -d '{"json": "{\"client_name\":\"Smoke Test\",\"redirect_uris\":[\"http://localhost:3001/callback\"],\"grant_types\":[\"AUTHORIZATION_CODE\"]}"}' | jq -r '.action'
 echo "=== 16. CIBA Authentication ==="
 curl -s -X POST "${BASE}/api/ciba/authentication" -H "Content-Type: application/json" -d "{\"parameters\":\"login_hint=admin&scope=openid\",\"clientId\":\"${CID}\",\"clientSecret\":\"${SEC}\"}" | jq -r '.action // .error'

@@ -139,7 +139,7 @@ const ROUTES: RouteEntry[] = [
     method: "POST",
     path: "/api/client/dcr/register",
     description: "RFC 7591 Dynamic Client Registration — requires Basic auth (MGMT_CLIENT_ID/MGMT_CLIENT_SECRET)",
-    body: JSON.stringify({ json: '{ "client_name": "My App", "redirect_uris": ["http://localhost:3001/callback"], "grant_types": ["AUTHORIZATION_CODE"] }' }),
+    body: JSON.stringify({ json: '{ "client_name": "My App", "redirect_uris": ["http://localhost:3000/callback"], "grant_types": ["AUTHORIZATION_CODE"] }' }),
   },
   {
     method: "POST",
@@ -237,11 +237,22 @@ const ROUTES: RouteEntry[] = [
     body: JSON.stringify({ subject: "user_subject" }),
   },
 
+  // ── Metrics ──────────────────────────────────────────────────
+  {
+    method: "GET",
+    path: "/api/metrics",
+    description: "Prometheus metrics endpoint — returns runtime and HTTP metrics in text format (no auth required)",
+  },
   // ── Health ──────────────────────────────────────────────────
   {
     method: "GET",
     path: "/api/health",
     description: "Server health check — returns status, uptime, and timestamp (no auth required)",
+  },
+  {
+    method: "GET",
+    path: "/api/health/all",
+    description: "Aggregate health check — returns Redis, Authlete, and server status (no auth required)",
   },
   {
     method: "GET",

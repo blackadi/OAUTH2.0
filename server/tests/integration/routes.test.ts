@@ -42,6 +42,8 @@ describe("Integration: all API routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubEnv("MGMT_CLIENT_ID", "")
+    vi.stubEnv("MGMT_CLIENT_SECRET", "")
     app = createApp()
   })
 

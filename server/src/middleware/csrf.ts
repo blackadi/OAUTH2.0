@@ -15,6 +15,10 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   if (req.method === "GET") {
     if (!req.session.csrfToken) {
       req.session.csrfToken = generateToken();
+      // Force save: express-session with resave:false + saveUninitialized:false
+      // neuters autosave for new sessions, even when modified. Without this,
+      // the CSRF token is lost between GET and POST, causing a 403 mismatch.
+      req.session.save();
     }
   } else if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
     const token = req.body?._csrf;

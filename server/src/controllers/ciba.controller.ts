@@ -1,9 +1,15 @@
 import { NextFunction, Request, Response } from "express";
 import { CibaService } from "../services/ciba.service";
 import { sendApiResponse } from "../utils/http-utils";
+import {
+  validateOrThrow,
+  cibaAuthenticationSchema,
+  cibaIssueSchema,
+  cibaFailSchema,
+  cibaCompleteSchema,
+} from "../utils/validation";
 import logger from "../utils/logger";
-
-const cibaService = new CibaService();
+import { AppError } from "../utils/app-error";
 
 function mapAuthActionToStatus(action?: string): number {
   switch (action) {
@@ -49,71 +55,71 @@ function handleControllerError(err: unknown, req: Request, next: NextFunction, l
   next(error);
 }
 
-export const cibaAuthenticationController = {
-  handle: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await cibaService.process(req);
-      sendApiResponse(res, mapAuthActionToStatus(result.action), result);
-    } catch (err) {
-      handleControllerError(err, req, next, "Authentication");
-    }
-  },
-};
+function handleValidationError(err: unknown, req: Request, res: Response): boolean {
+  if (err instanceof AppError && err.status === 400) {
+    const log = req.logger || logger;
+    log.error("CIBA Validation Error", { message: err.message });
+    res.status(400).json({ error: "invalid_request", error_description: err.message });
+    return true;
+  }
+  return false;
+}
 
-export const cibaIssueController = {
-  handle: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { ticket } = req.body as { ticket?: string };
-      if (!ticket) {
-        return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: ticket" });
-      }
-      const result = await cibaService.issue(ticket);
-      sendApiResponse(res, mapIssueActionToStatus(result.action), result);
-    } catch (err) {
-      handleControllerError(err, req, next, "Issue");
-    }
-  },
-};
+export function createCibaControllers(cibaServiceInstance = new CibaService()) {
+  return {
+    authentication: {
+      handle: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          validateOrThrow(cibaAuthenticationSchema, req.body);
+          const result = await cibaServiceInstance.process(req);
+          sendApiResponse(res, mapAuthActionToStatus(result.action), result);
+        } catch (err) {
+          if (handleValidationError(err, req, res)) return;
+          handleControllerError(err, req, next, "Authentication");
+        }
+      },
+    },
+    issue: {
+      handle: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          const { ticket } = validateOrThrow(cibaIssueSchema, req.body);
+          const result = await cibaServiceInstance.issue(ticket);
+          sendApiResponse(res, mapIssueActionToStatus(result.action), result);
+        } catch (err) {
+          if (handleValidationError(err, req, res)) return;
+          handleControllerError(err, req, next, "Issue");
+        }
+      },
+    },
+    fail: {
+      handle: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          const { ticket, reason } = validateOrThrow(cibaFailSchema, req.body);
+          const result = await cibaServiceInstance.fail(ticket, reason);
+          sendApiResponse(res, mapFailActionToStatus(result.action), result);
+        } catch (err) {
+          if (handleValidationError(err, req, res)) return;
+          handleControllerError(err, req, next, "Fail");
+        }
+      },
+    },
+    complete: {
+      handle: async (req: Request, res: Response, next: NextFunction) => {
+        try {
+          const { ticket, result, subject } = validateOrThrow(cibaCompleteSchema, req.body);
+          const apiResult = await cibaServiceInstance.complete(ticket, result, subject);
+          sendApiResponse(res, mapCompleteActionToStatus(apiResult.action), apiResult);
+        } catch (err) {
+          if (handleValidationError(err, req, res)) return;
+          handleControllerError(err, req, next, "Complete");
+        }
+      },
+    },
+  };
+}
 
-export const cibaFailController = {
-  handle: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { ticket, reason } = req.body as { ticket?: string; reason?: string };
-      if (!ticket) {
-        return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: ticket" });
-      }
-      if (!reason) {
-        return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: reason" });
-      }
-      const result = await cibaService.fail(ticket, reason);
-      sendApiResponse(res, mapFailActionToStatus(result.action), result);
-    } catch (err) {
-      handleControllerError(err, req, next, "Fail");
-    }
-  },
-};
-
-export const cibaCompleteController = {
-  handle: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { ticket, result, subject } = req.body as {
-        ticket?: string;
-        result?: string;
-        subject?: string;
-      };
-      if (!ticket) {
-        return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: ticket" });
-      }
-      if (!result) {
-        return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: result" });
-      }
-      if (!subject) {
-        return res.status(400).json({ error: "invalid_request", error_description: "Missing required field: subject" });
-      }
-      const apiResult = await cibaService.complete(ticket, result, subject);
-      sendApiResponse(res, mapCompleteActionToStatus(apiResult.action), apiResult);
-    } catch (err) {
-      handleControllerError(err, req, next, "Complete");
-    }
-  },
-};
+const defaultControllers = createCibaControllers();
+export const cibaAuthenticationController = defaultControllers.authentication;
+export const cibaIssueController = defaultControllers.issue;
+export const cibaFailController = defaultControllers.fail;
+export const cibaCompleteController = defaultControllers.complete;

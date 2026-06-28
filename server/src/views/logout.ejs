@@ -1,12 +1,18 @@
-<%- include('partials/head', { title: 'Logout' }) %>
+<%- include('partials/head', { title: 'Signed Out' }) %>
 <body>
-  <div class="card_table">
+  <main>
+  <div class="card logout-card">
     <h1>Signed out</h1>
     <p class="lead">You have been successfully signed out.</p>
     <% if (subject) { %>
     <p class="base">Signed out as <strong><%= subject %></strong>.</p>
     <% } %>
-    <p class="lead"><a href="<%= post_logout_redirect_uri || 'http://localhost:3000' %>" class="primary">Return to application</a></p>
+    <div>
+      <a href="<%= post_logout_redirect_uri || 'http://localhost:3000' %>" class="primary">Return to application</a>
+    </div>
+    <div class="foot">You may close this window.</div>
   </div>
+  </main>
+  <%- include('partials/footer') %>
 </body>
 </html>

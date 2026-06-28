@@ -18,7 +18,6 @@ export function sendTokenIssueResponse(res: Response, result: TokenIssueResponse
           return res.status(200).send(result.responseContent ?? result);
 
         default:
-          //req.logger?.error("Unknown token.issue action", { action: result.action });
           logger.error("Unknown token.issue action", { action: result.action });
           return res.status(500).send("Unknown token.issue action");
       }

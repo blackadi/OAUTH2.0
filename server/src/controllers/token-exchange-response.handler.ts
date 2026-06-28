@@ -22,10 +22,8 @@ export async function handleTokenExchange(
     const clientId = result.clientId as number;
     const scopes = result.scopes;
 
-    // The subject should be extracted from the validated subject token,
-    // not the raw token itself. In a production system, introspect/subject_token
-    // to get the actual subject identifier. For now, pass through as-is since
-    // Authlete's token exchange handles validation server-side.
+    // Authlete validates the subject token server-side.
+    // Use the resolved subject from Authlete, falling back to the raw subject token.
     const subject = result.subject || subjectToken;
 
     const tokenCreateRequest: TokenCreateRequest = {

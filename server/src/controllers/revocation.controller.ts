@@ -48,10 +48,11 @@ export const revocationController = {
           res.setHeader("Pragma", "no-cache");
           return res.status(500).send(result.responseContent ?? "");
 
-        default:
+        default: {
           const log = req.logger || logger;
           log.error("Unknown revocation action", { action: result.action });
           return res.status(500).send(result);
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

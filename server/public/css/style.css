@@ -144,6 +144,25 @@ body {
 }
 .routes-error { color: #f87171; }
 
+/* Skeleton loading for routes table */
+.skeleton-row td { padding: 8px 10px !important; }
+.skeleton-line {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--surface) 25%, rgba(148,163,184,0.08) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  margin: 8px 0;
+}
+.skeleton-line:first-child { width: 60%; }
+.skeleton-line:nth-child(2) { width: 85%; }
+.skeleton-line:nth-child(3) { width: 45%; }
+.skeleton-line:nth-child(4) { width: 70%; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Method badges */
 .method {
   display: inline-block;
@@ -216,10 +235,12 @@ body {
 .steps li {
   counter-increment: step;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 10px;
   font-size: 0.88rem;
   color: var(--text-secondary);
+  min-width: 0;
 }
 .steps li::before {
   content: counter(step);
@@ -294,6 +315,45 @@ body {
   color: var(--muted);
 }
 
+/* ── Code value row (copy button) ──────────────────────── */
+.code-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.code-value-row .base { flex: 1; margin: 0; }
+.code-value-row i { word-break: break-all; }
+.copy-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+.copy-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+.copy-btn.copied { border-color: var(--accent); color: var(--accent); }
+
+/* ── Code Snippets ──────────────────────────────────────── */
+.code-snippet {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 8px 0 4px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #9fb3d0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+}
+
 /* ── Utility ──────────────────────────────────────────── */
 .base { color: var(--text-secondary); }
 .foot { text-align: center; }
@@ -352,6 +412,12 @@ input[type="password"] {
   font-size: 0.88rem;
 }
 input:focus { outline: none; border-color: var(--accent2); }
+:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+}
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) { outline: none; }
 .actions {
   display: flex;
   gap: 8px;
@@ -379,9 +445,9 @@ button.secondary {
   cursor: pointer;
 }
 button.approve {
-  background: var(--accent2);
+  background: var(--accent);
   border: none;
-  color: #fff;
+  color: #063a3a;
   padding: 10px 14px;
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -400,9 +466,456 @@ button.deny {
   gap: 10px;
   margin-top: 14px;
 }
-ul.scopes {
-  padding-left: 20px;
-  margin: 12px 0;
+
+/* ── Login Page Enhancements ──────────────────────── */
+.card-narrow {
+  max-width: 420px;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+}
+
+.login-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.login-client-info {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-top: 12px;
+  font-size: 0.82rem;
+}
+.login-client-info strong { color: var(--text); }
+
+.password-wrapper {
+  position: relative;
+}
+
+.password-wrapper input {
+  padding-right: 36px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 6px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.password-toggle:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  color: #fca5a5;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+button.primary:disabled,
+.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button.secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(6, 58, 58, 0.25);
+  border-top-color: #063a3a;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Consent Page Enhancements ────────────────────── */
+.consent-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.consent-client-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.consent-client-info h2 {
+  margin: 0 0 2px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.consent-client-info p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.scope-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scope-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.scope-item::before {
+  content: "";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.scope-name {
+  font-weight: 600;
+  font-size: 0.85rem;
   color: var(--text);
 }
-.client { font-size: 0.82rem; color: var(--muted); }
+
+.scope-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.consent-redirect {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.consent-redirect-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.consent-redirect-value {
+  font-size: 0.78rem;
+  color: var(--accent2);
+  word-break: break-all;
+}
+
+.consent-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.consent-remember:hover {
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.consent-remember input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* ── Dashboard Status Cards ───────────────────────── */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.status-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+
+.status-card:hover {
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.status-card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent2);
+  line-height: 1.2;
+}
+
+.status-card-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── Footer ───────────────────────────────────────── */
+.page-footer {
+  text-align: center;
+  padding: 20px 16px 32px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 16px;
+}
+
+.page-footer a {
+  color: var(--accent2);
+  text-decoration: none;
+}
+
+.page-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ── Error Page ───────────────────────────────────── */
+.error-card {
+  text-align: center;
+  max-width: 520px;
+}
+
+.error-card h1 {
+  margin: 0 0 8px;
+}
+
+.error-card .lead {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.error-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+  line-height: 1;
+}
+
+.error-status-4xx {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.error-status-5xx {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.error-details {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.error-details summary:hover {
+  color: var(--text-secondary);
+}
+
+.error-details pre {
+  background: rgba(239, 68, 68, 0.06);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  font-size: 0.75rem;
+  margin-top: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.12);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.error-path {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  word-break: break-all;
+}
+.error-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Logout Page ──────────────────────────────────── */
+.logout-card { text-align: center; }
+.logout-card .primary { margin-top: 20px; }
+
+/* ── Device Verification ─────────────────────────── */
+.device-card { max-width: 520px; }
+.user-code-input {
+  font-size: 1.4em;
+  letter-spacing: 0.25em;
+  text-align: center;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+}
+.device-lead { margin-bottom: 8px; }
+.device-actions { margin-top: 16px; }
+
+/* ── Routes page meta ────────────────────────────── */
+.route-meta { color: var(--muted); font-size: 0.82rem; }
+
+/* ── Routes toolbar ──────────────────────────────── */
+.routes-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.route-filter-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  outline: none;
+}
+.route-filter-input:focus { border-color: var(--accent2); }
+.route-filter-input::placeholder { color: var(--muted); }
+.route-count { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+
+.route-group-header td {
+  padding: 16px 10px 6px !important;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: none !important;
+}
+
+/* ── Mobile: hide curl column in routes table ─────── */
+@media (max-width: 720px) {
+  .curl-cell { display: none; }
+  .hide-mobile { display: none; }
+  .dashboard { padding: 16px 12px 48px; gap: 24px; }
+  .routes-table { font-size: 0.75rem; }
+  .routes-table td, .routes-table th { padding: 8px 6px; }
+  .method { font-size: 0.65rem; padding: 2px 5px; }
+  .wrap { padding: 16px 12px; }
+  .links-grid { grid-template-columns: 1fr; }
+  .status-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .dashboard { padding: 12px 8px 32px; gap: 20px; }
+  .routes-table td, .routes-table th { padding: 6px 4px; }
+  .status-grid { grid-template-columns: 1fr; }
+}
+
+

@@ -5,13 +5,14 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "postbuild": "cp -r public dist/public && cp -r src/views dist/views",
+    "postbuild": "rm -rf dist/views dist/public && cp -r src/views dist/views && cp -r public dist/public",
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "postinstall": "patch-package"
@@ -32,11 +33,14 @@
     "jwk-to-pem": "^2.0.7",
     "jwks-rsa": "^4.0.1",
     "morgan": "^1.10.1",
+    "prom-client": "^15.1.3",
     "redis": "^6.0.1",
     "winston": "^3.18.3",
-    "winston-daily-rotate-file": "^5.0.0"
+    "winston-daily-rotate-file": "^5.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/cookie-parser": "^1.4.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
@@ -47,10 +51,12 @@
     "@types/node": "^26.0.0",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.9",
+    "eslint": "^10.5.0",
     "patch-package": "^8.0.1",
     "supertest": "^7.2.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.0",
     "vitest": "^4.1.9"
   }
 }

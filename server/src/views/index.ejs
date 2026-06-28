@@ -1,19 +1,39 @@
-<%- include('partials/head', { title: title || 'Default' }) %>
+<%- include('partials/head', { title: title || 'Authlete Authorization Server' }) %>
 <body>
+  <main>
   <div class="dashboard">
     <% if (code && code !== "No code provided") { %>
       <header class="hero">
-        <h1><%= title || 'Default' %></h1>
+        <h1>Authorization Code Received</h1>
       </header>
       <div class="card">
         <label>Query Parameters</label>
-        <p class="base"><strong>code:</strong> <i><%= code %></i></p>
+        <div class="code-value-row">
+          <span class="base"><strong>code:</strong> <i><%= code %></i></span>
+          <button class="copy-btn" data-copy="<%= code %>" aria-label="Copy authorization code">Copy</button>
+        </div>
         <p class="base"><strong>state:</strong> <i><%= state %></i></p>
         <p class="base"><strong>iss:</strong> <i><%= iss %></i></p>
         <div class="foot">
-          <p class="base">Next, exchange the authorization code for a token using your client or any REST tool like cURL or Postman.</p>
+          <p class="base">Next, exchange the authorization code for a token using your client or any REST tool such as cURL or Postman.</p>
         </div>
       </div>
+      <script>
+        (function() {
+          var btns = document.querySelectorAll('[data-copy]');
+          btns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              if (!navigator.clipboard) return;
+              navigator.clipboard.writeText(btn.getAttribute('data-copy')).then(function() {
+                var orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(function() { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+              });
+            });
+          });
+        })();
+      </script>
     <% } else { %>
       <header class="hero">
         <h1>Authlete OAuth 2.0 &amp; OpenID Connect</h1>
@@ -21,12 +41,32 @@
         <p class="hero-desc">DB-less, cloud-native OAuth 2.0 / OIDC server. Manage everything via the Authlete console.</p>
       </header>
 
+      <section class="section" aria-label="Server Status">
+        <div class="section-header">
+          <h2>Server Status</h2>
+        </div>
+        <div class="status-grid">
+          <div class="status-card">
+            <div class="status-card-value" id="stat-routes">—</div>
+            <div class="status-card-label">API Routes</div>
+          </div>
+          <div class="status-card">
+            <div class="status-card-value">&check;</div>
+            <div class="status-card-label">Authlete</div>
+          </div>
+          <div class="status-card">
+            <div class="status-card-value" id="stat-version">1.0</div>
+            <div class="status-card-label">Version</div>
+          </div>
+        </div>
+      </section>
+
       <section class="section" aria-label="API Routes">
         <div class="section-header">
           <h2>API Routes</h2>
-          <a href="/api/routes" class="section-link">View standalone &rarr;</a>
+          <a href="/api/routes" class="section-link">View all &rarr;</a>
         </div>
-        <%- include('partials/routes-table') %>
+        <%- include('partials/routes-table', { limit: 8 }) %>
       </section>
 
       <section class="section links-grid" aria-label="Resources">
@@ -47,11 +87,26 @@
       <section class="section" aria-label="Getting Started">
         <h2>Getting Started</h2>
         <ol class="steps">
-          <li><span>Use your client to request authorization from the authorization server.</span></li>
-          <li><span>Receive an authorization code.</span></li>
-          <li><span>Exchange the code for a token via <code>/api/token</code>.</span></li>
-          <li><span>Use the token to access <code>/api/userinfo</code> and other protected resources.</span></li>
-          <li><span>Refresh the token when it expires via <code>grant_type=refresh_token</code>.</span></li>
+          <li><span>Direct the user to the authorization endpoint. Your client initiates the OAuth flow by redirecting the user to the authorization server.</span>
+            <pre class="code-snippet">curl -v "http://localhost:3000/api/authorization?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=YOUR_REDIRECT_URI&scope=openid+profile&state=xyz"</pre>
+          </li>
+          <li><span>The user signs in and grants consent. The server redirects back to your app with an authorization code.</span>
+            <pre class="code-snippet">GET /callback?code=abc123&state=xyz</pre>
+          </li>
+          <li><span>Exchange the authorization code for a token at the token endpoint.</span>
+            <pre class="code-snippet">curl -X POST "http://localhost:3000/api/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code&code=abc123&redirect_uri=YOUR_REDIRECT_URI&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET"</pre>
+          </li>
+          <li><span>Use the access token to call the UserInfo endpoint and other protected resources.</span>
+            <pre class="code-snippet">curl "http://localhost:3000/api/userinfo" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"</pre>
+          </li>
+          <li><span>Refresh the access token when it expires using the refresh token.</span>
+            <pre class="code-snippet">curl -X POST "http://localhost:3000/api/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=refresh_token&refresh_token=YOUR_REFRESH_TOKEN&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET"</pre>
+          </li>
         </ol>
       </section>
 
@@ -67,5 +122,17 @@
       </section>
     <% } %>
   </div>
+  </main>
+  <%- include('partials/footer') %>
+  <script>
+    (async function() {
+      try {
+        var r = await fetch('/api/routes.json');
+        var d = await r.json();
+        var el = document.getElementById('stat-routes');
+        if (el && d.routes) el.textContent = d.routes.length;
+      } catch(e) {}
+    })();
+  </script>
 </body>
 </html>

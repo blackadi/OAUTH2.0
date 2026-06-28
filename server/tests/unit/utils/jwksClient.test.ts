@@ -19,11 +19,11 @@ vi.mock("jwk-to-pem", () => ({
 
 vi.mock("../../../src/utils/logger", () => ({
   default: Object.assign(
-    (msg: string) => {},
+    (_msg: string) => {},
     { error: vi.fn(), child: () => ({ error: vi.fn() }) }
   ),
   createCallableLogger: () => Object.assign(
-    (msg: string) => {},
+    (_msg: string) => {},
     { error: vi.fn(), child: () => ({ error: vi.fn() }) }
   ),
   baseLogger: {} as any,

@@ -54,10 +54,11 @@ export const tokenCreateController = {
           res.setHeader("Content-Type", "application/json");
           return res.status(403).send(result);
 
-        default:
+        default: {
           const log2 = req.logger || logger;
           log2.error("Unknown token action", { action: result.action });
           return res.status(500).send("Unknown token action");
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -78,10 +79,9 @@ export const tokenDeleteController = {
       if (!requireBasicAuth(req, res)) return;
       const accessTokenIdentifier = req.params.accessTokenIdentifier as string;
       const log = req.logger || logger;
-      log(
-        "TokenDeleteService: calling Authlete token management endpoint",
-        accessTokenIdentifier
-      );
+      log("TokenDeleteService: calling Authlete token management endpoint", {
+        accessTokenIdentifier,
+      });
 
       if (!accessTokenIdentifier) {
         return res.status(400).json({
@@ -92,7 +92,7 @@ export const tokenDeleteController = {
           },
         });
       }
-      const result = await tokenManagementService.delete(accessTokenIdentifier);
+      await tokenManagementService.delete(accessTokenIdentifier);
 
       return res
         .status(204)
@@ -137,10 +137,11 @@ export const tokenUpdateController = {
           res.setHeader("Content-Type", "application/json");
           return res.status(404).send(result);
 
-        default:
+        default: {
           const log3 = req.logger || logger;
           log3.error("Unknown token action", { action: result.action });
           return res.status(500).send("Unknown token action");
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -179,6 +180,7 @@ export const tokenRevokeToken = {
 
       switch (result.resultCode) {
         case "A135001":
+        case "A312001":
           res.setHeader("Content-Type", "application/json");
           return res.status(200).send(result);
 
@@ -241,12 +243,13 @@ export const tokenReissueIdToken = {
           res.setHeader("Content-Type", "application/json");
           return res.status(400).send(result);
 
-        default:
+        default: {
           const log5 = req.logger || logger;
           log5.error("Unknown reissue id token action", {
             action: result.action,
           });
           return res.status(500).send("Unknown reissue id token action");
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

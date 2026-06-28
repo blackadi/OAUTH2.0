@@ -2,10 +2,9 @@ import { NextFunction, Request, Response } from "express";
 import { PushedAuthorizationResponseAction } from "@authlete/typescript-sdk/models";
 import { ParService } from "../services/par.service";
 import { sendApiResponse } from "../utils/http-utils";
+import { validateOrThrow, parSchema } from "../utils/validation";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
-
-const parService = new ParService();
 
 function mapActionToStatus(action?: string): number {
   switch (action) {
@@ -19,20 +18,31 @@ function mapActionToStatus(action?: string): number {
   }
 }
 
-export const parController = {
-  handle: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await parService.process(req);
-      sendApiResponse(res, mapActionToStatus(result.action), result);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      const log = req.logger || logger;
-      log.error("PAR Response Error", { message: error.message });
-      const status = error instanceof AppError ? error.status : 500;
-      if (status >= 400 && status < 500) {
-        return res.status(status).json({ error: "invalid_request", error_description: error.message });
+export function createParControllers(parServiceInstance = new ParService()) {
+  return {
+    handle: async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        validateOrThrow(parSchema, req.body);
+        const result = await parServiceInstance.process(req);
+        sendApiResponse(res, mapActionToStatus(result.action), result);
+      } catch (err) {
+        if (err instanceof AppError && err.status === 400) {
+          const log = req.logger || logger;
+          log.error("PAR Validation Error", { message: err.message });
+          return res.status(400).json({ error: "invalid_request", error_description: err.message });
+        }
+        const error = err instanceof Error ? err : new Error(String(err));
+        const log = req.logger || logger;
+        log.error("PAR Response Error", { message: error.message });
+        const status = error instanceof AppError ? error.status : 500;
+        if (status >= 400 && status < 500) {
+          return res.status(status).json({ error: "invalid_request", error_description: error.message });
+        }
+        return next(error);
       }
-      return next(error);
-    }
-  },
-};
+    },
+  };
+}
+
+const defaultControllers = createParControllers();
+export const parController = defaultControllers;

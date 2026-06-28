@@ -25,12 +25,16 @@ import cibaRoutes from "./routes/ciba.routes";
 import parRoutes from "./routes/par.routes";
 import deviceRoutes from "./routes/device.routes";
 import healthRoutes from "./routes/health.routes";
+import metricsRoutes from "./routes/metrics.routes";
+import openapiRoutes from "./routes/openapi.routes";
 import routesList from "./routes/routes-list.routes";
 import DefaultRoutes from "./routes/default.routes";
 
 import { server } from "./config/app.config";
 import { errorHandler } from "./middleware/errorHandler";
 import { requestTimeout } from "./middleware/request-timeout";
+import { metricsMiddleware } from "./middleware/metrics";
+import { auditMiddleware } from "./middleware/audit-log";
 
 export function createApp() {
   const app = express();
@@ -47,7 +51,6 @@ export function createApp() {
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Referrer-Policy", "strict-no-referrer");
     res.setHeader(
       "Permissions-Policy",
@@ -93,6 +96,12 @@ export function createApp() {
       stream: { write: (msg: string) => logger(msg.trim()) },
     })
   );
+
+  // Prometheus metrics collection
+  app.use(metricsMiddleware);
+
+  // Structured audit logging
+  app.use(auditMiddleware);
   // Capture the raw request body for application/x-www-form-urlencoded
   app.use(
     bodyParser.urlencoded({
@@ -109,7 +118,7 @@ export function createApp() {
     })
   );
   app.use(bodyParser.json());
-  app.set("trust proxy", 1); // Trust Render's proxy
+  app.set("trust proxy", 1); // Trust first proxy (e.g. Render, Heroku, nginx)
   app.use(cookieParser());
   app.use(
     sessionMiddleware({
@@ -142,6 +151,10 @@ export function createApp() {
   app.use(routerURL, parRoutes);
   app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths)
   app.use(routerURL, healthRoutes);
+  app.use("/", metricsRoutes); // /metrics (standard Prometheus convention)
+  app.use(routerURL, metricsRoutes); // /api/metrics (consistency)
+  app.use(routerURL, healthRoutes);
+  app.use(routerURL, openapiRoutes); // /api/openapi.json
   app.use("/", DefaultRoutes); // For rendering the index page at root /*
 
   // Error Handler
