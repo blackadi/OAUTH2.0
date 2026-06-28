@@ -91,15 +91,21 @@ nodejs_eventloop_lag_seconds
 1. Open `http://localhost:3002`, log in as `admin` / `admin`
 2. Go to **Connections → Add data source → Prometheus**
 3. Set URL to `http://prometheus:9090`, click **Save & test**
-4. Go to **Dashboards → Import**, paste dashboard ID `14568` (Node.js Exporter), click **Load**
-5. Replace the data source with your Prometheus one
 
-### Quick Test Dashboard
+### Import Pre-built Dashboard
 
-Or create a simple panel manually:
-- **Query**: `rate(http_requests_total[5m])`
-- **Legend**: `{{route}} — {{method}} — {{status}}`
-- **Visualization**: Time series
+4. Go to **Dashboards → Import → Upload dashboard JSON file**
+5. Select `prometheus/dashboard.json` from the project root
+6. Select your Prometheus data source in the dropdown, click **Import**
+
+You'll see 8 panels: request rate, P95 latency, error rate, memory, event loop lag, heap, active handles, and GC duration.
+
+### Create a Panel Manually
+
+Or create a panel from scratch:
+- Click **Dashboards → New Dashboard → Add visualization**
+- Select the Prometheus data source
+- Paste a PromQL query from the [PromQL queries](#useful-promql-queries) section above
 
 ## Architecture Details
 
