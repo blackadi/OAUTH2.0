@@ -42,8 +42,14 @@ npm --prefix server install && npm --prefix client install
 npm --prefix client run build && npm --prefix server run build
 
 # Docker Redis (local dev)
-docker compose up -d
+docker compose up -d redis
 # Set REDIS_URL=redis://localhost:6379 in server/.env to use it
+
+# Docker Prometheus + Grafana (monitoring)
+docker compose up -d prometheus grafana
+# Prometheus UI at http://localhost:9090
+# Grafana at http://localhost:3002 (admin/admin)
+# See docs/MONITORING.md for usage
 ```
 
 ## Dev setup
