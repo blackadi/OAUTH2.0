@@ -168,7 +168,7 @@ flowchart LR
 
 | Middleware | File | Purpose |
 |-----------|------|---------|
-| Security Headers | `app.ts` (inline) | X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS (prod only) |
+| Security Headers | `app.ts` (inline) | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS (prod only) |
 | CORS | `app.ts` (inline) | Restricts origins to `ALLOWED_ORIGINS` env var |
 | Request ID | `app.ts` (inline) | UUID v1 on `req.id` |
 | Request Logger | `app.ts` (inline) | Winston child logger on `req.logger` |
@@ -179,10 +179,10 @@ flowchart LR
 | Cookie Parser | `app.ts` (inline) | `cookie-parser` |
 | Session | `src/middleware/session.ts` | `express-session`, 30-min expiry, in-memory or Redis |
 | CSRF | `src/middleware/csrf.ts` | 32-byte hex token on GET, validated on POST/PUT/PATCH/DELETE |
-| Request Timeout | `src/middleware/timeout.ts` | 30s abort on `/api/*` routes |
+| Request Timeout | `src/middleware/request-timeout.ts` | 30s abort on `/api/*` routes |
 | Rate Limiting | `src/middleware/rate-limit.ts` | Token (20/min), Auth (60/min), Login (5/min), General (60/min) |
-| Error Handler | `src/middleware/error-handler.ts` | Global catch-all, 500 for unhandled errors |
-| `requireBasicAuth` | `src/middleware/auth.ts` | Checks `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` for admin routes |
+| Error Handler | `src/middleware/errorHandler.ts` | Global catch-all, 500 for unhandled errors |
+| `requireBasicAuth` | Inline in controllers | Checks `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` for admin routes |
 
 ---
 
@@ -322,19 +322,18 @@ Location: `server/src/views/`
 
 ```
 src/views/
-├── login.ejs             # Login form (username, password)
-├── consent.ejs           # OAuth consent form (scopes, client name)
-├── logout.ejs            # RP-initiated logout confirmation
-├── device.ejs            # Device flow user code entry
-├── device-consent.ejs    # Device flow consent form
-├── error.ejs             # Generic error page
-├── backchannel-logout.ejs # Backchannel logout status page
-├── meta.hbs              # (reserved)
+├── consent.ejs              # OAuth consent form (scopes, client name, client logo)
+├── device-verification.ejs  # Device flow user code entry page
+├── error.ejs                # Generic error page (status, message, description)
+├── index.ejs                # Landing / documentation page
+├── login.ejs                # Login form (username, password)
+├── logout.ejs               # RP-initiated logout confirmation
+├── routes.ejs               # Route documentation table
 └── partials/
-    ├── head.ejs          # HTML <head> with CSRF meta tag
-    ├── header.ejs        # Common page header
-    ├── footer.ejs        # Common page footer
-    └── script.ejs        # Common scripts
+    ├── footer.ejs           # Common page footer
+    ├── head.ejs             # HTML <head> with CSRF meta tag, styles
+    ├── routes-table.ejs     # Shared route listing partial
+    └── scope-list.ejs       # Shared scope display partial
 ```
 
 Templates receive `res.locals.csrfToken` (set by CSRF middleware) and render it via `<input type="hidden" name="_csrf" value="<%= csrfToken %>">`.

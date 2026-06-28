@@ -67,13 +67,13 @@ npm --prefix client run dev    # SPA on :3001
 │   │   ├── app.ts             # Express factory (createApp)
 │   │   ├── config/            # Env loading, Authlete SDK config
 │   │   ├── controllers/       # 27 request handlers
-│   │   ├── services/          # 20 business logic modules
-│   │   ├── routes/            # 18 Express Router modules
+│   │   ├── services/          # 22 business logic modules
+│   │   ├── routes/            # 21 Express Router modules
 │   │   ├── middleware/        # 7 middleware (CSRF, audit, metrics, etc.)
 │   │   ├── types/             # TypeScript augmentations
 │   │   ├── utils/             # Logger, JWT, validation
-│   │   └── views/             # 8 EJS templates + 4 partials
-│   ├── tests/                 # 38 test files
+│   │   └── views/             # 7 EJS templates + 4 partials
+│   ├── tests/                 # 39 test files
 │   └── package.json
 ├── client/                    # React debugging SPA
 │   ├── src/
@@ -85,7 +85,7 @@ npm --prefix client run dev    # SPA on :3001
 │   │   ├── data/              # Operation documentation content
 │   │   ├── pages/             # CallbackPage
 │   │   └── styles/            # Tailwind v4 globals.css
-│   ├── test/                  # 17 test files
+│   └── src/test/              # 16 test files + setup
 │   └── package.json
 ├── docs/                      # You are here
 ├── AGENTS.md                  # AI agent instructions

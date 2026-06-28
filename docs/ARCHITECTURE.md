@@ -59,9 +59,9 @@ flowchart TB
     subgraph Express["Express Server (:3000)"]
         direction TB
         MW["Middleware Stack<br/>7 middleware layers"]
-        API["API Routes<br/>18 route modules"]
+        API["API Routes<br/>21 route modules"]
         CT["Controllers<br/>27 request handlers"]
-        SV["Services<br/>20 business logic modules"]
+        SV["Services<br/>22 business logic modules"]
         SDK["Authlete SDK<br/>@authlete/typescript-sdk"]
         VW["View Engine<br/>EJS templates"]
     end
@@ -155,7 +155,7 @@ Middleware executes top-to-bottom. Key behaviors:
 | # | Middleware | Side Effects | Config |
 |--|-----------|--------------|--------|
 | 1 | Static | Serves files from `public/` | `NODE_ENV` for path resolution |
-| 2 | Security Headers | Sets 5 response headers | HSTS only in `production` |
+| 2 | Security Headers | Sets 4 headers always (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) + HSTS in production |
 | 3 | CORS | `Access-Control-*` headers | `ALLOWED_ORIGINS` env var |
 | 4 | Request ID | Adds `req.id` (UUID v1) | — |
 | 5 | Logger | Creates Winston child with `reqId` | `LOG_LEVEL` env var |
@@ -164,9 +164,10 @@ Middleware executes top-to-bottom. Key behaviors:
 | 8 | Audit | Writes entry on `res.finish` | Daily rotate, 90-day retention |
 | 9 | Body Parsers | `req.body` + `req.rawBody` for form data | — |
 | 10 | Cookie Parser | `req.cookies` | — |
-| 11 | Session | `req.session` (in-memory or Redis) | `SESSION_SECRET`, `REDIS_URL` |
-| 12 | Timeout | 30s abort on `/api/*` | — |
-| 13 | Routes | Matches path → controller → service → Authlete | See [API Reference](./API.md) |
+| 11 | Trust Proxy | `app.set("trust proxy", 1)` — trusts first proxy (nginx/Render) | `NODE_ENV` |
+| 12 | Session | `req.session` (in-memory or Redis) | `SESSION_SECRET`, `REDIS_URL` |
+| 13 | Timeout | 30s abort on `/api/*` | — |
+| 14 | Routes | Matches path → controller → service → Authlete | See [API Reference](./API.md) |
 
 ---
 
@@ -271,7 +272,7 @@ flowchart TB
     subgraph Prod["Production Environment"]
         NGINX["Reverse Proxy<br/>(nginx / Render)"]
         EXPRESS["Node Express<br/>dist/server.js"]
-        STATIC["Static Files<br/>dist/client/"]
+        STATIC["Static Files<br/>client/dist/"]
         
         NGINX -->|"/api/*"| EXPRESS
         NGINX -->|"/*"| STATIC
@@ -301,7 +302,7 @@ flowchart TB
 | Aspect | Development | Production |
 |--------|-------------|------------|
 | Server runner | `ts-node-dev` (auto-reload) | `node dist/server.js` (compiled) |
-| Client serving | Vite dev server (`:3001`) | Static files from `dist/client/` |
+| Client serving | Vite dev server (`:3001`) | Static files from `client/dist/` |
 | API proxy | Vite proxies `/api/*` to `:3000` | Reverse proxy routes `/api/*` |
 | Session store | In-memory | Redis recommended (`REDIS_URL`) |
 | HSTS | Disabled | Enabled (1 year) |

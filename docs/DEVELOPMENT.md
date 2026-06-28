@@ -40,8 +40,8 @@ npm --prefix client run dev   # SPA on :3001 (Vite proxies /api → :3000)
 
 Get these from [Authlete Console](https://console.authlete.com/):
 - `AUTHLETE_BEARER_TOKEN` — API access token
-- `AUTHLETE_SERVICE_URL` — Service base URL
-- `AUTHLETE_SERVICE_ID` — Service ID (extracted from service URL)
+- `AUTHLETE_BASE_URL` — Authlete API base URL
+- `AUTHLETE_SERVICE_ID` — Authlete service ID
 
 ---
 
@@ -59,12 +59,12 @@ Get these from [Authlete Console](https://console.authlete.com/):
 | `AUTHLETE_SERVICE_ID` | **Yes** | — | Authlete service ID |
 | `REDIS_URL` | No | — | Redis connection string (e.g., `redis://localhost:6379`) |
 | `ALLOWED_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | CORS allowed origins |
-| `AUTH_USERS` | No | `admin:password` | Demo users: `subject:username:password:name;...` |
+| `AUTH_USERS` | No | `admin:admin:password:Administrator` | Demo users: `subject:username:password:name;...` |
 | `MGMT_CLIENT_ID` | No | — | Admin API Basic auth username |
 | `MGMT_CLIENT_SECRET` | No | — | Admin API Basic auth password |
 | `JWKS_URI` | No | — | JWKS URI for backchannel logout token verification |
 | `LOGOUT_REDIRECT_URI` | No | — | Valid post-logout redirect URI |
-| `LOG_LEVEL` | No | `info` | Winston log level |
+| `LOG_LEVEL` | No | `debug` (dev) / `info` (prod) | Winston log level |
 | `MORGAN_FORMAT` | No | `combined` | Morgan access log format |
 
 ### Client (`client/.env`)
@@ -75,7 +75,11 @@ Get these from [Authlete Console](https://console.authlete.com/):
 | `VITE_CLIENT_SECRET` | No | — | OAuth client secret for testing |
 | `VITE_REDIRECT_URI` | No | `http://localhost:3001/callback` | Redirect URI for auth flows |
 | `VITE_API_BASE_URL` | No | `http://localhost:3000` | Backend API URL |
-| `VITE_HEALTH_ENDPOINT` | No | `/api/health` | Health check endpoint path |
+| `VITE_PROD_API_BASE_URL` | No | — | Backend API URL in production |
+| `VITE_PROD_REDIRECT_URI` | No | — | Redirect URI in production |
+| `VITE_SCOPES` | No | `openid profile email` | Default scope list for tests |
+| `VITE_DEV_CLIENT_PORT` | No | `3001` | Vite dev server port |
+| `VITE_DEV_CLIENT_HOST` | No | `localhost` | Vite dev server host |
 
 ---
 
@@ -143,7 +147,7 @@ Set only if targeting Brazil's API ecosystem:
 Ordered as applied in `app.ts`:
 
 1. Static file serving (`public/`)
-2. Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS in prod)
+2. Security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS in prod)
 3. CORS (`ALLOWED_ORIGINS`)
 4. Request ID (`req.id` — UUID v1)
 5. Per-request logger (`req.logger` — Winston child)
@@ -152,10 +156,10 @@ Ordered as applied in `app.ts`:
 8. Audit log (Winston daily-rotate at `logs/audit-*.log`, 90-day retention)
 9. Body parsers (urlencoded + json; captures `req.rawBody`)
 10. Cookie parser
-11. Session (30-min expiry, in-memory or Redis)
-12. CSRF (token generated on GET, validated on POST/PUT/PATCH/DELETE)
-13. CSRF token in `res.locals.csrfToken` for EJS templates
-14. Rate limiters (applied per route, not globally)
+11. Trust proxy (`app.set("trust proxy", 1)`)
+12. Session (30-min expiry, in-memory or Redis)
+13. Rate limiters (applied per route, not globally)
+14. CSRF (applied per route on session/device browser routes)
 15. Request timeout (30s on `/api/*`)
 16. Routes
 
@@ -165,10 +169,10 @@ Ordered as applied in `app.ts`:
 
 | Limiter | Rate | Applied To | Skip Condition |
 |---------|------|------------|----------------|
-| `tokenLimiter` | 20/min | `POST /api/token` | Basic auth present |
-| `authLimiter` | 60/min | `/api/*` | — |
+| `tokenLimiter` | 20/min | `POST /api/token` | Skipped when Basic auth present |
+| `authLimiter` | 60/min | `GET /api/authorization` | — |
 | `loginLimiter` | 5/min | `POST /api/session/login` | — |
-| `generalLimiter` | 60/min | All session routes | — |
+| `generalLimiter` | 60/min | Session, DCR, CIBA, PAR, device browser routes | — |
 
 Rate limiting uses `express-rate-limit` with in-memory store.
 

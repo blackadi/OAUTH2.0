@@ -21,7 +21,7 @@ flowchart TB
     end
     
     subgraph Unit["Unit (223 tests)"]
-        SERVICES["Services<br/>20 files, 78 tests"]
+        SERVICES["Services<br/>21 files, 78 tests"]
         CONTROLLERS["Controllers<br/>6 files, 60 tests"]
         MIDDLEWARE["Middleware<br/>4 files, 28 tests"]
         UTILS["Utils<br/>4 files, 22 tests"]
@@ -94,7 +94,7 @@ flowchart TB
 
 ## Client Tests
 
-**17 test files** across 5 groups:
+**16 test files** (+ 1 setup) across 4 groups:
 
 | Group | Directory | Content |
 |-------|-----------|---------|
@@ -209,7 +209,7 @@ npm --prefix server run test:integration # 23 tests
 npm --prefix server run test:e2e         # 100 tests
 
 # Client tests
-npm --prefix client run test             # 17 test files
+npm --prefix client run test             # 16 test files
 
 # Lint & typecheck (server)
 npm --prefix server run lint             # ESLint flat config, 0 errors

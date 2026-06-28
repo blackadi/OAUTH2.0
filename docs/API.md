@@ -68,11 +68,11 @@ RFC 7009 token revocation.
 
 ## OIDC & Discovery
 
-### `GET /.well-known/openid-configuration`
-OIDC Discovery document (RFC 8414). No `/api` prefix.
+### `GET /api/.well-known/openid-configuration`
+OIDC Discovery document (RFC 8414). Mounted under `/api` prefix.
 
-### `GET /.well-known/jwks.json`
-JSON Web Key Set (RFC 7517). No `/api` prefix.
+### `GET /api/.well-known/jwks.json`
+JSON Web Key Set (RFC 7517). Mounted under `/api` prefix.
 
 ---
 
@@ -147,7 +147,7 @@ Verify user code.
 ### `POST /api/device/complete`
 Complete device authentication.
 
-**Body:** `userCode`, `decision` (`approve`/`deny`)
+**Body:** `userCode`, `result` (`AUTHORIZED`/`ACCESS_DENIED`), `subject`
 
 **Response:** 200 (SUCCESS), 403 (ACCESS_DENIED), 404 (USER_CODE_NOT_EXIST), 400 (EXPIRED)
 
@@ -295,7 +295,7 @@ Aggregate health (server + Redis + Authlete).
 ### `GET /api/metrics`
 Prometheus metrics in text format. Histograms for HTTP duration, counters for total requests. Labels: `method`, `route`, `status`.
 
-### `GET /api/metrics` (also at root `/metrics`)
+### `GET /metrics` (also at `/api/metrics`)
 Same metrics endpoint, registered at both paths.
 
 ---

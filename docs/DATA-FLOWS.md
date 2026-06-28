@@ -25,7 +25,7 @@ sequenceDiagram
     participant AL as Authlete Cloud
     
     Note over U,AL: Step 1 — Authorization Request
-    U->>AS: GET /api/authorize?response_type=code&client_id=...&scope=...
+    U->>AS: GET /api/authorization?response_type=code&client_id=...&scope=...
     AS->>AL: /auth/authorization API (SDK)
     AL-->>AS: action=INTERACTION, client info, scopes
     AS->>U: Redirect to /api/session/login (302)
@@ -56,7 +56,7 @@ sequenceDiagram
 
 | Aspect | Detail |
 |--------|--------|
-| Authorization entry | Accepts both `GET` (query params) and `POST` (body) |
+| Authorization entry | Accepts `GET` with query params |
 | Authentication | Server-side form against `AUTH_USERS` env var (defaults to `admin:password`) |
 | Session storage | Authorization context saved in `req.session.authorization` between redirects |
 | Consent persistence | `consent-store.service.ts` stores `{clientId}:{subject}` → scopes with 24h TTL |
@@ -149,14 +149,13 @@ sequenceDiagram
     participant AS as Auth Server
     participant AL as Authlete
     
-    U->>AS: GET /api/logout?post_logout_redirect_uri=...&id_token_hint=...
-    AS->>AS: Validate post_logout_redirect_uri against ALLOWED_ORIGINS
+    U->>AS: GET /api/logout?post_logout_redirect_uri=...&id_token_hint=...&client_id=...&state=...&backchannel=...
+    AS->>AS: Validate post_logout_redirect_uri against ALLOWED_ORIGINS, LOGOUT_REDIRECT_URI, and localhost
     
     alt Valid redirect
         AS->>U: Show logout confirmation page (EJS)
         U->>AS: POST /api/logout (confirmed)
         AS->>AS: Destroy session
-        AS->>AL: /auth/logout API (SDK)
         AS->>U: 302 Redirect to post_logout_redirect_uri
     else Invalid redirect
         AS-->>U: 400 "Invalid post_logout_redirect_uri"
@@ -392,7 +391,7 @@ sequenceDiagram
     
     Note over C,AL: Push Authorization Request
     C->>AS: POST /api/par (parameters, clientId, clientSecret)
-    AS->>AL: /pushedAuthorization/register (SDK)
+    AS->>AL: pushedAuthorization.create (SDK)
     AL-->>AS: action=CREATED, request_uri, expires_in
     
     Note over C,AL: Use Request URI
