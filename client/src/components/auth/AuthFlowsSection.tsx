@@ -60,6 +60,7 @@ const AuthFlowsSection: React.FC = () => {
   const { tokenSet, setTokenSet } = useToken();
   const [grantType, setGrantType] = useState<GrantType>('authorization_code');
   const { loading, result, error, call } = useAsyncCall<TokenResponse>();
+  const displayResult = result || tokenSet;
 
   const [acId, setAcId] = useState(CLIENT_ID);
   const [acRedirectUri, setAcRedirectUri] = useState(getRedirectUri());
@@ -179,7 +180,7 @@ const AuthFlowsSection: React.FC = () => {
 
         <FlowDiagram
           steps={flowSteps[grantType]}
-          currentStep={result ? 'token' : undefined}
+          currentStep={displayResult ? 'token' : undefined}
           className="py-2"
         />
 
@@ -193,7 +194,7 @@ const AuthFlowsSection: React.FC = () => {
 
         <SplitPane
           leftLabel="Configuration"
-          rightLabel={result ? 'Response' : ''}
+          rightLabel={displayResult ? 'Response' : ''}
           left={
             <div className="space-y-4">
               {grantType === 'authorization_code' && (
@@ -267,8 +268,8 @@ const AuthFlowsSection: React.FC = () => {
             </div>
           }
           right={
-            result ? (
-              <JsonBlock data={result} label="Token Response" />
+            displayResult ? (
+              <JsonBlock data={displayResult} label="Token Response" />
             ) : (
               <div className="flex items-center justify-center h-full min-h-[120px] rounded-lg border border-dashed border-border bg-muted/20">
                 <p className="text-xs text-muted-foreground">Run a flow to see the response here</p>
