@@ -5,17 +5,31 @@ Prometheus + Grafana stack for collecting and visualizing metrics from the autho
 ## Architecture
 
 ```
-┌─────────────────┐     scrape /api/metrics     ┌──────────────┐      query      ┌────────┐
-│  Express Server  │ ◄────────────────────────── │  Prometheus   │ ◄────────────── │ Grafana │
-│  (port :3000)    │                             │  (port :9090) │                │ (:3002) │
-└─────────────────┘                             └──────────────┘                └────────┘
+┌─────────────────┐     scrape /api/metrics     ┌──────────────┐
+│  Express Server  │ ◄────────────────────────── │  Prometheus   │
+│  (port :3000)    │     localhost:3000          │  Network: host │
+└─────────────────┘                             │  (port :9090)  │
+                                                  └──────┬───────┘
+                                                         │ query
+                                                  ┌──────▼───────┐
+                                                  │   Grafana    │
+                                                  │  (:3002)     │
+                                                  │ extra_hosts  │
+                                                  └──────────────┘
 ```
+
+**Network setup:**
+- Prometheus uses `network_mode: "host"` — it sees your machine's `localhost` directly, so scraping `localhost:3000` works. The clickable links in the Prometheus targets page also work in your browser.
+- Grafana uses bridge networking with port mapping. It reaches Prometheus via `host.docker.internal:9090` (configured when adding the Prometheus data source in Grafana).
 
 ## Quick Start
 
 ```bash
 # Start Prometheus + Grafana alongside the server
-docker compose -f docker-compose.yml up -d prometheus grafana
+docker compose up -d prometheus grafana
+
+# Ensure the Express server is running
+npm --prefix server run dev
 ```
 
 Verify:
@@ -23,6 +37,8 @@ Verify:
 ```bash
 # Prometheus targets page (check UP status)
 open http://localhost:9090/targets
+# Targets should show "UP" for localhost:3000
+# If you click the endpoint link, it will open in your browser correctly
 
 # Prometheus expression browser
 open http://localhost:9090/graph
@@ -31,6 +47,11 @@ open http://localhost:9090/graph
 open http://localhost:3002
 # Default: admin / admin
 ```
+
+> **Note:** If you see "Server Not Found" when clicking an endpoint link in the
+> Prometheus targets page, it means you are using the old `host.docker.internal`
+> setup. Update to the `network_mode: "host"` configuration in `docker-compose.yml`
+> and restart: `docker compose up -d prometheus`.
 
 ## What Gets Collected
 
@@ -81,7 +102,7 @@ nodejs_eventloop_lag_seconds
 
 1. Open `http://localhost:3002`, log in as `admin` / `admin`
 2. Go to **Connections → Add data source → Prometheus**
-3. Set URL to `http://prometheus:9090`, click **Save & test**
+3. Set URL to `http://host.docker.internal:9090`, click **Save & test**
 4. Go to **Dashboards → Import**, paste dashboard ID `14568` (Node.js Exporter), click **Load**
 5. Replace the data source with your Prometheus one
 
@@ -104,6 +125,6 @@ Or create a simple panel manually:
 | Symptom | Fix |
 |---------|-----|
 | Prometheus target shows `DOWN` | Ensure the Express server is running on `:3000` |
-| `host.docker.internal` not resolving | Linux only: add `--add-host host.docker.internal:host-gateway` to docker run, or set `network_mode: "host"` |
-| Grafana can't connect to Prometheus | Both are on the same Docker network; use `http://prometheus:9090` as URL |
+| Grafana can't connect to Prometheus | Use `http://host.docker.internal:9090` as the Prometheus URL in Grafana (Prometheus uses host networking, so Grafana reaches it via the host's IP) |
 | No metrics shown | Hit any endpoint first (`curl http://localhost:3000/api/health`) so the histogram has data |
+| Prometheus can't start (port in use) | The `network_mode: "host"` binds Prometheus directly to host ports. If port 9090 is taken, stop the other process or change Prometheus's `--web.listen-address` flag |

@@ -16,13 +16,10 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: authlete-prometheus
-    ports:
-      - "9090:9090"
+    network_mode: "host"
     volumes:
       - ./prometheus:/etc/prometheus
       - prometheus-data:/prometheus
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   grafana:
@@ -32,6 +29,8 @@ services:
       - "3002:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
 volumes:
