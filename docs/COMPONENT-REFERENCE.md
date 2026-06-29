@@ -125,12 +125,14 @@ flowchart LR
         DCR["dcr.controller.ts"]
         PC["par.controller.ts"]
         GMC["grant-management.controller.ts"]
+        VC["vci.controller.ts"]
     end
     
     subgraph Admin["Admin"]
         CMC["client.management.controller.ts"]
         TMC["token.management.controller.ts"]
         BCLC["backchannel-logout.controller.ts"]
+        HC["hsk.controller.ts"]
     end
     
     subgraph Infra["Infrastructure"]
@@ -160,6 +162,8 @@ flowchart LR
 | `backchannel-logout` | `/api/backchannel_logout/{issue,deliver,deliver-all}` | Admin Basic auth, raw `fetch()` to Authlete |
 | `device` | `/api/device/*` | Device authorization, verification, completion |
 | `device-session` | `GET/POST /device` | Browser-based user code entry and consent |
+| `hsk` | `/api/hsk/*` | Hardware Security Keys CRUD via Authlete SDK |
+| `vci` | `/api/vci/*` | Verifiable Credential Issuance (OID4VCI): discovery (§12.2), offers (admin), credential endpoint (§8), deferred endpoint (§9) |
 | `health` | `/api/health`, `/api/health/all`, `/api/health/authlete` | Server liveness, aggregate, Authlete-specific |
 
 ---
@@ -209,7 +213,7 @@ flowchart TB
     SECTION_PANEL --> HELP_POPOVER["HelpPopover<br/>Contextual help tooltips"]
     
     SECTION_PANEL --- AUTH_SECTION["AuthFlowsSection<br/>All grant types"]
-    SECTION_PANEL --- OIDC_SECTIONS["8 OIDC Sections<br/>DCR, CIBA, PAR, Device,<br/>Logout, Discovery,<br/>Backchannel, TokenOps"]
+    SECTION_PANEL --- OIDC_SECTIONS["9 OIDC Sections<br/>DCR, CIBA, PAR, Device,<br/>Logout, Discovery,<br/>Backchannel, TokenOps, VCI"]
     SECTION_PANEL --- ADMIN_SECTIONS["4 Admin Sections<br/>Token Mgmt, Client Mgmt,<br/>Grant Mgmt, Health"]
     
     subgraph UI_Components["UI Primitives"]
@@ -252,6 +256,7 @@ flowchart TB
 | `DiscoverySection.tsx` | OIDC Discovery |
 | `BackchannelLogoutSection.tsx` | Backchannel Logout |
 | `TokenOpsSection.tsx` | Token Operations |
+| `VciSection.tsx` | Verifiable Credential Issuance (OID4VCI) |
 
 #### Admin Components (`components/admin/`)
 | Component | Section |
@@ -311,6 +316,7 @@ All exported from `services/index.ts`:
 | `grantService` | `grant.service.ts` | Grant management |
 | `backchannelLogoutService` | `backchannel-logout.service.ts` | Backchannel logout |
 | `healthService` | `health.service.ts` | Health checks |
+| `vciService` | `vci.service.ts` | Verifiable Credential Issuance (8 operations: metadata, jwtissuer, jwks, well-known, offer create/info, credential issue, batch issue, deferred issue) |
 
 Shared HTTP utilities in `services/http.ts`.
 

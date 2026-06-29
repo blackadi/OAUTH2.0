@@ -68,6 +68,19 @@ export const DEVICE_AUTHORIZATION_ENDPOINT = `${API_BASE_URL}/api/device/authori
 export const DEVICE_VERIFICATION_ENDPOINT = `${API_BASE_URL}/api/device/verification`;
 export const DEVICE_COMPLETE_ENDPOINT = `${API_BASE_URL}/api/device/complete`;
 
+export const FEDERATION_CONFIGURATION_ENDPOINT = `${API_BASE_URL}/api/federation/configuration`;
+export const FEDERATION_REGISTRATION_ENDPOINT = `${API_BASE_URL}/api/federation/registration`;
+
+export const VCI_METADATA_ENDPOINT = `${API_BASE_URL}/api/vci/metadata`;
+export const VCI_JWTISSUER_ENDPOINT = `${API_BASE_URL}/api/vci/jwtissuer`;
+export const VCI_JWKS_ENDPOINT = `${API_BASE_URL}/api/vci/jwks`;
+export const VCI_WELLKNOWN_ENDPOINT = `${API_BASE_URL}/api/vci/well-known`;
+export const VCI_OFFER_CREATE_ENDPOINT = `${API_BASE_URL}/api/vci/offer/create`;
+export const VCI_OFFER_INFO_ENDPOINT = `${API_BASE_URL}/api/vci/offer/info`;
+export const VCI_CREDENTIAL_ISSUE_ENDPOINT = `${API_BASE_URL}/api/vci/credential/issue`;
+export const VCI_CREDENTIAL_BATCH_ENDPOINT = `${API_BASE_URL}/api/vci/credential/batch`;
+export const VCI_DEFERRED_ISSUE_ENDPOINT = `${API_BASE_URL}/api/vci/deferred/issue`;
+
 export const HEALTH_ENDPOINT = `${API_BASE_URL}/api/health`;
 export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;
 

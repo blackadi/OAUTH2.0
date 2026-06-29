@@ -541,6 +541,90 @@ const docs: Record<string, Record<string, OpDoc>> = {
       tips: 'Use the keys from this endpoint to validate ID token signatures client-side. The kid (key ID) in the JWT header tells you which key to use.',
     },
   },
+  'vci': {
+    'metadata': {
+      title: 'Discovery — Credential Issuer Metadata',
+      description: 'Fetches the Credential Issuer metadata document (OID4VCI §12.2). This tells a wallet app what credential types the server supports and where to request them. The response includes credential_issuer (the server\'s identifier), credential_endpoint (where to issue), and credential_configurations_supported (the list of credential types like "VerifiedEmployee").',
+      params: [],
+      returns: 'JSON with credential_issuer, credential_endpoint, credential_configurations_supported, and other issuer metadata.',
+      tips: 'Always start here. It tells you everything the server can do. The credential_configurations_supported field lists the credential types you can request.',
+    },
+    'jwtissuer': {
+      title: 'Discovery — JWT VC Issuer Metadata',
+      description: 'Fetches the JWT VC Issuer metadata (equivalent to /.well-known/jwt-vc-issuer). Returns the issuer identifier and the location of the public keys used to sign verifiable credentials. This is how a wallet learns to trust the credentials issued by this server.',
+      params: [],
+      returns: 'JSON with iss (issuer identifier) and jwks_uri (URI to fetch public keys).',
+      tips: 'Use this to find the JWKS URI if needed. The issuer identifier here should match the iss claim in issued credentials.',
+    },
+    'jwks': {
+      title: 'Discovery — JWKS (Public Keys)',
+      description: 'Fetches the JSON Web Key Set (JWKS) containing the public keys used to sign verifiable credentials. A wallet uses these keys to verify the cryptographic signature on the credentials issued by this server.',
+      params: [],
+      returns: 'JWKS JSON object with a keys array. Each key includes kty, kid, use, alg, and the key parameters (n/e for RSA, x/y for EC).',
+      tips: 'The kid (key ID) in the credential JWT header tells you which key to use for verification. Share this endpoint with relying parties that need to validate credentials.',
+    },
+    'wellknown': {
+      title: 'Discovery — Well-Known Credential Issuer (OID4VCI §12.2)',
+      description: 'Fetches the credential issuer metadata from the OID4VCI-specified well-known path. This is identical to the Metadata endpoint but served at the spec-mandated URL. Wallets use this path for automatic discovery.',
+      params: [],
+      returns: 'Same as Metadata — JSON with credential_issuer, credential_endpoint, credential_configurations_supported, and other metadata.',
+      tips: 'This is the path wallets use for auto-discovery. The Metadata tab returns the same data.',
+    },
+    'offer-create': {
+      title: 'Offers — Create Credential Offer (Admin)',
+      description: 'Creates a credential offer on the server. Offers are an admin-side concept (not part of OID4VCI) that grant credential eligibility before the wallet flow begins. The offer contains the credential configuration IDs the user is eligible for (e.g., "VerifiedEmployee"), and optionally the user subject, duration, and context. Requires admin Basic auth (MGMT_CLIENT_ID/MGMT_CLIENT_SECRET).',
+      params: [
+        { name: 'MGMT Client ID', desc: 'The admin client ID for Basic authentication.' },
+        { name: 'MGMT Client Secret', desc: 'The admin client secret for Basic authentication.' },
+        { name: 'Credential Configuration IDs', desc: 'JSON array of credential type IDs the offer covers (e.g. ["VerifiedEmployee"]). These must match the credential_configurations_supported in the metadata.' },
+        { name: 'Subject', desc: 'Optional end-user identifier the offer is for. If set, only this user can claim the credential.' },
+        { name: 'Duration', desc: 'Optional offer lifetime in seconds. Defaults to the service setting (usually 3600 = 1 hour).' },
+      ],
+      returns: 'JSON with identifier (the offer ID), credentialConfigurationIds, subject, duration, expiresAt, and createdAt.',
+      tips: 'Save the offer identifier — you need it to look up offer info later. Offers expire after the duration elapses. If no subject is set, any authenticated user can claim the offer.',
+    },
+    'offer-info': {
+      title: 'Offers — Get Offer Info (Admin)',
+      description: 'Retrieves information about a credential offer by its identifier. Shows the offer details including what credential types it covers, who it was issued to, and whether it is still valid. Requires admin Basic auth (MGMT_CLIENT_ID/MGMT_CLIENT_SECRET).',
+      params: [
+        { name: 'MGMT Client ID', desc: 'The admin client ID for Basic authentication.' },
+        { name: 'MGMT Client Secret', desc: 'The admin client secret for Basic authentication.' },
+        { name: 'Offer Identifier', desc: 'The offer ID returned from Create Offer.' },
+      ],
+      returns: 'JSON with identifier, credentialConfigurationIds, subject, duration, expiresAt, createdAt, and other offer details.',
+      tips: 'Use this to verify an offer is still valid before attempting credential issuance. Expired offers return 404.',
+    },
+    'cred-issue': {
+      title: 'Credential — Issue Verifiable Credential',
+      description: 'Requests a verifiable credential from the OID4VCI Credential Endpoint (§8). This is the core operation — it takes an access token (obtained through an OAuth authorization flow) and a credential order, and returns the signed credential. The access token must have been granted for the requested credential configuration(s). If the credential takes time to prepare, the server may return 202 ACCEPTED with a transaction_id — use the Deferred operation to retrieve it.',
+      params: [
+        { name: 'Access Token', desc: 'An access token obtained through an OAuth flow (e.g., authorization code or client credentials). This token must have scopes that cover the credential you are requesting.' },
+        { name: 'Order (JSON)', desc: 'Optional JSON with credential request details: requestIdentifier (your ID for this request), credentialPayload (specific format/payload options), and other parameters per OID4VCI §8.' },
+      ],
+      returns: 'JSON with format, credential (the signed credential JWT or SD-JWT), and optionally transaction_id (if deferred — use the Deferred endpoint). On 202 ACCEPTED, the response includes a transaction_id and a notification_id.',
+      tips: 'How to get an access token for VCI: (1) Go to Auth Flows > Authorization Code and log in as admin/password with scopes like openid, then copy the access_token from the vault. (2) Paste it in the Access Token field here and click Issue. If the server returns 202 Accepted, copy the transaction_id and use the Deferred tab to poll for completion.',
+    },
+    'cred-batch': {
+      title: 'Credential — Batch Credential Endpoint (OID4VCI §10)',
+      description: 'Requests multiple verifiable credentials in a single API call (OID4VCI §10). Takes an access token and an array of credential_requests, each specifying a format and credential type. For SD-JWT VC use format "vc+sd-jwt" with vct; for mdoc/mDL use format "mso_mdoc" with doctype. On success returns credential_responses array with each credential. The server accepts both OID4VCI format (credential_requests) and Authlete internal format (orders with requestIdentifier + credentialPayload).',
+      params: [
+        { name: 'Access Token', desc: 'An access token obtained through an OAuth flow. This token must have scopes that cover ALL requested credential types.' },
+        { name: 'credential_requests (JSON array)', desc: 'OID4VCI §10 format — array of credential request objects. Each object has: format ("vc+sd-jwt" or "mso_mdoc"), and either vct (for SD-JWT VC) or doctype and claims (for mdoc/mDL).' },
+        { name: 'orders (JSON array, alternative)', desc: 'Authlete internal CredentialIssuanceOrder format — each has requestIdentifier (string) and credentialPayload (string, JSON-stringified request).' },
+      ],
+      returns: 'JSON with credential_responses array. Each response has format and credential (the signed credential). May also include c_nonce and c_nonce_expires_in.',
+      tips: 'The order of credential_responses matches the order of credential_requests. Use the Batch endpoint to get both an SD-JWT VC and an mdoc/mDL in one call — similar to the demo in the OID4VCI article by Authlete\'s founder. If you already have Authlete CredentialIssuanceOrder objects, send them as the "orders" field directly.',
+    },
+    'deferred-issue': {
+      title: 'Credential — Deferred Credential Endpoint (OID4VCI §9)',
+      description: 'Retrieves a credential that was issued asynchronously (OID4VCI §9). Called when the Credential Endpoint returned a 202 ACCEPTED response with a transaction_id. The server may have needed time to prepare the credential — poll this endpoint until it returns the actual credential. The order JSON should include the transaction_id from the credential endpoint response.',
+      params: [
+        { name: 'Order (JSON)', desc: 'JSON with transaction_id (from the credential endpoint 202 response), and optionally requestIdentifier.' },
+      ],
+      returns: 'JSON with format and credential. On success, returns the signed credential JWT or SD-JWT.',
+      tips: 'The interval between polling attempts depends on the server configuration. If the server returns another 202, keep polling with the same transaction_id.',
+    },
+  },
   'health': {
     'health': {
       title: 'Server Health Check',

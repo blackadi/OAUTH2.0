@@ -23,7 +23,10 @@ import backchannelLogoutRoutes from "./routes/backchannel-logout.routes";
 import dcrRoutes from "./routes/dcr.routes";
 import cibaRoutes from "./routes/ciba.routes";
 import parRoutes from "./routes/par.routes";
+import federationRoutes, { rootRouter as federationRootRouter } from "./routes/federation.routes";
 import deviceRoutes from "./routes/device.routes";
+import hskRoutes from "./routes/hsk.routes";
+import vciRoutes, { wellKnownRouter as vciWellKnownRouter } from "./routes/vci.routes";
 import healthRoutes from "./routes/health.routes";
 import metricsRoutes from "./routes/metrics.routes";
 import openapiRoutes from "./routes/openapi.routes";
@@ -149,7 +152,12 @@ export function createApp() {
   app.use(routerURL, dcrRoutes);
   app.use(routerURL, cibaRoutes);
   app.use(routerURL, parRoutes);
-  app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths)
+  app.use(routerURL, federationRoutes);
+app.use("/", vciWellKnownRouter); // .well-known/openid-credential-issuer at root
+app.use("/", federationRootRouter); // .well-known/openid-federation at root
+app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths)
+  app.use(routerURL, vciRoutes);
+  app.use(routerURL, hskRoutes);
   app.use(routerURL, healthRoutes);
   app.use("/", metricsRoutes); // /metrics (standard Prometheus convention)
   app.use(routerURL, metricsRoutes); // /api/metrics (consistency)

@@ -6,8 +6,8 @@ import { TokenVault } from '@/components/ui/TokenVault';
 import CallbackPage from './pages/CallbackPage';
 import {
   KeyRound, Shield, LogOut,
-  UserPlus, Bell, Send, Smartphone, BellOff, Compass,
-  Settings, Users, FileCheck, HeartPulse,
+  UserPlus, Bell, Send, Smartphone, BellOff, Compass, Globe,
+  Settings, Users, FileCheck, HeartPulse, BadgeCheck,
 } from 'lucide-react';
 
 const AuthFlowsSection = lazy(() => import('@/components/auth/AuthFlowsSection'));
@@ -22,6 +22,8 @@ const DeviceSection = lazy(() => import('@/components/oidc/DeviceSection').then(
 const BackchannelLogoutSection = lazy(() => import('@/components/oidc/BackchannelLogoutSection').then((m) => ({ default: m.BackchannelLogoutSection })));
 const LogoutSection = lazy(() => import('@/components/oidc/LogoutSection').then((m) => ({ default: m.LogoutSection })));
 const DiscoverySection = lazy(() => import('@/components/oidc/DiscoverySection').then((m) => ({ default: m.DiscoverySection })));
+const FederationSection = lazy(() => import('@/components/oidc/FederationSection').then((m) => ({ default: m.FederationSection })));
+const VciSection = lazy(() => import('@/components/vci/VciSection').then((m) => ({ default: m.VciSection })));
 const HealthSection = lazy(() => import('@/components/admin/HealthSection').then((m) => ({ default: m.HealthSection })));
 
 export type SectionId =
@@ -34,6 +36,8 @@ export type SectionId =
   | 'device'
   | 'backchannel-logout'
   | 'discovery'
+  | 'federation'
+  | 'vci'
   | 'admin'
   | 'client-mgmt'
   | 'grant-mgmt'
@@ -69,6 +73,8 @@ const SECTIONS: SectionGroup[] = [
       { id: 'device', label: 'Device Flow', path: '/device', icon: <Smartphone className="h-4 w-4" /> },
       { id: 'backchannel-logout', label: 'Backchannel Logout', path: '/backchannel-logout', icon: <BellOff className="h-4 w-4" /> },
       { id: 'discovery', label: 'Discovery', path: '/discovery', icon: <Compass className="h-4 w-4" /> },
+      { id: 'federation', label: 'OIDC Federation', path: '/federation', icon: <Globe className="h-4 w-4" /> },
+      { id: 'vci', label: 'Verifiable Credentials', path: '/vci', icon: <BadgeCheck className="h-4 w-4" /> },
     ],
   },
   {
@@ -94,6 +100,8 @@ const sectionComponents: Record<SectionId, React.FC> = {
   'device': DeviceSection,
   'backchannel-logout': BackchannelLogoutSection,
   'discovery': DiscoverySection,
+  'federation': FederationSection,
+  'vci': VciSection,
   'admin': AdminSection,
   'client-mgmt': ClientManagementSection,
   'grant-mgmt': GrantManagementSection,

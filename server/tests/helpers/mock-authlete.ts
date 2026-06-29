@@ -49,6 +49,20 @@ export interface MockAuthleteApi {
   }
   joseObject: { joseVerifyApi: MockFn }
   deviceFlow: { authorization: MockFn; verification: MockFn; complete: MockFn }
+  hardwareSecurityKeys: { create: MockFn; get: MockFn; delete: MockFn; list: MockFn }
+  verifiableCredentials: {
+    getMetadata: MockFn;
+    getJwtIssuer: MockFn;
+    getJwks: MockFn;
+    createOffer: MockFn;
+    getOfferInfo: MockFn;
+    parse: MockFn;
+    issue: MockFn;
+    batchParse: MockFn;
+    batchIssue: MockFn;
+    deferredParse: MockFn;
+    deferredIssue: MockFn;
+  }
 }
 
 export function createMockAuthlete(overrides?: Partial<MockAuthleteApi>) {
@@ -113,6 +127,25 @@ export function createMockAuthlete(overrides?: Partial<MockAuthleteApi>) {
       authorization: fn(),
       verification: fn(),
       complete: fn(),
+    },
+    hardwareSecurityKeys: {
+      create: fn(),
+      get: fn(),
+      delete: fn(),
+      list: fn(),
+    },
+    verifiableCredentials: {
+      getMetadata: fn(),
+      getJwtIssuer: fn(),
+      getJwks: fn(),
+      createOffer: fn(),
+      getOfferInfo: fn(),
+      parse: fn(),
+      issue: fn(),
+      batchParse: fn(),
+      batchIssue: fn(),
+      deferredParse: fn(),
+      deferredIssue: fn(),
     },
     ...overrides,
   }

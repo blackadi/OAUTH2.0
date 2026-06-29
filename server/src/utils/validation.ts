@@ -100,3 +100,11 @@ export const backchannelLogoutDeliverSchema = z.object({
   sub: z.string().min(1, required("sub")),
   sid: z.string().optional(),
 });
+
+export const federationRegistrationSchema = z.object({
+  entityConfiguration: z.string().optional(),
+  trustChain: z.string().optional(),
+}).refine(
+  (data) => data.entityConfiguration || data.trustChain,
+  { message: "Missing required field: entityConfiguration or trustChain" }
+);

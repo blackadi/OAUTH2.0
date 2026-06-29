@@ -10,6 +10,7 @@ All endpoints are prefixed with `/api` unless noted. Routes are defined in `serv
 - [Dynamic Client Registration (DCR)](#dynamic-client-registration)
 - [Pushed Authorization Requests (PAR)](#pushed-authorization-requests)
 - [Grant Management](#grant-management)
+- [Verifiable Credential Issuance (VCI / OID4VCI)](#verifiable-credential-issuance-vci--oid4vci)
 - [Logout & Backchannel Logout](#logout--backchannel-logout)
 - [Token Management (Admin)](#token-management-admin)
 - [Client Management (Admin)](#client-management-admin)
@@ -210,6 +211,84 @@ Revoke grant. Bearer token required.
 
 ---
 
+## Verifiable Credential Issuance (VCI / OID4VCI)
+
+9 endpoints under `/api/vci/*` plus `/.well-known/openid-credential-issuer` implementing [OID4VCI 1.0 Final](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html). The flow has three phases: **Discovery** (public) → **Offers** (admin) → **Credential** (requires access token). Authlete SDK handles all underlying protocol logic.
+
+### Discovery (Public)
+
+#### `GET /api/vci/metadata`
+Credential Issuer metadata (OID4VCI §12.2). Returns `credential_issuer`, `credential_endpoint`, `credential_configurations_supported`, etc.
+
+**Response:** 200 (parsed `responseContent` JSON), 404
+
+#### `GET /api/vci/jwtissuer`
+JWT VC issuer metadata (`/.well-known/jwt-vc-issuer`). Public endpoint.
+
+**Response:** 200 (parsed `responseContent` JSON), 404
+
+#### `GET /api/vci/jwks`
+VCI JWKS endpoint. Public key distribution.
+
+**Response:** 200 (parsed `responseContent` JSON), 404
+
+#### `GET /api/vci/well-known`
+Alias for metadata endpoint. Convenience endpoint for the dev UI. Same as `GET /.well-known/openid-credential-issuer`.
+
+**Response:** 200 (parsed `responseContent` JSON), 404
+
+#### `GET /.well-known/openid-credential-issuer`
+OID4VCI §12.2 well-known credential issuer metadata. Mounted at root path for spec compliance. Returns identical data to `/api/vci/metadata`.
+
+**Response:** 200 (parsed `responseContent` JSON), 404
+
+### Offer Management (Admin Basic Auth)
+
+Server-side credential offer creation. These are out-of-band admin operations, not part of the OID4VCI wallet-facing protocol.
+
+#### `POST /api/vci/offer/create`
+Create a credential offer.
+
+**Body:** `credentialConfigurationIds` (string[], required), `subject`, `duration`, `context`, `acr`, `txCode`, `txCodeInputMode`, `txCodeDescription`, `authorizationCodeGrantIncluded`, `preAuthorizedCodeGrantIncluded`, `issuerStateIncluded`, `properties`, `jwtAtClaims`, `authTime`
+
+**Response:** 201 (CREATED), 400, 403, 500
+
+#### `POST /api/vci/offer/info`
+Get offer information by identifier.
+
+**Body:** `identifier` (required)
+
+**Response:** 200 (OK), 403, 404, 400, 500
+
+### Credential Endpoint (OID4VCI §8)
+
+#### `POST /api/vci/credential/issue`
+Issue a single verifiable credential. Maps to the OID4VCI Credential Endpoint (§8). Requires an access token obtained via authorization code or pre-authorized code flow. Accepts token via `Authorization: Bearer` header or `accessToken` body field.
+
+**Body:** `accessToken` (required), `order` (optional JSON with `requestIdentifier`, `credentialPayload`, etc.)
+
+**Response:** 200 (OK), 202 (ACCEPTED — deferred, returns `transaction_id`), 400, 401, 403, 500
+
+### Batch Credential Endpoint (OID4VCI §10)
+
+#### `POST /api/vci/credential/batch`
+Request multiple verifiable credentials in a single API call. Maps to the OID4VCI Batch Credential Endpoint (§10). Accepts either OID4VCI format (`credential_requests` array) or Authlete internal format (`orders` array).
+
+**Body:** `accessToken` (required), `credential_requests` (OID4VCI format: array of `{format, vct/doctype}`) or `orders` (Authlete format: array of `{requestIdentifier, credentialPayload}`)
+
+**Response:** 200 (OK), 400, 401, 403, 500
+
+### Deferred Credential Endpoint (OID4VCI §9)
+
+#### `POST /api/vci/deferred/issue`
+Retrieve a credential after deferred issuance. Maps to the OID4VCI Deferred Credential Endpoint (§9). Called when the Credential Endpoint returned 202 with a `transaction_id`.
+
+**Body:** `order` (optional JSON with `requestIdentifier`, `transactionId`, etc.)
+
+**Response:** 200 (OK), 202 (still pending — keep polling), 400, 403, 500
+
+---
+
 ## Logout & Backchannel Logout
 
 ### `GET /api/logout`
@@ -305,7 +384,8 @@ Same metrics endpoint, registered at both paths.
 | Status | Meaning |
 |--------|---------|
 | 200 | Success |
-| 201 | Created (DCR register, PAR) |
+| 201 | Created (DCR register, PAR, VCI offer) |
+| 202 | Accepted (VCI deferred credential issuance) |
 | 204 | Deleted / No Content |
 | 302 | Redirect (authorization, logout) |
 | 400 | Bad request / Invalid params |

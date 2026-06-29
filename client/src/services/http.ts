@@ -55,7 +55,10 @@ async function postJson(url: string, body: Record<string, unknown>): Promise<unk
 async function getJson(url: string, auth?: string): Promise<unknown> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (auth) headers['Authorization'] = `Basic ${auth}`;
+  console.log(`blackadi: ${JSON.stringify(url)}`)
+  console.log(`blackadi: ${JSON.stringify(headers)}`)
   const response = await fetch(url, { headers });
+  console.log(`blackadi: ${JSON.stringify(response)}`)
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }

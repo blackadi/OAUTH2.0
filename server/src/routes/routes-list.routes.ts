@@ -237,6 +237,29 @@ const ROUTES: RouteEntry[] = [
     body: JSON.stringify({ subject: "user_subject" }),
   },
 
+  // ── Hardware Security Keys ───────────────────────────────────────────
+  {
+    method: "POST",
+    path: "/api/hsk/create",
+    description: "Create a hardware security key — requires Basic auth (MGMT_CLIENT_ID/MGMT_CLIENT_SECRET)",
+    body: JSON.stringify({ kty: "EC", use: "sig", kid: "my-key", hsmName: "google", alg: "ES256" }),
+  },
+  {
+    method: "GET",
+    path: "/api/hsk/get/:handle",
+    description: "Get a hardware security key by handle — requires Basic auth",
+  },
+  {
+    method: "DELETE",
+    path: "/api/hsk/delete/:handle",
+    description: "Delete a hardware security key by handle — requires Basic auth",
+  },
+  {
+    method: "GET",
+    path: "/api/hsk/list",
+    description: "List all hardware security keys — requires Basic auth",
+  },
+
   // ── Metrics ──────────────────────────────────────────────────
   {
     method: "GET",

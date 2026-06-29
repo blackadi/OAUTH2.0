@@ -1200,6 +1200,168 @@ const spec: Record<string, unknown> = {
         },
       },
     },
+    "/vci/metadata": {
+      get: {
+        summary: "VCI metadata",
+        description: "Retrieves Verifiable Credential Issuer metadata. Public endpoint.",
+        parameters: [
+          {
+            name: "pretty",
+            in: "query",
+            schema: { type: "boolean" },
+          },
+        ],
+        responses: {
+          "200": { description: "VCI metadata (parsed responseContent JSON)" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/vci/jwtissuer": {
+      get: {
+        summary: "VCI JWT issuer metadata",
+        description: "Retrieves the JWT issuer configuration for VCI. Public endpoint.",
+        parameters: [
+          {
+            name: "pretty",
+            in: "query",
+            schema: { type: "boolean" },
+          },
+        ],
+        responses: {
+          "200": { description: "JWT issuer metadata" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/vci/jwks": {
+      get: {
+        summary: "VCI JWKS",
+        description: "Retrieves the JWK Set for VCI. Public endpoint.",
+        parameters: [
+          {
+            name: "pretty",
+            in: "query",
+            schema: { type: "boolean" },
+          },
+        ],
+        responses: {
+          "200": { description: "JWK Set" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/vci/offer/create": {
+      post: {
+        summary: "Create credential offer",
+        description: "Creates a credential offer. Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  credentialConfigurationIds: {
+                    type: "array",
+                    items: { type: "string" },
+                  },
+                  subject: { type: "string" },
+                  duration: { type: "number" },
+                  acr: { type: "string" },
+                  txCode: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": { description: "Offer created" },
+          "400": { description: "Caller error" },
+          "403": { description: "Forbidden" },
+          "500": { description: "Authlete error" },
+        },
+      },
+    },
+    "/vci/offer/info": {
+      post: {
+        summary: "Get offer information",
+        description: "Retrieves information about a credential offer. Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  identifier: { type: "string" },
+                },
+                required: ["identifier"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Offer info" },
+          "400": { description: "Caller error" },
+          "403": { description: "Forbidden" },
+          "404": { description: "Not found" },
+          "500": { description: "Authlete error" },
+        },
+      },
+    },
+    "/vci/credential/issue": {
+      post: {
+        summary: "Issue single credential",
+        description: "Issues a single credential. Returns 202 for deferred issuance.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  accessToken: { type: "string" },
+                  order: { type: "object" },
+                },
+                required: ["accessToken"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Credential issued" },
+          "202": { description: "Accepted (deferred)" },
+          "400": { description: "Caller error" },
+          "401": { description: "Unauthorized" },
+          "403": { description: "Forbidden" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/vci/deferred/issue": {
+      post: {
+        summary: "Issue deferred credential",
+        description: "Issues a deferred credential.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  order: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Deferred credential issued" },
+          "400": { description: "Caller error" },
+          "403": { description: "Forbidden" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
