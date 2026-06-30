@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { IntrospectionService } from "../services/introspection.service";
 import logger from "../utils/logger";
 import { validateIntrospectionParams } from "../utils/validate";
+import { setDpopNonce } from "../utils/dpop";
 
 const introspectionService = new IntrospectionService();
 
@@ -20,6 +21,9 @@ export const introspectionController = {
         });
       }
       const result = await introspectionService.process(req);
+
+      // DPoP nonce — relay to client if Authlete returned one
+      setDpopNonce(res, result.dpopNonce);
 
       switch (result.action) {
         case "BAD_REQUEST":

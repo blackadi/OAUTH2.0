@@ -625,6 +625,22 @@ const docs: Record<string, Record<string, OpDoc>> = {
       tips: 'The interval between polling attempts depends on the server configuration. If the server returns another 202, keep polling with the same transaction_id.',
     },
   },
+  'fapi': {
+    'config': {
+      title: 'FAPI 2.0 Configuration',
+      description: 'Displays the current FAPI 2.0 Security Profile configuration on the server. Shows whether FAPI mode (Security Profile only, or +Message Signing) is enabled, whether DPoP sender-constrained tokens are active, and what security requirements are enforced (PAR required, PKCE required, scope required, refresh token rotation disabled).',
+      params: [],
+      returns: 'JSON with mode ("disabled", "sp", "ms"), dpopEnabled (boolean), requiredClientAuth ("PRIVATE_KEY_JWT"), senderConstrainedTokens ("DPoP" or "none"), parRequired, pkceRequired, refreshTokenRotation, scopeRequired, and specs describing which FAPI profiles are active.',
+      tips: 'The server reads FAPI mode and DPoP settings dynamically from the Authlete API (authleteApi.service.get()). The mode "sp" enables FAPI 2.0 Security Profile; "ms" adds Message Signing (JARM + signed request objects with nbf). Configure FAPI modes in the Authlete console.',
+    },
+    'status': {
+      title: 'FAPI Status (Live Authlete Config)',
+      description: 'Fetches the live Authlete service configuration to verify that the Authlete console settings match what FAPI 2.0 requires. This is a read-only diagnostic — it calls Authlete\'s service API directly. Use this to confirm that dpopNonceRequired, pkceRequired, parRequired, scopeRequired, and other flags are set correctly in the Authlete console.',
+      params: [],
+      returns: 'JSON with mode, dpopEnabled, issuer, fapiModes (array), dpopNonceRequired, dpopNonceDuration, scopeRequired, refreshTokenKept, refreshTokenIdempotent, pkceRequired, and parRequired — mirroring the Authlete service configuration.',
+      tips: 'Cross-reference this with the Authlete console (https://console.authlete.com). If fapiModes does not include FAPI2_SECURITY, enable the FAPI profile in the console. The dpopNonceRequired flag must be true for DPoP to work correctly.',
+    },
+  },
   'health': {
     'health': {
       title: 'Server Health Check',

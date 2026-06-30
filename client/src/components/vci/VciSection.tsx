@@ -313,7 +313,7 @@ function VciSection() {
         />
       )}
 
-      {!activeOp && result && <JsonBlock data={result} label="Response" className="mt-4" />}
+      {!activeOp && !!result && <JsonBlock data={result} label="Response" className="mt-4" />}
     </SectionPanel>
   );
 }

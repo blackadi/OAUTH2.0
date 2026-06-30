@@ -1,3 +1,16 @@
+diff --git a/node_modules/@authlete/typescript-sdk/dist/commonjs/funcs/clientCreate.js b/node_modules/@authlete/typescript-sdk/dist/commonjs/funcs/clientCreate.js
+index 220ba8d..14225f3 100644
+--- a/node_modules/@authlete/typescript-sdk/dist/commonjs/funcs/clientCreate.js
++++ b/node_modules/@authlete/typescript-sdk/dist/commonjs/funcs/clientCreate.js
+@@ -116,7 +116,7 @@ async function $do(client, request, options) {
+     const responseFields = {
+         HttpMeta: { Response: response, Request: req },
+     };
+-    const [result] = await M.match(M.json(200, models.Client$inboundSchema), M.jsonErr([400, 401, 403], errors.ResultError$inboundSchema), M.jsonErr(500, errors.ResultError$inboundSchema), M.fail("4XX"), M.fail("5XX"))(response, req, { extraFields: responseFields });
++    const [result] = await M.match(M.json([200, 201], models.Client$inboundSchema), M.jsonErr([400, 401, 403], errors.ResultError$inboundSchema), M.jsonErr(500, errors.ResultError$inboundSchema), M.fail("4XX"), M.fail("5XX"))(response, req, { extraFields: responseFields });
+     if (!result.ok) {
+         return [result, { status: "complete", request: req, response }];
+     }
 diff --git a/node_modules/@authlete/typescript-sdk/dist/commonjs/models/operations/serviceconfigurationapi.js b/node_modules/@authlete/typescript-sdk/dist/commonjs/models/operations/serviceconfigurationapi.js
 index 5699440..84af469 100644
 --- a/node_modules/@authlete/typescript-sdk/dist/commonjs/models/operations/serviceconfigurationapi.js
@@ -25,6 +38,19 @@ index b7ac36d..022f36a 100644
  function keyFromJSON(jsonString) {
      return (0, schemas_js_1.safeParse)(jsonString, (x) => exports.Key$inboundSchema.parse(JSON.parse(x)), `Failed to parse 'Key' from JSON`);
  }
+diff --git a/node_modules/@authlete/typescript-sdk/dist/esm/funcs/clientCreate.js b/node_modules/@authlete/typescript-sdk/dist/esm/funcs/clientCreate.js
+index 002c043..29a22b3 100644
+--- a/node_modules/@authlete/typescript-sdk/dist/esm/funcs/clientCreate.js
++++ b/node_modules/@authlete/typescript-sdk/dist/esm/funcs/clientCreate.js
+@@ -80,7 +80,7 @@ async function $do(client, request, options) {
+     const responseFields = {
+         HttpMeta: { Response: response, Request: req },
+     };
+-    const [result] = await M.match(M.json(200, models.Client$inboundSchema), M.jsonErr([400, 401, 403], errors.ResultError$inboundSchema), M.jsonErr(500, errors.ResultError$inboundSchema), M.fail("4XX"), M.fail("5XX"))(response, req, { extraFields: responseFields });
++    const [result] = await M.match(M.json([200, 201], models.Client$inboundSchema), M.jsonErr([400, 401, 403], errors.ResultError$inboundSchema), M.jsonErr(500, errors.ResultError$inboundSchema), M.fail("4XX"), M.fail("5XX"))(response, req, { extraFields: responseFields });
+     if (!result.ok) {
+         return [result, { status: "complete", request: req, response }];
+     }
 diff --git a/node_modules/@authlete/typescript-sdk/dist/esm/models/operations/serviceconfigurationapi.js b/node_modules/@authlete/typescript-sdk/dist/esm/models/operations/serviceconfigurationapi.js
 index c700bb3..ad423ff 100644
 --- a/node_modules/@authlete/typescript-sdk/dist/esm/models/operations/serviceconfigurationapi.js
@@ -51,6 +77,19 @@ index 16234f1..716fadd 100644
  export function keyFromJSON(jsonString) {
      return safeParse(jsonString, (x) => Key$inboundSchema.parse(JSON.parse(x)), `Failed to parse 'Key' from JSON`);
  }
+diff --git a/node_modules/@authlete/typescript-sdk/src/funcs/clientCreate.ts b/node_modules/@authlete/typescript-sdk/src/funcs/clientCreate.ts
+index 8494e0a..0073226 100644
+--- a/node_modules/@authlete/typescript-sdk/src/funcs/clientCreate.ts
++++ b/node_modules/@authlete/typescript-sdk/src/funcs/clientCreate.ts
+@@ -164,7 +164,7 @@ async function $do(
+     | UnexpectedClientError
+     | SDKValidationError
+   >(
+-    M.json(200, models.Client$inboundSchema),
++    M.json([200, 201], models.Client$inboundSchema),
+     M.jsonErr([400, 401, 403], errors.ResultError$inboundSchema),
+     M.jsonErr(500, errors.ResultError$inboundSchema),
+     M.fail("4XX"),
 diff --git a/node_modules/@authlete/typescript-sdk/src/models/operations/serviceconfigurationapi.ts b/node_modules/@authlete/typescript-sdk/src/models/operations/serviceconfigurationapi.ts
 index 419ed1f..c223e98 100644
 --- a/node_modules/@authlete/typescript-sdk/src/models/operations/serviceconfigurationapi.ts

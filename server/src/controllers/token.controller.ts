@@ -12,6 +12,7 @@ import { sendTokenFailResponse } from "./token-fail-response.handler";
 import { sendTokenIssueResponse } from "./token-issue-response.handler";
 import { validateTokenParams } from "../utils/validate";
 import { JwtVerificationService } from "../services/jwt-verification.service";
+import { setDpopNonce } from "../utils/dpop";
 
 const tokenService = new TokenService();
 const loginService = new LoginService();
@@ -51,6 +52,9 @@ export const tokenController = {
         });
       }
       const result = await tokenService.process(req);
+
+      // DPoP nonce — relay to client if Authlete returned one
+      setDpopNonce(res, result.dpopNonce);
 
       switch (result.action as string) {
         case "BAD_REQUEST":

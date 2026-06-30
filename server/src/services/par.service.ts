@@ -20,13 +20,32 @@ export class ParService {
       throw new AppError("Missing required body field: parameters", 400);
     }
 
-    log("ParService: calling Authlete pushed authorization endpoint");
-
     const requestBody: PushedAuthorizationRequest = {
       parameters,
-      clientId,
-      clientSecret,
     };
+
+    if (clientId && clientSecret) {
+      requestBody.parameters = this.appendToParams(parameters, [
+        { key: "client_id", value: clientId },
+        { key: "client_secret", value: clientSecret },
+      ]);
+    } else if (clientId) {
+      requestBody.parameters = this.appendToParams(parameters, [
+        { key: "client_id", value: clientId },
+      ]);
+    }
+
+    // DPoP support — fields come from HTTP headers, not the body
+    const dpopHeader = req.headers["dpop"] as string | undefined;
+    if (dpopHeader) {
+      requestBody.dpop = dpopHeader;
+      requestBody.htm = req.method;
+      const protocol = req.protocol;
+      const host = req.get("host") || "";
+      requestBody.htu = `${protocol}://${host}${req.originalUrl}`;
+    }
+
+    log("ParService: calling Authlete pushed authorization endpoint", { hasDpop: !!dpopHeader });
 
     const response = await this.authleteApi.pushedAuthorization.create({
       serviceId,
@@ -34,5 +53,16 @@ export class ParService {
     });
 
     return response;
+  }
+
+  private appendToParams(
+    params: string,
+    fields: Array<{ key: string; value: string }>
+  ): string {
+    const searchParams = new URLSearchParams(params);
+    for (const { key, value } of fields) {
+      searchParams.set(key, value);
+    }
+    return searchParams.toString();
   }
 }

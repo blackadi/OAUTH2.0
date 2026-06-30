@@ -1,7 +1,9 @@
-async function postForm(url: string, params: URLSearchParams): Promise<unknown> {
+async function postForm(url: string, params: URLSearchParams, extraHeaders?: Record<string, string>): Promise<unknown> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (extraHeaders) Object.assign(headers, extraHeaders);
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers,
     body: params.toString(),
   });
   if (!response.ok) throw new Error(await response.text());
@@ -55,10 +57,7 @@ async function postJson(url: string, body: Record<string, unknown>): Promise<unk
 async function getJson(url: string, auth?: string): Promise<unknown> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (auth) headers['Authorization'] = `Basic ${auth}`;
-  console.log(`blackadi: ${JSON.stringify(url)}`)
-  console.log(`blackadi: ${JSON.stringify(headers)}`)
   const response = await fetch(url, { headers });
-  console.log(`blackadi: ${JSON.stringify(response)}`)
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }

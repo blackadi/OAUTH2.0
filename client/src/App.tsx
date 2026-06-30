@@ -24,6 +24,7 @@ const LogoutSection = lazy(() => import('@/components/oidc/LogoutSection').then(
 const DiscoverySection = lazy(() => import('@/components/oidc/DiscoverySection').then((m) => ({ default: m.DiscoverySection })));
 const FederationSection = lazy(() => import('@/components/oidc/FederationSection').then((m) => ({ default: m.FederationSection })));
 const VciSection = lazy(() => import('@/components/vci/VciSection').then((m) => ({ default: m.VciSection })));
+const FapiSection = lazy(() => import('@/components/fapi/FapiSection').then((m) => ({ default: m.FapiSection })));
 const HealthSection = lazy(() => import('@/components/admin/HealthSection').then((m) => ({ default: m.HealthSection })));
 
 export type SectionId =
@@ -37,6 +38,7 @@ export type SectionId =
   | 'backchannel-logout'
   | 'discovery'
   | 'federation'
+  | 'fapi'
   | 'vci'
   | 'admin'
   | 'client-mgmt'
@@ -74,6 +76,7 @@ const SECTIONS: SectionGroup[] = [
       { id: 'backchannel-logout', label: 'Backchannel Logout', path: '/backchannel-logout', icon: <BellOff className="h-4 w-4" /> },
       { id: 'discovery', label: 'Discovery', path: '/discovery', icon: <Compass className="h-4 w-4" /> },
       { id: 'federation', label: 'OIDC Federation', path: '/federation', icon: <Globe className="h-4 w-4" /> },
+      { id: 'fapi', label: 'FAPI 2.0 / DPoP', path: '/fapi', icon: <Shield className="h-4 w-4" /> },
       { id: 'vci', label: 'Verifiable Credentials', path: '/vci', icon: <BadgeCheck className="h-4 w-4" /> },
     ],
   },
@@ -101,6 +104,7 @@ const sectionComponents: Record<SectionId, React.FC> = {
   'backchannel-logout': BackchannelLogoutSection,
   'discovery': DiscoverySection,
   'federation': FederationSection,
+  'fapi': FapiSection,
   'vci': VciSection,
   'admin': AdminSection,
   'client-mgmt': ClientManagementSection,

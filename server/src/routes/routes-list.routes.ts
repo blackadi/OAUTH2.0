@@ -260,6 +260,18 @@ const ROUTES: RouteEntry[] = [
     description: "List all hardware security keys — requires Basic auth",
   },
 
+  // ── FAPI 2.0 ──────────────────────────────────────────────────
+  {
+    method: "GET",
+    path: "/api/fapi/config",
+    description: "FAPI 2.0 configuration — returns the server's FAPI mode, DPoP status, and compliance info",
+  },
+  {
+    method: "GET",
+    path: "/api/fapi/status",
+    description: "FAPI 2.0 status — returns Authlete service configuration including fapiModes and DPoP settings",
+  },
+
   // ── Metrics ──────────────────────────────────────────────────
   {
     method: "GET",

@@ -15,6 +15,30 @@ async function exchangeCodeForToken(tokenRequest: TokenRequest): Promise<TokenRe
   return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;
 }
 
+export interface TokenResponseWithNonce {
+  tokenResponse: TokenResponse;
+  dpopNonce?: string;
+}
+
+async function exchangeCodeForTokenWithDpop(
+  tokenRequest: TokenRequest,
+  dpopProof: string,
+): Promise<TokenResponseWithNonce> {
+  const params = new URLSearchParams(tokenRequest as unknown as Record<string, string>);
+  const response = await fetch(TOKEN_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      DPoP: dpopProof,
+    },
+    body: params.toString(),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const tokenResponse = (await response.json()) as TokenResponse;
+  const dpopNonce = response.headers.get('dpop-nonce') || undefined;
+  return { tokenResponse, dpopNonce };
+}
+
 async function clientCredentials(
   clientId: string,
   clientSecret: string,
@@ -44,8 +68,32 @@ async function refreshToken(
   return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
 }
 
+export interface UserinfoResponseWithNonce {
+  data: unknown;
+  dpopNonce?: string;
+}
+
 async function userInfo(accessToken: string): Promise<unknown> {
   return http.getWithBearer(USERINFO_ENDPOINT, accessToken);
+}
+
+async function userInfoWithDpop(
+  accessToken: string,
+  dpopProof: string,
+): Promise<UserinfoResponseWithNonce> {
+  const response = await fetch(USERINFO_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      DPoP: dpopProof,
+      Accept: 'application/json',
+    },
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json();
+  const dpopNonce = response.headers.get('dpop-nonce') || undefined;
+  return { data, dpopNonce };
 }
 
 async function introspection(token: string, accessToken?: string): Promise<unknown> {
@@ -106,10 +154,12 @@ async function getJwks(): Promise<JwksResponse> {
 
 export const tokenService = {
   exchangeCodeForToken,
+  exchangeCodeForTokenWithDpop,
   clientCredentials,
   passwordGrant,
   refreshToken,
   userInfo,
+  userInfoWithDpop,
   introspection,
   introspectionStandard,
   revocation,

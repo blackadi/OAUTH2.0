@@ -20,7 +20,7 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (270 tests, 40 files)
+npm --prefix server run test              # unit + integration (316 tests, 43 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
 npm --prefix server run test:unit         # unit tests only (247 tests, 39 files)
@@ -77,9 +77,9 @@ docker compose up -d prometheus grafana
   - `tests/unit/middleware/` — 4 files (28 tests), error handler, session, audit-log, csrf
   - `tests/unit/utils/` — 4 files (22 tests), createLocalJWT/jwksClient/validate/validation
   - `tests/unit/routes/` — 2 files (24 tests), metrics routes + openapi routes
-- **Integration tests**: 1 file `tests/integration/routes.test.ts` (23 tests) — full Express stack with mocked SDK
+- **Integration tests**: 1 file `tests/integration/routes.test.ts` (31 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 246 tests across 38 files, completes in ~2s
+- Run with `npm --prefix server run test` — 316 tests across 43 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -121,7 +121,7 @@ docker compose up -d prometheus grafana
 - **Routing**: React Router v6 with lazy-loaded sections, map-based route resolution via `sectionComponents` record in `App.tsx`. Typed `Section` and `SectionGroup` interfaces.
 - **Sections**: 12 sections organized in 3 sidebar groups — OAuth 2.0 (Grant Flows, Token Operations, Logout), OIDC & Extensions (DCR, CIBA, PAR, Device Flow, Backchannel Logout, Discovery), Admin (Token Management, Client Management, Grant Management, Health Check).
 - **Layout**: Sticky 48px header with AppLayout, collapsible mobile nav, 56px sidebar (desktop only). Backdrop blur on header. Grouped sidebar with lucide icons and active-state shadows.
-- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` (AuthFlowsSection), `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription).
+- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` (AuthFlowsSection), `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components), `components/fapi/` (FapiSection — FAPI config/status + DPoP key tools + 4-step Test Flow wizard), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription).
 - **Server status indicator**: `useServerStatus` hook (in `hooks/`) polls `GET /api/health` every 30s (10s retry on failure, 5s timeout). Color-coded badge in header: green=connected, red=offline, yellow pulse=checking. Hover shows uptime.
 - **Hooks**: `useApi`, `useAsyncCall`, `useClipboard`, `useLocalStorage`, `useServerStatus` in `hooks/`.
 - **Services**: Organized by domain in `services/` — `token.service.ts`, `admin.service.ts`, `client.service.ts`, `dcr.service.ts`, `ciba.service.ts`, `par.service.ts`, `device.service.ts`, `grant.service.ts`, `backchannel-logout.service.ts`, `health.service.ts`. Shared HTTP utilities in `http.ts`. All exported from `services/index.ts`.
@@ -174,6 +174,15 @@ The token controller (`src/controllers/token.controller.ts`) handles every Authl
 | `TOKEN_EXCHANGE` | Create exchanged token via token management API |
 | `ID_TOKEN_REISSUABLE` | Reissue ID token during refresh flow → `token.issue()` |
 | `default` | 500 (logged as unknown action) |
+
+## DPoP & Client Auth
+
+- **DPoP proof signature format**: For ES256, the JWS signature must be raw IEEE P1363 R||S concatenation (64 bytes for P-256), **not** DER-encoded. The `crypto.subtle.sign()` returns raw R||S natively. Using DER encoding causes `"invalid_dpop_proof: Signed JWT rejected: Invalid signature"`. See `client/src/services/dpop.service.ts:95-101`.
+- **DPoP proof `ath` claim (not `sub`)**: Per RFC 9449 §4.3, when a DPoP proof is used with an access token (resource access), the payload MUST contain `ath` (base64url-encoded SHA-256 hash of the access token), **not** `sub`. Using `sub` causes the server to reject the proof or ignore the binding. The `computeAth()` function computes the hash correctly. See `client/src/services/dpop.service.ts:81-83`.
+- **DPoP proof JWT header**: Per RFC 9449 §2.1, the JOSE header MUST include the `jwk` member with the public key. The `kid` parameter alone is insufficient. Without `jwk`, Authlete returns `"The DPoP header did not include a public key in JWK format."`. See `client/src/services/dpop.service.ts:89`.
+- **Client auth for DCR confidential clients**: Authlete defaults DCR-created confidential clients to `CLIENT_SECRET_POST` even when the service's `supportedTokenAuthMethods` lists only `CLIENT_SECRET_BASIC`. Token exchange requests must send `client_id` and `client_secret` in the URL-encoded body, not as `Authorization: Basic`. Using Basic auth produces `"The client authentication method is 'client_secret_post' but the request does not include a client secret."`. The SPA callback must persist `client_secret` to `sessionStorage` before the auth redirect. See `client/src/pages/CallbackPage.tsx:72-90`, `client/src/components/auth/AuthFlowsSection.tsx:112`.
+- **PAR `client_secret` in parameters**: For `CLIENT_SECRET_POST` clients, `client_secret` must be merged into the `parameters` string, not sent as a separate JSON field. Authlete's PAR API only recognizes client credentials inside the `parameters` string for `CLIENT_SECRET_POST`. See `server/src/services/par.service.ts:29-34`.
+- **DPoP nonce flow**: Nonces are OPTIONAL (controlled by `dpopNonceRequired`). First request without nonce → 401 `use_dpop_nonce` error + `DPoP-Nonce` header. Client retries with nonce. Expired nonce → 401 `invalid_dpop_proof` + new nonce. Token/PAR endpoints can return nonce on success; protected resource endpoints return it only on error per RFC 9449. See `docs/FAPI-DPOP-TUTORIAL.md`.
 
 ## Quirks & gotchas
 

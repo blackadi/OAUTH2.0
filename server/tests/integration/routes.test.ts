@@ -13,7 +13,7 @@ const mockApi = vi.hoisted(() => {
     userinfo: { process: fn(), issue: fn() },
     introspection: { process: fn(), standardProcess: fn() },
     revocation: { process: fn() },
-    service: { getConfiguration: fn(), getJwks: fn() },
+    service: { getConfiguration: fn(), getJwks: fn(), get: fn() },
     jwkSetEndpoint: { serviceJwksGetApi: fn() },
     dynamicClientRegistration: { register: fn(), get: fn(), update: fn(), delete: fn() },
     ciba: { processAuthentication: fn(), issue: fn(), fail: fn(), complete: fn() },
@@ -226,6 +226,132 @@ describe("Integration: all API routes", () => {
       mockApi.token.management.list.mockResolvedValue({ tokens: [{ accessToken: "at-1" }] })
       const res = await request(app).get("/api/token/list").expect(200)
       expect(res.body.tokens).toHaveLength(1)
+    })
+  })
+
+  describe("GET /api/fapi/config", () => {
+    it("returns FAPI config from live Authlete data", async () => {
+      mockApi.service.get.mockResolvedValue({
+        fapiModes: ["FAPI2_SECURITY"],
+        dpopNonceRequired: true,
+      })
+      const res = await request(app).get("/api/fapi/config").expect(200)
+      expect(res.body.mode).toBe("sp")
+      expect(res.body.dpopEnabled).toBe(true)
+      expect(res.body.requiredClientAuth).toBe("PRIVATE_KEY_JWT")
+      expect(res.body.parRequired).toBe(true)
+      expect(res.body.pkceRequired).toBe(true)
+      expect(res.body.scopeRequired).toBe(true)
+    })
+  })
+
+  describe("GET /api/fapi/status", () => {
+    it("returns live Authlete service config", async () => {
+      mockApi.service.get.mockResolvedValue({
+        issuer: "https://auth.example.com",
+        fapiModes: ["FAPI2_SECURITY"],
+        dpopNonceRequired: true,
+        dpopNonceDuration: 3600,
+        scopeRequired: true,
+        refreshTokenKept: false,
+        refreshTokenIdempotent: false,
+        pkceRequired: true,
+        parRequired: true,
+      })
+      const res = await request(app).get("/api/fapi/status").expect(200)
+      expect(res.body.mode).toBe("sp")
+      expect(res.body.dpopEnabled).toBe(true)
+      expect(res.body.dpopNonceRequired).toBe(true)
+      expect(res.body.fapiModes).toContain("FAPI2_SECURITY")
+      expect(res.body.issuer).toBe("https://auth.example.com")
+    })
+
+    it("returns 500 when Authlete call fails", async () => {
+      mockApi.service.get.mockRejectedValue(new Error("Authlete error"))
+      await request(app).get("/api/fapi/status").expect(500)
+    })
+  })
+
+  describe("DPoP header forwarding", () => {
+    it("forwards DPoP header on PAR and returns DPoP-Nonce", async () => {
+      mockApi.pushedAuthorization.create.mockResolvedValue({
+        action: "CREATED",
+        requestUri: "urn:ietf:params:oauth:request_uri:dpop-test",
+        responseContent: JSON.stringify({ expires_in: 90, request_uri: "urn:ietf:params:oauth:request_uri:dpop-test" }),
+        dpopNonce: "par-nonce-1",
+      })
+      const res = await request(app).post("/api/par")
+        .set("dpop", "dpop-proof-jwt")
+        .send({ parameters: "response_type=code&client_id=c-1", clientId: "c-1", clientSecret: "s-1" })
+        .expect(201)
+      expect(res.body.requestUri).toBe("urn:ietf:params:oauth:request_uri:dpop-test")
+      // Verify the mock was called with DPoP fields forwarded
+      expect(mockApi.pushedAuthorization.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pushedAuthorizationRequest: expect.objectContaining({
+            dpop: "dpop-proof-jwt",
+          }),
+        })
+      )
+    })
+
+    it("returns DPoP-Nonce header from token endpoint", async () => {
+      mockApi.token.process.mockResolvedValue({
+        action: "OK",
+        responseContent: JSON.stringify({ access_token: "at-dpop-1", token_type: "DPoP", expires_in: 3600 }),
+        dpopNonce: "token-nonce-1",
+      } as any)
+      const res = await request(app).post("/api/token")
+        .set("dpop", "dpop-proof-jwt")
+        .set("Authorization", `Basic ${Buffer.from("c-1:s-1").toString("base64")}`)
+        .send("grant_type=client_credentials&scope=openid")
+        .expect(200)
+      expect(res.body.access_token).toBe("at-dpop-1")
+      expect(res.headers["dpop-nonce"]).toBe("token-nonce-1")
+    })
+
+    it("returns DPoP-Nonce header from introspection endpoint", async () => {
+      mockApi.introspection.process.mockResolvedValue({
+        action: "OK",
+        active: true,
+        dpopNonce: "introspect-nonce-1",
+      } as any)
+      const res = await request(app).post("/api/introspection")
+        .set("dpop", "dpop-proof-jwt")
+        .send({ token: "at-dpop-1" })
+        .expect(200)
+      expect(res.body.active).toBe(true)
+      expect(res.headers["dpop-nonce"]).toBe("introspect-nonce-1")
+    })
+
+    it("returns DPoP-Nonce header from userinfo endpoint", async () => {
+      mockApi.userinfo.process.mockResolvedValue({
+        action: "OK",
+        subject: "user-1",
+        claims: ["name", "email"],
+        dpopNonce: "userinfo-nonce-1",
+      } as any)
+      mockApi.userinfo.issue.mockResolvedValue({
+        action: "JSON",
+        responseContent: JSON.stringify({ sub: "user-1", name: "user-1", email: "user-1@example.com" }),
+      } as any)
+      const res = await request(app).post("/api/userinfo")
+        .set("dpop", "dpop-proof-jwt")
+        .set("Authorization", "Bearer at-dpop-1")
+        .expect(200)
+      expect(res.headers["dpop-nonce"]).toBe("userinfo-nonce-1")
+    })
+
+    it("does not set DPoP-Nonce when Authlete returns none", async () => {
+      mockApi.token.process.mockResolvedValue({
+        action: "OK",
+        responseContent: JSON.stringify({ access_token: "at-no-nonce", token_type: "Bearer", expires_in: 3600 }),
+      } as any)
+      const res = await request(app).post("/api/token")
+        .set("Authorization", `Basic ${Buffer.from("c-1:s-1").toString("base64")}`)
+        .send("grant_type=client_credentials&scope=openid")
+        .expect(200)
+      expect(res.headers["dpop-nonce"]).toBeUndefined()
     })
   })
 

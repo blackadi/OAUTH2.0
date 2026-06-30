@@ -10,3 +10,4 @@ export { healthService } from './health.service';
 export { grantService } from './grant.service';
 export { federationService } from './federation.service';
 export { vciService } from './vci.service';
+export { fapiService } from './fapi.service';

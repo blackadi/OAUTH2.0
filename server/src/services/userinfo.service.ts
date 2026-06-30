@@ -20,8 +20,19 @@ export class UserInfoService {
       const authHeader = req.headers["authorization"] || "";
       reqBody.token = authHeader.replace("Bearer ", "");
     }
+
+    // DPoP support — fields come from HTTP headers, not the body
+    const dpopHeader = req.headers["dpop"] as string | undefined;
+    if (dpopHeader) {
+      reqBody.dpop = dpopHeader;
+      reqBody.htm = req.method;
+      const protocol = req.protocol;
+      const host = req.get("host") || "";
+      reqBody.htu = `${protocol}://${host}${req.originalUrl}`;
+    }
+
     const log = req.logger || logger;
-    log("Userinfo parameters", { reqBody });
+    log("Userinfo parameters", { hasDpop: !!dpopHeader });
 
     // Call Authlete /userinfo API
     const response = await this.authleteApi.userinfo.process({

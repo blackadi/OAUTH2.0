@@ -81,6 +81,9 @@ export const VCI_CREDENTIAL_ISSUE_ENDPOINT = `${API_BASE_URL}/api/vci/credential
 export const VCI_CREDENTIAL_BATCH_ENDPOINT = `${API_BASE_URL}/api/vci/credential/batch`;
 export const VCI_DEFERRED_ISSUE_ENDPOINT = `${API_BASE_URL}/api/vci/deferred/issue`;
 
+export const FAPI_CONFIG_ENDPOINT = `${API_BASE_URL}/api/fapi/config`;
+export const FAPI_STATUS_ENDPOINT = `${API_BASE_URL}/api/fapi/status`;
+
 export const HEALTH_ENDPOINT = `${API_BASE_URL}/api/health`;
 export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;
 

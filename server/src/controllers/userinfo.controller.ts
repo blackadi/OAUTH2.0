@@ -5,6 +5,7 @@ import {
   UserinfoIssueRequest,
 } from "@authlete/typescript-sdk/models";
 import { senduserInfoIssueResponse } from "./userinfo-issue-response.handler";
+import { setDpopNonce } from "../utils/dpop";
 
 const userInfoService = new UserInfoService();
 
@@ -12,6 +13,9 @@ export const userinfoController = {
   handleUserInfo: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await userInfoService.process(req);
+
+      // DPoP nonce — relay to client if Authlete returned one
+      setDpopNonce(res, result.dpopNonce);
 
       switch (result.action) {
         case "BAD_REQUEST":

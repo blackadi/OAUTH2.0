@@ -5,6 +5,7 @@ import { sendApiResponse } from "../utils/http-utils";
 import { validateOrThrow, parSchema } from "../utils/validation";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
+import { setDpopNonce } from "../utils/dpop";
 
 function mapActionToStatus(action?: string): number {
   switch (action) {
@@ -24,6 +25,8 @@ export function createParControllers(parServiceInstance = new ParService()) {
       try {
         validateOrThrow(parSchema, req.body);
         const result = await parServiceInstance.process(req);
+        // DPoP nonce — relay to client if Authlete returned one
+        setDpopNonce(res, result.dpopNonce);
         sendApiResponse(res, mapActionToStatus(result.action), result);
       } catch (err) {
         if (err instanceof AppError && err.status === 400) {

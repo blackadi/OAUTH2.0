@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { CLIENT_ID, getRedirectUri } from '@/config';
+import { CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, getRedirectUri } from '@/config';
 import { tokenService } from '@/services';
+import type { TokenResponseWithNonce } from '@/services/token.service';
+import { createProof } from '@/services/dpop.service';
 import { jwtDecode, type JwtPayload } from 'jwt-decode';
 import { useToken } from '@/context/TokenContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
@@ -61,16 +63,54 @@ const CallbackPage = () => {
       try {
         const storedClientId = sessionStorage.getItem('authz_client_id') || CLIENT_ID;
         const redirectUri = getRedirectUri();
-        const body = await tokenService.exchangeCodeForToken({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: redirectUri,
-          client_id: storedClientId,
-          code_verifier: codeVerifier,
-        });
+
+        // Check for DPoP key pair from the auth flow initiation
+        const dpopPrivateKeyRaw = sessionStorage.getItem('dpop_private_key');
+        let body: TokenResponse;
+        let dpopNonce: string | undefined;
+
+        if (dpopPrivateKeyRaw) {
+          const privateKeyJwk = JSON.parse(dpopPrivateKeyRaw);
+          const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
+          const dpopProof = await createProof(
+            privateKeyJwk,
+            'POST',
+            TOKEN_ENDPOINT,
+            undefined,
+            storedNonce,
+          );
+          const storedSecret = sessionStorage.getItem('authz_client_secret') || CLIENT_SECRET;
+          const result: TokenResponseWithNonce = await tokenService.exchangeCodeForTokenWithDpop(
+            {
+              grant_type: 'authorization_code',
+              code,
+              redirect_uri: redirectUri,
+              client_id: storedClientId,
+              client_secret: storedSecret,
+              code_verifier: codeVerifier,
+            },
+            dpopProof,
+          );
+          body = result.tokenResponse;
+          dpopNonce = result.dpopNonce;
+        } else {
+          const storedSecret = sessionStorage.getItem('authz_client_secret') || CLIENT_SECRET;
+          body = await tokenService.exchangeCodeForToken({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+            client_id: storedClientId,
+            client_secret: storedSecret,
+            code_verifier: codeVerifier,
+          });
+        }
 
         setTokenSet(body);
         sessionStorage.setItem('active_client_id', storedClientId);
+
+        if (dpopNonce) {
+          sessionStorage.setItem('dpop_nonce', dpopNonce);
+        }
 
         const decodedIdToken = body.id_token ? jwtDecode<JwtPayload>(body.id_token) : {};
         setState({

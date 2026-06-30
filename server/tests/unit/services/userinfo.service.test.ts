@@ -40,6 +40,31 @@ describe("UserInfoService", () => {
         })
       )
     })
+
+    it("forwards DPoP headers when present", async () => {
+      vi.mocked(mockApi.userinfo.process).mockResolvedValue({ action: "OK" } as any)
+
+      const req = {
+        method: "POST",
+        headers: { authorization: "Bearer tok-1", dpop: "dpop-proof-jwt" },
+        body: {},
+        protocol: "https",
+        get: () => "auth.example.com",
+        originalUrl: "/api/userinfo",
+      } as any
+      await service.process(req)
+
+      expect(mockApi.userinfo.process).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userinfoRequest: expect.objectContaining({
+            token: "tok-1",
+            dpop: "dpop-proof-jwt",
+            htm: "POST",
+            htu: "https://auth.example.com/api/userinfo",
+          }),
+        })
+      )
+    })
   })
 
   describe("issue", () => {

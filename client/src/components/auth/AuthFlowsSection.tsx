@@ -4,6 +4,7 @@ import { AUTHORIZATION_ENDPOINT, CLIENT_ID, DEFAULT_SCOPES, getRedirectUri, CLIE
 import { createPkcePair } from '@/pkce';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
+import { generateKeyPair } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { SectionPanel } from '@/components/layout/SectionPanel';
@@ -63,6 +64,7 @@ const AuthFlowsSection: React.FC = () => {
   const displayResult = result || tokenSet;
 
   const [acId, setAcId] = useState(CLIENT_ID);
+  const [acSecret, setAcSecret] = useState(CLIENT_SECRET);
   const [acRedirectUri, setAcRedirectUri] = useState(getRedirectUri());
 
   const [ccId, setCcId] = useState(CLIENT_ID);
@@ -109,6 +111,13 @@ const AuthFlowsSection: React.FC = () => {
       sessionStorage.setItem('pkce_code_verifier', codeVerifier);
       sessionStorage.setItem('oauth_state', state);
       sessionStorage.setItem('authz_client_id', acId);
+      if (acSecret) sessionStorage.setItem('authz_client_secret', acSecret);
+
+      // Generate DPoP key pair for sender-constrained token binding
+      const dpopKeyPair = await generateKeyPair();
+      sessionStorage.setItem('dpop_private_key', JSON.stringify(dpopKeyPair.privateKey));
+      sessionStorage.setItem('dpop_public_key', JSON.stringify(dpopKeyPair.publicKey));
+      sessionStorage.setItem('dpop_kid', dpopKeyPair.kid);
       const params = new URLSearchParams({
         response_type: 'code',
         client_id: acId,
@@ -200,6 +209,7 @@ const AuthFlowsSection: React.FC = () => {
               {grantType === 'authorization_code' && (
                 <div className="space-y-3">
                   <Input label="Client ID" value={acId} onChange={(e) => setAcId(e.target.value)} placeholder="Client identifier registered in Authlete" />
+                  <Input label="Client Secret" type="password" value={acSecret} onChange={(e) => setAcSecret(e.target.value)} placeholder="Client secret for auth code exchange" />
                   <Input label="Redirect URI" value={acRedirectUri} onChange={(e) => setAcRedirectUri(e.target.value)} placeholder="Must match a registered redirect URI" />
                   <div className="pt-1">
                     <Button onClick={startAuthCode} loading={loading} className="w-full sm:w-auto">
