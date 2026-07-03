@@ -918,4 +918,86 @@ button.secondary:disabled {
   .status-grid { grid-template-columns: 1fr; }
 }
 
+/* ── RAR (Rich Authorization Requests) ─────────────── */
+.rar-section {
+  margin-top: 16px;
+}
+.rar-heading {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 10px;
+}
+.rar-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.rar-card-header {
+  background: rgba(139, 92, 246, 0.08);
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.12);
+}
+.rar-type-badge {
+  display: inline-block;
+  background: rgba(139, 92, 246, 0.15);
+  color: #c4b5fd;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rar-card-body {
+  padding: 8px 12px;
+}
+.rar-field {
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+}
+.rar-field:last-child {
+  margin-bottom: 0;
+}
+.rar-field-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.rar-field code {
+  font-size: 0.78rem;
+  color: var(--accent2);
+  word-break: break-all;
+}
+.rar-field-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.rar-field-list li {
+  padding: 2px 0;
+}
+.rar-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rar-tag {
+  display: inline-block;
+  background: rgba(99, 102, 241, 0.1);
+  color: #a5b4fc;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
 

@@ -12,7 +12,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 
-type CibaOp = 'authentication' | 'issue' | 'fail' | 'complete';
+type CibaOp = 'authentication' | 'issue' | 'fail' | 'complete' | 'poll';
 
 const FAIL_REASONS = [
   { value: 'ACCESS_DENIED', label: 'ACCESS_DENIED' },
@@ -37,6 +37,7 @@ const CIBA_OPS: { value: CibaOp; label: string }[] = [
   { value: 'issue', label: 'Issue' },
   { value: 'fail', label: 'Fail' },
   { value: 'complete', label: 'Complete' },
+  { value: 'poll', label: 'Poll Token' },
 ];
 
 function CibaSection() {
@@ -54,22 +55,82 @@ function CibaSection() {
   const [completeResult, setCompleteResult] = useState('AUTHORIZED');
   const [completeSubject, setCompleteSubject] = useState('admin');
 
+  const [authReqId, setAuthReqId] = useState('');
+  const [pollInterval, setPollInterval] = useState(5);
+  const [pollResult, setPollResult] = useState<unknown>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
+
   const doc = activeOp ? getDoc('ciba', activeOp) : undefined;
 
   const handleCall = async (fn: () => Promise<unknown>) => {
     const { data, error: err } = await call(fn);
     if (data) {
+      const resp = data as Record<string, unknown>;
       if (activeOp === 'authentication') {
-        const ticket = (data as Record<string, unknown>).ticket as string | undefined;
+        const ticket = resp.ticket as string | undefined;
         if (ticket) {
           setIssueTicket(ticket);
           setFailTicket(ticket);
           setCompleteTicket(ticket);
         }
       }
+      if (activeOp === 'issue') {
+        const reqId = resp.authReqId as string | undefined;
+        if (reqId) {
+          setAuthReqId(reqId);
+        }
+        const interval = resp.interval as number | undefined;
+        if (interval) {
+          setPollInterval(interval);
+        }
+      }
       toast.success(`${activeOp} completed`);
     } else {
       toast.error(err);
+    }
+  };
+
+  const handlePollToken = async () => {
+    if (!authReqId) {
+      toast.error('No auth_req_id — call Issue first');
+      return;
+    }
+    setPollError(null);
+    setPollResult(null);
+    try {
+      const { status, body } = await cibaService.pollToken(
+        authReqId,
+        clientId || undefined,
+        clientSecret || undefined,
+      );
+      if (status === 200) {
+        setPollResult(body);
+        toast.success('Tokens obtained');
+      } else {
+        const errBody = body as Record<string, unknown>;
+        if (errBody.error === 'authorization_pending') {
+          setPollError(`Pending — retry in ${pollInterval}s`);
+          toast.info(`Authorization pending, retry in ${pollInterval}s`);
+        } else if (errBody.error === 'slow_down') {
+          const newInterval = (errBody.interval as number) ?? pollInterval + 5;
+          setPollInterval(newInterval);
+          setPollError(`Slow down — retry in ${newInterval}s`);
+          toast.info(`Slow down, retry in ${newInterval}s`);
+        } else if (errBody.error === 'access_denied') {
+          setPollError('Access denied by end-user');
+          toast.error('Access denied');
+        } else if (errBody.error === 'expired_token') {
+          setPollError('auth_req_id expired — start a new flow');
+          toast.error('auth_req_id expired');
+        } else {
+          setPollError(errBody.error_description as string ?? JSON.stringify(errBody));
+          toast.error(String(errBody.error ?? 'Poll failed'));
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Poll request failed';
+      setPollError(msg);
+      toast.error(msg);
     }
   };
 
@@ -114,7 +175,27 @@ function CibaSection() {
         </div>
       )}
 
-      {result ? <JsonBlock data={result} label="Response" /> : null}
+      {activeOp === 'poll' && (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-400">
+            Polls the token endpoint with the <code className="text-slate-300">auth_req_id</code> from the Issue step.
+            In a production CIBA POLL flow, the client polls at the <code className="text-slate-300">interval</code> returned by the Issue endpoint.
+          </p>
+          <Input label="auth_req_id" value={authReqId} onChange={(e) => setAuthReqId(e.target.value)} placeholder="from Issue response" />
+          <div className="flex gap-2 items-center">
+            <Button onClick={handlePollToken} loading={loading}>Poll Token</Button>
+            <span className="text-xs text-slate-500">Expected interval: {pollInterval}s</span>
+          </div>
+          {pollResult !== null && (
+            <div className="mt-2">
+              <JsonBlock data={pollResult} label="Token Response" />
+            </div>
+          )}
+          {pollError && <p className="text-xs text-amber-400">{pollError}</p>}
+        </div>
+      )}
+
+      {activeOp && activeOp !== 'poll' && result ? <JsonBlock data={result} label="Response" /> : null}
     </SectionPanel>
   );
 }

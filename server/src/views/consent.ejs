@@ -15,6 +15,66 @@
       <ul class="scope-list">
         <%- include('partials/scope-list', { scopes: scopes || ['openid', 'profile'] }) %>
       </ul>
+      <% if (authorizationDetails && authorizationDetails.length > 0) { %>
+        <div class="rar-section">
+          <p class="rar-heading">Rich Authorization Details</p>
+          <% authorizationDetails.forEach(function(detail) { %>
+            <div class="rar-card">
+              <div class="rar-card-header">
+                <span class="rar-type-badge"><%= detail.type %></span>
+              </div>
+              <div class="rar-card-body">
+                <% if (detail.locations && detail.locations.length > 0) { %>
+                  <div class="rar-field">
+                    <span class="rar-field-label">Locations</span>
+                    <ul class="rar-field-list">
+                      <% detail.locations.forEach(function(loc) { %>
+                        <li><code><%= loc %></code></li>
+                      <% }) %>
+                    </ul>
+                  </div>
+                <% } %>
+                <% if (detail.actions && detail.actions.length > 0) { %>
+                  <div class="rar-field">
+                    <span class="rar-field-label">Actions</span>
+                    <div class="rar-tags">
+                      <% detail.actions.forEach(function(action) { %>
+                        <span class="rar-tag"><%= action %></span>
+                      <% }) %>
+                    </div>
+                  </div>
+                <% } %>
+                <% if (detail.datatypes && detail.datatypes.length > 0) { %>
+                  <div class="rar-field">
+                    <span class="rar-field-label">Data Types</span>
+                    <div class="rar-tags">
+                      <% detail.datatypes.forEach(function(dt) { %>
+                        <span class="rar-tag"><%= dt %></span>
+                      <% }) %>
+                    </div>
+                  </div>
+                <% } %>
+                <% if (detail.identifier) { %>
+                  <div class="rar-field">
+                    <span class="rar-field-label">Identifier</span>
+                    <code><%= detail.identifier %></code>
+                  </div>
+                <% } %>
+                <% if (detail.privileges && detail.privileges.length > 0) { %>
+                  <div class="rar-field">
+                    <span class="rar-field-label">Privileges</span>
+                    <div class="rar-tags">
+                      <% detail.privileges.forEach(function(priv) { %>
+                        <span class="rar-tag"><%= priv %></span>
+                      <% }) %>
+                    </div>
+                  </div>
+                <% } %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
       <% if (redirectUri) { %>
         <div class="consent-redirect">
           <span class="consent-redirect-label">Redirect URI</span>

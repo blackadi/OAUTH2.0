@@ -12,8 +12,9 @@ import { Badge } from '@/components/ui/Badge';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { generateKeyPair, createProof, computeAth, type DPoPKeyPair } from '@/services/dpop.service';
+import { generateSigningKeyPair, createClientAssertion, getJwkSetDisplay, type SigningKeyPair } from '@/services/client-assertion.service';
 import { useToken } from '@/context/TokenContext';
-import { CLIENT_ID, CLIENT_SECRET, DEFAULT_SCOPES, PAR_ENDPOINT, AUTHORIZATION_ENDPOINT, USERINFO_ENDPOINT, getRedirectUri } from '@/config';
+import { CLIENT_ID, DEFAULT_SCOPES, PAR_ENDPOINT, AUTHORIZATION_ENDPOINT, USERINFO_ENDPOINT, TOKEN_ENDPOINT, getRedirectUri } from '@/config';
 import { createPkcePair } from '@/pkce';
 
 interface FapiConfig {
@@ -43,10 +44,10 @@ function FapiSection() {
 
   // Wizard state
   const [wizClientId, setWizClientId] = useState(CLIENT_ID);
-  const [wizClientSecret, setWizClientSecret] = useState(CLIENT_SECRET);
   const [wizRedirectUri, setWizRedirectUri] = useState(getRedirectUri());
   const [wizScopes, setWizScopes] = useState(DEFAULT_SCOPES);
-  const [wizKeyPair, setWizKeyPair] = useState<DPoPKeyPair | null>(null);
+  const [wizDpopKeyPair, setWizDpopKeyPair] = useState<DPoPKeyPair | null>(null);
+  const [wizSigningKey, setWizSigningKey] = useState<SigningKeyPair | null>(null);
   const [wizParResult, setWizParResult] = useState<{requestUri?: string; expiresIn?: number} | null>(null);
   const [wizUserinfoResult, setWizUserinfoResult] = useState<Record<string, unknown> | null>(null);
   const wizAsync = useDiscriminatedAsyncCall<string>();
@@ -101,27 +102,44 @@ function FapiSection() {
     }
   };
 
-  // Wizard handlers
-  const handleWizGenerateKey = async () => {
+  const handleWizGenerateDpopKey = async () => {
     const { error } = await wizCall('setup', async () => {
       const kp = await generateKeyPair();
       sessionStorage.setItem('dpop_private_key', JSON.stringify(kp.privateKey));
       sessionStorage.setItem('dpop_public_key', JSON.stringify(kp.publicKey));
       sessionStorage.setItem('dpop_kid', kp.kid);
       sessionStorage.setItem('authz_client_id', wizClientId);
-      sessionStorage.setItem('authz_client_secret', wizClientSecret);
-      setWizKeyPair(kp);
+      setWizDpopKeyPair(kp);
     });
     if (error) { toast.error(error); return; }
     toast.success('DPoP key pair generated');
   };
 
+  const handleWizGenerateSigningKey = async () => {
+    const { error } = await wizCall('setup', async () => {
+      const sk = await generateSigningKeyPair();
+      sessionStorage.setItem('fapi_signing_private_key', JSON.stringify(sk.privateKey));
+      sessionStorage.setItem('fapi_signing_pub_jwk', JSON.stringify(sk.publicKey));
+      setWizSigningKey(sk);
+    });
+    if (error) { toast.error(error); return; }
+    toast.success('Client auth signing key pair generated');
+  };
+
   const handleWizPar = async () => {
+    if (!wizDpopKeyPair || !wizSigningKey) return;
     const { error } = await wizCall('par', async () => {
       const pkce = await createPkcePair();
       sessionStorage.setItem('pkce_code_verifier', pkce.codeVerifier);
       const state = crypto.randomUUID();
       sessionStorage.setItem('oauth_state', state);
+
+      const clientAssertion = await createClientAssertion(
+        wizSigningKey.privateKey,
+        wizClientId,
+        TOKEN_ENDPOINT,
+      );
+
       const params = new URLSearchParams({
         response_type: 'code',
         client_id: wizClientId,
@@ -130,10 +148,13 @@ function FapiSection() {
         code_challenge: pkce.codeChallenge,
         code_challenge_method: 'S256',
         state,
+        client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+        client_assertion: clientAssertion,
       });
+
       const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
       const proof = await createProof(
-        wizKeyPair!.privateKey, 'POST', PAR_ENDPOINT, undefined, storedNonce,
+        wizDpopKeyPair.privateKey, 'POST', PAR_ENDPOINT, undefined, storedNonce,
       );
       const { data, dpopNonce } = await parService.pushedAuthorizationWithDpop(
         { parameters: params.toString() }, proof,
@@ -158,7 +179,7 @@ function FapiSection() {
       const athValue = await computeAth(accessToken);
       const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
       const proof = await createProof(
-        wizKeyPair!.privateKey, 'POST', USERINFO_ENDPOINT, athValue, storedNonce,
+        wizDpopKeyPair!.privateKey, 'POST', USERINFO_ENDPOINT, athValue, storedNonce,
       );
       const { data, dpopNonce } = await tokenService.userInfoWithDpop(accessToken, proof);
       if (dpopNonce) sessionStorage.setItem('dpop_nonce', dpopNonce);
@@ -168,8 +189,11 @@ function FapiSection() {
     toast.success('Userinfo fetched with DPoP');
   };
 
+  const accessToken = getAccessToken();
+  const wizHasToken = !!accessToken;
+
   return (
-    <SectionPanel title="FAPI 2.0 & DPoP" description="FAPI 2.0 Security Profile compliance and DPoP sender-constrained token tools">
+    <SectionPanel title="FAPI 2.0 Security Profile" description="FAPI 2.0 Security Profile compliance and test flow with private_key_jwt client auth and DPoP sender-constrained tokens">
       {!!error && <p className="text-xs text-red-400">{String(error)}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -217,6 +241,9 @@ function FapiSection() {
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>DPoP Key Utilities</CardTitle>
+          <p className="text-xs text-slate-400 mt-1">
+            Standalone DPoP proof generation for testing with any endpoint. For the full FAPI flow, use the wizard below.
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -267,36 +294,53 @@ function FapiSection() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Test Flow (FAPI 2.0 + DPoP)</CardTitle>
+          <CardTitle>FAPI 2.0 SP Test Flow</CardTitle>
+          <p className="text-xs text-slate-400 mt-1">
+            Demonstrates a FAPI 2.0 Security Profile authorization code flow with <code className="text-slate-300">private_key_jwt</code> client authentication and DPoP sender-constrained tokens. Requires a client configured with <code className="text-slate-300">PRIVATE_KEY_JWT</code> token auth method in Authlete Console.
+          </p>
         </CardHeader>
         <CardContent className="space-y-6">
           {!!wizError && <p className="text-xs text-red-400">{String(wizError)}</p>}
 
           <div>
-            <h4 className="text-sm font-medium mb-3">Step 1: Setup Client</h4>
+            <h4 className="text-sm font-medium mb-3">Setup: Client Configuration</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
               <Input label="Client ID" value={wizClientId} onChange={(e) => setWizClientId(e.target.value)} placeholder="your_client_id" />
-              <Input label="Client Secret" value={wizClientSecret} onChange={(e) => setWizClientSecret(e.target.value)} placeholder="your_client_secret" />
               <Input label="Redirect URI" value={wizRedirectUri} onChange={(e) => setWizRedirectUri(e.target.value)} placeholder="http://localhost:3001/callback" />
-              <Input label="Scopes" value={wizScopes} onChange={(e) => setWizScopes(e.target.value)} placeholder="openid profile email" />
+              <Input label="Scopes (incl. fapi2=sp scope)" value={wizScopes} onChange={(e) => setWizScopes(e.target.value)} placeholder="fapi_scope openid" />
             </div>
-            <Button onClick={handleWizGenerateKey} loading={wizLoading === 'setup'} size="sm">
-              Generate DPoP Key Pair
-            </Button>
-            {wizKeyPair && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2">
-                <JsonBlock data={wizKeyPair.publicKey} label="Public Key (JWK)" />
-                <JsonBlock data={{ ...wizKeyPair.privateKey, d: '***present***' }} label="Private Key (redacted)" />
-              </div>
-            )}
+            <p className="text-xs text-slate-500 mb-3">
+              Make sure your Authlete service has a scope with the <code className="text-slate-400">fapi2=sp</code> attribute and your client uses <code className="text-slate-400">PRIVATE_KEY_JWT</code> auth method.
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={handleWizGenerateSigningKey} loading={wizLoading === 'setup'} size="sm" disabled={!!wizSigningKey}>
+                Generate Client Auth Key
+              </Button>
+              <Button onClick={handleWizGenerateDpopKey} loading={wizLoading === 'setup'} size="sm" disabled={!!wizDpopKeyPair}>
+                Generate DPoP Key
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
+              {wizSigningKey && (
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">
+                    Register this JWK in Authlete Console → Client → JWK Set. Delete any existing key.
+                  </p>
+                  <Textarea label="Client Auth Public Key (JWK Set)" rows={6} value={getJwkSetDisplay(wizSigningKey.publicKey)} readOnly />
+                </div>
+              )}
+              {wizDpopKeyPair && (
+                <JsonBlock data={wizDpopKeyPair.publicKey} label="DPoP Public Key (JWK)" />
+              )}
+            </div>
           </div>
 
-          <div className={`border-t border-slate-800 pt-4 ${!wizKeyPair ? 'opacity-50 pointer-events-none' : ''}`}>
-            <h4 className="text-sm font-medium mb-3">Step 2: Push Authorization Request (PAR)</h4>
+          <div className={`border-t border-slate-800 pt-4 ${!wizDpopKeyPair || !wizSigningKey ? 'opacity-50 pointer-events-none' : ''}`}>
+            <h4 className="text-sm font-medium mb-2">Step 1: Push Authorization Request (PAR)</h4>
             <p className="text-xs text-slate-400 mb-2">
-              Sends the authorization parameters to the PAR endpoint with a DPoP proof. Also generates PKCE challenge and state for the callback.
+              Pushes authorization parameters with a <code className="text-slate-300">private_key_jwt</code> client assertion and DPoP proof. Also generates PKCE challenge and state.
             </p>
-            <Button onClick={handleWizPar} loading={wizLoading === 'par'} size="sm" disabled={!wizKeyPair}>
+            <Button onClick={handleWizPar} loading={wizLoading === 'par'} size="sm" disabled={!wizDpopKeyPair || !wizSigningKey}>
               Push PAR
             </Button>
             {wizParResult && (
@@ -307,25 +351,28 @@ function FapiSection() {
           </div>
 
           <div className={`border-t border-slate-800 pt-4 ${!wizParResult ? 'opacity-50 pointer-events-none' : ''}`}>
-            <h4 className="text-sm font-medium mb-3">Step 3: Authorize</h4>
+            <h4 className="text-sm font-medium mb-2">Step 2: Authorize</h4>
             <p className="text-xs text-slate-400 mb-2">
-              Open the authorization page to log in and consent. After the redirect back to the callback page,
-              your tokens will be stored. Then return here for Step 4.
+              Opens the authorization page. After login + consent, you are redirected to the callback page where the code is exchanged for tokens using <code className="text-slate-300">private_key_jwt</code> + DPoP. Navigate back here for Step 3.
             </p>
             <Button onClick={handleWizAuthorize} size="sm" variant="secondary" disabled={!wizParResult}>
               Open Authorize Page
             </Button>
           </div>
 
-          <div className="border-t border-slate-800 pt-4">
-            <h4 className="text-sm font-medium mb-3">Step 4: Call Userinfo with DPoP</h4>
+          <div className={`border-t border-slate-800 pt-4`}>
+            <h4 className="text-sm font-medium mb-2">Step 3: Call Userinfo with DPoP</h4>
             <p className="text-xs text-slate-400 mb-2">
-              Uses the stored DPoP key and access token to call the userinfo endpoint.
-              The DPoP proof includes the <code className="text-slate-300">ath</code> claim (hash of the access token).
+              Uses the stored DPoP key and access token from the callback. The DPoP proof includes the <code className="text-slate-300">ath</code> claim (hash of the access token).
             </p>
-            <Button onClick={handleWizUserinfo} loading={wizLoading === 'userinfo'} size="sm">
+            <Button onClick={handleWizUserinfo} loading={wizLoading === 'userinfo'} size="sm" disabled={!wizHasToken}>
               Call Userinfo with DPoP
             </Button>
+            {!wizHasToken && (
+              <p className="text-xs text-amber-400 mt-1">
+                No access token found. Complete Step 2 first.
+              </p>
+            )}
             {wizUserinfoResult && (
               <div className="mt-2">
                 <JsonBlock data={wizUserinfoResult} label="Userinfo Response" />

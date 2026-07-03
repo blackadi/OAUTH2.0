@@ -29,6 +29,8 @@ export function createParControllers(parServiceInstance = new ParService()) {
         setDpopNonce(res, result.dpopNonce);
         sendApiResponse(res, mapActionToStatus(result.action), result);
       } catch (err) {
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
         if (err instanceof AppError && err.status === 400) {
           const log = req.logger || logger;
           log.error("PAR Validation Error", { message: err.message });

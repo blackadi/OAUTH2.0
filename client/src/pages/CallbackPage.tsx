@@ -5,6 +5,7 @@ import { CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, getRedirectUri } from '@/conf
 import { tokenService } from '@/services';
 import type { TokenResponseWithNonce } from '@/services/token.service';
 import { createProof } from '@/services/dpop.service';
+import { createClientAssertion } from '@/services/client-assertion.service';
 import { jwtDecode, type JwtPayload } from 'jwt-decode';
 import { useToken } from '@/context/TokenContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
@@ -64,12 +65,42 @@ const CallbackPage = () => {
         const storedClientId = sessionStorage.getItem('authz_client_id') || CLIENT_ID;
         const redirectUri = getRedirectUri();
 
-        // Check for DPoP key pair from the auth flow initiation
         const dpopPrivateKeyRaw = sessionStorage.getItem('dpop_private_key');
+        const signingPrivateKeyRaw = sessionStorage.getItem('fapi_signing_private_key');
         let body: TokenResponse;
         let dpopNonce: string | undefined;
 
-        if (dpopPrivateKeyRaw) {
+        if (dpopPrivateKeyRaw && signingPrivateKeyRaw) {
+          const dpopPrivateKeyJwk = JSON.parse(dpopPrivateKeyRaw);
+          const signingPrivateKeyJwk = JSON.parse(signingPrivateKeyRaw);
+          const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
+          const dpopProof = await createProof(
+            dpopPrivateKeyJwk,
+            'POST',
+            TOKEN_ENDPOINT,
+            undefined,
+            storedNonce,
+          );
+          const clientAssertion = await createClientAssertion(
+            signingPrivateKeyJwk,
+            storedClientId,
+            TOKEN_ENDPOINT,
+          );
+          const result: TokenResponseWithNonce = await tokenService.exchangeCodeForTokenWithDpop(
+            {
+              grant_type: 'authorization_code',
+              code,
+              redirect_uri: redirectUri,
+              client_id: storedClientId,
+              code_verifier: codeVerifier,
+              client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+              client_assertion: clientAssertion,
+            },
+            dpopProof,
+          );
+          body = result.tokenResponse;
+          dpopNonce = result.dpopNonce;
+        } else if (dpopPrivateKeyRaw) {
           const privateKeyJwk = JSON.parse(dpopPrivateKeyRaw);
           const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
           const dpopProof = await createProof(

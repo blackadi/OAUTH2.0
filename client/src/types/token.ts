@@ -5,6 +5,8 @@ export interface TokenRequest {
   client_id: string;
   client_secret?: string;
   code_verifier?: string;
+  client_assertion_type?: string;
+  client_assertion?: string;
 }
 
 export interface TokenResponse {

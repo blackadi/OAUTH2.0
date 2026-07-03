@@ -40,7 +40,7 @@ A production-grade OAuth 2.0 / OpenID Connect authorization server that delegate
 | [API Reference](./API.md) | Complete endpoint catalog with request/response formats |
 | [Component Reference](./COMPONENT-REFERENCE.md) | Server services/controllers + React component tree |
 | [Testing](./TESTING.md) | Unit, integration, E2E, and client test architecture |
-| [FAPI 2.0 & DPoP](./FAPI-DPOP-TUTORIAL.md) | Complete FAPI 2.0 Security Profile + DPoP tutorial with setup and walkthrough |
+| [FAPI 2.0 Tutorial](./FAPI-TUTORIAL.md) | FAPI 2.0 Security Profile with private_key_jwt client auth and DPoP sender-constrained tokens |
 | [Development](./DEVELOPMENT.md) | Setup, env vars, middleware stack, quirks |
 
 ## Quick Start

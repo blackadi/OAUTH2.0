@@ -49,10 +49,12 @@ npm --prefix client run dev          # SPA on :3001
    - Client Secret: your `clientSecret`
 3. Click **Run** → you should get `action: USER_IDENTIFICATION` with a `ticket`
 4. The ticket is auto-filled into the Issue, Fail, and Complete tabs
-5. **Complete tab**: Click **Run** (defaults: `AUTHORIZED`, subject `admin`)
-6. This returns `NO_ACTION` (expected for POLL mode)
-
-To actually get tokens, you'd need a client that polls the token endpoint with `grant_type=urn:openid:params:grant-type:ciba` + `auth_req_id` (see Part 4 for a full curl demo).
+5. **Issue tab**: Click **Run** → returns `authReqId`, `expiresIn`, `interval`
+   - The `authReqId` is auto-filled into the **Poll Token** tab
+6. **Complete tab**: Click **Run** (defaults: `AUTHORIZED`, subject `admin`)
+   - Returns `NO_ACTION` (expected for POLL mode — tokens are now available for polling)
+7. **Poll Token tab**: Click **Poll Token** → returns `access_token`, `id_token`, etc.
+   - If you see `authorization_pending`, wait the interval and retry
 
 ### 5. Verify it's working
 
@@ -318,24 +320,89 @@ This section walks through a complete CIBA POLL mode flow using curl commands.
 
 ### Step 1: Backchannel Authentication Request
 
-The client sends a backchannel authentication request to the server's CIBA endpoint.
+The client sends a backchannel authentication request to the server's CIBA endpoint. The `parameters` field is a URL-encoded string containing all the CIBA request parameters.
 
-```http
-POST /api/ciba/authentication HTTP/1.1
-Content-Type: application/json
-
-{
-  "parameters": "login_hint=admin&scope=openid",
-  "clientId": "<your_client_id>",
-  "clientSecret": "<your_client_secret>"
-}
-```
+**Basic example (login_hint only):**
 
 ```bash
 curl -X POST http://localhost:3000/api/ciba/authentication \
   -H "Content-Type: application/json" \
   -d '{
     "parameters": "login_hint=admin&scope=openid",
+    "clientId": "<your_client_id>",
+    "clientSecret": "<your_client_secret>"
+  }'
+```
+
+**With binding_message:** A human-readable message shown on both the consumption device and the authentication device so the end-user can confirm the transaction is related:
+
+```bash
+curl -X POST http://localhost:3000/api/ciba/authentication \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "login_hint=admin&scope=openid&binding_message=Pay+%2450+to+Acme+Corp",
+    "clientId": "<your_client_id>",
+    "clientSecret": "<your_client_secret>"
+  }'
+```
+
+**With user_code:** A secret code (like a PIN) known only to the user, providing an extra layer of security against fraudulent authentication requests:
+
+```bash
+# Requires client configured with User Code Required = Required
+curl -X POST http://localhost:3000/api/ciba/authentication \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "login_hint=admin&scope=openid&user_code=123456",
+    "clientId": "<your_client_id>",
+    "clientSecret": "<your_client_secret>"
+  }'
+```
+
+**With acr_values:** Request a specific authentication context class reference (e.g., a particular level of assurance):
+
+```bash
+curl -X POST http://localhost:3000/api/ciba/authentication \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "login_hint=admin&scope=openid&acr_values=urn%3Amace%3Aincommon%3Aiap%3Asilver",
+    "clientId": "<your_client_id>",
+    "clientSecret": "<your_client_secret>"
+  }'
+```
+
+**Using request object (JAR-based CIBA):** Instead of URL-encoded parameters, you can pass a signed JWT request object via the `request` parameter. This is useful for FAPI-compliant deployments:
+
+```bash
+# First create a JWT with the CIBA claims, then:
+curl -X POST http://localhost:3000/api/ciba/authentication \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "request=<signed_jwt>&client_id=<your_client_id>",
+    "clientId": "<your_client_id>",
+    "clientSecret": "<your_client_secret>"
+  }'
+```
+
+When using a `request` object, standard JWT claims like `iss`, `aud`, `exp`, `iat` are validated, and the JWT must be signed with the client's registered key.
+
+**With login_hint_token or id_hint_token (alternative hint types):**
+
+```bash
+# login_hint_token — an opaque token referencing the end-user
+curl -X POST http://localhost:3000/api/ciba/authentication \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "login_hint_token=some_opaque_token&scope=openid",
+    "clientId": "<your_client_id>",
+    "clientSecret": "<your_client_secret>"
+  }'
+
+# id_token_hint — a previously-issued ID token identifying the end-user
+curl -X POST http://localhost:3000/api/ciba/authentication \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "id_token_hint=<previous_id_token>&scope=openid",
     "clientId": "<your_client_id>",
     "clientSecret": "<your_client_secret>"
   }'
@@ -485,6 +552,19 @@ HTTP/1.1 400 Bad Request
 
 The client should wait `interval` seconds before polling again.
 
+**Slow down response (polling too fast):**
+
+```json
+HTTP/1.1 400 Bad Request
+{
+  "error": "slow_down",
+  "error_description": "[A055104] The polling interval is too short.",
+  "interval": 10
+}
+```
+
+When receiving `slow_down`, the client must increase the polling interval (e.g., add 5 seconds) and MUST NOT poll faster than the new `interval` value. This prevents overwhelming the server.
+
 **Error response (access denied):**
 
 ```json
@@ -494,6 +574,18 @@ HTTP/1.1 400 Bad Request
   "error_description": "[A055105] The end-user denied the authorization request."
 }
 ```
+
+**Expired token response (auth_req_id expired):**
+
+```json
+HTTP/1.1 400 Bad Request
+{
+  "error": "expired_token",
+  "error_description": "[A055106] The authentication request ID has expired."
+}
+```
+
+When the `auth_req_id` expires, the client must start a new CIBA flow from scratch (Step 1).
 
 ### Step 5: Fail Authentication (Error Path)
 
@@ -567,7 +659,7 @@ Client                          Server
 
 ## Part 5: Client Demo Walkthrough
 
-The React SPA includes a **CIBA** section that lets you test all four CIBA operations interactively.
+The React SPA includes a **CIBA** section that lets you test the complete CIBA POLL flow interactively — from authentication through token polling.
 
 ### Opening the CIBA section
 
@@ -577,7 +669,7 @@ The React SPA includes a **CIBA** section that lets you test all four CIBA opera
 
 ### Using the CIBA tools
 
-The CIBA section has a tab bar with 4 operations:
+The CIBA section has a tab bar with 5 operations:
 
 **1. Authentication tab:**
 
@@ -616,6 +708,16 @@ Click **Run** → calls the fail endpoint and returns the error response.
 
 Click **Run** → on success, completes the CIBA flow.
 
+**5. Poll Token tab:**
+
+| Field | Description |
+|-------|-------------|
+| auth_req_id | Auto-filled from Issue response |
+| Poll Token button | Polls `/api/token` with `grant_type=urn:openid:params:grant-type:ciba` |
+| Expected interval | Shows the polling interval from the Issue response |
+
+Click **Poll Token** → on success, returns `access_token`, `id_token`, `refresh_token` (if applicable). If the user hasn't completed authorization yet, you'll see `authorization_pending` or `slow_down`.
+
 ### Testing the full flow
 
 1. Go to **CIBA** section
@@ -623,9 +725,9 @@ Click **Run** → on success, completes the CIBA flow.
    - Parameters: `login_hint=admin&scope=openid`
    - Enter your `clientId` and `clientSecret`
    - Click **Run** → expect `action: USER_IDENTIFICATION`
-3. **Issue tab**: Click **Run** (ticket is pre-filled)
+3. **Issue tab**: Click **Run** (ticket is pre-filled) → `authReqId` auto-filled into Poll Token tab
 4. **Complete tab**: Click **Run** (defaults: `AUTHORIZED`, subject `admin`)
-5. To get tokens (POLL mode), use curl as shown in [Part 4 Step 4](#step-4-poll-token-endpoint-poll-mode)
+5. **Poll Token tab**: Click **Poll Token** → expect `access_token`, `id_token`, `refresh_token` (if applicable)
 
 ---
 

@@ -492,6 +492,22 @@ const docs: Record<string, Record<string, OpDoc>> = {
     },
   },
 
+  'rar': {
+    'push': {
+      title: 'Rich Authorization Requests (RFC 9396)',
+      description: 'Sends an authorization request with fine-grained authorization_details — structured JSON describing the specific operations the client wants to perform on the user\'s resources. This goes beyond OAuth scopes, allowing the client to request specific actions, locations, data types, and privileges per resource type. Authlete passes the authorization_details through the authorization, token, and introspection endpoints as opaque JSON, making RAR transparent to the server implementation. Use PAR for large authorization_details payloads that would not fit in a browser URL.',
+      params: [
+        { name: 'authorization_details (JSON)', desc: 'A JSON array of objects, each with a required "type" field. Standard types include "payment_initiation", "account_information", "document_access", and "id_card_verification". Each object may also include: locations (array of URIs), actions (e.g. "initiate", "read", "write"), datatypes (e.g. "payment", "transaction"), identifier (resource-specific ID), and privileges (e.g. "admin", "viewer").' },
+        { name: 'Client ID', desc: 'The client identifier registered in Authlete. Required for PAR mode.' },
+        { name: 'Client Secret', desc: 'The client secret for confidential clients. Required if the client uses client_secret_basic or client_secret_post.' },
+        { name: 'Scope', desc: 'Space-separated scopes (e.g. openid). The authorization_details type must be configured in the client\'s authorizationDetailsTypes metadata for Authlete to validate it.' },
+        { name: 'Redirect URI', desc: 'Where the authorization server redirects after consent. Must match the registered URI.' },
+      ],
+      returns: 'Redirects to the authorization page with authorization_details embedded (either in the URL parameters or via a PAR request_uri). After the user approves, the authorization code is returned and can be exchanged for tokens. The resulting tokens include authorization_details in the token response and introspection response.',
+      tips: 'authorization_details is enabled by default in Authlete — no feature flag needed. Configure allowed types via the client\'s authorizationDetailsTypes metadata on DCR or in the Authlete Console. For payment flows, use type "payment_initiation" with relevant actions. For account access, use "account_information" with "read" action and appropriate datatypes. Use PAR when the authorization_details JSON is large (over 2KB) so it does not bloat the browser redirect URL. The consent page automatically displays authorization_details as structured permission cards.',
+    },
+  },
+
   'device': {
     'authorization': {
       title: 'Device Authorization (RFC 8628)',

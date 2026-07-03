@@ -150,9 +150,9 @@ export function createSessionController(
     if (!req.session.user || !req.session.authorization) {
       return next(new AppError("Unauthorized - no ticket in session", 403));
     }
-    const { clientName = "", redirectUri = "", authorizationIssueRequest: { scopes = [] } = {} } =
+    const { clientName = "", redirectUri = "", authorizationIssueRequest: { scopes = [], authorizationDetails } = {} } =
       req.session.authorization || {};
-    res.render("consent", { clientName, scopes, redirectUri });
+    res.render("consent", { clientName, scopes, redirectUri, authorizationDetails });
   },
 
   handleConsent: async (
