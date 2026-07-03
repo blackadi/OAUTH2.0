@@ -31,6 +31,7 @@ import healthRoutes from "./routes/health.routes";
 import metricsRoutes from "./routes/metrics.routes";
 import openapiRoutes from "./routes/openapi.routes";
 import fapiRoutes from "./routes/fapi.routes";
+import jarRoutes from "./routes/jar.routes";
 import routesList from "./routes/routes-list.routes";
 import DefaultRoutes from "./routes/default.routes";
 
@@ -164,6 +165,7 @@ app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths
   app.use(routerURL, metricsRoutes); // /api/metrics (consistency)
   app.use(routerURL, healthRoutes);
   app.use(routerURL, fapiRoutes);
+  app.use(routerURL, jarRoutes);
   app.use(routerURL, openapiRoutes); // /api/openapi.json
   app.use("/", DefaultRoutes); // For rendering the index page at root /*
 

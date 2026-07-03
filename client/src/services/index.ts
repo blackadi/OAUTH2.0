@@ -12,3 +12,4 @@ export { federationService } from './federation.service';
 export { vciService } from './vci.service';
 export { fapiService } from './fapi.service';
 export { rarService } from './rar.service';
+export { processJar } from './jar.service';
