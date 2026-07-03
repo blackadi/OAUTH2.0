@@ -7,7 +7,7 @@ import CallbackPage from './pages/CallbackPage';
 import {
   KeyRound, Shield, LogOut,
   UserPlus, Bell, Send, Smartphone, BellOff, Compass, Globe,
-  Settings, Users, FileCheck, HeartPulse, BadgeCheck, ListChecks,
+  Settings, Users, FileCheck, HeartPulse, BadgeCheck, ListChecks, FileText,
 } from 'lucide-react';
 
 const AuthFlowsSection = lazy(() => import('@/components/auth/AuthFlowsSection'));
@@ -26,6 +26,7 @@ const FederationSection = lazy(() => import('@/components/oidc/FederationSection
 const VciSection = lazy(() => import('@/components/vci/VciSection').then((m) => ({ default: m.VciSection })));
 const FapiSection = lazy(() => import('@/components/fapi/FapiSection').then((m) => ({ default: m.FapiSection })));
 const RarSection = lazy(() => import('@/components/oidc/RarSection').then((m) => ({ default: m.RarSection })));
+const JarSection = lazy(() => import('@/components/oidc/JarSection').then((m) => ({ default: m.JarSection })));
 const HealthSection = lazy(() => import('@/components/admin/HealthSection').then((m) => ({ default: m.HealthSection })));
 
 export type SectionId =
@@ -36,6 +37,7 @@ export type SectionId =
   | 'ciba'
   | 'par'
   | 'rar'
+  | 'jar'
   | 'device'
   | 'backchannel-logout'
   | 'discovery'
@@ -75,6 +77,7 @@ const SECTIONS: SectionGroup[] = [
       { id: 'ciba', label: 'CIBA', path: '/ciba', icon: <Bell className="h-4 w-4" /> },
       { id: 'par', label: 'PAR', path: '/par', icon: <Send className="h-4 w-4" /> },
       { id: 'rar', label: 'RAR', path: '/rar', icon: <ListChecks className="h-4 w-4" /> },
+      { id: 'jar', label: 'JAR', path: '/jar', icon: <FileText className="h-4 w-4" /> },
       { id: 'device', label: 'Device Flow', path: '/device', icon: <Smartphone className="h-4 w-4" /> },
       { id: 'backchannel-logout', label: 'Backchannel Logout', path: '/backchannel-logout', icon: <BellOff className="h-4 w-4" /> },
       { id: 'discovery', label: 'Discovery', path: '/discovery', icon: <Compass className="h-4 w-4" /> },
@@ -104,6 +107,7 @@ const sectionComponents: Record<SectionId, React.FC> = {
   'ciba': CibaSection,
   'par': ParSection,
   'rar': RarSection,
+  'jar': JarSection,
   'device': DeviceSection,
   'backchannel-logout': BackchannelLogoutSection,
   'discovery': DiscoverySection,

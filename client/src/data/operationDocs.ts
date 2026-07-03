@@ -508,6 +508,20 @@ const docs: Record<string, Record<string, OpDoc>> = {
     },
   },
 
+  'jar': {
+    'process': {
+      title: 'JWT Secured Authorization Request (RFC 9101)',
+      description: 'JAR lets a client send authorization request parameters as a signed JWT. The client creates a JWT with the standard OAuth parameters as claims, signs it with its private key, and sends it via the `request` parameter. Authlete validates the JWT signature using the client\'s registered public key, decodes the payload, and returns the result including the `requestObjectPayload`. JAR prevents parameter tampering and is REQUIRED for FAPI 2.0 compliance.',
+      params: [
+        { name: 'Key Pair', desc: 'An ES256 (ECDSA P-256) key pair. The public key must be registered in the client\'s JWK Set in the Authlete Console for signature validation.' },
+        { name: 'JWT Claims (JSON)', desc: 'The OAuth authorization request parameters as JWT claims. Required: iss (client ID), aud (Authlete service issuer), response_type, client_id, redirect_uri. Recommended: exp, nbf, jti for replay protection, state for CSRF, nonce for OIDC.' },
+        { name: 'Client ID', desc: 'The client identifier. Must match the `iss` and `client_id` claims in the JWT and be registered with the JWK Set containing the signing public key.' },
+      ],
+      returns: 'Full Authlete `/auth/authorization` response including action (INTERACTION, LOCATION, etc.), ticket, client info, scopes, and requestObjectPayload (the decoded JWT claims). The requestObjectPayload confirms Authlete successfully validated and decoded the JWT.',
+      tips: 'The signing key\'s public JWK must be registered in the Authlete Developer Console under Client → JWK Set Content. Authlete supports ES256, RS256, and other algorithms. Use `exp` (max 60s for FAPI), `nbf`, and `jti` for security. The `aud` claim should be the Authlete service URL (https://api.authlete.com) or your custom issuer URL. When combined with PAR, the JWT goes inside the PAR body for a two-layer security model.',
+    },
+  },
+
   'device': {
     'authorization': {
       title: 'Device Authorization (RFC 8628)',
