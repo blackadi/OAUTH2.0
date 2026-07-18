@@ -186,7 +186,7 @@ sequenceDiagram
     S->>S: Generate 32-byte random hex token
     S->>SS: req.session.csrfToken = token
     S->>SS: req.session.save() (force persist)
-    S->>B: Render form with &lt;input name="_csrf" value="token"&gt;
+    S->>B: Render form with <input name="_csrf" value="token">
     
     Note over B,SS: Step 2 — POST request (form submission)
     B->>S: POST /api/session/login (body: _csrf=token, ...)
@@ -324,7 +324,7 @@ The client build is served by the Express server in production. The `postbuild` 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#475569', 'lineColor': '#475569', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'fontFamily': 'Inter'}}}%%
 flowchart LR
-    ENV[".env file"] --> DOT[dotenv.config()]
+    ENV[".env file"] --> DOT["dotenv.config()"]
     DOT --> CONF["app.config.ts<br/>Validates required vars"]
     CONF --> AUTH["authlete.config.ts<br/>SDK + JWT config"]
     CONF --> SERVER["server.ts<br/>PORT, NODE_ENV"]
