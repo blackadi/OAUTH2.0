@@ -24,7 +24,7 @@ function mapAuthActionToStatus(action?: string): number {
 function mapIssueActionToStatus(action?: string): number {
   switch (action) {
     case "INTERNAL_SERVER_ERROR": return 500;
-    case "INVALID_TICKET": return 500;
+    case "INVALID_TICKET": return 400;
     case "OK": return 200;
     default: return 500;
   }

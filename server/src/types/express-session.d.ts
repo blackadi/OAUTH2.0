@@ -11,6 +11,7 @@ declare module "express-session" {
       prompt?: string;
       redirectUri?: string;
       authorizationIssueRequest?: AuthorizationIssueRequest;
+      nativeSsoRequested?: boolean;
     };
     secret?: string;
     saveUninitialized?: string;

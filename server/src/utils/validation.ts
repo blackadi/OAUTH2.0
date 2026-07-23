@@ -108,3 +108,18 @@ export const federationRegistrationSchema = z.object({
   (data) => data.entityConfiguration || data.trustChain,
   { message: "Missing required field: entityConfiguration or trustChain" }
 );
+
+export const nativeSsoProcessSchema = z.object({
+  accessToken: z.string().min(1, required("accessToken")),
+  deviceSecret: z.string().min(1, required("deviceSecret")),
+  refreshToken: z.string().optional(),
+  sub: z.string().optional(),
+  claims: z.string().optional(),
+  idtHeaderParams: z.string().optional(),
+  idTokenAudType: z.string().optional(),
+  deviceSecretHash: z.string().optional(),
+});
+
+export const nativeSsoLogoutSchema = z.object({
+  sessionId: z.string().min(1, required("sessionId")),
+});

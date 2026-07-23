@@ -949,7 +949,7 @@ The token endpoint (`POST /api/token`) handles CIBA token requests via the stand
 | Authlete Action | HTTP Status |
 |----------------|:-----------:|
 | `OK` | 200 |
-| `INVALID_TICKET` | 500 |
+| `INVALID_TICKET` | 400 |
 | `INTERNAL_SERVER_ERROR` | 500 |
 
 **Fail endpoint:**
