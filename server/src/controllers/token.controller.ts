@@ -8,6 +8,7 @@ import {
   TokenIssueRequest,
 } from "@authlete/typescript-sdk/models";
 import { handleTokenExchange } from "./token-exchange-response.handler";
+import { handleNativeSso } from "./native-sso-response.handler";
 import { sendTokenFailResponse } from "./token-fail-response.handler";
 import { sendTokenIssueResponse } from "./token-issue-response.handler";
 import { validateTokenParams } from "../utils/validate";
@@ -155,6 +156,9 @@ export const tokenController = {
 
         case "TOKEN_EXCHANGE":
           return handleTokenExchange(req, res, result, next);
+
+        case "NATIVE_SSO":
+          return handleNativeSso(req, res, result, next);
 
         case "ID_TOKEN_REISSUABLE": {
           // Refresh token flow with openid scope — Authlete can reissue

@@ -85,6 +85,7 @@ export const authorizationController = {
               claims: result.idTokenClaims,
               ...(storedProperties ? { properties: storedProperties } : {}),
             },
+            nativeSsoRequested: result.nativeSsoRequested ?? false,
           };
 
           // If prompt=none and user is logged in, check persistent consent

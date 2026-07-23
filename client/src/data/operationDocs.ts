@@ -477,6 +477,15 @@ const docs: Record<string, Record<string, OpDoc>> = {
       returns: 'JSON with action (NO_ACTION for poll mode, NOTIFICATION for ping/push mode, or SERVER_ERROR). For NOTIFICATION, the server should POST responseContent to clientNotificationEndpoint with clientNotificationToken as Bearer token.',
       tips: 'For poll mode, the client polls the token endpoint with grant_type=urn:openid:params:grant-type:ciba to get the actual tokens. For push mode, tokens are delivered in the notification.',
     },
+    'poll': {
+      title: 'Poll Token Endpoint (CIBA POLL Mode)',
+      description: 'Polls the token endpoint with grant_type=urn:openid:params:grant-type:ciba and the auth_req_id from the Issue step. This is how POLL mode clients retrieve tokens — the client repeatedly polls the standard token endpoint until the end-user has authorized on their authentication device.',
+      params: [
+        { name: 'auth_req_id', desc: 'The authentication request ID returned by the Issue endpoint. Auto-filled after a successful Issue call.' },
+      ],
+      returns: 'On success (200): JSON with access_token, token_type, expires_in, id_token, refresh_token (if applicable), and scope. While pending (400): {"error":"authorization_pending","interval":5}. Too fast (400): {"error":"slow_down","interval":<new_interval>}. Denied (400): {"error":"access_denied"}. Expired (400): {"error":"expired_token"}.',
+      tips: 'Poll at the interval returned by the Issue endpoint (typically 5 seconds). Never poll faster than the interval — the server will return slow_down. If you receive slow_down, increase your polling interval by the new interval value returned. After receiving access_denied or expired_token, start a new flow from the Authentication step.',
+    },
   },
   'par': {
     'create': {

@@ -11,6 +11,7 @@ import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import session from "express-session";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
+import crypto from "crypto";
 
 export class AuthorizationService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -83,6 +84,14 @@ export class AuthorizationService {
     const reqBody: AuthorizationIssueRequest = {
       ...req.session.authorization?.authorizationIssueRequest,
     } as AuthorizationIssueRequest;
+
+    // For Native SSO: generate a sessionId and include it in the issue request
+    // when nativeSsoRequested is true
+    if (req.session.authorization?.nativeSsoRequested) {
+      const sessionId = crypto.randomUUID();
+      reqBody.sessionId = sessionId;
+      log("Native SSO: generated sessionId for authorization issue", { sessionId });
+    }
 
     log("Issue authorization request parameters", { params: reqBody });
 
