@@ -1,447 +1,334 @@
-# CIBA (Client-Initiated Backchannel Authentication) Tutorial
+# CIBA (Client-Initiated Backchannel Authentication)
 
-- [Quick Start (5-Minute CIBA + POLL Mode)](#quick-start-5-minute-ciba--poll-mode)
+> **The short version:** CIBA lets a device (like a POS terminal or call center screen) initiate authentication without a browser redirect. The user approves on their own phone, and the device gets tokens via server-side polling.
+
+---
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
 - [Part 1: What is CIBA?](#part-1-what-is-ciba)
-- [Part 2: Authlete Console Setup](#part-2-authlete-console-setup)
-- [Part 3: CIBA Delivery Modes](#part-3-ciba-delivery-modes)
-- [Part 4: Step-by-Step CIBA Flow](#part-4-step-by-step-ciba-flow)
-- [Part 5: Client Demo Walkthrough](#part-5-client-demo-walkthrough)
-- [Part 6: Troubleshooting](#part-6-troubleshooting)
-- [Part 7: Failure Demonstrations](#part-7-failure-demonstrations)
+- [Part 2: Authlete Setup](#part-2-authlete-setup)
+- [Part 3: Delivery Modes](#part-3-delivery-modes)
+- [Part 4: Step-by-Step Flow](#part-4-step-by-step-flow)
+- [Part 5: SPA Testing Tool](#part-5-spa-testing-tool)
+- [Part 6: Failure Demonstrations](#part-6-failure-demonstrations)
+- [Part 7: Troubleshooting](#part-7-troubleshooting)
 - [Appendix: Server Architecture](#appendix-server-architecture)
 
-## Quick Start (5-Minute CIBA + POLL Mode)
+---
 
-Get a working CIBA POLL mode flow end-to-end in 5 minutes.
+## Quick Start
 
-### 1. Enable CIBA in Authlete Console
+Get a working CIBA POLL flow in 5 minutes.
 
-| Setting | Path in Console |
-|---------|----------------|
-| Supported Backchannel Token Delivery Modes | **Service Settings → Endpoints → CIBA** → check `POLL`, `PING`, `PUSH` |
-| Backchannel Authentication Endpoint | **Same page** → set to `http://localhost:3000/api/ciba/authentication` |
-| Auth Req ID Duration | **Same page** → set to `600` (10 minutes) |
-| Polling Interval | **Same page** → set to `5` (seconds) |
+### 1. Enable CIBA in Authlete
 
-### 2. Create a confidential client
+| Setting | Path | Value |
+|---------|------|-------|
+| Supported Backchannel Token Delivery Modes | **Service Settings → Endpoints → CIBA** | Check `POLL` |
+| Backchannel Authentication Endpoint | Same page | `http://localhost:3000/api/ciba/authentication` |
+| Auth Req ID Duration | Same page | `600` (10 minutes) |
+| Polling Interval | Same page | `5` (seconds) |
+
+### 2. Create a Client
 
 1. **Clients → Create** → Client Type: `Confidential`
-2. Token Auth Method: `CLIENT_SECRET_POST` (simplest for testing)
-3. Grant Types: `AUTHORIZATION_CODE`, `REFRESH_TOKEN`
-4. CIBA tab → Token Delivery Mode: `POLL`
-5. CIBA tab → User Code Required: `Not Required` (simplest for testing)
-6. Save and note the `clientId` and `clientSecret`
+2. Token Auth Method: `CLIENT_SECRET_POST`
+3. CIBA tab → Token Delivery Mode: `POLL`
+4. Save and note `clientId` and `clientSecret`
 
-### 3. Start the servers
+### 3. Start Servers
 
 ```bash
-docker compose up -d redis          # optional, for session storage
-npm --prefix server run dev          # Express on :3000
-npm --prefix client run dev          # SPA on :3001
+npm --prefix server run dev
+npm --prefix client run dev
 ```
 
-### 4. Run the CIBA flow in the SPA
+### 4. Test in SPA
 
-1. Open `http://localhost:3001` → click **CIBA** in the sidebar (under OIDC & Extensions)
-2. **Authentication tab**: Enter:
-   - Parameters: `login_hint=admin&scope=openid`
-   - Client ID: your `clientId`
-   - Client Secret: your `clientSecret`
-3. Click **Run** → you should get `action: USER_IDENTIFICATION` with a `ticket`
-4. The ticket is auto-filled into the Issue, Fail, and Complete tabs
-5. **Issue tab**: Click **Run** → returns `authReqId`, `expiresIn`, `interval`
-   - The `authReqId` is auto-filled into the **Poll Token** tab
-6. **Complete tab**: Click **Run** (defaults: `AUTHORIZED`, subject `admin`)
-   - Returns `NO_ACTION` (expected for POLL mode — tokens are now available for polling)
-7. **Poll Token tab**: Click **Poll Token** → returns `access_token`, `id_token`, etc.
-   - If you see `authorization_pending`, wait the interval and retry
-
-### 5. Verify it's working
-
-```bash
-# Check the CIBA server config
-curl http://localhost:3000/api/fapi/status | python3 -m json.tool | grep -E "backchannel|bc_"
-# Expected: backchannelAuthenticationEndpoint set, supportedBackchannelTokenDeliveryModes includes POLL
-```
+1. Open `http://localhost:3001` → **CIBA** in sidebar
+2. **Authentication tab**: `login_hint=admin&scope=openid` + credentials → **Run**
+3. **Issue tab**: **Run** (ticket auto-filled)
+4. **Complete tab**: **Run** (defaults: `AUTHORIZED`, subject `admin`)
+5. **Poll Token tab**: **Poll Token** → tokens
 
 ---
 
 ## Part 1: What is CIBA?
 
-**CIBA** (Client-Initiated Backchannel Authentication) is an OpenID Connect extension (CIBA Core 1.0) that defines a **decoupled authentication flow**. Unlike the traditional OAuth/OIDC flows where the user is redirected through a browser (redirect flow), CIBA allows the client application to directly communicate with the authorization server via a **backchannel** (server-to-server) — the user authenticates on a separate device.
+### The Problem: No Browser Redirect
 
-### Key Concept: Decoupled Flow
+Imagine you're at a hotel check-in kiosk. You need to sign in, but:
+- Typing your password on a shared touchscreen is risky
+- The kiosk can't redirect to your bank's login page
+- You're holding your phone, which has your banking app
 
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    subgraph Traditional["Traditional OAuth"]
+        T1["Browser"] -->|"Redirect"| T2["Auth Server"]
+        T2 -->|"Redirect back"| T1
+    end
+    subgraph CIBA["CIBA (Decoupled)"]
+        C1["Kiosk"] -->|"Server-to-server"| C2["Auth Server"]
+        C2 -->|"Push to phone"| C3["User's Phone"]
+    end
 ```
-Traditional (Redirect Flow):
-  Browser ──→ Authorization Server ←── Client
-  (user sees login page)                  │
-                                          └── redirects browser
 
-CIBA (Decoupled Flow):
-  Consumption Device ──→ Authorization Server ←── Authentication Device
-  (client app, no          │                       (user's phone,
-   browser redirect)       │                        authenticates here)
-                           └── server-to-server
-                                (backchannel)
+### The Solution: Decouple the Flow
+
+CIBA splits the "consumption device" (kiosk) from the "authentication device" (phone):
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Kiosk as 🖥️ Kiosk
+    participant Server as Auth Server
+    participant Phone as 📱 Phone
+    participant User as 👤 User
+
+    Kiosk->>Server: "I need to authenticate user X"
+    Server->>Phone: "Hey, approve login for kiosk?"
+    User->>Phone: Opens app, approves
+    Server->>Kiosk: "Done! Here's the token"
 ```
 
-### Real-World Use Cases
+### When to Use CIBA
 
-| Use Case | How CIBA Helps |
-|----------|---------------|
-| **Call center authentication** | Operator initiates auth on desktop; user approves on phone |
-| **Smart TV login** | TV shows a code; user authenticates on phone and enters the code |
-| **CIBA Pay** | POS terminal shows binding message; user confirms payment on phone |
-| **IoT device authorization** | Device requests access; owner approves via mobile app |
-| **Banking "approve transaction"** | ATM/terminal initiates; user approves on banking app |
-
-### Why CIBA?
-
-- **No browser redirect** — the client app doesn't need a browser or redirect URI
-- **Decoupled devices** — consumption device and authentication device can be physically separate
-- **Better UX** — user authenticates on their familiar device (phone) instead of a shared terminal
-- **Higher security** — authentication on a trusted personal device reduces phishing risk
-- **Client always confidential** — CIBA only works with confidential clients (public clients not allowed)
+| Scenario | Use CIBA? | Why |
+|----------|:---------:|-----|
+| Call center authentication | **Yes** | Operator on desktop, user on phone |
+| POS terminal | **Yes** | Payment app on user's phone |
+| Smart TV | **Yes** | No keyboard for password entry |
+| ATM/Banking | **Yes** | Approve transaction on banking app |
+| SPA with browser | **No** | Standard OAuth works fine |
 
 ### Three Delivery Modes
 
-CIBA defines three ways tokens are delivered after authentication:
-
-| Mode | Client Polls? | Server Pushes? | Use Case |
-|------|:---:|:---:|---------|
-| **POLL** | Yes (client polls token endpoint) | No | Simplest; no notification endpoint needed |
-| **PING** | Yes (client polls after notification) | Yes (ping to notification endpoint) | Reduces polling; needs notification endpoint |
-| **PUSH** | No | Yes (tokens pushed to notification endpoint) | Lowest latency; needs notification endpoint |
-
-See [Part 3](#part-3-ciba-delivery-modes) for detailed comparisons.
+| Mode | How It Works | Best For |
+|------|-------------|----------|
+| **POLL** | Device polls server for tokens | Simplest, no push infrastructure |
+| **PING** | Server pings device, then device polls | Moderate real-time needs |
+| **PUSH** | Server pushes tokens directly to device | Lowest latency |
 
 ---
 
-## Part 2: Authlete Console Setup
+## Part 2: Authlete Setup
 
-All CIBA configuration happens in the [Authlete Console](https://console.authlete.com/), not in code or env vars.
+### Service-Level Configuration
 
-### Step 1: Enable CIBA at the service level
+In the [Authlete Console](https://console.authlete.com/):
 
-1. Log into [Authlete Console](https://console.authlete.com/)
-2. Select your Service
-3. Go to **Service Settings → Endpoints → CIBA**
-4. Set the following:
+| Setting | Recommended Value | Why |
+|---------|------------------|-----|
+| Supported Backchannel Token Delivery Modes | `["POLL"]` | Start simple |
+| Backchannel Authentication Endpoint | `http://localhost:3000/api/ciba/authentication` | Where clients send requests |
+| Auth Req ID Duration | `600` (10 minutes) | Long enough for user to respond |
+| Polling Interval | `5` (seconds) | Prevents server overload |
 
-| Setting | Recommended Value | Description |
-|---------|------------------|-------------|
-| Supported Backchannel Token Delivery Modes | `POLL`, `PING`, `PUSH` | At least `POLL` for testing |
-| Backchannel Authentication Endpoint | `http://localhost:3000/api/ciba/authentication` | Must match this server's route |
-| Backchannel Auth Req ID Duration | `600` | How long `auth_req_id` is valid (seconds) |
-| Backchannel Polling Interval | `5` | Minimum interval between polls (seconds) |
-| Backchannel User Code Parameter | `Supported` | Enable `user_code` support (optional but useful) |
+### Client-Level Configuration
 
-5. Click **Save**
+| Setting | Recommended | Why |
+|---------|-------------|-----|
+| Client Type | `Confidential` | CIBA requires confidential clients |
+| Token Auth Method | `CLIENT_SECRET_POST` | Simplest for testing |
+| Token Delivery Mode | `POLL` | Start simple |
+| User Code Required | `Not Required` | Simplify initial testing |
 
-### Step 2: Create or configure a client for CIBA
-
-1. Go to **Clients → Create** (or edit an existing client)
-2. **Basic tab**:
-   - Client Type: `Confidential` (required — CIBA does not allow public clients)
-   - Token Auth Method: `CLIENT_SECRET_POST` (simplest for testing)
-3. **Grant Types**: at minimum, the ones you need. CIBA uses `urn:openid:params:grant-type:ciba` which is always enabled.
-4. **CIBA tab**:
-
-| Setting | Recommended | Description |
-|---------|-------------|-------------|
-| Token Delivery Mode | `POLL` | Choose the mode you want to test |
-| Notification Endpoint | `https://your-app.com/notification` | Required for PING/PUSH only |
-| Notification Token | (auto-generated) | Bearer token sent with notifications |
-| User Code Required | `Not Required` | Set to `Required` if you want to test `user_code` |
-| Requested Expiry (seconds) | (optional) | Override the service's default `auth_req_id` duration |
-
-5. If testing PING or PUSH mode, you must set up a **Notification Endpoint** that can receive POST requests from the authorization server.
-
-### Step 3: Verify configuration
-
-Use the server's FAPI status endpoint to check the live configuration:
+### Verify Configuration
 
 ```bash
-curl http://localhost:3000/api/fapi/status | python3 -m json.tool | grep -i backchannel
+curl http://localhost:3000/api/.well-known/openid-configuration | jq '.backchannel_authentication_endpoint'
 ```
-
-Expected output includes:
-- `backchannelAuthenticationEndpoint: "http://localhost:3000/api/ciba/authentication"`
-- `supportedBackchannelTokenDeliveryModes: ["POLL", ...]`
-- `backchannelAuthReqIdDuration: 600`
-- `backchannelPollingInterval: 5`
-
-### Step 4: Using the enable_ciba.ts helper
-
-The repo includes a helper script that configures CIBA on your Authlete service via the API:
-
-```bash
-# Set env vars first
-export AUTHLETE_BEARER_TOKEN=your_token
-export AUTHLETE_BASE_URL=https://api.authlete.com
-export AUTHLETE_SERVICE_ID=your_service_id
-export BASE_URL=http://localhost:3000
-
-# Run the helper
-npx ts-node tests/e2e/enable_ciba.ts
-```
-
-This script:
-1. Reads the current service configuration
-2. Sets `backchannelAuthenticationEndpoint`, `supportedBackchannelTokenDeliveryModes: ["POLL"]`, `backchannelAuthReqIdDuration: 600`, `backchannelPollingInterval: 5`
-3. Verifies the changes are applied
-
-> **Important:** If your test also sets other service properties (like `supportedScopes`, `jwks`), you must send all desired properties in a single `service/update` call. Subsequent `PUT` calls overwrite previous fields.
 
 ---
 
-## Part 3: CIBA Delivery Modes
-
-CIBA defines three distinct modes for delivering tokens after the end-user authenticates on their device.
+## Part 3: Delivery Modes
 
 ### POLL Mode (Simplest)
 
-In POLL mode, the client periodically polls the token endpoint until tokens are available.
+The client polls the token endpoint until tokens are available.
 
-```
-Client (CD)          Auth Server            Auth Device
-    │                     │                      │
-    │── Auth Request ────→│ (backchannel)         │
-    │←─ auth_req_id ─────│                      │
-    │                     │── Authenticate ─────→│
-    │                     │←──── Approve ────────│
-    │── Token Poll ──────→│ (grant_type=ciba)     │
-    │── Token Poll ──────→│                      │
-    │←── tokens ─────────│                      │
-```
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant Server as Auth Server
+    participant Phone as 📱 Phone
 
-**Key characteristics:**
-- Client **does not** need a notification endpoint
-- Client polls the token endpoint at the `interval` specified in the auth response
-- Poll returns `authorization_pending` until authentication is complete
-- Simplest to implement — no server-side push infrastructure needed
-
-**Request/Response:**
-
-```http
-POST /api/token HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-Authorization: Basic <base64(client_id:client_secret)>
-
-grant_type=urn:openid:params:grant-type:ciba&auth_req_id=<auth_req_id>
+    Client->>Server: Backchannel Auth Request
+    Server->>Client: auth_req_id
+    Server->>Phone: "Approve login?"
+    loop Polling (every 5s)
+        Client->>Server: Token request
+        Server->>Client: authorization_pending
+    end
+    Phone->>Server: User approves
+    Client->>Server: Token request
+    Server->>Client: access_token + id_token
 ```
 
-While pending:
-```json
-HTTP/1.1 400 Bad Request
-{"error": "authorization_pending", "error_description": "...", "interval": 5}
-```
-
-On success:
-```json
-HTTP/1.1 200 OK
-{"access_token": "...", "token_type": "Bearer", "id_token": "...", "expires_in": 3600}
-```
+**Pros:** Simple, no push infrastructure needed
+**Cons:** Higher latency (poll interval)
 
 ### PING Mode
 
-In PING mode, the server sends a lightweight notification (ping) to the client's notification endpoint when authentication is complete. The client then polls the token endpoint.
+Server sends a lightweight notification when auth completes.
 
-```
-Client (CD)          Auth Server            Auth Device
-    │                     │                      │
-    │── Auth Request ────→│ (backchannel)         │
-    │←─ auth_req_id ─────│                      │
-    │                     │── Authenticate ─────→│
-    │                     │←──── Approve ────────│
-    │←── PING ───────────│ (notification)        │
-    │── Token Poll ──────→│ (grant_type=ciba)     │
-    │←── tokens ─────────│                      │
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant Server as Auth Server
+    participant Phone as 📱 Phone
+
+    Client->>Server: Backchannel Auth Request
+    Server->>Client: auth_req_id
+    Server->>Phone: "Approve login?"
+    Phone->>Server: User approves
+    Server->>Client: PING (notification)
+    Client->>Server: Token request
+    Server->>Client: access_token + id_token
 ```
 
-**Key characteristics:**
-- Client **must** have a notification endpoint (`client_notification_endpoint`)
-- Client **must** provide a `client_notification_token` in the auth request
-- Notification contains only `auth_req_id` (lightweight)
-- Client polls token endpoint only after receiving the ping
+**Pros:** No unnecessary polling
+**Cons:** Requires notification endpoint
 
 ### PUSH Mode
 
-In PUSH mode, the server pushes the tokens directly to the client's notification endpoint.
+Server pushes tokens directly to client.
 
-```
-Client (CD)          Auth Server            Auth Device
-    │                     │                      │
-    │── Auth Request ────→│ (backchannel)         │
-    │←─ auth_req_id ─────│                      │
-    │                     │── Authenticate ─────→│
-    │                     │←──── Approve ────────│
-    │←── tokens ─────────│ (push notification)   │
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant Server as Auth Server
+    participant Phone as 📱 Phone
+
+    Client->>Server: Backchannel Auth Request
+    Server->>Client: auth_req_id
+    Server->>Phone: "Approve login?"
+    Phone->>Server: User approves
+    Server->>Client: access_token + id_token (pushed)
 ```
 
-**Key characteristics:**
-- Client **must** have a notification endpoint
-- Client **must** provide a `client_notification_token`
-- Tokens are **pushed directly** — no polling needed
-- Lowest latency but requires more infrastructure
-- ID token includes `urn:openid:params:jwt:claim:auth_req_id` claim
+**Pros:** Lowest latency
+**Cons:** Requires notification endpoint + token handling
 
 ### Mode Comparison
 
 | Feature | POLL | PING | PUSH |
-|---------|:---:|:----:|:----:|
-| Notification endpoint needed | No | Yes | Yes |
-| Client polls token endpoint | Yes (periodically) | Yes (after ping) | No |
-| Latency | Highest (poll interval) | Medium | Lowest |
-| Server-side complexity | Lowest | Medium | Highest |
-| `client_notification_token` in auth request | No | Yes | Yes |
-| `interval` in auth response | Yes | Yes | No |
-| `expires_in` in auth response | Yes | Yes | Yes |
-| Best for | Simple testing, no push infra | Moderate real-time needs | Real-time, production |
-
-### What this server supports
-
-This server's CIBA implementation delegates all mode-specific logic to Authlete. The four API endpoints (`authentication`, `issue`, `fail`, `complete`) are mode-agnostic — Authlete handles the delivery based on the client's configured `backchannelTokenDeliveryMode`.
-
-For PING and PUSH modes, the server's CIBA `complete` endpoint returns `action=NOTIFICATION` (instead of `NO_ACTION` for POLL), and the caller must send the notification to the client's notification endpoint.
+|---------|:----:|:----:|:----:|
+| Notification endpoint | No | Yes | Yes |
+| Client polls | Yes | Yes | No |
+| Latency | Highest | Medium | Lowest |
+| Complexity | Lowest | Medium | Highest |
 
 ---
 
-## Part 4: Step-by-Step CIBA Flow
+## Part 4: Step-by-Step Flow
 
-This section walks through a complete CIBA POLL mode flow using curl commands.
+### Complete POLL Mode Flow
 
-### Prerequisites
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant Server as Express
+    participant Authlete
+    participant Phone as 📱 Phone
 
-1. Authlete service configured with CIBA (see Part 2)
-2. A confidential client with `clientId`, `clientSecret`, and CIBA POLL mode
-3. This server running on `http://localhost:3000`
+    Note over Client,Phone: Step 1: Backchannel Auth Request
+    Client->>Server: POST /api/ciba/authentication<br/>login_hint=admin&scope=openid
+    Server->>Authlete: ciba.processAuthentication()
+    Authlete->>Server: ticket + hint
+    Server->>Client: 200 { ticket }
 
-### Step 1: Backchannel Authentication Request
+    Note over Client,Phone: Step 2: Issue Auth Req ID
+    Client->>Server: POST /api/ciba/issue<br/>ticket
+    Server->>Authlete: ciba.issue()
+    Authlete->>Server: auth_req_id + interval
+    Server->>Client: 200 { auth_req_id, expiresIn, interval }
 
-The client sends a backchannel authentication request to the server's CIBA endpoint. The `parameters` field is a URL-encoded string containing all the CIBA request parameters.
+    Note over Client,Phone: Step 3: User Approves on Phone
+    Server->>Phone: Notification
+    Phone->>User: Shows approval screen
+    User->>Phone: Approves
+    Phone->>Server: User decision
 
-**Basic example (login_hint only):**
+    Note over Client,Phone: Step 4: Complete Authentication
+    Client->>Server: POST /api/ciba/complete<br/>ticket + AUTHORIZED + admin
+    Server->>Authlete: ciba.complete()
+    Authlete->>Server: NO_ACTION
+    Server->>Client: 200 { action: NO_ACTION }
+
+    Note over Client,Phone: Step 5: Poll for Tokens
+    loop Until tokens available
+        Client->>Server: POST /api/token<br/>grant_type=ciba&auth_req_id=...
+        Server->>Authlete: token.process()
+        Authlete->>Server: authorization_pending
+        Server->>Client: 400 { error: authorization_pending }
+    end
+    Client->>Server: POST /api/token
+    Server->>Authlete: token.process()
+    Authlete->>Server: access_token + id_token
+    Server->>Client: 200 { access_token, id_token }
+```
+
+### What Just Happened?
+
+1. **Client** told the server: "I need to authenticate user X (hint: `admin`)"
+
+2. **Authlete** validated the request and returned a `ticket` — an opaque identifier for this flow
+
+3. **Server** issued an `auth_req_id` — what the client uses to poll for tokens
+
+4. **User** approved on their phone
+
+5. **Client** called `complete` to record the approval
+
+6. **Client** polled the token endpoint until tokens were available
+
+### API Endpoints
+
+| Endpoint | Method | Purpose | Auth Required |
+|----------|--------|---------|:-------------:|
+| `/api/ciba/authentication` | POST | Start CIBA flow | Client creds |
+| `/api/ciba/issue` | POST | Get `auth_req_id` | No |
+| `/api/ciba/complete` | POST | Record approval | No |
+| `/api/ciba/fail` | POST | Record denial | No |
+| `/api/token` | POST | Exchange for tokens | Client creds |
+
+### Request/Response Examples
+
+**Step 1: Authentication Request**
 
 ```bash
 curl -X POST http://localhost:3000/api/ciba/authentication \
   -H "Content-Type: application/json" \
   -d '{
-    "parameters": "login_hint=admin&scope=openid",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
+    "parameters": "login_hint=admin&scope=openid&binding_message=Approve+kiosk+login",
+    "clientId": "YOUR_CID",
+    "clientSecret": "YOUR_SEC"
   }'
 ```
 
-**With binding_message:** A human-readable message shown on both the consumption device and the authentication device so the end-user can confirm the transaction is related:
-
-```bash
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parameters": "login_hint=admin&scope=openid&binding_message=Pay+%2450+to+Acme+Corp",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
-  }'
-```
-
-**With user_code:** A secret code (like a PIN) known only to the user, providing an extra layer of security against fraudulent authentication requests:
-
-```bash
-# Requires client configured with User Code Required = Required
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parameters": "login_hint=admin&scope=openid&user_code=123456",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
-  }'
-```
-
-**With acr_values:** Request a specific authentication context class reference (e.g., a particular level of assurance):
-
-```bash
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parameters": "login_hint=admin&scope=openid&acr_values=urn%3Amace%3Aincommon%3Aiap%3Asilver",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
-  }'
-```
-
-**Using request object (JAR-based CIBA):** Instead of URL-encoded parameters, you can pass a signed JWT request object via the `request` parameter. This is useful for FAPI-compliant deployments:
-
-```bash
-# First create a JWT with the CIBA claims, then:
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parameters": "request=<signed_jwt>&client_id=<your_client_id>",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
-  }'
-```
-
-When using a `request` object, standard JWT claims like `iss`, `aud`, `exp`, `iat` are validated, and the JWT must be signed with the client's registered key.
-
-**With login_hint_token or id_hint_token (alternative hint types):**
-
-```bash
-# login_hint_token — an opaque token referencing the end-user
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parameters": "login_hint_token=some_opaque_token&scope=openid",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
-  }'
-
-# id_token_hint — a previously-issued ID token identifying the end-user
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parameters": "id_token_hint=<previous_id_token>&scope=openid",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
-  }'
-```
-
-**Successful response (action=USER_IDENTIFICATION):**
-
+**Response:**
 ```json
 {
   "action": "USER_IDENTIFICATION",
-  "responseContent": "...",
   "ticket": "ticket-abc123",
   "hintType": "LOGIN_HINT",
   "hint": "admin",
   "deliveryMode": "POLL",
-  "scopes": [{"name": "openid", ...}],
+  "scopes": [{"name": "openid"}],
   "clientName": "My Client"
 }
 ```
 
-Save the `ticket` value — you'll need it for subsequent steps.
-
-**Error responses:**
-- `400 BAD_REQUEST` — missing required parameters
-- `401 UNAUTHORIZED` — client authentication failed
-- `500 INTERNAL_SERVER_ERROR` — server error
-
-### Step 2: Issue Auth Req ID
-
-After identifying the end-user from the hint, the server issues an `auth_req_id`.
-
-```http
-POST /api/ciba/issue HTTP/1.1
-Content-Type: application/json
-
-{
-  "ticket": "ticket-abc123"
-}
-```
+**Step 2: Issue Auth Req ID**
 
 ```bash
 curl -X POST http://localhost:3000/api/ciba/issue \
@@ -449,34 +336,17 @@ curl -X POST http://localhost:3000/api/ciba/issue \
   -d '{"ticket": "ticket-abc123"}'
 ```
 
-**Successful response (action=OK):**
-
+**Response:**
 ```json
 {
   "action": "OK",
-  "responseContent": "...",
   "authReqId": "auth_req_id_xyz789",
   "expiresIn": 600,
   "interval": 5
 }
 ```
 
-The `authReqId` is what the client uses to poll for tokens. `expiresIn` tells how long the `auth_req_id` is valid, and `interval` tells the minimum polling interval.
-
-### Step 3: Complete Authentication
-
-After the end-user authenticates on their device, call the complete endpoint.
-
-```http
-POST /api/ciba/complete HTTP/1.1
-Content-Type: application/json
-
-{
-  "ticket": "ticket-abc123",
-  "result": "AUTHORIZED",
-  "subject": "admin"
-}
-```
+**Step 3: Complete (User Approved)**
 
 ```bash
 curl -X POST http://localhost:3000/api/ciba/complete \
@@ -484,524 +354,217 @@ curl -X POST http://localhost:3000/api/ciba/complete \
   -d '{"ticket": "ticket-abc123", "result": "AUTHORIZED", "subject": "admin"}'
 ```
 
-**Response (POLL mode — action=NO_ACTION):**
-
+**Response:**
 ```json
 {
-  "action": "NO_ACTION",
-  "responseContent": "..."
+  "action": "NO_ACTION"
 }
 ```
 
-In POLL mode, `NO_ACTION` means the server has stored the authorization result. The client will now poll the token endpoint.
-
-In PING/PUSH mode, `action=NOTIFICATION` means the server should send a notification to the client's notification endpoint (handled by the caller, not this endpoint).
-
-**Possible `result` values:**
-| Value | Meaning |
-|-------|---------|
-| `AUTHORIZED` | End-user approved the request |
-| `ACCESS_DENIED` | End-user rejected the request |
-| `TRANSACTION_FAILED` | Could not reach authentication device |
-
-### Step 4: Poll Token Endpoint (POLL mode)
-
-The client polls the token endpoint with `grant_type=urn:openid:params:grant-type:ciba` + `auth_req_id`.
-
-```http
-POST /api/token HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-Authorization: Basic <base64(client_id:client_secret)>
-
-grant_type=urn:openid:params:grant-type:ciba&auth_req_id=auth_req_id_xyz789
-```
+**Step 4: Poll for Tokens**
 
 ```bash
-# You may need to wait a moment for Authlete to process the complete request
-sleep 3
-
 curl -X POST http://localhost:3000/api/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -u "<client_id>:<client_secret>" \
+  -u "YOUR_CID:YOUR_SEC" \
   -d "grant_type=urn:openid:params:grant-type:ciba&auth_req_id=auth_req_id_xyz789"
 ```
 
-**Successful response:**
+**While pending:**
+```json
+{"error": "authorization_pending", "interval": 5}
+```
 
+**On success:**
 ```json
 {
-  "access_token": "eyJraWQiOiI...",
+  "access_token": "eyJraWQ...",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "id_token": "eyJraWQiOiI...",
-  "refresh_token": "...",
-  "scope": "openid"
+  "id_token": "eyJraWQ..."
 }
 ```
 
-**Pending response (not yet authorized):**
+---
 
-```json
-HTTP/1.1 400 Bad Request
-{
-  "error": "authorization_pending",
-  "error_description": "[A055103] The authorization request is still pending.",
-  "interval": 5
-}
-```
+## Part 5: SPA Testing Tool
 
-The client should wait `interval` seconds before polling again.
+### Accessing CIBA
 
-**Slow down response (polling too fast):**
+1. Start servers
+2. Open `http://localhost:3001`
+3. Click **CIBA** in sidebar
 
-```json
-HTTP/1.1 400 Bad Request
-{
-  "error": "slow_down",
-  "error_description": "[A055104] The polling interval is too short.",
-  "interval": 10
-}
-```
+### Five Tabs
 
-When receiving `slow_down`, the client must increase the polling interval (e.g., add 5 seconds) and MUST NOT poll faster than the new `interval` value. This prevents overwhelming the server.
+| Tab | Purpose | Key Fields |
+|-----|---------|------------|
+| **Authentication** | Start CIBA flow | Parameters, Client ID, Secret |
+| **Issue** | Get `auth_req_id` | Ticket (auto-filled) |
+| **Fail** | Record denial | Ticket, Reason |
+| **Complete** | Record approval | Ticket, Result, Subject |
+| **Poll Token** | Get tokens | `auth_req_id` (auto-filled) |
 
-**Error response (access denied):**
+### Testing Workflow
 
-```json
-HTTP/1.1 400 Bad Request
-{
-  "error": "access_denied",
-  "error_description": "[A055105] The end-user denied the authorization request."
-}
-```
+1. **Authentication**: `login_hint=admin&scope=openid` → **Run** → get `ticket`
+2. **Issue**: **Run** → get `auth_req_id`
+3. **Complete**: **Run** (defaults: `AUTHORIZED`, `admin`)
+4. **Poll Token**: **Poll Token** → get tokens
 
-**Expired token response (auth_req_id expired):**
+> **Note:** The SPA doesn't poll automatically. Click **Poll Token** manually after each interval.
 
-```json
-HTTP/1.1 400 Bad Request
-{
-  "error": "expired_token",
-  "error_description": "[A055106] The authentication request ID has expired."
-}
-```
+---
 
-When the `auth_req_id` expires, the client must start a new CIBA flow from scratch (Step 1).
+## Part 6: Failure Demonstrations
 
-### Step 5: Fail Authentication (Error Path)
-
-If the end-user cannot be identified or the request is invalid, call the fail endpoint.
-
-```http
-POST /api/ciba/fail HTTP/1.1
-Content-Type: application/json
-
-{
-  "ticket": "ticket-abc123",
-  "reason": "UNKNOWN_USER_ID"
-}
-```
+### No Client Credentials
 
 ```bash
-curl -X POST http://localhost:3000/api/ciba/fail \
+curl -X POST http://localhost:3000/api/ciba/authentication \
   -H "Content-Type: application/json" \
-  -d '{"ticket": "ticket-abc123", "reason": "UNKNOWN_USER_ID"}'
+  -d '{"parameters": "login_hint=admin&scope=openid"}'
 ```
 
 **Response:**
-
-```json
-{
-  "action": "FORBIDDEN",
-  "responseContent": "..."
-}
-```
-
-**Possible `reason` values:**
-
-| Reason | HTTP Status | Description |
-|--------|:-----------:|-------------|
-| `ACCESS_DENIED` | 403 | End-user rejected |
-| `EXPIRED_LOGIN_HINT_TOKEN` | 400 | Hint token expired |
-| `INVALID_BINDING_MESSAGE` | 400 | Binding message invalid |
-| `INVALID_TARGET` | 400 | Invalid target |
-| `INVALID_USER_CODE` | 400 | Wrong user code |
-| `MISSING_USER_CODE` | 400 | User code required but missing |
-| `SERVER_ERROR` | 500 | Server-side error |
-| `UNAUTHORIZED_CLIENT` | 400 | Client not authorized for CIBA |
-| `UNKNOWN_USER_ID` | 403 | Could not identify end-user |
-
-### Full Flow Summary (POLL Mode)
-
-```
-Client                          Server
-  │                                │
-  │  1. POST /api/ciba/authentication
-  │───── parameters + creds ──────→│  Authlete validates
-  │←──── ticket + hint ───────────│
-  │                                │
-  │  2. POST /api/ciba/issue
-  │───── ticket ──────────────────→│  Authlete issues auth_req_id
-  │←──── auth_req_id + interval ──│
-  │                                │
-  │  3. Authenticate user on device│
-  │   (real implementation)        │
-  │                                │
-  │  4. POST /api/ciba/complete
-  │───── ticket + result + sub ───→│  Authlete stores result
-  │←──── NO_ACTION ───────────────│
-  │                                │
-  │  5. GET /api/token (polling)
-  │───── auth_req_id ─────────────→│  Authlete issues tokens
-  │←──── access_token + id_token ─│
-```
-
----
-
-## Part 5: Client Demo Walkthrough
-
-The React SPA includes a **CIBA** section that lets you test the complete CIBA POLL flow interactively — from authentication through token polling.
-
-### Opening the CIBA section
-
-1. Start both servers: `npm --prefix server run dev` + `npm --prefix client run dev`
-2. Open `http://localhost:3001`
-3. Click **CIBA** in the sidebar (under OIDC & Extensions)
-
-### Using the CIBA tools
-
-The CIBA section has a tab bar with 5 operations:
-
-**1. Authentication tab:**
-
-| Field | Description |
-|-------|-------------|
-| Parameters | URL-encoded CIBA parameters. Must include at minimum `login_hint=<user>` and `scope=openid` |
-| Client ID | Your confidential client's ID |
-| Client Secret | Your confidential client's secret |
-
-Click **Run** → on success, the `ticket` is auto-filled into the Issue, Fail, and Complete tabs.
-
-**2. Issue tab:**
-
-| Field | Description |
-|-------|-------------|
-| Ticket | Auto-filled from the authentication response |
-
-Click **Run** → on success, returns `auth_req_id`, `expires_in`, and `interval`.
-
-**3. Fail tab:**
-
-| Field | Description |
-|-------|-------------|
-| Ticket | Auto-filled from the authentication response |
-| Reason | Dropdown with all 9 fail reasons |
-
-Click **Run** → calls the fail endpoint and returns the error response.
-
-**4. Complete tab:**
-
-| Field | Description |
-|-------|-------------|
-| Ticket | Auto-filled from the authentication response |
-| Result | Dropdown: `AUTHORIZED`, `ACCESS_DENIED`, `TRANSACTION_FAILED` |
-| Subject | The end-user subject identifier (e.g., `admin`) |
-
-Click **Run** → on success, completes the CIBA flow.
-
-**5. Poll Token tab:**
-
-| Field | Description |
-|-------|-------------|
-| auth_req_id | Auto-filled from Issue response |
-| Poll Token button | Polls `/api/token` with `grant_type=urn:openid:params:grant-type:ciba` |
-| Expected interval | Shows the polling interval from the Issue response |
-
-Click **Poll Token** → on success, returns `access_token`, `id_token`, `refresh_token` (if applicable). If the user hasn't completed authorization yet, you'll see `authorization_pending` or `slow_down`.
-
-### Testing the full flow
-
-1. Go to **CIBA** section
-2. **Authentication tab**:
-   - Parameters: `login_hint=admin&scope=openid`
-   - Enter your `clientId` and `clientSecret`
-   - Click **Run** → expect `action: USER_IDENTIFICATION`
-3. **Issue tab**: Click **Run** (ticket is pre-filled) → `authReqId` auto-filled into Poll Token tab
-4. **Complete tab**: Click **Run** (defaults: `AUTHORIZED`, subject `admin`)
-5. **Poll Token tab**: Click **Poll Token** → expect `access_token`, `id_token`, `refresh_token` (if applicable)
-
----
-
-## Part 6: Troubleshooting
-
-### "action is INTERNAL_SERVER_ERROR"
-
-**Cause:** Authlete API call failed.
-**Fix:** Check `responseContent` for error details. Common causes:
-- `login_hint` format wrong or user not found
-- CIBA not enabled on the service (check `supportedBackchannelTokenDeliveryModes`)
-- `scope=openid` missing from parameters
-
-### "Missing required field: parameters"
-
-**Cause:** The `parameters` field was not sent in the request body.
-**Fix:** Ensure your JSON body includes `"parameters": "login_hint=admin&scope=openid"`.
-
-### 401 Unauthorized on authentication
-
-**Cause:** Client authentication failed.
-**Fix:** Verify `clientId` and `clientSecret` match a CIBA-enabled confidential client. CIBA only allows confidential clients — public clients will be rejected.
-
-### "No user found with the given hint"
-
-**Cause:** The `login_hint` value doesn't match any known user.
-**Fix:** Use a valid user. For this server's demo, use `admin` (the default demo user). If `AUTH_USERS` env var is set, use one of those subjects.
-
-### auth_req_id expires before polling
-
-**Cause:** The polling interval or authentication process took too long.
-**Fix:** Increase `backchannelAuthReqIdDuration` in Authlete Console (e.g., to 600 or 1200 seconds).
-
-### Polling returns "authorization_pending" forever
-
-**Cause:** The `complete` endpoint was not called, or was called with wrong values.
-**Fix:**
-1. Ensure you called `POST /api/ciba/complete` with the correct `ticket`
-2. Check that `result` is `"AUTHORIZED"` (not `ACCESS_DENIED`)
-3. Verify the `ticket` matches the one from the authentication response
-
-### Polling returns "slow_down"
-
-**Cause:** Polling interval is too short (less than the `interval` returned in the issue response).
-**Fix:** Wait at least `interval` seconds between token endpoint requests.
-
-### "action is INVALID_TICKET"
-
-**Cause:** The ticket was already used, expired, or never existed.
-**Fix:** Get a fresh ticket from `POST /api/ciba/authentication` and use it immediately.
-
-### PING/PUSH mode: "action is NOTIFICATION" but no notification sent
-
-**Cause:** This server's `complete` endpoint returns `NOTIFICATION` in PING/PUSH modes, but the notification delivery to the client's endpoint is the caller's responsibility.
-**Fix:** After receiving `action=NOTIFICATION`, the caller must:
-1. Extract `clientNotificationEndpoint` and `clientNotificationToken` from the original authentication response
-2. POST the `responseContent` to the notification endpoint with `Authorization: Bearer <token>`
-
-### "CIBA is not enabled on this service"
-
-**Cause:** The Authlete service does not have `supportedBackchannelTokenDeliveryModes` configured.
-**Fix:** Go to Authlete Console → **Service Settings → Endpoints → CIBA** → check at least `POLL` → Save.
-
----
-
-## Part 7: Failure Demonstrations
-
-This section proves that CIBA's client authentication and hint-based identification actually prevent unauthorized access.
-
-### Demo 1: CIBA request without client credentials
-
-A client that doesn't authenticate cannot initiate a CIBA flow:
-
-```bash
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{"parameters": "login_hint=admin&scope=openid"}'
-```
-
-Expected response:
-```json
-HTTP/1.1 400 Bad Request
-{
-  "error": "invalid_request",
-  "error_description": "Missing required field: parameters"
-}
-```
-
-Wait — actually the validation passes because `clientId` and `clientSecret` are optional fields. Authlete itself will reject the request:
-
-```bash
-curl -X POST http://localhost:3000/api/ciba/authentication \
-  -H "Content-Type: application/json" \
-  -d '{"parameters": "login_hint=admin&scope=openid"}'
-```
-
-Expected response:
 ```json
 HTTP/1.1 401 Unauthorized
 {
   "action": "UNAUTHORIZED",
-  "resultCode": "...",
-  "resultMessage": "...",
   "responseContent": "..."
 }
 ```
 
-Authlete requires client authentication at the backchannel authentication endpoint. Anonymous requests are rejected.
-
-### Demo 2: Wrong client secret
-
-A client with correct `clientId` but wrong `clientSecret` will be rejected:
+### Wrong Client Secret
 
 ```bash
 curl -X POST http://localhost:3000/api/ciba/authentication \
   -H "Content-Type: application/json" \
   -d '{
     "parameters": "login_hint=admin&scope=openid",
-    "clientId": "<your_client_id>",
+    "clientId": "YOUR_CID",
     "clientSecret": "wrong_secret"
   }'
 ```
 
-Expected response:
+**Response:**
 ```json
 HTTP/1.1 401 Unauthorized
 {
-  "action": "UNAUTHORIZED",
-  "responseContent": "..."
+  "action": "UNAUTHORIZED"
 }
 ```
 
-### Demo 3: Unknown login_hint
-
-A request with a non-existent user hint will fail:
+### Unknown User
 
 ```bash
 curl -X POST http://localhost:3000/api/ciba/authentication \
   -H "Content-Type: application/json" \
   -d '{
-    "parameters": "login_hint=nonexistent_user&scope=openid",
-    "clientId": "<your_client_id>",
-    "clientSecret": "<your_client_secret>"
+    "parameters": "login_hint=nonexistent&scope=openid",
+    "clientId": "YOUR_CID",
+    "clientSecret": "YOUR_SEC"
   }'
 ```
 
-The server forwards the request to Authlete, which returns `action=USER_IDENTIFICATION` with the hint. Since the server doesn't manage user data (Authlete doesn't either), the identification happens in the caller's code. If you then call `POST /api/ciba/fail` with `reason=UNKNOWN_USER_ID`, it returns `403 FORBIDDEN`.
+Then call fail:
+```bash
+curl -X POST http://localhost:3000/api/ciba/fail \
+  -H "Content-Type: application/json" \
+  -d '{"ticket": "YOUR_TICKET", "reason": "UNKNOWN_USER_ID"}'
+```
 
-### Demo 4: Public client cannot use CIBA
+**Response:**
+```json
+HTTP/1.1 403 Forbidden
+{
+  "action": "FORBIDDEN"
+}
+```
 
-CIBA requires confidential clients. A client registered as `public` would be rejected at the Authlete level.
+### Security Summary
 
-### What this proves
+| Attack | Protected By | Result |
+|--------|-------------|:------:|
+| No client auth | Authlete requires credentials | ❌ Blocked |
+| Wrong secret | Authlete validates | ❌ Blocked |
+| Unknown user | Hint-based identification fails | ❌ Blocked |
+| Public client | Authlete rejects | ❌ Blocked |
 
-| Attack Scenario | Protected By | Result |
-|----------------|-------------|--------|
-| No client authentication | Authlete requires client auth at BC endpoint | ❌ Fails (Demo 1) |
-| Wrong client secret | Authlete validates credentials | ❌ Fails (Demo 2) |
-| Unknown user hint | Hint-based identification fails; caller returns UNKNOWN_USER_ID | ❌ Fails (Demo 3) |
-| Public client | Authlete rejects non-confidential clients | ❌ Fails (Demo 4) |
-| Stolen bearer token (no DPoP) | Token theft is possible in standard Bearer tokens — see FAPI tutorial for DPoP protection | ⚠️ Bearer |
+---
+
+## Part 7: Troubleshooting
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| "Missing required field: parameters" | `parameters` not in body | Add `"parameters": "login_hint=admin&scope=openid"` |
+| 401 on authentication | Wrong credentials | Check `clientId`/`clientSecret` |
+| "No user found with given hint" | Unknown `login_hint` | Use valid user (default: `admin`) |
+| `auth_req_id` expires | Too slow to poll | Increase `backchannelAuthReqIdDuration` |
+| "authorization_pending" forever | `complete` not called | Call `POST /api/ciba/complete` with `AUTHORIZED` |
+| "slow_down" | Polling too fast | Wait `interval` seconds between polls |
+| "INVALID_TICKET" | Ticket used/expired | Get fresh ticket from authentication |
+| "CIBA not enabled" | Service not configured | Enable in Authlete Console |
+| PING/PUSH: `NOTIFICATION` action | Caller must deliver | Send `responseContent` to notification endpoint |
 
 ---
 
 ## Appendix: Server Architecture
 
-### Files involved in CIBA
+### Files
 
 | File | Role |
 |------|------|
-| `server/src/routes/ciba.routes.ts` | Route definitions (`POST /ciba/authentication`, `POST /ciba/issue`, `POST /ciba/fail`, `POST /ciba/complete`) |
-| `server/src/controllers/ciba.controller.ts` | Request validation, action-to-status mapping, error handling |
-| `server/src/services/ciba.service.ts` | Authlete API delegation (`ciba.processAuthentication`, `ciba.issue`, `ciba.fail`, `ciba.complete`) |
-| `server/src/utils/validation.ts` | Zod schemas (`cibaAuthenticationSchema`, `cibaIssueSchema`, `cibaFailSchema`, `cibaCompleteSchema`) |
-| `client/src/services/ciba.service.ts` | Client-side API calls to all 4 CIBA endpoints |
-| `client/src/components/oidc/CibaSection.tsx` | CIBA demo UI with tabbed operations |
-| `client/src/data/operationDocs.ts:438-480` | Inline documentation for each CIBA operation |
-| `client/src/config.ts:60-63` | CIBA endpoint URLs |
-| `server/tests/e2e/enable_ciba.ts` | Helper script to configure CIBA on Authlete service |
-| `server/tests/e2e/e2e.test.ts:1023-1135` | E2E tests for CIBA happy path and denied path |
-| `server/tests/unit/services/ciba.service.test.ts` | Unit tests for CibaService |
-| `server/tests/integration/routes.test.ts:108-135` | Integration tests for CIBA route handlers |
+| `server/src/services/ciba.service.ts` | Authlete SDK wrapper |
+| `server/src/controllers/ciba.controller.ts` | Request handling |
+| `server/src/routes/ciba.routes.ts` | Route definitions |
+| `client/src/services/ciba.service.ts` | Client API calls |
+| `client/src/components/oidc/CibaSection.tsx` | SPA testing UI |
 
-### CIBA API endpoints
+### Authlete SDK Mapping
 
-| Endpoint | Method | Request Body | Auth | Description |
-|----------|--------|-------------|------|-------------|
-| `/api/ciba/authentication` | POST | `{ parameters, clientId?, clientSecret? }` | Optional (passed to Authlete) | Process backchannel authentication request |
-| `/api/ciba/issue` | POST | `{ ticket }` | None | Issue `auth_req_id` for polling |
-| `/api/ciba/fail` | POST | `{ ticket, reason }` | None | Fail a CIBA authentication |
-| `/api/ciba/complete` | POST | `{ ticket, result, subject }` | None | Complete CIBA authentication with user decision |
+| Express Endpoint | Authlete Method |
+|-----------------|----------------|
+| `POST /api/ciba/authentication` | `ciba.processAuthentication()` |
+| `POST /api/ciba/issue` | `ciba.issue()` |
+| `POST /api/ciba/fail` | `ciba.fail()` |
+| `POST /api/ciba/complete` | `ciba.complete()` |
 
-### Authlete API mapping
+### Action-to-Status Mapping
 
-This server's CIBA implementation maps 1:1 to Authlete's CIBA API:
+| Endpoint | Action | HTTP Status |
+|----------|--------|:-----------:|
+| Authentication | `USER_IDENTIFICATION` | 200 |
+| Authentication | `UNAUTHORIZED` | 401 |
+| Issue | `OK` | 200 |
+| Issue | `INVALID_TICKET` | 400 |
+| Fail | `FORBIDDEN` | 403 |
+| Complete | `NO_ACTION` | 200 (POLL) |
+| Complete | `NOTIFICATION` | 200 (PING/PUSH) |
 
-| Express Endpoint | Authlete API SDK Method |
-|-----------------|------------------------|
-| `POST /api/ciba/authentication` | `authleteApi.ciba.processAuthentication()` |
-| `POST /api/ciba/issue` | `authleteApi.ciba.issue()` |
-| `POST /api/ciba/fail` | `authleteApi.ciba.fail()` |
-| `POST /api/ciba/complete` | `authleteApi.ciba.complete()` |
+---
 
-The token endpoint (`POST /api/token`) handles CIBA token requests via the standard `authleteApi.token.create()` call, with `grant_type=urn:openid:params:grant-type:ciba` — no custom token endpoint is needed.
+## Summary
 
-### Action-to-HTTP status mapping
+CIBA is simple:
 
-**Authentication endpoint:**
+1. **Client** sends backchannel auth request → gets `ticket`
+2. **Server** issues `auth_req_id` for polling
+3. **User** approves on phone
+4. **Client** calls `complete` with approval
+5. **Client** polls token endpoint → gets tokens
 
-| Authlete Action | HTTP Status |
-|----------------|:-----------:|
-| `USER_IDENTIFICATION` | 200 |
-| `BAD_REQUEST` | 400 |
-| `UNAUTHORIZED` | 401 |
-| `INTERNAL_SERVER_ERROR` | 500 |
+**Use CIBA when:**
+- No browser redirect possible
+- User has a separate authentication device
+- Need server-side authentication (call center, POS)
 
-**Issue endpoint:**
+**Don't use CIBA when:**
+- Standard OAuth works (SPA, mobile app)
 
-| Authlete Action | HTTP Status |
-|----------------|:-----------:|
-| `OK` | 200 |
-| `INVALID_TICKET` | 400 |
-| `INTERNAL_SERVER_ERROR` | 500 |
+---
 
-**Fail endpoint:**
+## References
 
-| Authlete Action | HTTP Status |
-|----------------|:-----------:|
-| `FORBIDDEN` | 403 |
-| `BAD_REQUEST` | 400 |
-| `INTERNAL_SERVER_ERROR` | 500 |
-
-**Complete endpoint:**
-
-| Authlete Action | HTTP Status | Meaning |
-|----------------|:-----------:|---------|
-| `NO_ACTION` | 200 | POLL mode — tokens available for polling |
-| `NOTIFICATION` | 200 | PING/PUSH mode — caller must deliver notification |
-
-### Data flow diagram
-
-```
-┌──────────┐    POST /api/ciba/authentication  ┌──────────────┐
-│          │ ── {parameters, clientId,           │              │
-│  Client  │      clientSecret}                │  Express     │
-│  (SPA)   │                                    │  Server      │
-│          │    POST /api/ciba/issue             │              │
-│          │ ── {ticket}                       │  Authlete    │
-│          │                                    │  SDK         │
-│          │    POST /api/ciba/complete          │              │
-│          │ ── {ticket, result, subject}      │              │
-│          │                                    │              │
-│          │    POST /api/token (poll)           │   Authlete   │
-│          │ ── grant_type=CIBA + auth_req_id  │   Cloud API  │
-│          │                                    │              │
-│          │←── access_token + id_token ────────│              │
-└──────────┘                                    └──────────────┘
-```
-
-### Test coverage
-
-- **Unit tests** (`tests/unit/services/ciba.service.test.ts`): Mocks all 4 Authlete SDK methods — `processAuthentication`, `issue`, `fail`, `complete`
-- **Integration tests** (`tests/integration/routes.test.ts:108-135`): Full Express stack with mocked Authlete — validates route wiring, action-to-status mapping, and error handling
-- **E2E tests** (`tests/e2e/e2e.test.ts:1023-1135`): Two complete flows:
-  - **Happy path**: authenticate → issue → complete → token exchange (200)
-  - **Denied path**: authenticate → issue → fail → poll token (400)
-- **Validation tests** (`tests/unit/utils/validation.test.ts`): Tests all 4 Zod schemas — valid data and missing field errors
-
-### Configuration summary
-
-| Setting | Console Path | Required Value |
-|---------|-------------|----------------|
-| Supported Backchannel Token Delivery Modes | **Endpoints → CIBA** | `["POLL"]` minimum |
-| Backchannel Authentication Endpoint | **Endpoints → CIBA** | `http://localhost:3000/api/ciba/authentication` |
-| Client Type | **Clients → Basic** | `Confidential` |
-| Token Delivery Mode | **Clients → CIBA** | `POLL` (for testing) |
-| Grant Types | **Clients → Basic** | At minimum what you need + implicit CIBA support |
+- [CIBA Core 1.0](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html)
+- [Authlete KB: CIBA](https://www.authlete.com/kb/ciba/)
+- [FAPI-CIBA Profile](https://openid.net/specs/fapi-1_0-final.html#client-initiated-backchannel-authentication-profile)

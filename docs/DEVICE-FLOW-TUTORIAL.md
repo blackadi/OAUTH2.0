@@ -1,304 +1,231 @@
 # OAuth 2.0 Device Authorization Grant (Device Flow) — RFC 8628
 
-A comprehensive guide to the Device Flow: what it is, why it exists, how Authlete implements it, and how to test it with this server and client.
+> **The short version:** Device Flow lets devices without keyboards (smart TVs, game consoles, IoT) get authorization by showing a code on screen while the user completes login on their phone.
 
 ---
 
 ## Table of Contents
 
-- [Part 1: Introduction & Motivation](#part-1-introduction--motivation)
+- [Part 1: Why Device Flow Exists](#part-1-why-device-flow-exists)
 - [Part 2: How Device Flow Works](#part-2-how-device-flow-works)
-- [Part 3: Authlete Device Flow Configuration](#part-3-authlete-device-flow-configuration)
+- [Part 3: Authlete Configuration](#part-3-authlete-configuration)
 - [Part 4: Server Implementation](#part-4-server-implementation)
-- [Part 5: Step-by-Step Device Flow (API)](#part-5-step-by-step-device-flow-api)
-- [Part 6: Step-by-Step Device Flow (Browser)](#part-6-step-by-step-device-flow-browser)
-- [Part 7: The Device Flow API Endpoints](#part-7-the-device-flow-api-endpoints)
-- [Part 8: Token Endpoint — Device Code Exchange](#part-8-token-endpoint--device-code-exchange)
-- [Part 9: Client SPA Testing Tool Walkthrough](#part-9-client-spa-testing-tool-walkthrough)
-- [Part 10: Complete End-to-End Test Scenarios](#part-10-complete-end-to-end-test-scenarios)
-- [Part 11: Error Scenarios](#part-11-error-scenarios)
-- [Part 12: RFC 8628 Compliance Checklist](#part-12-rfc-8628-compliance-checklist)
-- [Part 13: Security Considerations](#part-13-security-considerations)
-- [Part 14: Troubleshooting](#part-14-troubleshooting)
+- [Part 5: Step-by-Step API Flow](#part-5-step-by-step-api-flow)
+- [Part 6: Browser-Based Flow](#part-6-browser-based-flow)
+- [Part 7: Token Endpoint — Polling](#part-7-token-endpoint--polling)
+- [Part 8: SPA Testing Tool](#part-8-spa-testing-tool)
+- [Part 9: Complete Test Scenarios](#part-9-complete-test-scenarios)
+- [Part 10: Error Scenarios](#part-10-error-scenarios)
+- [Part 11: RFC 8628 Compliance](#part-11-rfc-8628-compliance)
+- [Part 12: Security Considerations](#part-12-security-considerations)
+- [Part 13: Troubleshooting](#part-13-troubleshooting)
 
 ---
 
-## Part 1: Introduction & Motivation
+## Part 1: Why Device Flow Exists
 
-### What is Device Flow?
+### The Problem: Devices Without Keyboards
 
-The **Device Authorization Grant** ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), commonly called "Device Flow," is an OAuth 2.0 extension that allows devices with limited input capabilities (smart TVs, media consoles, printers, IoT devices) to obtain access tokens by having the user authorize on a **separate device** (phone, laptop) that has a full browser.
+Imagine you're watching Netflix on your smart TV. You want to sign in, but the TV remote is terrible for typing. Even worse, some devices like IoT sensors or printers can't display a browser at all.
 
-### Why was Device Flow created?
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    subgraph Problems["The Input Problem"]
+        TV["📺 Smart TV<br/>No keyboard<br/>Only remote"]
+        Game["🎮 Game Console<br/>Controller only<br/>No browser"]
+        IoT["🖨️ IoT Device<br/>No screen<br/>No input"]
+    end
+```
 
-| Problem | How Device Flow Fixes It |
-|---------|--------------------------|
-| **No browser** — Smart TVs, game consoles, and IoT devices cannot open a browser for standard OAuth redirects | The device only needs to display a URL and a short code. The user opens the browser on their phone/laptop and enters the code there. |
-| **Limited input** — Devices with only a remote control or voice input cannot type complex credentials | The user types on their phone's keyboard, which is much easier. The user code is designed to be short (e.g., `WDJB-MJHT`). |
-| **No redirect URI** — Devices behind NAT or without a web server cannot receive OAuth callbacks | The device **polls** the token endpoint instead of waiting for a redirect. No redirect URI needed. |
-| **Input security** — Typing passwords on a shared TV screen is insecure (shoulder surfing) | The user authenticates on their personal device (phone), keeping credentials private. |
+| Problem | What Happens | Why It Matters |
+|---------|-------------|----------------|
+| **No keyboard** | Can't type username/password on TV | Users give up |
+| **No browser** | Can't redirect to login page | Standard OAuth fails |
+| **Limited input** | Remote control navigation is painful | Bad user experience |
+| **Security risk** | Typing passwords on shared screen | Shoulder surfing |
 
-### Real-World Use Cases
+### The Solution: Split the Flow
 
-| Device | Example |
-|--------|---------|
-| Smart TV | Netflix, YouTube, Spotify on TV — shows code, user authorizes on phone |
-| Game Console | PlayStation, Xbox streaming apps |
-| CLI Tools | `gh` (GitHub CLI) — shows a one-time code, user authorizes in browser |
-| IoT / Printers | Network printers, smart home hubs |
-| Set-Top Boxes | Roku, Apple TV, Fire TV Stick |
+Device Flow splits authorization into two parts:
 
-### When should you use Device Flow?
+1. **Device** shows a short code and URL
+2. **User** enters the code on their phone
+3. **Device** polls the server until approved
 
-- **When** the device cannot reliably open a browser or receive redirects
-- **When** the device has limited text input (remote control, voice only)
-- **When** the user has a secondary device (phone, laptop) they can use
-- **Never** as a replacement for browser-based flows on capable devices (smartphones, desktops)
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Device as 📺 Device (TV)
+    participant Server as Auth Server
+    participant Phone as 📱 Phone
+    participant User as 👤 User
+
+    Device->>Server: "I need access"
+    Server->>Device: "Here's a code: WDJB-MJHT"
+    Device->>User: "Go to example.com/device, enter: WDJB-MJHT"
+    User->>Phone: Opens browser, enters code
+    Phone->>Server: Code verified
+    Server->>User: Login + consent
+    User->>Phone: Approves
+    Device->>Server: "Is it done yet?"
+    Server->>Device: "Yes! Here's your token"
+```
+
+### When Should You Use Device Flow?
+
+| Scenario | Use Device Flow? | Why |
+|----------|:----------------:|-----|
+| Smart TV app | **Yes** | Can't type, no browser |
+| Game console | **Yes** | Controller input only |
+| CLI tool | **Yes** | `gh` CLI uses this |
+| IoT device | **Yes** | No screen or input |
+| Mobile app | **No** | Can use standard OAuth |
+| SPA | **No** | Can use standard OAuth |
 
 ---
 
 ## Part 2: How Device Flow Works
 
-### The Flow at a Glance
+### The Complete Flow
 
-```
-     Device (TV/App)                          Authorization Server                        User (Phone/Laptop)
-          │                                         │                                          │
-          │  (A) POST /device/authorization          │                                          │
-          │  (client_id, scope)                      │                                          │
-          │────────────────────────────────────────>│                                          │
-          │                                         │                                          │
-          │  (B) { device_code, user_code,           │                                          │
-          │        verification_uri,                 │                                          │
-          │        expires_in, interval }            │                                          │
-          │<────────────────────────────────────────│                                          │
-          │                                         │                                          │
-          │  (C) Display to user:                    │                                          │
-          │  "Go to https://example.com/device"      │                                          │
-          │  "Enter code: WDJB-MJHT"                │                                          │
-          │                                         │                                          │
-          │                                         │    (D) User visits verification_uri      │
-          │                                         │    and enters user_code                   │
-          │                                         │<─────────────────────────────────────────│
-          │                                         │                                          │
-          │  (E) Poll: POST /token                   │    (F) User authenticates + approves     │
-          │  grant_type=device_code                  │<─────────────────────────────────────────│
-          │  device_code=...                         │                                          │
-          │  (every N seconds)                       │                                          │
-          │────────────────────────────────────────>│                                          │
-          │                                         │                                          │
-          │  ... still pending ...                  │                                          │
-          │<────────────────────────────────────────│                                          │
-          │                                         │                                          │
-          │  (G) POST /token (poll again)            │                                          │
-          │────────────────────────────────────────>│                                          │
-          │                                         │                                          │
-          │  (H) { access_token, token_type, ... }  │                                          │
-          │<────────────────────────────────────────│                                          │
-```
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Device as 📺 Device
+    participant Server as Auth Server
+    participant Authlete
+    participant Phone as 📱 Phone
 
-### Detailed Steps
+    Note over Device,Phone: Step 1: Device Requests Access
+    Device->>Server: POST /api/device/authorization<br/>client_id=TV_APP&scope=openid
+    Server->>Authlete: deviceFlow.authorization()
+    Authlete->>Server: device_code, user_code, verification_uri
+    Server->>Device: Return codes
 
-#### (A) Device Authorization Request
+    Note over Device,Phone: Step 2: Device Displays Instructions
+    Device->>User: "Go to example.com/device<br/>Enter code: WDJB-MJHT"
 
-The device sends a POST to the **device authorization endpoint** with:
-- `client_id` (REQUIRED for public clients, optional for confidential clients)
-- `scope` (OPTIONAL — the requested permissions)
+    Note over Device,Phone: Step 3: User Completes on Phone
+    User->>Phone: Opens verification_uri
+    Phone->>Server: GET /device (enters user_code)
+    Server->>Authlete: deviceFlow.verification()
+    Authlete->>Server: VALID (client name, scopes)
+    Server->>Phone: Login page
+    Phone->>Server: User logs in + consents
+    Server->>Authlete: deviceFlow.complete(AUTHORIZED)
+    Authlete->>Server: SUCCESS
+    Server->>Phone: "Authorization successful!"
 
-#### (B) Device Authorization Response
-
-The authorization server responds with:
-- `device_code` — A high-entropy code the device uses for polling
-- `user_code` — A short, human-readable code the user enters
-- `verification_uri` — The URL the user visits
-- `verification_uri_complete` (OPTIONAL) — URL with user_code embedded (for QR codes)
-- `expires_in` — Lifetime of device_code and user_code (in seconds)
-- `interval` (OPTIONAL) — Minimum seconds between polls (default: 5)
-
-#### (C) User Instruction
-
-The device displays:
-```
-┌─────────────────────────────────────────┐
-│                                         │
-│  Using a browser on another device,     │
-│  visit: https://example.com/device      │
-│                                         │
-│  And enter the code:                    │
-│  WDJB-MJHT                             │
-│                                         │
-└─────────────────────────────────────────┘
+    Note over Device,Phone: Step 4: Device Gets Token
+    loop Polling (every 5 seconds)
+        Device->>Server: POST /api/token<br/>grant_type=device_code
+        Server->>Authlete: token.process()
+        Authlete->>Server: authorization_pending
+        Server->>Device: 400 { error: "authorization_pending" }
+    end
+    Device->>Server: POST /api/token (final poll)
+    Server->>Authlete: token.process()
+    Authlete->>Server: Tokens
+    Server->>Device: 200 { access_token, id_token, ... }
 ```
 
-#### (D) User Interaction
+### What Just Happened?
 
-The user opens their phone/laptop browser, navigates to the verification URI, enters the user code, authenticates (login), and approves/denies the request.
+1. **Device** told the server: "I'm a TV app, I need access to openid scope."
 
-#### (E) Polling
+2. **Authlete** generated two codes:
+   - `device_code` — high-entropy, secret, used for polling
+   - `user_code` — short, human-readable (`WDJB-MJHT`), shown to user
 
-The device **repeatedly** polls the token endpoint:
-```
-POST /token
-Content-Type: application/x-www-form-urlencoded
+3. **Device** displayed instructions: "Go to this URL, enter this code."
 
-grant_type=urn:ietf:params:oauth:grant-type:device_code
-&device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS
-&client_id=1406020730
-```
+4. **User** opened their phone, went to the URL, entered the code, logged in, and approved.
 
-#### (F-H) Token Response
+5. **Device** kept polling the token endpoint every 5 seconds. While the user was logging in, it got `authorization_pending`.
 
-The server responds based on the state:
-- **Still pending:** `400 { "error": "authorization_pending" }` — keep polling
-- **Slow down:** `400 { "error": "slow_down" }` — increase interval by 5s
-- **User denied:** `400 { "error": "access_denied" }` — stop polling
-- **Code expired:** `400 { "error": "expired_token" }` — restart flow
-- **Success:** `200 { "access_token": "...", "token_type": "Bearer", ... }`
+6. **After approval**, the next poll returned the access token.
 
-### Polling Error Codes (RFC 8628 Section 3.5)
+### Key Insight: No Redirect URI
 
-| Error | Meaning | Device Action |
-|-------|---------|---------------|
-| `authorization_pending` | User hasn't completed interaction yet | Continue polling (wait at least `interval` seconds) |
-| `slow_down` | Too fast! | Increase interval by 5 seconds for this and all subsequent requests |
-| `access_denied` | User denied the request | Stop polling, show error |
-| `expired_token` | `device_code` has expired | Stop polling, optionally restart the entire flow |
-| `invalid_client` | Client authentication failed | Stop polling, check credentials |
-| `invalid_grant` | Device code is invalid | Stop polling |
+Unlike standard OAuth, Device Flow doesn't need a redirect URI. The device **polls** instead of waiting for a callback. This is perfect for devices behind NAT or without a web server.
 
 ---
 
-## Part 3: Authlete Device Flow Configuration
+## Part 3: Authlete Configuration
 
-### Authlete Service Settings
+### Service Settings
 
-In the [Authlete web console](https://console.authlete.com/), configure:
+In the [Authlete Console](https://console.authlete.com/), configure these settings:
 
-| Setting | Location | Description |
-|---------|----------|-------------|
-| **Device Authorization Endpoint** | Service → Device Flow | The URL of your device authorization endpoint (e.g., `https://your-server.com/api/device/authorization`) |
-| **Device Verification URI** | Service → Device Flow | The URL users visit to enter their code (e.g., `https://your-server.com/device`) |
-| **Device Verification URI Complete** | Service → Device Flow | URI with `USER_CODE` placeholder (e.g., `https://your-server.com/device?user_code=USER_CODE`) |
-| **Device Flow Code Duration** | Service → Device Flow | Lifetime of device/user codes in seconds (default varies) |
-| **Device Flow Polling Interval** | Service → Device Flow | Minimum seconds between token polls (e.g., 5) |
-| **Supported Grant Types** | Service → General | Must include `urn:ietf:params:oauth:grant-type:device_code` |
+| Setting | What to Enter | Why |
+|---------|---------------|-----|
+| **Device Authorization Endpoint** | `https://your-server.com/api/device/authorization` | Where devices request codes |
+| **Device Verification URI** | `https://your-server.com/device` | Where users enter codes |
+| **Device Verification URI Complete** | `https://your-server.com/device?user_code=USER_CODE` | For QR codes (optional) |
+| **Device Flow Code Duration** | `300` (5 minutes) | How long codes stay valid |
+| **Device Flow Polling Interval** | `5` (seconds) | Minimum time between polls |
+| **Supported Grant Types** | Include `urn:ietf:params:oauth:grant-type:device_code` | Enable device flow |
 
-### Server Metadata
+### Verify in Discovery Document
 
-When Device Flow is configured, Authlete includes these in `.well-known/openid-configuration`:
-
-```json
-{
-  "device_authorization_endpoint": "https://your-server.com/api/device/authorization",
-  "grant_types_supported": [
-    "authorization_code",
-    "client_credentials",
-    "refresh_token",
-    "urn:ietf:params:oauth:grant-type:device_code"
-  ]
-}
+```bash
+curl http://localhost:3000/api/.well-known/openid-configuration | jq '.device_authorization_endpoint, .grant_types_supported'
 ```
 
-### Authlete SDK Methods
-
-The server uses three Authlete SDK methods:
-
-| SDK Method | API Endpoint | Purpose |
-|-----------|-------------|---------|
-| `authleteApi.deviceFlow.authorization()` | `/device/authorization` | Process device authorization request, return device_code + user_code |
-| `authleteApi.deviceFlow.verification()` | `/device/verification` | Validate user_code entered by the user |
-| `authleteApi.deviceFlow.complete()` | `/device/complete` | Record user's approval/denial decision |
-
-The token endpoint uses `authleteApi.token.process()` — Authlete handles `grant_type=device_code` natively with no special code path needed.
+Expected output:
+```
+"https://your-server.com/api/device/authorization"
+["authorization_code", "client_credentials", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"]
+```
 
 ---
 
 ## Part 4: Server Implementation
 
-### Architecture Overview
+### Architecture
 
-```
-server/src/
-├── services/
-│   └── device.service.ts              # Authlete SDK wrapper (3 methods)
-├── controllers/
-│   ├── device.controller.ts           # REST API controllers (3 endpoints)
-│   └── device-session.controller.ts   # Browser flow controllers (3 endpoints)
-├── routes/
-│   └── device.routes.ts              # Route definitions (6 routes)
-├── views/
-│   └── device-verification.ejs       # Browser UI template (3 states)
-├── utils/
-│   └── validation.ts                 # Zod schemas for request validation
-└── middleware/
-    ├── csrf.ts                       # CSRF protection (browser routes)
-    └── rate-limit.ts                 # Rate limiting (browser routes)
-```
-
-### API Routes vs. Browser Routes
-
-The server exposes **two sets** of endpoints for device flow:
-
-| Route | Method | Purpose | Auth | Rate Limited |
-|-------|--------|---------|------|-------------|
-| `/api/device/authorization` | POST | Start device flow (API) | Client auth in body | No |
-| `/api/device/verification` | POST | Verify user code (API) | None | No |
-| `/api/device/complete` | POST | Approve/deny (API) | None | No |
-| `GET /device` | GET | Show user code entry form (Browser) | None | generalLimiter (60/min) |
-| `POST /device` | POST | Submit user code (Browser) | CSRF | generalLimiter (60/min) |
-| `POST /device/consent` | POST | Authenticate + approve/deny (Browser) | CSRF + credentials | generalLimiter (60/min) |
-
-**Why two sets?** The API endpoints are for programmatic clients (e.g., the React SPA testing tool). The browser endpoints are for real device flow user interaction — a user opens their phone browser, navigates to `/device`, and interacts with a rendered HTML form.
-
-### The Device Service (`device.service.ts`)
-
-Three methods, each wrapping one Authlete SDK call:
-
-```typescript
-// 1. Start the flow — returns device_code, user_code, verification_uri
-async authorization(req): Promise<GMResponse> {
-  // Requires: parameters (URL-encoded), clientId, clientSecret
-  // Returns: device_code, user_code, verification_uri, expires_in, interval
-}
-
-// 2. Verify the user_code — checks if it's valid, not expired, etc.
-async verification(userCode): Promise<GMResponse> {
-  // Returns: action (VALID / NOT_EXIST / EXPIRED), clientName, scopes
-}
-
-// 3. Complete the flow — record user's decision
-async complete(userCode, result, subject, extra?): Promise<GMResponse> {
-  // result: "AUTHORIZED" | "ACCESS_DENIED" | "TRANSACTION_FAILED"
-  // subject: the authenticated user's identifier
-  // Returns: action (SUCCESS / USER_CODE_NOT_EXIST / USER_CODE_EXPIRED)
-}
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart TB
+    subgraph API["API Endpoints (for devices)"]
+        A1["POST /api/device/authorization<br/>Start device flow"]
+        A2["POST /api/device/verification<br/>Verify user code"]
+        A3["POST /api/device/complete<br/>Approve/deny"]
+    end
+    subgraph Browser["Browser Endpoints (for users)"]
+        B1["GET /device<br/>Show code entry form"]
+        B2["POST /device<br/>Submit user code"]
+        B3["POST /device/consent<br/>Login + approve"]
+    end
+    subgraph Authlete
+        AF["deviceFlow.authorization()"]
+        AV["deviceFlow.verification()"]
+        AC["deviceFlow.complete()"]
+        AT["token.process()"]
+    end
+    A1 --> AF
+    A2 --> AV
+    A3 --> AC
+    B1 --> AV
+    B3 --> AC
+    API -->|"Polling"| AT
 ```
 
-### The Session Controller (`device-session.controller.ts`)
+### Why Two Sets of Endpoints?
 
-Handles the browser-based flow with three states:
+| Endpoint Set | Who Uses It | Purpose |
+|-------------|-------------|---------|
+| **API** (`/api/device/*`) | Devices (programmatic) | Start flow, verify code, approve/deny |
+| **Browser** (`/device`) | Users (human) | Enter code, login, consent |
 
-| State | Template Rendered | User Sees |
-|-------|-------------------|-----------|
-| Initial | Code entry form | "Enter the code displayed on your device" + user_code input |
-| Verified | Consent form | Client name, requested scopes, username/password, Authorize/Deny buttons |
-| Done | Success/failure page | "Authorization successful! You can close this window." or error message |
-
-### EJS Template (`device-verification.ejs`)
-
-Three conditional states in a single template:
-
-1. **`done` state** — Shows success/error message with "Go Home" link
-2. **Code entry form** — User code input with monospace font + letter-spacing for readability
-3. **Consent form** — Client name with icon, scope list, username/password fields, Authorize (green) / Deny (red) buttons
+The API endpoints are for testing tools and programmatic clients. The browser endpoints are what real users interact with.
 
 ---
 
-## Part 5: Step-by-Step Device Flow (API)
+## Part 5: Step-by-Step API Flow
 
-This is the programmatic flow using the API endpoints (what the React SPA testing tool does).
-
-### Step 1: Device Authorization Request
+### Step 1: Device Requests Access
 
 ```bash
 curl -X POST http://localhost:3000/api/device/authorization \
@@ -310,16 +237,14 @@ curl -X POST http://localhost:3000/api/device/authorization \
   }'
 ```
 
-**Response:**
+**Response (200):**
 ```json
 {
-  "type": "deviceAuthorizationResponse",
-  "action": "OK",
   "deviceCode": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
   "userCode": "WDJB-MJHT",
-  "verificationUri": "https://your-server.com/device",
-  "verificationUriComplete": "https://your-server.com/device?user_code=WDJB-MJHT",
-  "expiresIn": 1800,
+  "verificationUri": "http://localhost:3000/device",
+  "verificationUriComplete": "http://localhost:3000/device?user_code=WDJB-MJHT",
+  "expiresIn": 300,
   "interval": 5
 }
 ```
@@ -328,47 +253,62 @@ curl -X POST http://localhost:3000/api/device/authorization \
 
 The device shows:
 ```
-Using a browser on another device, visit:
-https://your-server.com/device
-
-And enter the code:
-WDJB-MJHT
+┌─────────────────────────────────────────┐
+│                                         │
+│  Using a browser on another device,     │
+│  visit: http://localhost:3000/device    │
+│                                         │
+│  And enter the code:                    │
+│  WDJB-MJHT                             │
+│                                         │
+└─────────────────────────────────────────┘
 ```
 
-### Step 3: User Visits Verification URI
+### Step 3: User Enters Code on Phone
 
-The user opens their phone browser, goes to `https://your-server.com/device`, and enters the code `WDJB-MJHT`.
+1. Opens `http://localhost:3000/device`
+2. Enters `WDJB-MJHT`
+3. Sees consent page with client name and scopes
+4. Logs in (default: `admin` / `password`)
+5. Clicks **Authorize**
 
-### Step 4: Device Polls Token Endpoint
+### Step 4: Device Polls for Token
 
 ```bash
+# While waiting for user
 curl -X POST http://localhost:3000/api/token \
   -u "YOUR_CLIENT_ID:YOUR_CLIENT_SECRET" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS"
+  -d "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
+  -d "device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS"
 ```
 
-**While pending:** `400 { "error": "authorization_pending" }`
-**After approval:** `200 { "access_token": "...", "token_type": "Bearer", ... }`
+**While pending:**
+```json
+HTTP/1.1 400 Bad Request
+{"error": "authorization_pending"}
+```
+
+**After approval:**
+```json
+{
+  "access_token": "FOMxkE5baq...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "scope": "openid profile",
+  "id_token": "eyJhbGciOiJSUzI1NiIs..."
+}
+```
 
 ---
 
-## Part 6: Step-by-Step Device Flow (Browser)
+## Part 6: Browser-Based Flow
 
-This is the human-facing flow — what the end user actually does.
+This is what real end users see.
 
-### Step 1: Device Shows Code
+### Step 1: User Visits Device Page
 
-After the device calls `/api/device/authorization` (Step 1 from Part 5), it displays the `verification_uri` and `user_code` to the user.
-
-### Step 2: User Opens Browser
-
-The user opens their phone browser and navigates to:
-```
-https://your-server.com/device
-```
-
-They see the **Device Verification** page with a single input field:
+Opens phone browser to `http://localhost:3000/device`:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -380,7 +320,7 @@ They see the **Device Verification** page with a single input field:
 │                                         │
 │  User Code                              │
 │  ┌─────────────────────────────────┐    │
-│  │  ABCD-1234                      │    │
+│  │  WDJB-MJHT                      │    │
 │  └─────────────────────────────────┘    │
 │                                         │
 │  [Verify]                               │
@@ -388,15 +328,15 @@ They see the **Device Verification** page with a single input field:
 └─────────────────────────────────────────┘
 ```
 
-### Step 3: User Submits Code
+### Step 2: User Sees Consent Page
 
-After clicking "Verify," the server calls Authlete's `/device/verification` API. If the code is valid, the user sees the **consent page**:
+After entering the code:
 
 ```
 ┌─────────────────────────────────────────┐
 │                                         │
 │  ┌─┐                                   │
-│  │Y│  Your TV App                       │
+│  │T│  Your TV App                       │
 │  └─┘  requesting access to your account │
 │                                         │
 │  This device would like to:             │
@@ -405,11 +345,11 @@ After clicking "Verify," the server calls Authlete's `/device/verification` API.
 │                                         │
 │  Username                               │
 │  ┌─────────────────────────────────┐    │
-│  │                                 │    │
+│  │  admin                          │    │
 │  └─────────────────────────────────┘    │
 │  Password                               │
 │  ┌─────────────────────────────────┐    │
-│  │                                 │    │
+│  │  ••••••••                       │    │
 │  └─────────────────────────────────┘    │
 │                                         │
 │  [Authorize]  [Deny]                    │
@@ -417,190 +357,133 @@ After clicking "Verify," the server calls Authlete's `/device/verification` API.
 └─────────────────────────────────────────┘
 ```
 
-### Step 4: User Authenticates and Approves
+### Step 3: Success
 
-The user enters their credentials (default: `admin` / `password`) and clicks **Authorize**. The server:
-1. Validates credentials
-2. Calls Authlete's `/device/complete` API with `result=AUTHORIZED` and `subject=admin`
-3. Shows success page
+After clicking **Authorize**:
 
-### Step 5: Device Gets Token
-
-The device has been polling `/api/token` with the `device_code`. Once the user approves, the next poll returns the access token:
-
-```json
-{
-  "access_token": "FOMxkE5baq...",
-  "token_type": "Bearer",
-  "expires_in": 86400,
-  "scope": "openid profile"
-}
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│  ✓ Authorization Successful             │
+│                                         │
+│  You can now close this window.         │
+│                                         │
+└─────────────────────────────────────────┘
 ```
 
 ---
 
-## Part 7: The Device Flow API Endpoints
+## Part 7: Token Endpoint — Polling
 
-### POST `/api/device/authorization`
+### The Polling Pattern
 
-Initiates the device flow. Called by the device (not the end user).
+The device keeps asking "Is the user done yet?" until approved or timeout.
 
-**Request Body (JSON):**
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart TB
+    Start["Start Polling"]
+    Poll["POST /api/token<br/>grant_type=device_code"]
+    Check{"Response?"}
+    Pending["authorization_pending<br/>Wait 5 seconds"]
+    Slow["slow_down<br/>Wait 10 seconds"]
+    Denied["access_denied<br/>Stop polling"]
+    Expired["expired_token<br/>Restart flow"]
+    Success["access_token<br/>Done!"]
+    Done["Stop"]
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `parameters` | string | Yes | URL-encoded OAuth parameters (`client_id=...&scope=...`) |
-| `clientId` | string | No | Client identifier (alternative to including in `parameters`) |
-| `clientSecret` | string | No | Client secret (for confidential clients) |
-
-**Response (200 OK):**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `deviceCode` | string | High-entropy code for the device to use when polling |
-| `userCode` | string | Short code for the user to enter (e.g., `WDJB-MJHT`) |
-| `verificationUri` | string | URL the user should visit |
-| `verificationUriComplete` | string | URL with user_code embedded (for QR codes) |
-| `expiresIn` | number | Lifetime of codes in seconds |
-| `interval` | number | Minimum seconds between token polls |
-
-**Error Responses:**
-
-| Status | Action | Meaning |
-|--------|--------|---------|
-| 400 | `BAD_REQUEST` | Invalid client_id, scope, or other parameters |
-| 401 | `UNAUTHORIZED` | Client authentication failed |
-| 500 | `INTERNAL_SERVER_ERROR` | Server error |
-
-### POST `/api/device/verification`
-
-Verifies the user code entered by the end user.
-
-**Request Body (JSON):**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `userCode` | string | Yes | The user code entered by the user |
-
-**Response (200 OK):**
-
-| Action | Status | Description |
-|--------|--------|-------------|
-| `VALID` | 200 | Code is valid. Response includes `clientName`, `scopes`, etc. |
-| `NOT_EXIST` | 404 | Code does not exist |
-| `EXPIRED` | 400 | Code has expired |
-| `INTERNAL_SERVER_ERROR` | 500 | Server error |
-
-### POST `/api/device/complete`
-
-Records the user's authorization decision.
-
-**Request Body (JSON):**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `userCode` | string | Yes | The user code |
-| `result` | string | Yes | `AUTHORIZED`, `ACCESS_DENIED`, or `TRANSACTION_FAILED` |
-| `subject` | string | Yes | The authenticated user's identifier (e.g., `admin`) |
-
-**Response (200 OK):**
-
-| Action | Status | Description |
-|--------|--------|-------------|
-| `SUCCESS` | 200 | Decision recorded |
-| `USER_CODE_NOT_EXIST` | 404 | Code does not exist |
-| `USER_CODE_EXPIRED` | 400 | Code has expired |
-| `INVALID_REQUEST` | 400 | Missing or invalid parameters |
-
----
-
-## Part 8: Token Endpoint — Device Code Exchange
-
-The device code exchange uses the **standard token endpoint** — no separate endpoint needed.
-
-### Request
-
-```
-POST /api/token
-Content-Type: application/x-www-form-urlencoded
-Authorization: Basic <base64(client_id:client_secret)>
-
-grant_type=urn:ietf:params:oauth:grant-type:device_code
-&device_code=GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS
+    Start --> Poll
+    Poll --> Check
+    Check -->|"400 + authorization_pending"| Pending
+    Check -->|"400 + slow_down"| Slow
+    Check -->|"400 + access_denied"| Denied
+    Check -->|"400 + expired_token"| Expired
+    Check -->|"200 + access_token"| Success
+    Pending --> Poll
+    Slow --> Poll
+    Denied --> Done
+    Expired --> Done
+    Success --> Done
 ```
 
-### Polling Responses
+### Polling Rules
 
-| Response | Meaning | Device Action |
-|----------|---------|---------------|
-| `400 { "error": "authorization_pending" }` | Still waiting for user | Continue polling (wait `interval` seconds) |
-| `400 { "error": "slow_down" }` | Polling too fast | Increase interval by 5 seconds |
-| `400 { "error": "access_denied" }` | User denied | Stop polling |
-| `400 { "error": "expired_token" }` | Code expired | Stop polling, restart flow |
-| `200 { "access_token": "...", ... }` | Success! | Use the token |
+| Rule | Value | Why |
+|------|-------|-----|
+| Initial interval | 5 seconds | Default from Authlete config |
+| Slow down increment | +5 seconds | RFC 8628 §3.5 requirement |
+| Maximum interval | Not specified | But be reasonable |
+| Timeout | `expires_in` (default 300s) | Device code expires |
 
-### Success Response
-
-```json
-{
-  "access_token": "FOMxkE5baqGjIAznqmhANgw1ITiwCK4CRdo0Pbi2p-A",
-  "token_type": "Bearer",
-  "expires_in": 86400,
-  "scope": "openid profile",
-  "id_token": "eyJhbGciOiJSUzI1NiIs..."
-}
-```
-
----
-
-## Part 9: Client SPA Testing Tool Walkthrough
-
-### Accessing the Device Flow Section
-
-1. Start the client: `npm --prefix client run dev`
-2. Navigate to `http://localhost:3001`
-3. Click **"Device Flow"** in the sidebar (under OIDC & Extensions)
-
-### UI Components
-
-The testing UI provides three tabs:
-
-#### Tab 1: Authorization
-- **Parameters (URL-encoded)** — Textarea for `client_id=xxx&scope=openid+profile` (pre-filled with default)
-- **Client ID** — Optional standalone client_id field
-- **Client Secret** — Optional standalone client_secret field
-- **Run** button — Calls `POST /api/device/authorization`
-
-After success, the `user_code` is **auto-populated** into the Verification and Complete tabs.
-
-#### Tab 2: Verification
-- **User Code** — Auto-populated from Authorization tab (or manual entry)
-- **Run** button — Calls `POST /api/device/verification`
-- Shows client name, scopes on success
-
-#### Tab 3: Complete
-- **User Code** — Auto-populated from Authorization tab
-- **Result** — Dropdown: `AUTHORIZED`, `ACCESS_DENIED`, `TRANSACTION_FAILED`
-- **Subject** — Text input (default: `admin`)
-- **Run** button — Calls `POST /api/device/complete`
-
-### Typical SPA Testing Workflow
-
-1. **Authorization tab:** Click "Run" → Get `device_code` and `user_code`
-2. **Verification tab:** Click "Run" → See client name and scopes
-3. **Complete tab:** Select "AUTHORIZED", click "Run" → Device flow approved
-4. **Token exchange:** Use curl to poll `/api/token` with the `device_code` to get the access token
-
-> **Note:** The SPA does NOT do the token polling automatically. You must use curl or a separate client to poll the token endpoint with the `device_code`.
-
----
-
-## Part 10: Complete End-to-End Test Scenarios
-
-### Scenario 1: Happy Path — Full Device Flow
+### Example Polling Script
 
 ```bash
-# Step 1: Start device flow
+#!/bin/bash
+DEVICE_CODE="GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS"
+CID="YOUR_CLIENT_ID"
+SEC="YOUR_CLIENT_SECRET"
+INTERVAL=5
+
+while true; do
+  RESP=$(curl -s -w "\n%{http_code}" -X POST http://localhost:3000/api/token \
+    -u "$CID:$SEC" \
+    -d "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=$DEVICE_CODE")
+  
+  HTTP_CODE=$(echo "$RESP" | tail -n1)
+  BODY=$(echo "$RESP" | head -n-1)
+  
+  if [ "$HTTP_CODE" = "200" ]; then
+    echo "Success! $BODY"
+    break
+  elif echo "$BODY" | grep -q '"error":"slow_down"'; then
+    INTERVAL=$((INTERVAL + 5))
+  elif echo "$BODY" | grep -q '"error":"authorization_pending"'; then
+    echo "Waiting... (interval: ${INTERVAL}s)"
+  else
+    echo "Error: $BODY"
+    break
+  fi
+  
+  sleep $INTERVAL
+done
+```
+
+---
+
+## Part 8: SPA Testing Tool
+
+### Accessing Device Flow
+
+1. Start the server: `npm --prefix server run dev`
+2. Start the client: `npm --prefix client run dev`
+3. Open `http://localhost:3001`
+4. Click **Device Flow** in the sidebar
+
+### Three Tabs
+
+| Tab | Purpose | What You Enter |
+|-----|---------|----------------|
+| **Authorization** | Start device flow | Client ID, Secret, Scope |
+| **Verification** | Verify user code | User Code (auto-filled) |
+| **Complete** | Approve/deny | User Code, Result, Subject |
+
+### Testing Workflow
+
+1. **Authorization tab:** Click **Run** → Get `device_code` and `user_code`
+2. **Verification tab:** Click **Run** → See client name and scopes
+3. **Complete tab:** Select "AUTHORIZED", click **Run** → Approved
+4. **Terminal:** Poll `/api/token` with `device_code` to get token
+
+> **Note:** The SPA doesn't poll automatically. Use curl to poll the token endpoint.
+
+---
+
+## Part 9: Complete Test Scenarios
+
+### Scenario 1: Happy Path
+
+```bash
+# 1. Start device flow
 DEVICE_RESP=$(curl -s -X POST http://localhost:3000/api/device/authorization \
   -H "Content-Type: application/json" \
   -d '{
@@ -611,253 +494,174 @@ DEVICE_RESP=$(curl -s -X POST http://localhost:3000/api/device/authorization \
 
 DEVICE_CODE=$(echo $DEVICE_RESP | jq -r '.deviceCode')
 USER_CODE=$(echo $DEVICE_RESP | jq -r '.userCode')
-VERIFICATION_URI=$(echo $DEVICE_RESP | jq -r '.verificationUri')
 
 echo "User code: $USER_CODE"
-echo "Visit: $VERIFICATION_URI"
 
-# Step 2: Verify user code (simulating the browser interaction)
+# 2. Verify user code
 curl -s -X POST http://localhost:3000/api/device/verification \
   -H "Content-Type: application/json" \
   -d "{\"userCode\": \"$USER_CODE\"}" | jq .
 
-# Step 3: Complete with approval
+# 3. Approve
 curl -s -X POST http://localhost:3000/api/device/complete \
   -H "Content-Type: application/json" \
   -d "{\"userCode\": \"$USER_CODE\", \"result\": \"AUTHORIZED\", \"subject\": \"admin\"}" | jq .
 
-# Step 4: Exchange device_code for access token
+# 4. Exchange for token
 curl -s -X POST http://localhost:3000/api/token \
   -u "YOUR_CID:YOUR_SEC" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=$DEVICE_CODE" | jq .
 ```
 
 ### Scenario 2: User Denies Access
 
 ```bash
-# Steps 1-2: Same as Scenario 1
+# Steps 1-2: Same as above
 
-# Step 3: Complete with denial
+# 3. Deny
 curl -s -X POST http://localhost:3000/api/device/complete \
   -H "Content-Type: application/json" \
   -d "{\"userCode\": \"$USER_CODE\", \"result\": \"ACCESS_DENIED\", \"subject\": \"admin\"}" | jq .
 
-# Step 4: Token exchange fails
-curl -s -X POST http://localhost:3000/api/token \
-  -u "YOUR_CID:YOUR_SEC" \
-  -d "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=$DEVICE_CODE"
+# 4. Token exchange fails
 # Response: 400 { "error": "access_denied" }
 ```
 
-### Scenario 3: Expired User Code
+### Scenario 3: Expired Code
 
 ```bash
-# Start device flow
+# Start flow
 DEVICE_RESP=$(curl -s -X POST http://localhost:3000/api/device/authorization \
   -H "Content-Type: application/json" \
   -d '{"parameters": "client_id=YOUR_CID&scope=openid", "clientId": "YOUR_CID", "clientSecret": "YOUR_SEC"}')
 
 USER_CODE=$(echo $DEVICE_RESP | jq -r '.userCode')
 
-# Wait for expiration (depends on Authlete config, default is 300s)
+# Wait for expiration (default 300 seconds)
 sleep 301
 
-# Try to verify — should fail
+# Try to verify — fails
 curl -s -X POST http://localhost:3000/api/device/verification \
   -H "Content-Type: application/json" \
   -d "{\"userCode\": \"$USER_CODE\"}" | jq .
 # Response: 400 { "action": "EXPIRED" }
 ```
 
-### Scenario 4: Invalid User Code
-
-```bash
-curl -s -X POST http://localhost:3000/api/device/verification \
-  -H "Content-Type: application/json" \
-  -d '{"userCode": "XXXX-XXXX"}' | jq .
-# Response: 404 { "action": "NOT_EXIST" }
-```
-
-### Scenario 5: Browser Flow (End User Perspective)
-
-This is what a real end user would do:
-
-```bash
-# Step 1: Device calls the API (done by the device, not the user)
-# (Device gets device_code and user_code)
-
-# Step 2: User opens phone browser
-# Visit: http://localhost:3000/device
-# Enter the user code in the form
-
-# Step 3: User sees consent page with client name and scopes
-# Enters username: admin
-# Enters password: password
-# Clicks "Authorize"
-
-# Step 4: User sees "Authorization successful! You can now close this window."
-
-# Step 5: Device polls and gets the access token
-```
-
-### Scenario 6: Missing Parameters (Error)
-
-```bash
-curl -s -X POST http://localhost:3000/api/device/authorization \
-  -H "Content-Type: application/json" \
-  -d '{}' | jq .
-# Response: 400 { "error": "invalid_request", "error_description": "Missing required body field: parameters" }
-```
-
-### Scenario 7: Transaction Failed
-
-```bash
-# Start flow, verify code, then report transaction failure
-curl -s -X POST http://localhost:3000/api/device/complete \
-  -H "Content-Type: application/json" \
-  -d '{"userCode": "VALID_CODE", "result": "TRANSACTION_FAILED", "subject": "admin"}' | jq .
-# Response: 200 { "action": "SUCCESS" }
-# Device will see an error when polling
-```
-
 ---
 
-## Part 11: Error Scenarios
+## Part 10: Error Scenarios
 
-### Device Authorization Errors
+### Authorization Errors
 
-| Scenario | HTTP Status | Error | Cause |
-|----------|-------------|-------|-------|
-| Missing parameters | 400 | `invalid_request` | `parameters` field is empty or missing |
-| Invalid client | 401 | `invalid_client` | `client_id` or `client_secret` is wrong |
-| Unknown client | 401 | `invalid_client` | Client not registered in Authlete |
+| HTTP Status | Error | Cause | Fix |
+|:-----------:|-------|-------|-----|
+| 400 | `invalid_request` | Missing `parameters` field | Include `"parameters": "client_id=...&scope=..."` |
+| 401 | `invalid_client` | Wrong credentials | Check `client_id` and `client_secret` |
 
 ### Verification Errors
 
-| Scenario | HTTP Status | Error | Cause |
-|----------|-------------|-------|-------|
-| Invalid code | 404 | `NOT_EXIST` | User code doesn't match any pending flow |
-| Expired code | 400 | `EXPIRED` | Code has passed its `expires_in` duration |
+| HTTP Status | Error | Cause | Fix |
+|:-----------:|-------|-------|-----|
+| 404 | `NOT_EXIST` | Code doesn't exist | Check for typos (codes are case-insensitive) |
+| 400 | `EXPIRED` | Code expired | Restart flow from Step 1 |
 
-### Token Exchange Errors (Polling)
+### Polling Errors
 
-| Scenario | HTTP Status | Error | Device Action |
-|----------|-------------|-------|---------------|
-| Still pending | 400 | `authorization_pending` | Continue polling |
-| Polling too fast | 400 | `slow_down` | Increase interval by 5s |
-| User denied | 400 | `access_denied` | Stop polling |
-| Code expired | 400 | `expired_token` | Stop polling, restart |
-| Invalid device code | 400 | `invalid_grant` | Stop polling |
-| Wrong client | 401 | `invalid_client` | Check credentials |
-
----
-
-## Part 12: RFC 8628 Compliance Checklist
-
-| RFC 8628 Section | Requirement | Status | Location |
-|------------------|-------------|--------|----------|
-| **Section 3.1** | Device Authorization Endpoint accepts POST | **Implemented** | `POST /api/device/authorization` |
-| **Section 3.1** | Accepts `client_id` and `scope` | **Implemented** | `parameters` string in body |
-| **Section 3.1** | Confidential clients authenticate per RFC 6749 §3.2.1 | **Implemented** | `clientId`/`clientSecret` in body or Basic auth |
-| **Section 3.2** | Response includes `device_code`, `user_code`, `verification_uri`, `expires_in` | **Implemented** | Authlete SDK returns all fields |
-| **Section 3.2** | `verification_uri_complete` is OPTIONAL | **Implemented** | Authlete returns if configured |
-| **Section 3.2** | `interval` is OPTIONAL (default 5) | **Implemented** | Authlete returns if configured |
-| **Section 3.3** | User navigates to `verification_uri` and enters `user_code` | **Implemented** | `GET /device` serves verification page |
-| **Section 3.3.1** | `verification_uri_complete` can be used with QR codes | **Available** | Authlete returns the field if configured |
-| **Section 3.4** | Token request uses `grant_type=urn:ietf:params:oauth:grant-type:device_code` | **Implemented** | Standard token endpoint, Authlete handles natively |
-| **Section 3.4** | Client authenticates per RFC 6749 §3.2.1 | **Implemented** | Basic auth or client_id/client_secret in body |
-| **Section 3.5** | `authorization_pending` error for continued polling | **Handled by Authlete** | Token endpoint returns as-is |
-| **Section 3.5** | `slow_down` error with +5s interval increase | **Handled by Authlete** | Token endpoint returns as-as |
-| **Section 3.5** | `access_denied` error to stop polling | **Handled by Authlete** | Token endpoint returns as-is |
-| **Section 3.5** | `expired_token` error when code expires | **Handled by Authlete** | Token endpoint returns as-is |
-| **Section 4** | `device_authorization_endpoint` in server metadata | **Handled by Authlete** | Included when configured |
-| **Section 5.1** | Rate-limit user code attempts (brute force protection) | **Authlete handles** | Server-side rate limiting |
-| **Section 5.2** | High-entropy device codes | **Authlete handles** | Generated by Authlete |
-| **Section 6.1** | Usable user code format (case-insensitive, dashes) | **Implemented** | EJS template with monospace font |
+| HTTP Status | Error | Device Action |
+|:-----------:|-------|---------------|
+| 400 | `authorization_pending` | Keep polling |
+| 400 | `slow_down` | Increase interval by 5s |
+| 400 | `access_denied` | Stop polling |
+| 400 | `expired_token` | Stop polling, restart |
+| 400 | `invalid_grant` | Stop polling, check code |
+| 401 | `invalid_client` | Check credentials |
 
 ---
 
-## Part 13: Security Considerations
+## Part 11: RFC 8628 Compliance
+
+| RFC 8628 Section | Requirement | Status |
+|------------------|-------------|:------:|
+| §3.1 | Device Authorization Endpoint accepts POST | ✅ |
+| §3.1 | Accepts `client_id` and `scope` | ✅ |
+| §3.2 | Response includes `device_code`, `user_code`, `verification_uri`, `expires_in` | ✅ |
+| §3.2 | `verification_uri_complete` is OPTIONAL | ✅ |
+| §3.2 | `interval` is OPTIONAL (default 5) | ✅ |
+| §3.3 | User navigates to `verification_uri` | ✅ |
+| §3.4 | Token request uses `grant_type=device_code` | ✅ |
+| §3.5 | `authorization_pending` for continued polling | ✅ |
+| §3.5 | `slow_down` with +5s interval | ✅ |
+| §3.5 | `access_denied` to stop polling | ✅ |
+| §3.5 | `expired_token` when code expires | ✅ |
+| §4 | `device_authorization_endpoint` in metadata | ✅ |
+| §5.1 | Rate-limit user code attempts | ✅ |
+| §5.2 | High-entropy device codes | ✅ |
+| §6.1 | Usable user code format | ✅ |
+
+---
+
+## Part 12: Security Considerations
 
 ### User Code Brute Force
 
-- The user code is short and human-readable (e.g., `WDJB-MJHT`), which means lower entropy
-- Authlete rate-limits user code verification attempts
-- The user code has a finite lifetime (`expires_in`)
-- The server uses `generalLimiter` (60/min) on browser routes
+| Risk | Mitigation |
+|------|-----------|
+| Short code (`WDJB-MJHT`) has low entropy | Rate limiting on verification endpoint |
+| Attacker could guess codes | Finite lifetime (`expires_in`) |
+| Code visible on device screen | Consent page shows client name + scopes for verification |
 
-### Device Code Brute Force
+### Device Code Security
 
-- The device code is a high-entropy string — not displayed to the user
-- Authlete validates the device code on every token poll
-- Device code is tied to a specific `client_id`
-
-### Non-Confidential Clients
-
-- Device clients are often public (no client_secret)
-- The `client_id` parameter is required for public clients
-- Additional security measures (PKCE, etc.) should be considered
-
-### Session Spying
-
-- The user code is displayed on the device screen
-- An observer could see the code and enter it on their own device
-- The consent page shows the client name and scopes so the user can verify
+| Risk | Mitigation |
+|------|-----------|
+| Device code could be intercepted | High-entropy string, never displayed |
+| Polling could be intercepted | Tied to specific `client_id` |
+| Code reuse attempts | Single-use after approval |
 
 ### CSRF Protection
 
-- All browser routes (`GET /device`, `POST /device`, `POST /device/consent`) use CSRF tokens
-- The CSRF token is generated on GET and validated on POST via the `_csrf` hidden field
+All browser routes use CSRF tokens:
+- `GET /device` — generates token
+- `POST /device` — validates token
+- `POST /device/consent` — validates token
 
 ---
 
-## Part 14: Troubleshooting
+## Part 13: Troubleshooting
 
-### "Missing required body field: parameters"
+| Problem | Likely Cause | Solution |
+|---------|-------------|----------|
+| "Missing required body field: parameters" | `parameters` not in body | Add `"parameters": "client_id=...&scope=..."` |
+| "authorization_pending" forever | User hasn't completed flow | Verify user entered correct code on phone |
+| "expired_token" | Codes expired | Restart flow from beginning |
+| 404 "NOT_EXIST" on verification | Wrong code | Check for typos, codes are case-insensitive |
+| "Invalid credentials" on browser | Wrong username/password | Default is `admin` / `password` |
+| 401 "invalid_client" | Wrong credentials | Check `client_id` / `client_secret` |
+| Device flow not in discovery | Not configured in Authlete | Add to `supportedGrantTypes` and set endpoints |
+| "slow_down" too often | Polling too fast | Increase polling interval by 5s |
 
-The `parameters` field in the JSON body is required and must be a URL-encoded string:
-```json
-{
-  "parameters": "client_id=YOUR_CID&scope=openid"
-}
-```
+---
 
-### Token exchange returns "authorization_pending" forever
+## Summary
 
-- The user hasn't completed the verification flow yet
-- Make sure the user visits the `verification_uri` and enters the correct `user_code`
-- Check that the `user_code` hasn't expired
+Device Flow is simple but powerful:
 
-### Token exchange returns "expired_token"
+1. **Device** requests codes → gets `device_code` + `user_code`
+2. **User** enters `user_code` on phone → logs in + approves
+3. **Device** polls until approved → gets access token
 
-- The device/user codes have expired (based on `expires_in`)
-- Restart the entire flow by calling `/api/device/authorization` again
+**Use Device Flow when:**
+- Device can't open a browser
+- Device has limited input
+- User has a secondary device (phone)
 
-### Verification returns 404 "NOT_EXIST"
+**Don't use Device Flow when:**
+- Device can use standard OAuth (smartphones, desktops)
 
-- The user code doesn't match any pending flow
-- Check for typos (codes are case-insensitive, dashes are optional)
-- The code may have already been used or expired
+---
 
-### Browser page shows "Invalid credentials"
+## References
 
-- The default demo credentials are `admin` / `password`
-- If `AUTH_USERS` env var is set, use those credentials instead
-
-### Token exchange returns 401 "invalid_client"
-
-- For confidential clients: check `client_id` and `client_secret`
-- Use HTTP Basic auth: `Authorization: Basic base64(client_id:client_secret)`
-- Or use `client_id` and `client_secret` in the form body
-
-### Device flow not available in Authlete
-
-- Ensure `urn:ietf:params:oauth:grant-type:device_code` is in `supportedGrantTypes`
-- Set `deviceAuthorizationEndpoint`, `deviceVerificationUri`, `deviceFlowCodeDuration`, and `deviceFlowPollingInterval` in the Authlete service configuration
-- Check `feature.gm.enabled` if using Grant Management with device flow
-
-### QR code with `verification_uri_complete`
-
-- The `verification_uri_complete` is only returned if `deviceVerificationUriComplete` is configured in Authlete with a `USER_CODE` placeholder
-- The client can render this URL as a QR code for the user to scan with their phone camera
+- [RFC 8628: OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
+- [Authlete KB: Device Flow](https://www.authlete.com/kb/oauth-and-openid-connect/authorization-requests/device-flow/)
+- [GitHub CLI: Device Flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow)

@@ -1,7 +1,72 @@
-# Authlete Node Authorization Server — Documentation
+# Documentation
+
+> **New to OAuth 2.0?** Start with the [PKCE Tutorial](./PKCE-TUTORIAL.md) — it explains the most important security concept in modern OAuth, with diagrams and step-by-step examples.
+
+## How This Project Works
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#334155', 'lineColor': '#475569', 'secondaryColor': '#0f172a', 'tertiaryColor': '#1e293b', 'fontFamily': 'Inter'}}}%%
+%%{init: {'theme': 'dark'}}%%
+flowchart TB
+    subgraph User["User"]
+        Browser[Browser]
+    end
+    subgraph YourServer["Your Express Server"]
+        Routes[API Routes]
+        Views[EJS Templates]
+        MW[Middleware]
+    end
+    subgraph Authlete["Authlete Cloud API"]
+        OAuth[OAuth Engine]
+    end
+
+    Browser -->|HTTP| Routes
+    Routes -->|session, CSRF, rate-limit| MW
+    MW -->|process| Routes
+    Routes -->|Authlete SDK| OAuth
+    OAuth -->|token, code, claims| Routes
+    Routes -->|render| Views
+    Views -->|login/consent| Browser
+```
+
+**The short version:** This server handles HTTP. Authlete handles OAuth. Together, they give you a complete, spec-compliant authorization server.
+
+## Where to Start
+
+### I want to understand the architecture
+- [Architecture](./ARCHITECTURE.md) — System design, middleware pipeline, deployment
+- [Data Flows](./DATA-FLOWS.md) — OAuth flow sequences with diagrams
+
+### I want to understand a specific OAuth feature
+Each tutorial explains **why** the feature was created, **how** it works, and **how to test it**.
+
+| Tutorial | The Problem It Solves |
+|----------|----------------------|
+| [PKCE](./PKCE-TUTORIAL.md) | "What stops someone from stealing my authorization code?" |
+| [PAR](./PAR-TUTORIAL.md) | "Why are my authorization parameters visible in the URL?" |
+| [RAR](./RAR-TUTORIAL.md) | "How do I request fine-grained access beyond simple scopes?" |
+| [Device Flow](./DEVICE-FLOW-TUTORIAL.md) | "How do I authorize on a device with no browser?" |
+| [CIBA](./CIBA-TUTORIAL.md) | "How do I authorize without redirecting the user?" |
+| [JWT Bearer](./JWT-BEARER-TUTORIAL.md) | "Can I use a JWT instead of a client secret?" |
+| [Token Exchange](./TOKEN-EXCHANGE-TUTORIAL.md) | "How do I let one service act on behalf of another?" |
+| [Native SSO](./NATIVE-SSO-TUTORIAL.md) | "How do I share login state across my mobile apps?" |
+| [Backchannel Logout](./BACKCHANNEL-LOGOUT-TUTORIAL.md) | "How do I log out the user from all my services?" |
+| [Grant Management](./GRANT-MANAGEMENT.md) | "How do I let users see and revoke what they've authorized?" |
+| [FAPI 2.0](./FAPI-TUTORIAL.md) | "How do I meet financial-grade security requirements?" |
+
+### I want to build or test something
+- [API Reference](./API.md) — Every endpoint, every parameter, every response
+- [Component Reference](./COMPONENT-REFERENCE.md) — Server services + React components
+- [Testing](./TESTING.md) — How the test suite works, how to add tests
+- [Development](./DEVELOPMENT.md) — Setup, env vars, middleware, quirks
+- [Monitoring](./MONITORING.md) — Prometheus metrics and Grafana dashboards
+
+### I want to test with curl
+- [CURL-TEST.md](../CURL-TEST.md) — Copy-paste curl commands for every endpoint
+
+## Architecture Overview
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
 flowchart LR
     subgraph External["External"]
         B[Browser / curl]
@@ -15,94 +80,30 @@ flowchart LR
     subgraph Client["React SPA"]
         D[Dashboard UI]
     end
+
     B -->|HTTP| E
     D -->|HTTP| E
     E -->|SDK calls| S
     S -->|REST| A
     E -->|renders| V
     B -->|browser| V
-    style B fill:#3b82f6,color:#fff
-    style A fill:#8b5cf6,color:#fff
-    style E fill:#10b981,color:#fff
-    style S fill:#10b981,color:#fff
-    style V fill:#f59e0b,color:#fff
-    style D fill:#06b6d4,color:#fff
 ```
 
-A production-grade OAuth 2.0 / OpenID Connect authorization server that delegates all OAuth logic to [Authlete](https://www.authlete.com/)'s cloud API. The server is stateless and DB-less — it never stores tokens, clients, or user data locally.
-
-## Quick Links
-
-| Document | Purpose |
-|----------|---------|
-| [Architecture](./ARCHITECTURE.md) | System design, middleware pipeline, deployment topology |
-| [Data Flows](./DATA-FLOWS.md) | OAuth grant sequences, CSRF lifecycle, health polling |
-| [API Reference](./API.md) | Complete endpoint catalog with request/response formats |
-| [Component Reference](./COMPONENT-REFERENCE.md) | Server services/controllers + React component tree |
-| [Testing](./TESTING.md) | Unit, integration, E2E, and client test architecture |
-| [FAPI 2.0 Tutorial](./FAPI-TUTORIAL.md) | FAPI 2.0 Security Profile with private_key_jwt client auth and DPoP sender-constrained tokens |
-| [Development](./DEVELOPMENT.md) | Setup, env vars, middleware stack, quirks |
+| Layer | Tech | Purpose |
+|-------|------|---------|
+| **HTTP** | Express | Routing, sessions, CORS, security headers |
+| **Auth** | Authlete SDK | Delegates all OAuth/OIDC logic to Authlete cloud |
+| **Views** | EJS | Server-rendered login and consent pages |
+| **Dashboard** | React + Vite | Interactive OAuth debugging tools |
+| **Monitoring** | Prometheus + Winston | Metrics and structured audit logs |
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm --prefix server install && npm --prefix client install
-
-# Configure environment
-cp server/.env.example server/.env
-cp client/.env.example client/.env
-
-# Edit server/.env with your Authlete credentials, then:
+cp server/.env.example server/.env && cp client/.env.example client/.env
+# Edit server/.env with your Authlete credentials:
+#   AUTHLETE_BEARER_TOKEN, AUTHLETE_BASE_URL, AUTHLETE_SERVICE_ID, SESSION_SECRET
 npm --prefix server run dev    # Express on :3000
 npm --prefix client run dev    # SPA on :3001
 ```
-
-## Project Map
-
-```
-.
-├── server/                    # Express authorization server
-│   ├── src/
-│   │   ├── server.ts          # Entry point
-│   │   ├── app.ts             # Express factory (createApp)
-│   │   ├── config/            # Env loading, Authlete SDK config
-│   │   ├── controllers/       # 27 request handlers
-│   │   ├── services/          # 22 business logic modules
-│   │   ├── routes/            # 21 Express Router modules
-│   │   ├── middleware/        # 7 middleware (CSRF, audit, metrics, etc.)
-│   │   ├── types/             # TypeScript augmentations
-│   │   ├── utils/             # Logger, JWT, validation
-│   │   └── views/             # 7 EJS templates + 4 partials
-│   ├── tests/                 # 39 test files
-│   └── package.json
-├── client/                    # React debugging SPA
-│   ├── src/
-│   │   ├── components/        # 4 groups (layout/auth/oidc/admin/ui) — 30+ components
-│   │   ├── hooks/             # 5 custom hooks
-│   │   ├── services/          # 10 API client modules
-│   │   ├── context/           # TokenContext (sessionStorage)
-│   │   ├── types/             # TypeScript interfaces
-│   │   ├── data/              # Operation documentation content
-│   │   ├── pages/             # CallbackPage
-│   │   └── styles/            # Tailwind v4 globals.css
-│   └── src/test/              # 16 test files + setup
-│   └── package.json
-├── docs/                      # You are here
-├── AGENTS.md                  # AI agent instructions
-├── CURL-TEST.md               # Interactive curl test suite
-└── docker-compose.yml         # Redis for local dev (optional)
-```
-
-## Key Architecture Decisions
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| OAuth delegation | Authlete SDK | No token/client/user DB needed; stateless server |
-| Session store | In-memory (Redis optional) | Simplicity; Redis via `REDIS_URL` for production |
-| Frontend framework | React + Vite + SWC | Fast HMR, lightweight build |
-| Styling | Tailwind CSS v4 | Zero-runtime CSS, dark-first palette |
-| Form security | Server-side CSRF tokens | 32-byte hex tokens on GET, validated on POST |
-| API design | REST under `/api/` | Clean separation from browser routes |
-| Client auth | HTTP Basic (MGMT credentials) | Simple, standard, optional per endpoint group |
-| Monitoring | Prometheus + Winston audit | Built-in metrics + structured audit trail |

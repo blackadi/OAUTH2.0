@@ -1,6 +1,6 @@
-# OpenID Connect Native SSO for Mobile Apps 1.0 — Deep Dive
+# OpenID Connect Native SSO for Mobile Apps 1.0 — The Complete Guide
 
-A comprehensive guide to Native SSO: why it was created, the security problems it solves, how it works step by step, how Authlete implements it, and how to test it.
+> **The short version:** Native SSO lets mobile apps from the same vendor share authentication state directly through secure device storage (iOS Keychain, Android Account Manager), eliminating the need for browser cookies and providing SSO that works even in incognito mode.
 
 ---
 
@@ -8,38 +8,43 @@ A comprehensive guide to Native SSO: why it was created, the security problems i
 
 - [Part 1: Why Native SSO Exists](#part-1-why-native-sso-exists)
 - [Part 2: The Core Concepts](#part-2-the-core-concepts)
-- [Part 3: How Native SSO Works (Step by Step)](#part-3-how-native-sso-works-step-by-step)
+- [Part 3: How Native SSO Works](#part-3-how-native-sso-works)
 - [Part 4: The Device Secret — Deep Dive](#part-4-the-device-secret--deep-dive)
 - [Part 5: The `ds_hash` and `sid` Claims](#part-5-the-ds_hash-and-sid-claims)
 - [Part 6: Authlete Console Setup](#part-6-authlete-console-setup)
-- [Part 7: Server Implementation Analysis](#part-7-server-implementation-analysis)
-- [Part 8: Step-by-Step curl Testing](#part-8-step-by-step-curl-testing)
-- [Part 9: Native SSO + Token Exchange (RFC 8693)](#part-9-native-sso--token-exchange-rfc-8693)
-- [Part 10: Real-World Use Cases](#part-10-real-world-use-cases)
-- [Part 11: How Native SSO Hardens Security](#part-11-how-native-sso-hardens-security)
-- [Part 12: Logout — Revoking All Apps](#part-12-logout--revoking-all-apps)
-- [Part 13: Error Scenarios](#part-13-error-scenarios)
-- [Part 14: Troubleshooting](#part-14-troubleshooting)
-- [Appendix A: Specification References](#appendix-a-specification-references)
-- [Appendix B: Server Architecture](#appendix-b-server-architecture)
+- [Part 7: Step-by-Step Flow](#part-7-step-by-step-flow)
+- [Part 8: Logout — Revoking All Apps](#part-8-logout--revoking-all-apps)
+- [Part 9: Security Hardening](#part-9-security-hardening)
+- [Part 10: Troubleshooting](#part-10-troubleshooting)
 
 ---
 
 ## Part 1: Why Native SSO Exists
 
-### The Problem
+### The Problem: Re-Authentication Hell
 
 Imagine a bank with three mobile apps: a main banking app, a credit card app, and an investment app. All three are made by the same bank and installed on the same phone.
 
-**Without Native SSO:**
+**Without SSO:**
 
-1. User opens the banking app → logs in with username/password
-2. User opens the credit card app → **must log in again** with username/password
-3. User opens the investment app → **must log in again** with username/password
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant User as 👤 User
+    participant Bank as 🏦 Banking App
+    participant Card as 💳 Credit Card App
+    participant Invest as 📈 Investment App
 
-Every time the user switches between apps, they have to re-authenticate. This is terrible UX.
+    User->>Bank: Open app, log in
+    User->>Card: Open app, log in AGAIN
+    User->>Invest: Open app, log in AGAIN
 
-**The Browser-Based SSO Workaround (and why it's fragile):**
+    Note over User: Every app requires<br/>separate login!
+```
+
+Every time the user switches between apps, they must re-authenticate. This is terrible UX.
+
+### The Browser SSO Workaround (and Why It's Fragile)
 
 OAuth 2.0 already has a browser-based SSO mechanism: if all three apps use the same system browser for authentication, the browser's session cookies can provide SSO. But this has serious problems:
 
@@ -55,7 +60,26 @@ OAuth 2.0 already has a browser-based SSO mechanism: if all three apps use the s
 
 Native SSO (formally "OpenID Connect Native SSO for Mobile Apps 1.0") solves this by letting mobile apps **share authentication state directly** through secure device storage (like iOS Keychain or Android Account Manager), without relying on browser cookies.
 
-> "The purpose of this specification is to provide a single-sign-on (SSO) mechanism across mobile applications installed on the same device that addresses the risks highlighted above." — OpenID Connect Native SSO §1
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant User as 👤 User
+    participant Bank as 🏦 Banking App
+    participant Card as 💳 Credit Card App
+    participant Invest as 📈 Investment App
+    participant Keychain as 🔐 Keychain
+
+    User->>Bank: Open app, log in
+    Bank->>Keychain: Store id_token + device_secret
+    User->>Card: Open app
+    Card->>Keychain: Read id_token + device_secret
+    Card->>Card: Token exchange (no login!)
+    User->>Invest: Open app
+    Invest->>Keychain: Read id_token + device_secret
+    Invest->>Invest: Token exchange (no login!)
+
+    Note over User: Single login!<br/>All apps work seamlessly
+```
 
 ### Before vs. After
 
@@ -83,20 +107,54 @@ Native SSO (formally "OpenID Connect Native SSO for Mobile Apps 1.0") solves thi
 
 Native SSO works in two phases:
 
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    subgraph Phase1["Phase 1: Authentication"]
+        A1[App 1 authenticates]
+        A2[AS issues device_secret]
+        A3[App 1 stores in Keychain]
+        A1 --> A2 --> A3
+    end
+    
+    subgraph Phase2["Phase 2: SSO Token Exchange"]
+        B1[App 2 reads from Keychain]
+        B2[App 2 calls AS]
+        B3[AS validates & issues tokens]
+        B1 --> B2 --> B3
+    end
+    
+    Phase1 --> Phase2
+```
+
 **Phase 1: Authentication (App 1)**
 
-```
-App 1 → AS: "Log me in (with device_sso scope)"
-AS → App 1: access_token + refresh_token + id_token + device_secret
-App 1 → Shared Storage: stores id_token + device_secret
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant App1 as 🏦 App 1
+    participant AS as Auth Server
+    participant Keychain as 🔐 Keychain
+
+    App1->>AS: "Log me in (with device_sso scope)"
+    AS->>AS: Authenticate user
+    AS->>App1: access_token + refresh_token + id_token + device_secret
+    App1->>Keychain: Store id_token + device_secret
 ```
 
 **Phase 2: SSO Token Exchange (App 2)**
 
-```
-App 2 ← Shared Storage: reads id_token + device_secret
-App 2 → AS: "Exchange these for my own tokens"
-AS → App 2: access_token + refresh_token + id_token + device_secret
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant App2 as 💳 App 2
+    participant AS as Auth Server
+    participant Keychain as 🔐 Keychain
+
+    App2->>Keychain: Read id_token + device_secret
+    App2->>AS: "Exchange these for my own tokens"
+    AS->>AS: Validate device_secret + ds_hash + sid
+    AS->>App2: access_token + refresh_token + id_token + device_secret
 ```
 
 ### The New Scope: `device_sso`
@@ -106,15 +164,6 @@ The `device_sso` scope is the trigger. When an authorization request includes `o
 1. Issue a **device secret** alongside the normal tokens
 2. Include `ds_hash` and `sid` claims in the ID token
 3. Prepare for future token exchange requests from other apps
-
-### The New Token Type: Device Secret
-
-The device secret is:
-- An **opaque string** (like `b81d5ae9-9f85-4c6d-8658-1a36ffa42c83`)
-- Issued by the AS and unique to the device + user combination
-- **Completely opaque to the client** — apps cannot decode or tamper with it
-- Stored in **secure shared storage** (iOS Keychain, Android Account Manager)
-- Used to **prove device identity** during token exchange
 
 ### The New Grant Type Extension: Token Exchange with Device Secret
 
@@ -131,7 +180,7 @@ App 2 doesn't use the authorization code flow. Instead, it uses **Token Exchange
 
 ---
 
-## Part 3: How Native SSO Works (Step by Step)
+## Part 3: How Native SSO Works
 
 ### Phase 1: App 1 Authentication
 
@@ -232,7 +281,7 @@ client_id=app_2
 
 #### Step 9: AS Validates and Issues Tokens
 
-The AS performs these checks (see Part 9 for details):
+The AS performs these checks:
 
 1. Validates the device secret
 2. Verifies the ID token signature
@@ -282,18 +331,17 @@ In practice, the AS generates a random opaque string (like a UUID or a JWE). Aut
 
 ### Lifecycle
 
-```
-App 1 authenticates → AS generates device_secret
-                        ↓
-              App 1 stores in Keychain
-                        ↓
-App 2 reads from Keychain → sends to AS in token exchange
-                        ↓
-              AS validates → issues new tokens
-                        ↓
-              AS may rotate device_secret (optional)
-                        ↓
-              App 2 stores updated device_secret
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart TD
+    A[App 1 authenticates] --> B[AS generates device_secret]
+    B --> C[App 1 stores in Keychain]
+    C --> D[App 2 reads from Keychain]
+    D --> E[App 2 sends to AS in token exchange]
+    E --> F{AS validates}
+    F -->|Valid| G[Issues new tokens]
+    F -->|Invalid| H[Rejects request]
+    G --> I[App 2 stores tokens]
 ```
 
 ### Rotation
@@ -440,122 +488,7 @@ For each client:
 
 ---
 
-## Part 7: Server Implementation Analysis
-
-### Current State: Native SSO Is NOT Implemented
-
-A thorough analysis of this codebase reveals that **Native SSO is entirely unimplemented**. Here's what exists and what's missing:
-
-### What Exists (SDK Support)
-
-The Authlete TypeScript SDK (`@authlete/typescript-sdk@^1.1.6`) includes full Native SSO support:
-
-| Component | Location | Status |
-|-----------|----------|--------|
-| `NativeSso` class | `node_modules/@authlete/typescript-sdk/src/sdk/nativesso.ts` | ✅ Present |
-| `NativeSsoRequest` model | `node_modules/@authlete/typescript-sdk/src/models/nativessorequest.ts` | ✅ Present |
-| `NativeSsoResponse` model | `node_modules/@authlete/typescript-sdk/src/models/nativessoresponse.ts` | ✅ Present |
-| `NativeSsoLogoutRequest` model | `node_modules/@authlete/typescript-sdk/src/models/nativessologoutrequest.ts` | ✅ Present |
-| `NativeSsoLogoutResponse` model | `node_modules/@authlete/typescript-sdk/src/models/nativessologoutresponse.ts` | ✅ Present |
-| `authleteApi.nativeSso` getter | `node_modules/@authlete/typescript-sdk/src/sdk/sdk.ts` | ✅ Present |
-| `AuthorizationResponse.nativeSsoRequested` field | `node_modules/@authlete/typescript-sdk/src/models/authorizationresponse.ts` | ✅ Present |
-
-### What's Missing (Application Code)
-
-| Component | What's Needed | Current Status |
-|-----------|--------------|----------------|
-| **Token controller `NATIVE_SSO` action** | Handle `action === "NATIVE_SSO"` from `/auth/token` → call `authleteApi.nativeSso.process()` | ❌ Missing — falls to `default` case → returns 500 |
-| **`sessionId` in authorization/issue** | When `nativeSsoRequested === true`, pass `sessionId` to `/auth/authorization/issue` | ❌ Missing — `authorization.service.ts:58-95` doesn't pass `sessionId` |
-| **Native SSO processing endpoint** | `POST /api/nativesso` route, controller, and service | ❌ Missing — no routes exist |
-| **Native SSO logout endpoint** | `POST /api/nativesso/logout` route, controller, and service | ❌ Missing — no routes exist |
-| **Device secret management** | Generate, store, validate device secrets | ❌ Missing — no device secret handling |
-
-### What Would Need to Change
-
-#### 1. Token Controller (`server/src/controllers/token.controller.ts`)
-
-Add a `case "NATIVE_SSO":` handler. The current code at line 186 falls through to:
-
-```typescript
-default: {
-  const log2 = req.logger || logger;
-  log2.error("Unknown token action", { action: result.action });
-  return res.status(500).send("Unknown token action");
-}
-```
-
-This means if Authlete returns `NATIVE_SSO`, the client gets a 500 error.
-
-#### 2. Authorization Service (`server/src/services/authorization.service.ts`)
-
-The `issue()` method at line 83 spreads `authorizationIssueRequest` from session but doesn't include `sessionId`. When Authlete returns `nativeSsoRequested: true` in the authorization response, the implementation must:
-
-1. Generate or retrieve a session ID
-2. Store it in the session
-3. Pass it to the `/auth/authorization/issue` call
-
-#### 3. Native SSO Service (New File)
-
-A new service would need to:
-
-```typescript
-// Conceptual — NOT implemented in this codebase
-export class NativeSsoService {
-  async process(request: NativeSsoRequest): Promise<NativeSsoResponse> {
-    return this.authleteApi.nativeSso.process({
-      serviceId,
-      nativeSsoRequest: request,
-    });
-  }
-
-  async logout(request: NativeSsoLogoutRequest): Promise<NativeSsoLogoutResponse> {
-    return this.authleteApi.nativeSso.logout({
-      serviceId,
-      nativeSsoLogoutRequest: request,
-    });
-  }
-}
-```
-
-### SDK Request/Response Types
-
-#### NativeSsoRequest (what you pass to `/nativesso`)
-
-```typescript
-{
-  accessToken: string;        // REQUIRED — from /auth/token response
-  refreshToken?: string;      // OPTIONAL — from /auth/token response
-  deviceSecret: string;       // REQUIRED — generated or from /auth/token response
-  deviceSecretHash?: string;  // OPTIONAL — SHA-256 hash of device secret
-  sub?: string;               // OPTIONAL — subject claim override
-  claims?: string;            // OPTIONAL — additional claims (JSON string)
-  idtHeaderParams?: string;   // OPTIONAL — additional JWS header params
-  idTokenAudType?: string;    // OPTIONAL — "array" or "string" for aud claim
-}
-```
-
-#### NativeSsoResponse (what you get back)
-
-```typescript
-{
-  resultCode?: string;
-  resultMessage?: string;
-  action?: "OK" | "INTERNAL_SERVER_ERROR" | "CALLER_ERROR";
-  responseContent?: string;   // Use as-is for HTTP response body
-  idToken?: string;           // The issued ID token
-}
-```
-
----
-
-## Part 8: Step-by-Step curl Testing
-
-### Prerequisites
-
-Before testing, you need:
-- An Authlete service with Native SSO enabled
-- Two registered clients (`app_1` and `app_2`) with `TOKEN_EXCHANGE` and `device_sso` scope
-- A valid access token for `app_1` (from a previous authorization code flow with `scope=openid device_sso`)
+## Part 7: Step-by-Step Flow
 
 ### Phase 1: Get Tokens for App 1
 
@@ -712,117 +645,51 @@ curl -v -X POST https://YOUR_AUTHLETE_BASE/YOUR_SERVICE_ID/token \
 
 ---
 
-## Part 9: Native SSO + Token Exchange (RFC 8693)
+## Part 8: Logout — Revoking All Apps
 
-Native SSO is **not a standalone protocol** — it's a **profile** (extension) of OAuth 2.0 Token Exchange (RFC 8693). Here's how they relate:
+### The Problem
 
-### RFC 8693 (Generic Token Exchange)
+In a multi-app scenario, logging out of one app should log out of **all apps**. Without Native SSO, each app manages its own tokens independently — logging out of App 1 doesn't affect App 2.
 
-RFC 8693 defines a generic mechanism for swapping one token for another. It's flexible — you can exchange any token type for any other token type, with any audience.
+### The Solution: Session-Based Logout
 
-### Native SSO Profile (Restrictive Extension)
+Native SSO ties all tokens to a single session via the `sid` claim. The `/nativesso/logout` API deletes **all access/refresh token records** associated with a session ID.
 
-Native SSO **restricts** RFC 8693 to a specific use case:
+### How It Works
 
-| Aspect | RFC 8693 (Generic) | Native SSO Profile |
-|--------|--------------------|--------------------|
-| `subject_token` | Any token type | Must be an ID token |
-| `subject_token_type` | Any type identifier | Must be `urn:ietf:params:oauth:token-type:id_token` |
-| `actor_token` | Any token type | Must be a device secret |
-| `actor_token_type` | Any type identifier | Must be `urn:openid:params:token-type:device-secret` |
-| `audience` | Any audience | Must be the AS's issuer URI |
-| Additional validation | Standard token validation | Must verify `ds_hash`, `sid`, device secret binding |
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant User as 👤 User
+    participant App1 as 🏦 App 1
+    participant App2 as 💳 App 2
+    participant AS as Auth Server
 
-### The Authlete Flow
+    User->>App1: Click "Logout"
+    App1->>AS: POST /nativesso/logout<br/>{ sessionId }
+    AS->>AS: Delete all tokens for sessionId
+    AS->>App1: 200 OK
+    App1->>App1: Clear local tokens
 
-When Authlete receives a token request at `/auth/token`, it analyzes the parameters and determines the appropriate action:
+    Note over App2: App 2 still has tokens...<br/>but they're now invalid server-side
 
-```
-grant_type=authorization_code + scope=openid device_sso
-  → action: NATIVE_SSO (first time, App 1)
-
-grant_type=refresh_token + device_sso scope
-  → action: NATIVE_SSO (refresh flow)
-
-grant_type=urn:ietf:params:oauth:grant-type:token-exchange
-  + actor_token_type=urn:openid:params:token-type:device-secret
-  → action: NATIVE_SSO (App 2's token exchange)
+    App2->>AS: Try to use token
+    AS->>App2: 401 Unauthorized
+    App2->>App2: Clear local tokens
 ```
 
-When `action === "NATIVE_SSO"`, the implementation must:
+### What Just Happened?
 
-1. **Validate the session ID** (`sessionId` from the response)
-2. **Validate or generate the device secret** (`deviceSecret` from the response)
-3. **Call the `/nativesso` API** to generate the Native SSO-compliant token response
-
-### Key Difference from Generic Token Exchange
-
-In the server's current implementation, `TOKEN_EXCHANGE` is handled by `token-exchange-response.handler.ts`, which calls `tokenManagementService.create()`. This works for generic token exchange but **does NOT work for Native SSO** because:
-
-1. Native SSO requires generating an ID token with `ds_hash` and `sid` claims
-2. Native SSO requires returning a `device_secret` in the response
-3. Native SSO requires session ID validation
-4. The `/nativesso` API handles all of this — `tokenManagement.create()` does not
+1. User clicks "Logout" in App 1
+2. App 1 calls POST `/api/nativesso/logout` with the session ID
+3. Authlete deletes **all tokens** for that session ID
+4. App 1 clears its local tokens
+5. App 2's tokens are now invalid (deleted server-side)
+6. Next time App 2 tries to use its token → 401 Unauthorized
 
 ---
 
-## Part 10: Real-World Use Cases
-
-### 1. Banking Apps (Primary Use Case)
-
-A bank with multiple mobile apps:
-
-| App | Purpose | SSO Benefit |
-|-----|---------|-------------|
-| Main Banking | Account overview, transfers | Initial authentication |
-| Credit Cards | Card management, transactions | No re-login needed |
-| Investments | Portfolio, trading | No re-login needed |
-| Insurance | Policy management | No re-login needed |
-
-All four apps share the same device secret and session. User logs in once in the main app, and all other apps get SSO.
-
-### 2. Enterprise Suites
-
-A company with multiple productivity apps:
-
-| App | Purpose |
-|-----|---------|
-| Email | Mail, calendar |
-| Documents | Word processing, spreadsheets |
-| Messaging | Chat, video calls |
-| HR | Payroll, benefits |
-
-Employees authenticate once and get seamless access across all apps.
-
-### 3. Healthcare Platforms
-
-A hospital system with multiple apps:
-
-| App | Purpose |
-|-----|---------|
-| Patient Portal | Appointments, records |
-| Telehealth | Video consultations |
-| Pharmacy | Prescription management |
-| Lab Results | Test results |
-
-Patients authenticate once and access all health services.
-
-### 4. Government Services
-
-A government with multiple citizen-facing apps:
-
-| App | Purpose |
-|-----|---------|
-| Tax Portal | File taxes |
-| Benefits | Apply for benefits |
-| Licensing | Driver's license, permits |
-| Voting | Voter registration |
-
-Citizens authenticate once and access all government services.
-
----
-
-## Part 11: How Native SSO Hardens Security
+## Part 9: Security Hardening
 
 ### 1. No Browser Cookie Dependency
 
@@ -863,10 +730,6 @@ The AS should maintain a list of apps authorized for SSO. During token exchange,
 - Both the requesting app (`client_id`) and the original app (`aud` in the ID token) are authorized
 - This prevents unauthorized apps from using the SSO mechanism
 
-### 7. Consent Requirements
-
-The AS should verify that the scopes requested by App 2 don't require explicit user consent. If they do, the AS returns `interaction_required`, forcing the user to authenticate explicitly in App 2.
-
 ### Security Comparison
 
 | Attack Vector | Browser SSO | Native SSO |
@@ -880,245 +743,16 @@ The AS should verify that the scopes requested by App 2 don't require explicit u
 
 ---
 
-## Part 12: Logout — Revoking All Apps
-
-### The Problem
-
-In a multi-app scenario, logging out of one app should log out of **all apps**. Without Native SSO, each app manages its own tokens independently — logging out of App 1 doesn't affect App 2.
-
-### The Solution: Session-Based Logout
-
-Native SSO ties all tokens to a single session via the `sid` claim. The `/nativesso/logout` API deletes **all access/refresh token records** associated with a session ID.
-
-### How It Works
-
-```
-User clicks "Logout" in App 1
-  → App 1 calls POST /api/nativesso/logout with sessionId
-  → Authlete deletes all tokens for that sessionId
-  → App 1 clears its local tokens
-  → App 2's tokens are now invalid (deleted server-side)
-  → Next time App 2 tries to use its token → 401 Unauthorized
-```
-
-### API Call
-
-```bash
-POST /api/{serviceId}/nativesso/logout
-Content-Type: application/json
-Authorization: Bearer {service_access_token}
-
-{
-  "sessionId": "session_abc123"
-}
-```
-
-### Response
-
-```json
-{
-  "resultCode": "S232001",
-  "resultMessage": "[S232001] The /nativesso/logout API call successfully deleted 2 access/refresh token record(s).",
-  "action": "OK"
-}
-```
-
-### Logout Flow Diagram
-
-```
-┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
-│  App 1  │     │  App 2  │     │   AS    │     │Storage  │
-└────┬────┘     └────┬────┘     └────┬────┘     └────┬────┘
-     │               │               │               │
-     │ [1] User clicks Logout        │               │
-     │               │               │               │
-     │ [2] Clear local tokens        │               │
-     │               │               │               │
-     │ [3] POST /nativesso/logout    │               │
-     │     { sessionId }             │               │
-     │ ──────────────────────────>  │               │
-     │               │               │               │
-     │               │         [4] Delete all        │
-     │               │             tokens for        │
-     │               │             sessionId         │
-     │               │               │               │
-     │ [5] 200 OK    │               │               │
-     │ <──────────────────────────  │               │
-     │               │               │               │
-     │               │ [6] App 2 tries to use token  │
-     │               │ ──────────────────────────>  │
-     │               │               │               │
-     │               │ [7] 401 Unauthorized          │
-     │               │ <──────────────────────────  │
-     │               │               │               │
-     │               │ [8] App 2 clears local tokens │
-     │               │               │               │
-```
-
----
-
-## Part 13: Error Scenarios
-
-### Error 1: Invalid Device Secret Hash
-
-**When:** App 2 sends a device secret that doesn't match the `ds_hash` in the ID token.
-
-**HTTP Response:**
-
-```http
-HTTP/1.1 400 Bad Request
-Content-Type: application/json
-Cache-Control: no-store
-
-{
-  "error": "invalid_grant",
-  "error_description": "The device secret hash in the subject token does not correspond to the device secret."
-}
-```
-
-**Cause:** Device secret was tampered with, or App 2 has a stale/incorrect device secret.
-
-**Fix:** App 2 should re-read the device secret from shared storage. If the problem persists, App 1 may need to re-authenticate.
-
----
-
-### Error 2: Invalid Session ID
-
-**When:** The `sid` in the ID token refers to an expired or revoked session.
-
-**HTTP Response:**
-
-```http
-HTTP/1.1 400 Bad Request
-Content-Type: application/json
-Cache-Control: no-store
-
-{
-  "error": "invalid_grant",
-  "error_description": "The session ID is no longer valid."
-}
-```
-
-**Cause:** The user's session expired, or an admin revoked the session, or the user logged out from another app.
-
-**Fix:** App 2 must start a fresh authorization code flow (no SSO possible).
-
----
-
-### Error 3: Missing Required Parameters
-
-**When:** Token exchange request is missing `audience`, `actor_token`, or `actor_token_type`.
-
-**HTTP Response:**
-
-```http
-HTTP/1.1 400 Bad Request
-Content-Type: application/json
-Cache-Control: no-store
-
-{
-  "error": "invalid_request",
-  "error_description": "The request is missing a required parameter."
-}
-```
-
-**Fix:** Ensure all required parameters are included in the token exchange request.
-
----
-
-### Error 4: Unauthorized App
-
-**When:** The requesting app (`app_2`) is not authorized for Native SSO token exchange.
-
-**HTTP Response:**
-
-```http
-HTTP/1.1 400 Bad Request
-Content-Type: application/json
-Cache-Control: no-store
-
-{
-  "error": "invalid_grant",
-  "error_description": "The client is not authorized for Native SSO."
-}
-```
-
-**Cause:** The AS's configuration doesn't allow `app_2` to participate in token exchange.
-
-**Fix:** Configure the AS to authorize `app_2` for token exchange (in Authlete: enable `TOKEN_EXCHANGE` grant type on the client and set `extension.tokenExchangePermitted = true`).
-
----
-
-### Error 5: Interaction Required
-
-**When:** The scopes requested by App 2 require explicit user consent.
-
-**HTTP Response:**
-
-```http
-HTTP/1.1 400 Bad Request
-Content-Type: application/json
-Cache-Control: no-store
-
-{
-  "error": "interaction_required",
-  "error_description": "The request requires user interaction."
-}
-```
-
-**Cause:** App 2 is requesting scopes that weren't previously consented to.
-
-**Fix:** App 2 must start a standard authorization code flow to get user consent.
-
----
-
-### Error 6: Native SSO Not Enabled
-
-**When:** The service doesn't have `nativeSsoSupported = true`.
-
-**HTTP Response:**
-
-```http
-HTTP/1.1 400 Bad Request
-Content-Type: application/json
-Cache-Control: no-store
-
-{
-  "error": "invalid_request",
-  "error_description": "The token type 'urn:openid:params:token-type:device-secret' is not supported."
-}
-```
-
-**Cause:** Native SSO is not enabled on the Authlete service.
-
-**Fix:** Enable Native SSO in the Authlete Console (see Part 6, Step 1).
-
----
-
-### Error 7: `device_sso` Scope Not Registered
-
-**When:** The `device_sso` scope is not registered on the service.
-
-**HTTP Response:**
-
-The authorization request succeeds, but `nativeSsoRequested` is `false` in the Authlete response, and no device secret is issued. The token response looks like a standard OIDC response (no `device_secret`).
-
-**Cause:** OAuth 2.0 silently ignores unknown scopes. If `device_sso` isn't registered, it's treated as an unknown scope and ignored.
-
-**Fix:** Register the `device_sso` scope in the Authlete Console (see Part 6, Step 2).
-
----
-
-## Part 14: Troubleshooting
+## Part 10: Troubleshooting
 
 ### Problem: No `device_secret` in Token Response
 
 **Checklist:**
-1. ✅ Is `nativeSsoSupported = true` on the service?
-2. ✅ Is `device_sso` registered as a scope?
-3. ✅ Does the authorization request include `scope=openid device_sso`?
-4. ✅ Does the client have `device_sso` in its requestable scopes?
-5. ✅ Does the client have `TOKEN_EXCHANGE` in its grant types?
+1. Is `nativeSsoSupported = true` on the service?
+2. Is `device_sso` registered as a scope?
+3. Does the authorization request include `scope=openid device_sso`?
+4. Does the client have `device_sso` in its requestable scopes?
+5. Does the client have `TOKEN_EXCHANGE` in its grant types?
 
 ### Problem: Token Exchange Returns 500
 
@@ -1129,16 +763,16 @@ The authorization request succeeds, but `nativeSsoRequested` is `false` in the A
 ### Problem: `ds_hash` Doesn't Match
 
 **Checklist:**
-1. ✅ Are you using the same device secret that was originally issued?
-2. ✅ Was the device secret stored correctly in shared storage?
-3. ✅ Is the hash computation correct (SHA-256, base64url)?
+1. Are you using the same device secret that was originally issued?
+2. Was the device secret stored correctly in shared storage?
+3. Is the hash computation correct (SHA-256, base64url)?
 
 ### Problem: Session ID Validation Fails
 
 **Checklist:**
-1. ✅ Is the session still active on the AS?
-2. ✅ Has the session been revoked (by logout or admin action)?
-3. ✅ Is the session ID value correct (not truncated or corrupted)?
+1. Is the session still active on the AS?
+2. Has the session been revoked (by logout or admin action)?
+3. Is the session ID value correct (not truncated or corrupted)?
 
 ### Problem: App 2 Gets `interaction_required`
 
@@ -1150,83 +784,30 @@ The authorization request succeeds, but `nativeSsoRequested` is `false` in the A
 
 ---
 
-## Appendix A: Specification References
+## Summary
 
-| Specification | Full Name | Version |
-|--------------|-----------|---------|
-| Native SSO | OpenID Connect Native SSO for Mobile Apps 1.0 | draft-07 (January 2025) |
-| Token Exchange | OAuth 2.0 Token Exchange | RFC 8693 (January 2020) |
-| OAuth 2.0 | The OAuth 2.0 Authorization Framework | RFC 6749 (October 2012) |
-| OIDC Core | OpenID Connect Core 1.0 | Final (December 2023) |
-| OIDC Discovery | OpenID Connect Discovery 1.0 | Final (December 2023) |
+Native SSO is simple but powerful:
 
-### Native SSO-Specific Registration
+1. **App 1** authenticates and stores `id_token` + `device_secret` in Keychain
+2. **App 2** reads from Keychain and exchanges for its own tokens
+3. **AS** validates the device secret and issues new tokens
+4. **Logout** revokes all tokens for the session
 
-| Item | Value | Registry |
-|------|-------|----------|
-| Scope | `device_sso` | OpenID Connect |
-| Token Type | `urn:openid:params:token-type:device-secret` | IANA OAuth Parameters |
-| Parameter | `device_secret` | IANA OAuth Parameters |
-| Metadata | `native_sso_supported` | IANA OAuth AS Metadata |
+**Use Native SSO when:**
+- Multiple mobile apps from the same vendor
+- Need SSO that works in incognito mode
+- Need SSO that survives browser data clearing
+- High-security requirements
+
+**Don't use Native SSO when:**
+- Single app (no SSO needed)
+- Browser-based SSO is sufficient
+- Cross-device scenarios
 
 ---
 
-## Appendix B: Server Architecture
+## References
 
-### Current Token Controller Flow
-
-```
-POST /api/token
-  → tokenService.process(req)     // calls Authlete /auth/token
-  → switch (result.action)
-      case "OK":                  → return responseContent
-      case "BAD_REQUEST":         → 400
-      case "INVALID_CLIENT":      → 401/400
-      case "INTERNAL_SERVER_ERROR": → 500
-      case "JWT_BEARER":          → jwtVerificationService.processJwtBearer()
-      case "PASSWORD":            → validate credentials → issue/fail
-      case "TOKEN_EXCHANGE":      → handleTokenExchange()
-      case "ID_TOKEN_REISSUABLE": → tokenService.issue()
-      default:                    → 500 "Unknown token action"  ← Native SSO falls here
-```
-
-### What Native SSO Would Need
-
-```
-POST /api/token
-  → tokenService.process(req)
-  → switch (result.action)
-      ...
-      case "NATIVE_SSO":         → nativeSsoHandler(req, res, result)
-        1. Validate sessionId
-        2. Validate/generate deviceSecret
-        3. Call authleteApi.nativeSso.process()
-        4. Return responseContent
-      ...
-
-POST /api/nativesso/logout
-  → nativeSsoService.logout({ sessionId })
-  → return responseContent
-```
-
-### SDK Native SSO Methods
-
-```typescript
-// Processing (token exchange for App 2)
-authleteApi.nativeSso.process({
-  serviceId: "YOUR_SERVICE_ID",
-  nativeSsoRequest: {
-    accessToken: "...",
-    deviceSecret: "...",
-    deviceSecretHash: "...",  // optional, computed if omitted
-  }
-})
-
-// Logout (revoke all tokens for a session)
-authleteApi.nativeSso.logout({
-  serviceId: "YOUR_SERVICE_ID",
-  nativeSsoLogoutRequest: {
-    sessionId: "session_abc123"
-  }
-})
-```
+- [OpenID Connect Native SSO for Mobile Apps 1.0](https://openid.net/specs/openid-connect-native-sso-1_0.html)
+- [RFC 8693: OAuth 2.0 Token Exchange](https://www.rfc-editor.org/rfc/rfc8693.html)
+- [Authlete KB: Native SSO](https://kb.authlete.com/en/s/oauth-and-openid-connect/a/native-sso)

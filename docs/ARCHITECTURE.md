@@ -1,5 +1,9 @@
 # Architecture
 
+> **The short version:** The authorization server is a stateless translation layer between browsers/apps and Authlete's cloud API. All OAuth decisions happen in Authlete — the server handles HTTP, sessions, and UI rendering.
+
+---
+
 - [System Context](#system-context)
 - [Container Diagram](#container-diagram)
 - [Middleware Pipeline](#middleware-pipeline)

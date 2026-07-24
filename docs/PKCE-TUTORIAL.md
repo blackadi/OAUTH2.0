@@ -1,6 +1,6 @@
 # Proof Key for Code Exchange (PKCE) — RFC 7636
 
-A comprehensive guide to PKCE: why it was created, the security problems it solves, how this server implements it, and how to test it.
+> **The short version:** PKCE prevents someone from stealing your authorization code and using it. It's the single most important security improvement you can make to your OAuth implementation.
 
 ---
 
@@ -20,7 +20,6 @@ A comprehensive guide to PKCE: why it was created, the security problems it solv
 - [Part 12: Error Scenarios](#part-12-error-scenarios)
 - [Part 13: PKCE Myths and Misconceptions](#part-13-pkce-myths-and-misconceptions)
 - [Part 14: Troubleshooting](#part-14-troubleshooting)
-- [Appendix: Server Architecture](#appendix-server-architecture)
 
 ---
 
@@ -28,76 +27,83 @@ A comprehensive guide to PKCE: why it was created, the security problems it solv
 
 ### The Problem: Authorization Code Interception
 
-In the standard OAuth 2.0 authorization code flow, there's a critical moment of vulnerability:
+Here's a scenario that should worry you.
+
+You're building a mobile banking app. The user taps "Login," your app opens the browser, the auth server authenticates the user, and redirects back to your app with an authorization code:
 
 ```
-1. User clicks "Login" → browser redirects to auth server
-2. Auth server redirects back with: https://myapp.com/callback?code=ABC123
-3. The app exchanges ABC123 for tokens
+mybank://callback?code=ABC123
 ```
 
-The problem is step 2. The authorization code travels through the browser, and in that moment, a malicious app on the same device can **intercept** it.
+But here's the thing — on iOS and Android, **any app can register a custom URL scheme**. A malicious app on the same phone could register `mybank://` and intercept that code. Now the attacker has your authorization code, and they can exchange it for the user's access token.
 
-Here's how the attack works:
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant User
+    participant LegitApp as Legit App (Bank)
+    participant OS as Mobile OS
+    participant MaliciousApp as Malicious App
+    participant AuthServer as Auth Server
 
-```
-┌──────────┐     ┌──────────┐     ┌──────────┐
-│  Legit   │     │  Browser │     │  Malicious│
-│  App     │     │          │     │  App      │
-│          │     │          │     │  (registered│
-│          │     │          │     │   custom   │
-│          │     │          │     │   scheme)  │
-└────┬─────┘     └────┬─────┘     └────┬─────┘
-     │                │                │
-     │ 1. Redirect to auth server      │
-     │ ───────────────────────────────→│
-     │                │                │
-     │ 2. Auth server redirects back   │
-     │    with ?code=ABC123            │
-     │ ←───────────────────────────────│
-     │                │                │
-     │                │  3. Malicious  │
-     │                │  app intercepts│
-     │                │  the code!     │
-     │                │ ──────────────→│
-     │                │                │
-     │ 4. Legit app tries to           │
-     │    exchange code, but it's      │
-     │    already been used            │
-     │ ───────────────────────────────→│
-     │                │     5. Malicious│
-     │                │     app also   │
-     │                │     exchanges  │
-     │                │     the code!  │
-     │                │ ←─────────────│
+    LegitApp->>AuthServer: 1. Redirect to login
+    AuthServer->>User: 2. Authenticate & consent
+    User->>AuthServer: 3. Approve
+    AuthServer->>OS: 4. Redirect to mybank://callback?code=ABC123
+
+    Note over OS: OS sees two apps registered<br/>for mybank:// ...
+
+    OS->>MaliciousApp: 5. Wrong app gets the code!
+    MaliciousApp->>AuthServer: 6. Exchange code for tokens
+    AuthServer->>MaliciousApp: 7. Access token issued 😱
 ```
 
-On **mobile devices**, this is especially dangerous. iOS and Android allow apps to register custom URL schemes (like `myapp://callback`). When the auth server redirects to `myapp://callback?code=ABC123`, the OS might open the **wrong** app.
+This isn't theoretical. It's happened in production. The authorization code is a bearer credential — whoever has it can use it.
 
 ### The Solution: PKCE
 
-PKCE (pronounced "pixy") fixes this by adding a **secret** that only the legitimate app knows. The app generates a random secret, shows a "fingerprint" of it to the auth server, and later proves it has the original secret.
+PKCE (pronounced "pixy" — like the fairy) fixes this by adding a **proof** that the app exchanging the code is the same app that started the authorization request.
 
-Even if the attacker intercepts the authorization code, they **can't exchange it for tokens** because they don't have the original secret.
+Here's the key insight: the app generates a secret, shows a "fingerprint" of it to the auth server, and later proves it has the original secret. Even if an attacker steals the code, they can't use it because they don't have the secret.
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant User
+    participant App as Legit App
+    participant AuthServer as Auth Server
+
+    App->>App: Generate secret (code_verifier)
+    App->>App: Compute fingerprint (code_challenge)
+    App->>AuthServer: 1. Authorization request + code_challenge
+    AuthServer->>AuthServer: Store code_challenge
+    AuthServer->>App: 2. Redirect with code
+    App->>AuthServer: 3. Exchange code + code_verifier (secret!)
+    AuthServer->>AuthServer: Verify: SHA256(code_verifier) == code_challenge?
+    AuthServer->>App: 4. Tokens issued ✓
+```
+
+Even if the attacker intercepts the code at step 2, they can't complete step 3 — they don't have the `code_verifier`.
 
 ### Before PKCE vs. After
 
 | Scenario | Without PKCE | With PKCE |
 |----------|:-----------:|:---------:|
-| Code intercepted on mobile | Attacker exchanges code for tokens | Attacker can't exchange — missing code_verifier |
-| Code intercepted on shared device | Same | Same — attacker blocked |
+| Code intercepted on mobile | Attacker gets tokens | Attacker blocked — no code_verifier |
 | Code intercepted via malware | Same | Same — attacker blocked |
 | Legitimate app exchanges code | Works | Works — has the code_verifier |
+
+**Bottom line:** PKCE turns an authorization code from a "bearer" credential into a "proof of possession" credential.
 
 ---
 
 ## Part 2: The Core Concept
 
-### The Two Secrets
+### The Two Values
 
 PKCE works with two values:
 
-1. **Code Verifier** — A random secret generated by the client app. Never sent to the auth server during the authorization request. Kept secret on the client.
+1. **Code Verifier** — A random secret generated by the client. Never sent to the auth server during the authorization request. Kept secret on the client.
 
 2. **Code Challenge** — A "fingerprint" of the code verifier. Sent to the auth server during the authorization request. Stored alongside the authorization code.
 
@@ -105,12 +111,14 @@ PKCE works with two values:
 
 Think of it like a **lock and key**:
 
-- **Authorization request**: You put a lock on a box (code_challenge) and send the box to the auth server
-- **Authorization response**: The auth server gives you a key (authorization code) that opens the box
-- **Token request**: You present the key (code) AND the original key's mold (code_verifier) to prove you're the one who locked the box
-- **Verification**: The auth server checks that the mold matches the lock — if so, it issues tokens
+- You put a lock on a box (code_challenge) and send the box to the auth server
+- The auth server gives you a receipt (authorization code) 
+- To claim your tokens, you present the receipt AND the key that fits the lock (code_verifier)
+- The auth server checks that the key fits → tokens issued
 
-### The Grant Type
+The key never traveled with the box. An interceptor only has the receipt — useless without the key.
+
+### What Changes (and What Doesn't)
 
 PKCE doesn't change the grant type. It's still:
 
@@ -118,60 +126,48 @@ PKCE doesn't change the grant type. It's still:
 grant_type=authorization_code
 ```
 
-PKCE adds two new parameters to the authorization request and one new parameter to the token request.
+PKCE adds **two parameters** to the authorization request and **one parameter** to the token request. That's it.
 
 ---
 
 ## Part 3: How PKCE Works (Step by Step)
 
-### The Flow
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client
+    participant AuthServer as Auth Server
 
-```
-┌──────────┐                              ┌──────────────┐
-│          │  1. Generate random secret    │              │
-│  Client  │     (code_verifier)           │              │
-│  (SPA)   │                              │              │
-│          │  2. Compute fingerprint       │              │
-│          │     (code_challenge)          │              │
-│          │                              │              │
-│          │  3. Authorization request     │              │
-│          │     + code_challenge          │              │
-│          │ ────────────────────────────→ │  Auth Server │
-│          │                              │              │
-│          │  4. Redirect back with code   │              │
-│          │ ←──────────────────────────── │              │
-│          │                              │              │
-│          │  5. Token request             │              │
-│          │     + code (from redirect)    │              │
-│          │     + code_verifier (secret)  │              │
-│          │ ────────────────────────────→ │              │
-│          │                              │  Auth Server │
-│          │                              │  computes:   │
-│          │                              │  challenge = │
-│          │                              │  hash(verifier)│
-│          │                              │  compare with │
-│          │                              │  stored       │
-│          │                              │  challenge   │
-│          │  6. Tokens                    │              │
-│          │ ←──────────────────────────── │              │
-└──────────┘                              └──────────────┘
+    Client->>Client: 1. Generate random code_verifier
+    Client->>Client: 2. Compute code_challenge = SHA256(code_verifier)
+    Client->>AuthServer: 3. Authorization request<br/>+ code_challenge + method=S256
+    AuthServer->>AuthServer: 4. Store code_challenge with auth code
+    AuthServer->>Client: 5. Redirect with ?code=...
+    Client->>AuthServer: 6. Token request<br/>+ code + code_verifier
+    AuthServer->>AuthServer: 7. Verify: SHA256(verifier) == stored challenge?
+    AuthServer->>Client: 8. Tokens issued ✓
 ```
 
 ### Step by Step
 
-**Step 1**: Client generates a random `code_verifier` (43-128 characters from `[A-Za-z0-9-._~]`)
+**Step 1:** Client generates a random `code_verifier` (43-128 characters from `[A-Za-z0-9-._~]`)
 
-**Step 2**: Client computes `code_challenge` from the verifier:
-- **S256** (recommended): `BASE64URL(SHA256(code_verifier))`
-- **plain** (not recommended): `code_challenge = code_verifier`
+**Step 2:** Client computes `code_challenge` from the verifier using S256:
+```
+code_challenge = BASE64URL(SHA256(code_verifier))
+```
 
-**Step 3**: Client sends authorization request with `code_challenge` and `code_challenge_method=S256`
+**Step 3:** Client sends authorization request with `code_challenge` and `code_challenge_method=S256`
 
-**Step 4**: Auth server stores the `code_challenge` alongside the authorization code. Redirects back with the code.
+**Step 4:** Auth server stores the `code_challenge` alongside the authorization code
 
-**Step 5**: Client exchanges the code for tokens, including the original `code_verifier`
+**Step 5:** Auth server redirects back with the authorization code
 
-**Step 6**: Auth server computes the challenge from the presented verifier, compares it with the stored challenge. If they match → tokens issued. If not → rejected.
+**Step 6:** Client exchanges the code for tokens, including the original `code_verifier`
+
+**Step 7:** Auth server computes the challenge from the presented verifier, compares it with the stored challenge
+
+**Step 8:** If they match → tokens issued. If not → rejected.
 
 ---
 
@@ -201,11 +197,11 @@ code_challenge = BASE64URL(SHA256(ASCII(code_verifier)))
 
 Example:
 ```
-code_verifier: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+code_verifier:  dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
 code_challenge: E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
 ```
 
-Why S256 is better: The auth server only stores the **hash**, not the original verifier. Even if the auth server's database is compromised, the attacker can't recover the verifier. With `plain`, the challenge equals the verifier — so a database leak reveals the secret.
+**Why S256 is better:** The auth server only stores the **hash**, not the original verifier. Even if the auth server's database is compromised, the attacker can't recover the verifier.
 
 #### plain (Not Recommended)
 
@@ -219,14 +215,18 @@ The challenge IS the verifier. This defeats the purpose — if the auth server i
 
 When the token request arrives:
 
-```
-1. Auth server retrieves stored: code_challenge (hash) + code_challenge_method
-2. Auth server receives: code_verifier (from token request)
-3. If method is S256:
-     computed_challenge = BASE64URL(SHA256(code_verifier))
-4. Compare: computed_challenge == stored_code_challenge?
-5. If yes → tokens issued
-6. If no → rejected (invalid_grant)
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+flowchart TB
+    A[Token request arrives] --> B[Retrieve stored code_challenge]
+    B --> C[Receive code_verifier from request]
+    C --> D{Method?}
+    D -->|S256| E[Compute: SHA256 verifier]
+    D -->|plain| F[Use verifier directly]
+    E --> G[Compare with stored challenge]
+    F --> G
+    G -->|Match| H[Tokens issued ✓]
+    G -->|No match| I[Rejected: invalid_grant ✗]
 ```
 
 ---
@@ -240,39 +240,38 @@ When the token request arrives:
 3. Go to **Service Settings → Endpoints → Authorization → General**
 4. Under **Proof Key for Code Exchange (PKCE)**:
 
-| Setting | Recommended | Description |
-|---------|:-----------:|-------------|
-| **Require PKCE** | `true` | Reject authorization requests without `code_challenge`. Forces all clients to use PKCE. |
-| **Require S256 for Code Challenge Method** | `true` | Reject `plain` method. Only allow S256 (the secure option). |
-
-5. Click **Save Changes**
+| Setting | Recommended | Why |
+|---------|:-----------:|-----|
+| **Require PKCE** | `true` | Reject authorization requests without `code_challenge` |
+| **Require S256** | `true` | Reject `plain` method — only allow the secure option |
 
 ### Client-Level Settings
 
-For each client:
+For each client, go to **Client Settings → Endpoints → Authorization → General**:
 
-1. Go to **Client Settings → Endpoints → Authorization → General**
-2. Under **Proof Key for Code Exchange (PKCE)**:
+| Setting | Recommended | Why |
+|---------|:-----------:|-----|
+| **Require PKCE** | `true` | This client must use PKCE |
+| **Require S256** | `true` | This client must use S256 |
 
-| Setting | Recommended | Description |
-|---------|:-----------:|-------------|
-| **Require PKCE** | `true` | This specific client must use PKCE |
-| **Require S256** | `true` | This client must use S256 method |
+### When to Enforce PKCE
 
-### Why Enforce PKCE?
-
-- **Public clients (SPAs, mobile apps)**: PKCE is **essential**. These apps can't keep secrets. Without PKCE, intercepted codes can be exchanged by anyone.
-- **Confidential clients**: PKCE is still recommended as defense-in-depth. Even with client authentication, PKCE adds an extra layer of protection against code injection attacks.
+| Client Type | PKCE Required? | Why |
+|------------|:--------------:|-----|
+| Public clients (SPAs, mobile apps) | **Always** | These apps can't keep secrets. Without PKCE, intercepted codes can be exchanged by anyone. |
+| Confidential clients | **Recommended** | Defense-in-depth. Even with client authentication, PKCE prevents code injection attacks. |
 
 ---
 
 ## Part 6: Client Implementation
 
-### PKCE Utilities (`client/src/pkce.ts`)
+### PKCE Utilities
 
 The client includes a complete PKCE implementation using browser-native crypto:
 
 ```typescript
+// client/src/pkce.ts
+
 // Generate a random code verifier (64 characters)
 export async function generateCodeVerifier(length = 64): Promise<string> {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
@@ -306,42 +305,12 @@ PKCE is used in **every** authorization code flow in the client:
 
 | Component | How It Uses PKCE |
 |-----------|-----------------|
-| `AuthFlowsSection.tsx` | Generates PKCE pair on "Auth Code" flow start, stores verifier in `sessionStorage`, sends challenge in authorization request |
-| `CallbackPage.tsx` | Reads verifier from `sessionStorage`, sends it with the token exchange request |
-| `ParSection.tsx` | Generates PKCE pair for PAR flows, includes challenge in pushed parameters |
-| `RarSection.tsx` | Generates PKCE pair for RAR flows, includes challenge in authorization request |
-| `FapiSection.tsx` | Generates PKCE pair for FAPI 2.0 flows, includes challenge in PAR request |
-| `TokenContext.tsx` | Clears `pkce_code_verifier` from `sessionStorage` on logout |
-
-### The Complete Client Flow
-
-```
-1. User clicks "Auth Code (PKCE)" in the SPA
-2. Client calls createPkcePair() → { codeVerifier, codeChallenge }
-3. Client stores codeVerifier in sessionStorage('pkce_code_verifier')
-4. Client redirects to:
-   /api/authorization?
-     response_type=code&
-     client_id=YOUR_CLIENT_ID&
-     redirect_uri=http://localhost:3001/callback&
-     scope=openid profile email&
-     state=<random_uuid>&
-     code_challenge=<codeChallenge>&
-     code_challenge_method=S256
-
-5. User logs in, consents
-6. Auth server redirects to callback with ?code=...&state=...
-7. CallbackPage reads codeVerifier from sessionStorage
-8. CallbackPage POSTs to /api/token:
-   grant_type=authorization_code
-   code=<authorization_code>
-   redirect_uri=http://localhost:3001/callback
-   client_id=YOUR_CLIENT_ID
-   code_verifier=<codeVerifier>
-
-9. Server verifies: SHA256(code_verifier) == stored code_challenge
-10. Tokens issued!
-```
+| `AuthFlowsSection.tsx` | Generates PKCE pair, stores verifier in `sessionStorage`, sends challenge |
+| `CallbackPage.tsx` | Reads verifier from `sessionStorage`, sends with token exchange |
+| `ParSection.tsx` | Generates PKCE pair for PAR flows |
+| `RarSection.tsx` | Generates PKCE pair for RAR flows |
+| `FapiSection.tsx` | Generates PKCE pair for FAPI 2.0 flows |
+| `TokenContext.tsx` | Clears `pkce_code_verifier` on logout |
 
 ---
 
@@ -351,39 +320,34 @@ PKCE is used in **every** authorization code flow in the client:
 
 The server **delegates all PKCE handling to Authlete**. There is no custom PKCE code in the server — Authlete validates the challenge/verifier pair automatically.
 
-The flow:
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client
+    participant Server as Express Server
+    participant Authlete
 
+    Client->>Server: GET /api/authorization?code_challenge=...&method=S256
+    Server->>Authlete: Forward authorization request
+    Authlete->>Authlete: Store code_challenge with auth code
+    Authlete->>Server: Redirect with code
+    Server->>Client: Redirect ?code=...
+
+    Client->>Server: POST /api/token code=...&code_verifier=...
+    Server->>Authlete: Forward token request
+    Authlete->>Authlete: Verify: SHA256(verifier) == stored challenge?
+    Authlete->>Server: action=OK + tokens
+    Server->>Client: Access token, ID token
 ```
-1. Authorization request arrives at /api/authorization
-   → Server forwards URL-encoded params to Authlete /auth/authorization
-   → Authlete stores code_challenge + code_challenge_method alongside the auth code
 
-2. Token request arrives at /api/token
-   → Server forwards URL-encoded params to Authlete /auth/token
-   → Authlete computes challenge from presented code_verifier
-   → Authlete compares with stored challenge
-   → If match: returns action=OK with tokens
-   → If mismatch: returns action=BAD_REQUEST (invalid_grant)
-```
+### What Authlete Validates
 
-### Key Files
-
-| File | Role |
-|------|------|
-| `server/src/services/token.service.ts` | Forwards token requests (including `code_verifier`) to Authlete |
-| `server/src/services/client.management.service.ts:427-428` | Supports `pkceRequired` and `pkceS256Required` flags for client management |
-| `server/src/controllers/fapi.controller.ts:38,73` | Reports `pkceRequired` status in FAPI config and status endpoints |
-| `server/src/routes/openapi.routes.ts:50-56` | Documents `code_challenge` and `code_challenge_method` parameters |
-| `server/tests/e2e/e2e.test.ts:494-563` | E2E test: full PKCE flow (authorize → login → consent → token exchange) |
-
-### Server-Side Validation (All Handled by Authlete)
-
-| Step | What Authlete Validates |
-|:----:|----------------------|
-| 1 | `code_challenge` is present in authorization request (if PKCE required) |
+| Step | What Authlete Checks |
+|:----:|---------------------|
+| 1 | `code_challenge` is present (if PKCE required) |
 | 2 | `code_challenge_method` is valid (`S256` or `plain`) |
-| 3 | `code_verifier` is present in token request (when auth code has a challenge) |
-| 4 | `code_verifier` matches the stored `code_challenge` (using the method) |
+| 3 | `code_verifier` is present in token request |
+| 4 | `code_verifier` matches the stored `code_challenge` |
 | 5 | `code_verifier` length is 43-128 characters |
 | 6 | `code_verifier` contains only allowed characters |
 
@@ -396,11 +360,10 @@ The flow:
 1. Authlete service with PKCE enabled
 2. A public client with `clientId` (no `clientSecret`)
 3. This server running on `http://localhost:3000`
-4. A registered `redirect_uri` for your client
 
-### Scenario 1: Full PKCE Flow with curl
+### Scenario 1: Full PKCE Flow
 
-**Step 1**: Generate a code verifier and challenge
+**Step 1:** Generate a code verifier and challenge
 
 ```bash
 # Generate a random code verifier (64 chars)
@@ -412,10 +375,9 @@ CODE_CHALLENGE=$(echo -n "$CODE_VERIFIER" | openssl dgst -sha256 -binary | base6
 echo "Code Challenge: $CODE_CHALLENGE"
 ```
 
-**Step 2**: Start the authorization request
+**Step 2:** Start the authorization request
 
 ```bash
-# Build the authorization URL
 AUTH_URL="http://localhost:3000/api/authorization?response_type=code"
 AUTH_URL="${AUTH_URL}&client_id=YOUR_PUBLIC_CLIENT_ID"
 AUTH_URL="${AUTH_URL}&redirect_uri=http://localhost:3000"
@@ -428,15 +390,9 @@ echo "Open this URL in your browser:"
 echo "$AUTH_URL"
 ```
 
-**Step 3**: Complete the login and consent
+**Step 3:** Complete login and consent. Open the URL, log in with `admin` / `password`, approve consent.
 
-Open the URL in your browser. Log in with `admin` / `password`. Approve consent. You'll be redirected to:
-
-```
-http://localhost:3000?code=AUTHORIZATION_CODE&state=...
-```
-
-**Step 4**: Exchange the code for tokens
+**Step 4:** Exchange the code for tokens
 
 ```bash
 curl -X POST http://localhost:3000/api/token \
@@ -448,8 +404,7 @@ curl -X POST http://localhost:3000/api/token \
   -d "code_verifier=${CODE_VERIFIER}"
 ```
 
-**Response**:
-
+**Response:**
 ```json
 {
   "access_token": "eyJhbGciOiJSUzI1NiIs...",
@@ -460,23 +415,10 @@ curl -X POST http://localhost:3000/api/token \
 }
 ```
 
-### Scenario 2: PKCE with Confidential Client
+### Scenario 2: Wrong Code Verifier (Attack Simulation)
 
 ```bash
-# Same as above, but add client authentication
-curl -X POST http://localhost:3000/api/token \
-  -u "YOUR_CLIENT_ID:YOUR_CLIENT_SECRET" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code" \
-  -d "code=AUTHORIZATION_CODE" \
-  -d "redirect_uri=http://localhost:3000" \
-  -d "code_verifier=${CODE_VERIFIER}"
-```
-
-### Scenario 3: Wrong Code Verifier (Attack Simulation)
-
-```bash
-# Try to exchange with a DIFFERENT code verifier (attacker doesn't have the original)
+# Try with a DIFFERENT code verifier (attacker doesn't have the original)
 curl -X POST http://localhost:3000/api/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=authorization_code" \
@@ -486,8 +428,7 @@ curl -X POST http://localhost:3000/api/token \
   -d "code_verifier=WRONG_VERIFIER_123456789012345678901234567890"
 ```
 
-**Response** (400 Bad Request):
-
+**Response (400):**
 ```json
 {
   "error": "invalid_grant",
@@ -497,27 +438,6 @@ curl -X POST http://localhost:3000/api/token \
 
 This proves PKCE works — even with a valid authorization code, the wrong verifier is rejected.
 
-### Scenario 4: Missing Code Verifier (When Required)
-
-```bash
-# Try to exchange WITHOUT a code_verifier (when PKCE is required)
-curl -X POST http://localhost:3000/api/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code" \
-  -d "code=AUTHORIZATION_CODE" \
-  -d "redirect_uri=http://localhost:3000" \
-  -d "client_id=YOUR_PUBLIC_CLIENT_ID"
-```
-
-**Response** (400 Bad Request):
-
-```json
-{
-  "error": "invalid_grant",
-  "error_description": "The code_verifier is required."
-}
-```
-
 ---
 
 ## Part 9: How PKCE Hardens Security
@@ -525,37 +445,21 @@ curl -X POST http://localhost:3000/api/token \
 ### 1. Prevents Authorization Code Interception
 
 This is the primary purpose. Even if an attacker intercepts the authorization code:
-- They don't have the `code_verifier` (it was never sent over the network during the authorization request)
+- They don't have the `code_verifier` (it was never sent during the authorization request)
 - They can't compute it (they don't know the original random secret)
 - The token exchange fails
 
 ### 2. Protects Public Clients
 
-Public clients (SPAs, mobile apps) can't keep secrets. Without PKCE:
-- The authorization code is the only credential
-- If intercepted, the attacker has everything needed
-
-With PKCE:
-- The code_verifier acts as a "one-time secret" that never travels through the browser
-- Even if the code is intercepted, it's useless without the verifier
+Public clients (SPAs, mobile apps) can't keep secrets. Without PKCE, the authorization code is the only credential. If intercepted, the attacker has everything. With PKCE, the code_verifier acts as a "one-time secret" that never travels through the browser.
 
 ### 3. Defense-in-Depth for Confidential Clients
 
-Even with client authentication (client_secret), PKCE adds protection:
-- Prevents authorization code injection attacks
-- Prevents CSRF-based code reuse
-- Required by FAPI 2.0 Security Profile
+Even with client authentication (client_secret), PKCE adds protection against authorization code injection attacks and CSRF-based code reuse. FAPI 2.0 requires PKCE for all clients.
 
 ### 4. No Server-Side State Needed
 
 Unlike some security mechanisms, PKCE doesn't require the auth server to store session state. The challenge is stored alongside the authorization code, and verification is a simple hash comparison.
-
-### 5. Browser-Native Crypto
-
-The client implementation uses `crypto.subtle.digest()` (Web Crypto API) for SHA-256 hashing. This is:
-- Available in all modern browsers
-- Cryptographically secure
-- No external dependencies needed
 
 ---
 
@@ -563,17 +467,13 @@ The client implementation uses `crypto.subtle.digest()` (Web Crypto API) for SHA
 
 PKCE is **mandatory** in FAPI 2.0 Security Profile. The FAPI section in the client SPA demonstrates this:
 
-### FAPI 2.0 Security Profile Requirements
-
-| Requirement | How PKCE Helps |
-|------------|---------------|
+| FAPI Requirement | How PKCE Helps |
+|-----------------|---------------|
 | Authorization code interception prevention | PKCE is the primary defense |
 | Sender-constrained tokens | DPoP + PKCE together |
 | No token leakage | PKCE ensures only the legitimate client can exchange codes |
 
-### FAPI Flow with PKCE
-
-The FAPI wizard in the client SPA (`FapiSection.tsx`) automatically generates PKCE:
+The FAPI wizard in the client SPA automatically generates PKCE:
 
 ```typescript
 const pkce = await createPkcePair();
@@ -591,26 +491,9 @@ const params = new URLSearchParams({
 });
 ```
 
-### FAPI Configuration Status
-
-The server's FAPI status endpoint reports PKCE status:
-
-```bash
-curl http://localhost:3000/api/fapi/status | python3 -m json.tool | grep pkce
-```
-
-Response:
-```json
-{
-  "pkceRequired": true
-}
-```
-
 ---
 
 ## Part 11: Testing with the Client SPA
-
-### Using the Auth Code Flow
 
 1. Start both servers:
    ```bash
@@ -620,139 +503,60 @@ Response:
 
 2. Open `http://localhost:3001`
 
-3. Click **Grant Flows** in the sidebar
+3. Click **Grant Flows** → select **Auth Code (PKCE)**
 
-4. Select **Auth Code (PKCE)** from the dropdown
+4. Enter your `Client ID` → click **Start Flow**
 
-5. Enter your `Client ID` (must be a public client or one with PKCE enabled)
+5. Log in with `admin` / `password` → approve consent
 
-6. Click **Start Flow**
-
-7. You'll be redirected to the auth server's login page
-
-8. Log in with `admin` / `password`
-
-9. Approve consent
-
-10. You'll be redirected back to the SPA with tokens
+6. You'll be redirected back with tokens
 
 ### What Happens Under the Hood
 
-1. SPA generates PKCE pair → stores verifier in `sessionStorage`
-2. SPA redirects to `/api/authorization` with `code_challenge` + `code_challenge_method=S256`
-3. Auth server stores the challenge, redirects back with `code`
-4. SPA callback reads verifier from `sessionStorage`
-5. SPA POSTs to `/api/token` with `code` + `code_verifier`
-6. Authlete verifies: `SHA256(code_verifier) == stored code_challenge`
-7. Tokens issued!
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant User
+    participant SPA
+    participant Server as Express Server
+    participant Authlete
 
-### Verifying PKCE in Action
+    SPA->>SPA: Generate PKCE pair, store verifier in sessionStorage
+    SPA->>Server: GET /api/authorization + code_challenge
+    Server->>Authlete: Forward request
+    Authlete->>Server: Redirect to login
+    Server->>User: Login page
+    User->>Server: Log in + consent
+    Server->>Authlete: Issue authorization
+    Authlete->>Server: Redirect with code
+    Server->>SPA: Callback with code
+    SPA->>SPA: Read verifier from sessionStorage
+    SPA->>Server: POST /api/token + code + code_verifier
+    Server->>Authlete: Forward token request
+    Authlete->>Authlete: Verify PKCE
+    Authlete->>Server: Tokens
+    Server->>SPA: Access token, ID token
+```
+
+### Verify in DevTools
 
 Open browser DevTools → Network tab:
 
-1. Look at the `/api/authorization` request → you'll see `code_challenge` and `code_challenge_method=S256` in the query params
+1. Look at the `/api/authorization` request → you'll see `code_challenge` and `code_challenge_method=S256`
 2. Look at the `/api/token` request → you'll see `code_verifier` in the POST body
-3. The `sessionStorage` shows `pkce_code_verifier` during the flow (cleared on completion)
+3. `sessionStorage` shows `pkce_code_verifier` during the flow (cleared on completion)
 
 ---
 
 ## Part 12: Error Scenarios
 
-### Error 1: Missing code_challenge when PKCE is required
-
-```bash
-# Authorization request without code_challenge (when PKCE required)
-curl "http://localhost:3000/api/authorization?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&scope=openid"
-```
-
-**Response**: Authlete returns an error page indicating PKCE is required.
-
-### Error 2: Wrong code_verifier
-
-```bash
-curl -X POST http://localhost:3000/api/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code" \
-  -d "code=VALID_CODE" \
-  -d "redirect_uri=http://localhost:3000" \
-  -d "client_id=YOUR_CLIENT_ID" \
-  -d "code_verifier=WRONG_VERIFIER_123456789012345678901234567890"
-```
-
-**Response** (400):
-
-```json
-{
-  "error": "invalid_grant",
-  "error_description": "The code_verifier is not valid."
-}
-```
-
-### Error 3: Missing code_verifier when code has a challenge
-
-```bash
-curl -X POST http://localhost:3000/api/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code" \
-  -d "code=CODE_WITH_CHALLENGE" \
-  -d "redirect_uri=http://localhost:3000" \
-  -d "client_id=YOUR_CLIENT_ID"
-```
-
-**Response** (400):
-
-```json
-{
-  "error": "invalid_grant",
-  "error_description": "The code_verifier is required."
-}
-```
-
-### Error 4: code_verifier too short
-
-The RFC requires 43-128 characters. A shorter verifier is rejected:
-
-```bash
-curl -X POST http://localhost:3000/api/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code" \
-  -d "code=VALID_CODE" \
-  -d "redirect_uri=http://localhost:3000" \
-  -d "client_id=YOUR_CLIENT_ID" \
-  -d "code_verifier=short"
-```
-
-**Response** (400):
-
-```json
-{
-  "error": "invalid_grant",
-  "error_description": "The code_verifier is not valid."
-}
-```
-
-### Error 5: Invalid characters in code_verifier
-
-Only `[A-Za-z0-9-._~]` are allowed:
-
-```bash
-curl -X POST http://localhost:3000/api/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code" \
-  -d "code=VALID_CODE" \
-  -d "redirect_uri=http://localhost:3000" \
-  -d "client_id=YOUR_CLIENT_ID" \
-  -d "code_verifier=has+invalid+characters!@#$%"
-```
-
-**Response** (400):
-
-```json
-{
-  "error": "invalid_grant",
-  "error_description": "The code_verifier is not valid."
-}
-```
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `code_verifier is not valid` | Presented verifier doesn't match stored challenge | Use the exact same code_verifier that generated the code_challenge |
+| `code_verifier is required` | Authorization code has a challenge, but token request lacks verifier | Always include `code_verifier` when the authorization request included `code_challenge` |
+| `PKCE is required` | Auth server requires PKCE, but authorization request lacks `code_challenge` | Generate a PKCE pair and include `code_challenge` + `code_challenge_method=S256` |
+| Tokens work without PKCE | PKCE not enabled on Authlete service or client | Enable PKCE in both service and client settings in Authlete Console |
+| Verifier lost between redirect | `sessionStorage` entry was cleared or page refreshed | Store verifier before redirect, read it in callback before clearing |
 
 ---
 
@@ -760,108 +564,46 @@ curl -X POST http://localhost:3000/api/token \
 
 ### Myth 1: "PKCE is only for public clients"
 
-**Reality**: PKCE benefits all clients. Even confidential clients benefit from PKCE as defense-in-depth against code injection attacks. FAPI 2.0 requires PKCE for all clients.
+**Reality:** PKCE benefits all clients. FAPI 2.0 requires PKCE for all clients, including confidential ones.
 
 ### Myth 2: "PKCE replaces client authentication"
 
-**Reality**: PKCE and client authentication are orthogonal. PKCE proves "I'm the same party that started the authorization request." Client authentication proves "I am the registered client." Use both for maximum security.
+**Reality:** PKCE and client authentication are orthogonal. PKCE proves "I'm the same party that started the request." Client authentication proves "I am the registered client." Use both.
 
 ### Myth 3: "plain method is fine for testing"
 
-**Reality**: Even in testing, use S256. The `plain` method stores the raw verifier on the server — if the server is compromised, all verifiers are exposed. S256 stores only hashes.
+**Reality:** Even in testing, use S256. The `plain` method stores the raw verifier on the server — if the server is compromised, all verifiers are exposed.
 
 ### Myth 4: "PKCE prevents CSRF"
 
-**Reality**: PKCE prevents code interception, not CSRF. You still need the `state` parameter for CSRF protection. PKCE + state together provide comprehensive protection.
+**Reality:** PKCE prevents code interception, not CSRF. You still need the `state` parameter for CSRF protection. PKCE + state together provide comprehensive protection.
 
 ### Myth 5: "PKCE adds complexity"
 
-**Reality**: PKCE adds ~20 lines of code to the client (generate random string + SHA-256 hash). The security benefit far outweighs the implementation cost.
+**Reality:** PKCE adds ~20 lines of code to the client. The security benefit far outweighs the implementation cost.
 
 ---
 
 ## Part 14: Troubleshooting
 
-### "code_verifier is not valid"
-
-**Cause**: The presented `code_verifier` doesn't match the stored `code_challenge`.
-**Fix**: Ensure you're using the **exact same** code_verifier that was used to generate the code_challenge. Don't regenerate it.
-
-### "code_verifier is required"
-
-**Cause**: The authorization code was created with a `code_challenge`, but the token request doesn't include a `code_verifier`.
-**Fix**: Always include `code_verifier` in the token request when the authorization request included `code_challenge`.
-
-### "PKCE is required"
-
-**Cause**: The auth server or client is configured to require PKCE, but the authorization request doesn't include `code_challenge`.
-**Fix**: Generate a PKCE pair and include `code_challenge` + `code_challenge_method=S256` in the authorization request.
-
-### Tokens work without PKCE in development
-
-**Cause**: PKCE might not be enabled on your Authlete service or client.
-**Fix**: Enable PKCE in both service and client settings in the Authlete Console. See Part 5.
-
-### code_verifier is lost between redirect and token request
-
-**Cause**: The `sessionStorage` entry was cleared or the page was refreshed.
-**Fix**: Ensure `pkce_code_verifier` is stored in `sessionStorage` before the redirect, and read it in the callback page before it's cleared.
+| Problem | Likely Cause | Solution |
+|---------|-------------|----------|
+| "code_verifier is not valid" | Wrong verifier or verifier regenerated | Use the exact same code_verifier from step 1 |
+| "code_verifier is required" | Missing verifier in token request | Include `code_verifier` in POST body |
+| "PKCE is required" | Missing `code_challenge` in auth request | Add `code_challenge` + `method=S256` |
+| Tokens work without PKCE | PKCE not enabled | Enable in Authlete Console (Part 5) |
+| Verifier lost | sessionStorage cleared | Store before redirect, read in callback |
 
 ---
 
-## Appendix: Server Architecture
+## Summary
 
-### Data Flow Diagram
+PKCE is simple but powerful. It turns an authorization code from a bearer credential into a proof-of-possession credential. Here's what you need to remember:
 
-```
-┌──────────┐  GET /api/authorization       ┌──────────────┐
-│          │  ?code_challenge=...           │              │
-│  Client  │  &code_challenge_method=S256   │  Express     │
-│  (SPA)   │ ────────────────────────────→  │  Server      │
-│          │                              │              │
-│          │  (Authlete stores             │  Authlete    │
-│          │   code_challenge              │  API         │
-│          │   with auth code)             │              │
-│          │                              │              │
-│          │ ←──────────────────────────── │              │
-│          │  redirect with ?code=...      │              │
-│          │                              │              │
-│          │  POST /api/token              │              │
-│          │  code=...&code_verifier=...   │              │
-│          │ ────────────────────────────→ │              │
-│          │                              │  Authlete    │
-│          │                              │  verifies:   │
-│          │                              │  SHA256(verifier)│
-│          │                              │  == stored   │
-│          │                              │  challenge?  │
-│          │                              │              │
-│          │ ←──────────────────────────── │              │
-│          │  access_token, id_token       │              │
-└──────────┘                              └──────────────┘
-```
+1. Generate a random `code_verifier`
+2. Compute `code_challenge = SHA256(code_verifier)`
+3. Send `code_challenge` with the authorization request
+4. Send `code_verifier` with the token request
+5. Authlete handles the rest
 
-### Files Involved
-
-| File | Role |
-|------|------|
-| `client/src/pkce.ts` | PKCE utilities: `generateCodeVerifier`, `generateCodeChallenge`, `createPkcePair` |
-| `client/src/components/auth/AuthFlowsSection.tsx:106-131` | Auth Code flow: generates PKCE, stores verifier, sends challenge |
-| `client/src/pages/CallbackPage.tsx:58-136` | Callback: reads verifier from sessionStorage, sends with token request |
-| `client/src/components/oidc/ParSection.tsx:25-52` | PAR flow: generates PKCE pair |
-| `client/src/components/oidc/RarSection.tsx:38-51` | RAR flow: generates PKCE pair |
-| `client/src/components/fapi/FapiSection.tsx:132-133` | FAPI flow: generates PKCE pair |
-| `client/src/context/TokenContext.tsx:35` | Clears `pkce_code_verifier` on logout |
-| `client/src/types/token.ts:7` | `code_verifier` field in TokenRequest |
-| `client/src/services/token.service.ts:13-16` | Sends `code_verifier` with token request |
-| `server/src/services/client.management.service.ts:427-428` | `pkceRequired` / `pkceS256Required` flags |
-| `server/src/controllers/fapi.controller.ts:38,73` | Reports `pkceRequired` status |
-| `server/src/routes/openapi.routes.ts:50-56` | Documents `code_challenge` parameters |
-| `server/tests/e2e/e2e.test.ts:494-563` | E2E test: full PKCE flow |
-| `server/tests/unit/routes/fapi.routes.test.ts:39,81` | Unit test: FAPI reports pkceRequired |
-
-### Test Coverage
-
-- **E2E tests** (`e2e.test.ts:494-563`): Full PKCE flow — authorization request with `code_challenge` + `code_challenge_method=S256`, login, consent, token exchange with `code_verifier`. Verifies 200 response with tokens.
-- **Unit tests** (`fapi.routes.test.ts`): FAPI status endpoint reports `pkceRequired: true`
-- **Integration tests** (`routes.test.ts:243`): FAPI config endpoint returns `pkceRequired: true`
-- **Client tests**: Token service test verifies `code_verifier` is included in token requests
+**Always use S256. Never use plain. Always enforce PKCE for public clients.**
