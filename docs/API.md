@@ -1,6 +1,10 @@
 # API Reference
 
-All endpoints are prefixed with `/api` unless noted. Routes are defined in `server/src/routes/` and handled by controllers in `server/src/controllers/`.
+> **The short version:** Complete reference for all 40+ endpoints. Routes are defined in `server/src/routes/` and handled by controllers in `server/src/controllers/`.
+
+---
+
+All endpoints are prefixed with `/api` unless noted.
 
 - [OAuth Core](#oauth-core)
 - [OIDC & Discovery](#oidc--discovery)
@@ -286,6 +290,24 @@ Retrieve a credential after deferred issuance. Maps to the OID4VCI Deferred Cred
 **Body:** `order` (optional JSON with `requestIdentifier`, `transactionId`, etc.)
 
 **Response:** 200 (OK), 202 (still pending — keep polling), 400, 403, 500
+
+---
+
+## Native SSO
+
+### `POST /api/nativesso`
+Process Native SSO token exchange. No admin auth — client auth via body `clientId`/`clientSecret`.
+
+**Body:** `clientId`, `clientSecret`, `accessToken`, `deviceSecret`, `deviceSecretHash` (optional), `sub` (optional), `claims` (optional), `idtHeaderParams` (optional), `idTokenAudType` (optional)
+
+**Response:** 200 (OK — returns `responseContent` JSON with ID token, device secret), 400 (CALLER_ERROR), 500 (INTERNAL_SERVER_ERROR)
+
+### `POST /api/nativesso/logout`
+Revoke all tokens for a session. No admin auth — client auth via body `clientId`/`clientSecret`.
+
+**Body:** `clientId`, `clientSecret`, `sessionId`
+
+**Response:** 200 (OK — returns `responseContent` JSON with revocation confirmation), 500 (INTERNAL_SERVER_ERROR)
 
 ---
 

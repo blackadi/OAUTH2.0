@@ -1,5 +1,9 @@
 # Data Flows
 
+> **The short version:** This document shows how data moves through the authorization server — from authorization requests to token exchanges, logouts, and admin operations. Each flow includes a Mermaid sequence diagram showing the exact sequence of API calls.
+
+---
+
 - [Authorization Code Flow](#authorization-code-flow)
 - [Token Request Variations](#token-request-variations)
 - [Logout Flow](#logout-flow)

@@ -1,362 +1,231 @@
 # Grant Management for OAuth 2.0
 
-A comprehensive guide to Grant Management: what it is, why it exists, how Authlete implements it, and how to test it with this server and client.
+> **The short version:** Grant Management lets clients explicitly query, merge, replace, and revoke their authorizations — giving them full control over what permissions they have, rather than just having tokens with no visibility.
 
 ---
 
 ## Table of Contents
 
-- [Part 1: Introduction & Motivation](#part-1-introduction--motivation)
-- [Part 2: How Grant Management Works](#part-2-how-grant-management-works)
-- [Part 3: Authlete Grant Management Configuration](#part-3-authlete-grant-management-configuration)
-- [Part 4: Step-by-Step Grant Management Flows](#part-4-step-by-step-grant-management-flows)
-- [Part 5: The Grant Management API](#part-5-the-grant-management-api)
-- [Part 6: Client SPA Testing Tool Walkthrough](#part-6-client-spa-testing-tool-walkthrough)
-- [Part 7: Complete End-to-End Test Scenarios](#part-7-complete-end-to-end-test-scenarios)
-- [Part 8: Error Scenarios](#part-8-error-scenarios)
-- [Part 9: Relationship to Resource Indicators (RFC 8707)](#part-9-relationship-to-resource-indicators-rfc-8707)
-- [Part 10: Industry Use Cases](#part-10-industry-use-cases)
-- [Part 11: Troubleshooting](#part-11-troubleshooting)
+- [Part 1: Why Grant Management Exists](#part-1-why-grant-management-exists)
+- [Part 2: Core Concepts](#part-2-core-concepts)
+- [Part 3: Authlete Setup](#part-3-authlete-setup)
+- [Part 4: The Grant Lifecycle](#part-4-the-grant-lifecycle)
+- [Part 5: The API](#part-5-the-api)
+- [Part 6: Testing with curl](#part-6-testing-with-curl)
+- [Part 7: Error Scenarios](#part-7-error-scenarios)
+- [Part 8: Use Cases](#part-8-use-cases)
+- [Part 9: Troubleshooting](#part-9-troubleshooting)
 
 ---
 
-## Part 1: Introduction & Motivation
+## Part 1: Why Grant Management Exists
 
-### What is Grant Management?
+### The Problem: No Visibility into Grants
 
-Grant Management, defined in [Grant Management for OAuth 2.0](https://openid.net/specs/oauth-v2-grant-management.html) (part of [FAPI 2.0](https://openid.net/specs/openid-financial-api-2_0.html)), gives clients explicit control over their authorizations. Instead of the implicit "grant = whatever tokens I have," clients can:
+In traditional OAuth, a client has tokens. But what permissions do those tokens represent? How long will they last? Can the client selectively revoke old permissions?
 
-- **Query** the exact permissions (scopes, claims, authorization details) currently granted
-- **Revoke** specific grants they no longer need
-- **Merge** new permissions into an existing grant (e.g., add scopes without re-authorizing old ones)
-- **Replace** all permissions in a grant (revoke old, authorize new)
+| Problem | What Happens |
+|---------|-------------|
+| **No visibility** | Client can't see what permissions it has |
+| **No selective revocation** | Can only revoke individual tokens, not the underlying authorization |
+| **Scope creep** | Adding new scopes requires re-authorizing everything |
+| **Regulatory requirements** | UK Open Banking, Australian CDR require explicit consent management |
 
-### Why was Grant Management created?
+### The Solution: Explicit Grant Management
 
-In traditional OAuth 2.0, there is no explicit representation of a "grant." A client has tokens, and when they expire or are revoked, access is lost. This creates problems:
+Grant Management gives clients:
 
-| Problem | How Grant Management Fixes It |
-|---------|-------------------------------|
-| **No visibility** — Clients cannot see what permissions they currently have | The query endpoint returns the full grant status: scopes, resources, claims, and authorization details |
-| **No selective revocation** — Clients can only revoke individual tokens, not the underlying authorization | The revoke endpoint revokes the entire grant (all associated tokens) |
-| **Scope creep** — When adding new scopes, the entire authorization must be re-done | `grant_management_action=merge` adds new scopes while preserving existing ones |
-| **No concurrent grants** — A single client+user pair has at most one authorization | Each `grant_management_action=create` produces a new, independent grant with its own `grant_id` |
-| **Regulatory requirements** — UK Open Banking, Australian CDR, and Brazil Open Banking require TPPs to manage consents explicitly | Grant Management provides a standardized API for consent management |
+| Capability | What It Does |
+|-----------|-------------|
+| **Query** | See exact permissions (scopes, claims, authorization details) |
+| **Merge** | Add new permissions without losing existing ones |
+| **Replace** | Swap all permissions for new ones |
+| **Revoke** | Delete the entire grant and all associated tokens |
 
-### Who uses Grant Management?
+### Who Uses Grant Management?
 
-Grant Management is a mandatory part of **FAPI 2.0 Security Profile**, which is the basis for:
+Grant Management is mandatory for **FAPI 2.0 Security Profile**:
 
-- **UK Open Banking** — TPPs use equivalent endpoints (`GET/DELETE /account-access-consents/{ConsentId}`)
-- **Australian Consumer Data Right** — Data Recipients use `cdr_arrangement_id` with revoke endpoints
-- **Open Banking Brasil** — Follows FAPI 2.0 with Grant Management
-- **GAIN** (Global Assured Identity Network) — References Grant Management in its whitepaper
-
-### When should you use Grant Management?
-
-- **Always** in FAPI 2.0 compliant deployments
-- **When** you need clients to know what permissions they currently have
-- **When** you need clients to revoke authorizations they no longer need
-- **When** you need to support concurrent grants for the same client+user pair
-- **When** regulatory requirements mandate explicit consent management
+| Region | Implementation |
+|--------|---------------|
+| UK Open Banking | `GET/DELETE /account-access-consents/{ConsentId}` |
+| Australian CDR | `cdr_arrangement_id` with revoke endpoints |
+| Brazil Open Banking | FAPI 2.0 with Grant Management |
+| GAIN | References Grant Management in whitepaper |
 
 ---
 
-## Part 2: How Grant Management Works
-
-### Core Concepts
-
-#### Grant
-
-A **grant** is the set of permissions (authorization) granted by a Resource Owner to a Client. In Authlete, a grant is defined as a collection of "live" access token records tied to the same `grant_id`.
-
-#### Grant ID
-
-A **grant ID** is a unique, URL-safe identifier assigned to each grant. It is issued by the authorization server when a client includes `grant_management_action=create` in an authorization request. The grant ID is returned in the token response.
-
-#### Grant Management Actions
-
-| Action | Description | Requires `grant_id` |
-|--------|-------------|---------------------|
-| `create` | Creates a new grant. The AS assigns a new grant ID. | No (must NOT be present) |
-| `merge` | Adds new permissions to an existing grant. Existing permissions are preserved. | Yes |
-| `replace` | Replaces all permissions in an grant. Old permissions are revoked. | Yes |
+## Part 2: Core Concepts
 
 ### The Grant Lifecycle
 
-```
-1. CREATION
-   Client sends authorization request with grant_management_action=create
-   → User authenticates and consents
-   → AS creates grant, issues tokens + grant_id
-   
-2. QUERY
-   Client calls GET /gm/{grantId} with a query-scoped token
-   → AS returns current grant status (scopes, claims, authorization_details)
-
-3. MERGE (optional)
-   Client sends another authorization request with grant_management_action=merge & grant_id=...
-   → User consents to additional permissions
-   → AS merges new permissions into existing grant
-   → New access token inherits all permissions (old + new)
-
-4. REPLACE (optional)
-   Client sends authorization request with grant_management_action=replace & grant_id=...
-   → Old permissions are revoked
-   → New permissions replace them entirely
-
-5. REVOCATION
-   Client calls DELETE /gm/{grantId} with a revoke-scoped token
-   → AS revokes all tokens associated with the grant
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+stateDiagram-v2
+    [*] --> Created: grant_management_action=create
+    Created --> Active: User consents
+    Active --> Active: grant_management_action=merge<br/>(add permissions)
+    Active --> Active: grant_management_action=replace<br/>(swap permissions)
+    Active --> Revoked: DELETE /gm/:grantId
+    Revoked --> [*]
 ```
 
-### Request Parameters
+### Grant Management Actions
 
-#### Authorization Request Parameters
+| Action | What It Does | Requires `grant_id` |
+|--------|-------------|:-------------------:|
+| `create` | Creates a new grant | ❌ (must NOT be present) |
+| `merge` | Adds new permissions to existing grant | ✅ |
+| `replace` | Replaces all permissions in grant | ✅ |
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| `grant_management_action` | `create` | Create a new grant |
-| `grant_management_action` | `merge` | Merge new permissions into existing grant (requires `grant_id`) |
-| `grant_management_action` | `replace` | Replace all permissions in grant (requires `grant_id`) |
-| `grant_id` | `<grant-id>` | Reference an existing grant (required for `merge` and `replace`) |
+### The Grant ID
 
-#### Token Response Parameters
+A unique, URL-safe identifier assigned to each grant. It appears in:
 
-| Parameter | Description |
-|-----------|-------------|
-| `grant_id` | The grant ID associated with the issued tokens. Present when `grant_management_action` was used. |
+- **Authorization request:** `grant_management_action=create` → server generates `grant_id`
+- **Token response:** `grant_id` returned with access token
+- **API requests:** `GET/DELETE /gm/:grantId` to query or revoke
 
-#### Grant Management API Scopes
+### API Scopes
 
 | Scope | Access |
 |-------|--------|
-| `grant_management_query` | Allows querying grant status (GET) |
-| `grant_management_revoke` | Allows revoking grants (DELETE) |
+| `grant_management_query` | Query grant status (GET) |
+| `grant_management_revoke` | Revoke grants (DELETE) |
 
 ---
 
-## Part 3: Authlete Grant Management Configuration
+## Part 3: Authlete Setup
 
-### Authlete Service Settings
+### Service-Level Settings
 
-In the [Authlete web console](https://console.authlete.com/), configure:
+In [Authlete Console](https://console.authlete.com/) → **Service Settings → Grant Management**:
 
-| Setting | Location | Description |
-|---------|----------|-------------|
-| **Grant Management Endpoint** | Service → Grant Management | The URL of your grant management endpoint (e.g., `https://your-server.com/api/gm`) |
-| **Grant Management Action Required** | Service → Grant Management | If `true`, every authorization request MUST include `grant_management_action`. If `false` (default), it's optional. |
+| Setting | Value | Why |
+|---------|-------|-----|
+| Grant Management Endpoint | `https://your-server.com/api/gm` | Where query/revoke requests go |
+| Grant Management Action Required | `false` (default) | Makes `grant_management_action` optional |
 
-### Server Metadata
+### Verify Configuration
 
-When Grant Management is configured, Authlete includes these in the `.well-known/openid-configuration`:
+```bash
+curl http://localhost:3000/api/.well-known/openid-configuration | jq '.grant_management_actions_supported'
+```
 
+Expected output:
 ```json
-{
-  "grant_management_actions_supported": ["create", "query", "merge", "replace", "revoke"],
-  "grant_management_endpoint": "https://your-server.com/api/gm",
-  "grant_management_action_required": false
-}
-```
-
-> **Note:** If the grant management endpoint is not configured on the Authlete service, only `create`, `merge`, and `replace` actions are supported (no `query` or `revoke` since there's no endpoint to call).
-
-### SDK Configuration
-
-The server uses `@authlete/typescript-sdk` v1.1.6. The GM API is accessed via:
-
-```typescript
-authleteApi.grantManagement.processRequest({
-  serviceId,
-  gMRequest: {
-    accessToken: "<bearer-token>",
-    gmAction: "QUERY" | "REVOKE",
-    grantId: "<grant-id>",
-  },
-});
+["create", "query", "merge", "replace", "revoke"]
 ```
 
 ---
 
-## Part 4: Step-by-Step Grant Management Flows
+## Part 4: The Grant Lifecycle
 
 ### Flow 1: Create a Grant
 
-This is the standard authorization flow with Grant Management enabled.
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant AuthServer as Auth Server
+    participant User as 👤 User
 
-```
-┌──────────┐                                    ┌──────────────┐                                    ┌──────────┐
-│  Client   │                                    │  Auth Server  │                                    │   User   │
-└────┬─────┘                                    └──────┬───────┘                                    └────┬─────┘
-     │                                                 │                                                 │
-     │  GET /api/authorization                          │                                                 │
-     │  ?response_type=code                             │                                                 │
-     │  &client_id=...                                  │                                                 │
-     │  &scope=openid profile                           │                                                 │
-     │  &redirect_uri=...                               │                                                 │
-     │  &grant_management_action=create                 │                                                 │
-     │────────────────────────────────────────────────>│                                                 │
-     │                                                 │                                                 │
-     │                                                 │  Redirect to /login                             │
-     │<────────────────────────────────────────────────│                                                 │
-     │                                                 │                                                 │
-     │  POST /api/session/login                         │                                                 │
-     │  (username: admin, password: password)           │                                                 │
-     │────────────────────────────────────────────────>│                                                 │
-     │                                                 │                                                 │
-     │                                                 │  Redirect to /consent                           │
-     │<────────────────────────────────────────────────│                                                 │
-     │                                                 │                                                 │
-     │  POST /api/authorization/issue                   │                                                 │
-     │  (user consents)                                 │                                                 │
-     │────────────────────────────────────────────────>│                                                 │
-     │                                                 │                                                 │
-     │                                                 │  302 redirect with ?code=...                    │
-     │<────────────────────────────────────────────────│                                                 │
-     │                                                 │                                                 │
-     │  POST /api/token                                 │                                                 │
-     │  grant_type=authorization_code                   │                                                 │
-     │  &code=...                                       │                                                 │
-     │  &code_verifier=...                              │                                                 │
-     │────────────────────────────────────────────────>│                                                 │
-     │                                                 │                                                 │
-     │  {                                               │                                                 │
-     │    "access_token": "...",                        │                                                 │
-     │    "grant_id": "abc123",  ← NEW!                 │                                                 │
-     │    ...                                           │                                                 │
-     │  }                                               │                                                 │
-     │<────────────────────────────────────────────────│                                                 │
+    Client->>AuthServer: GET /authorize?<br/>grant_management_action=create<br/>&scope=openid profile
+    AuthServer->>User: Login page
+    User->>AuthServer: Authenticate
+    AuthServer->>User: Consent page
+    User->>AuthServer: Approve
+    AuthServer->>Client: Redirect with code
+    Client->>AuthServer: POST /token<br/>grant_type=authorization_code
+    AuthServer->>Client: { access_token, grant_id: "abc123" }
 ```
 
-**Key point:** The `grant_id` appears in the token response only when `grant_management_action` was present in the authorization request.
+**Key point:** The `grant_id` appears in the token response only when `grant_management_action` was present.
 
 ### Flow 2: Query a Grant
 
-```
-Client                        Auth Server
-  │                               │
-  │  GET /api/gm/abc123           │
-  │  Authorization: Bearer <token-with-grant_management_query-scope>
-  │──────────────────────────────>│
-  │                               │
-  │  200 OK                       │
-  │  {                            │
-  │    "scopes": [                │
-  │      {                        │
-  │        "scope": "openid profile",
-  │        "resource": ["https://api.example.com"]
-  │      }                        │
-  │    ],                         │
-  │    "claims": ["sub","name","email"],
-  │    "authorization_details": [...],
-  │    "created_at": 1700000000,
-  │    "last_updated_at": 1700000000
-  │  }                            │
-  │<──────────────────────────────│
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant AuthServer as Auth Server
+
+    Client->>AuthServer: GET /gm/abc123<br/>Authorization: Bearer <query_token>
+    AuthServer->>AuthServer: Verify token has grant_management_query scope
+    AuthServer->>Client: 200 { scopes, claims, authorization_details }
 ```
 
-### Flow 3: Merge Permissions into an Existing Grant
+### Flow 3: Merge Permissions
 
-```
-Client                        Auth Server                        User
-  │                               │                               │
-  │  GET /api/authorization       │                               │
-  │  ?response_type=code          │                               │
-  │  &client_id=...               │                               │
-  │  &scope=openid profile payments  ← added new scope            │
-  │  &redirect_uri=...            │                               │
-  │  &grant_management_action=merge                               │
-  │  &grant_id=abc123             │                               │
-  │──────────────────────────────>│                               │
-  │                               │                               │
-  │                               │  Redirect to /consent         │
-  │<──────────────────────────────│                               │
-  │                               │                               │
-  │  POST /api/authorization/issue│                               │
-  │  (user consents)              │                               │
-  │──────────────────────────────>│                               │
-  │                               │                               │
-  │  POST /api/token              │                               │
-  │  grant_type=authorization_code│                               │
-  │──────────────────────────────>│                               │
-  │                               │                               │
-  │  {                            │                               │
-  │    "access_token": "...",     │                               │
-  │    "grant_id": "abc123",  ← same grant_id                     │
-  │    ...                        │                               │
-  │  }                            │                               │
-  │<──────────────────────────────│                               │
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant AuthServer as Auth Server
+    participant User as 👤 User
+
+    Note over Client,User: Add "payments" scope to existing grant
+
+    Client->>AuthServer: GET /authorize?<br/>grant_management_action=merge<br/>&grant_id=abc123<br/>&scope=openid profile payments
+    AuthServer->>User: Consent page (new scope)
+    User->>AuthServer: Approve
+    AuthServer->>Client: Redirect with code
+    Client->>AuthServer: POST /token
+    AuthServer->>Client: { access_token, grant_id: "abc123" }
+
+    Note over Client,AuthServer: New token has ALL permissions (old + new)
 ```
 
-**Key point:** The new access token inherits ALL permissions — both the original (`openid profile`) and the newly added (`payments`). The `grant_id` stays the same.
+**Key point:** The new access token inherits ALL permissions — both original and newly added. The `grant_id` stays the same.
 
 ### Flow 4: Replace Grant Permissions
 
-```
-Client                        Auth Server
-  │                               │
-  │  GET /api/authorization       │
-  │  ?response_type=code          │
-  │  &scope=openid payments       │  ← completely new scope set
-  │  &grant_management_action=replace
-  │  &grant_id=abc123             │
-  │──────────────────────────────>│
-  │                               │
-  │  ... (authorization flow) ... │
-  │                               │
-  │  POST /api/token              │
-  │──────────────────────────────>│
-  │                               │
-  │  {                            │
-  │    "access_token": "...",     │
-  │    "grant_id": "abc123",      │
-  │    ...                        │
-  │  }                            │
-  │<──────────────────────────────│
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant AuthServer as Auth Server
+
+    Note over Client,AuthServer: Replace all permissions with new set
+
+    Client->>AuthServer: GET /authorize?<br/>grant_management_action=replace<br/>&grant_id=abc123<br/>&scope=openid payments
+    AuthServer->>AuthServer: Revoke old permissions
+    AuthServer->>Client: ... (authorization flow) ...
+    AuthServer->>Client: { access_token, grant_id: "abc123" }
+
+    Note over Client,AuthServer: Only new permissions remain
 ```
 
-**Key point:** The old permissions (`profile`) are revoked. Only the new permissions (`openid payments`) remain. The `grant_id` stays the same.
+**Key point:** The old permissions (`profile`) are revoked. Only the new permissions (`openid payments`) remain.
 
 ### Flow 5: Revoke a Grant
 
-```
-Client                        Auth Server
-  │                               │
-  │  DELETE /api/gm/abc123        │
-  │  Authorization: Bearer <token-with-grant_management_revoke-scope>
-  │──────────────────────────────>│
-  │                               │
-  │  204 No Content               │
-  │<──────────────────────────────│
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant Client as 🖥️ Client
+    participant AuthServer as Auth Server
+
+    Client->>AuthServer: DELETE /gm/abc123<br/>Authorization: Bearer <revoke_token>
+    AuthServer->>AuthServer: Verify token has grant_management_revoke scope
+    AuthServer->>AuthServer: Revoke all tokens for this grant
+    AuthServer->>Client: 204 No Content
 ```
 
-**Key point:** All refresh tokens are revoked. All access tokens are revoked (subject to self-contained token limitations). The `grant_id` can no longer be used.
+**Key point:** All refresh tokens and access tokens associated with the grant are revoked.
 
 ---
 
-## Part 5: The Grant Management API
+## Part 5: The API
 
-### Endpoint
+### Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/gm/:grantId` | Query the status of a grant |
-| `DELETE` | `/api/gm/:grantId` | Revoke a grant |
+| Method | Path | Purpose | Required Scope |
+|--------|------|---------|:--------------:|
+| `GET` | `/api/gm/:grantId` | Query grant status | `grant_management_query` |
+| `DELETE` | `/api/gm/:grantId` | Revoke grant | `grant_management_revoke` |
 
-### Authentication
-
-Both endpoints require a Bearer access token in the `Authorization` header:
-
-```
-Authorization: Bearer <access-token>
-```
-
-The token must have been obtained with the appropriate scope:
-
-- **Query:** Token must have `grant_management_query` scope
-- **Revoke:** Token must have `grant_management_revoke` scope
-
-### Query Response (200 OK)
+### Query Response (200)
 
 ```json
 {
@@ -366,14 +235,8 @@ The token must have been obtained with the appropriate scope:
       "resource": ["https://api.example.com"]
     }
   ],
-  "claims": ["sub", "name", "email", "email_verified"],
-  "authorization_details": [
-    {
-      "type": "payment_initiation",
-      "actions": ["initiate"],
-      "locations": ["https://api.example.com/payments"]
-    }
-  ],
+  "claims": ["sub", "name", "email"],
+  "authorization_details": [...],
   "created_at": 1700000000,
   "last_updated_at": 1700000000,
   "expires_at": 1700086400,
@@ -383,105 +246,35 @@ The token must have been obtained with the appropriate scope:
 
 | Field | Description |
 |-------|-------------|
-| `scopes` | Array of scope-resource clusters. Each cluster has `scope` (space-delimited) and optionally `resource` (array of URIs). |
-| `claims` | Array of OpenID Connect claim names the user has consented to. |
-| `authorization_details` | Array of RAR (Rich Authorization Requests) authorization details. |
-| `created_at` | Unix timestamp when the grant was created. |
-| `last_updated_at` | Unix timestamp of last modification. |
-| `expires_at` | Unix timestamp when the grant expires. |
-| `updated_by` | Who last modified the grant: `"client"` or `"authorization_server"`. |
+| `scopes` | Scope-resource clusters |
+| `claims` | OpenID Connect claims user consented to |
+| `authorization_details` | RAR authorization details |
+| `created_at` | Unix timestamp when grant was created |
+| `last_updated_at` | Unix timestamp of last modification |
+| `updated_by` | Who last modified: `"client"` or `"authorization_server"` |
 
-### Revoke Response (204 No Content)
+### Revoke Response
 
-Empty body on success.
+`204 No Content` — empty body on success.
 
 ### Error Responses
 
 | Status | Error | When |
-|--------|-------|------|
-| `401` | `invalid_token` | Missing, expired, or invalid Bearer token |
-| `403` | `access_denied` | Token lacks required scope (`grant_management_query` or `grant_management_revoke`) |
-| `404` | `not_found` | Grant ID does not exist |
-| `400` | `caller_error` | Malformed request |
-| `500` | — | Internal server error |
+|:------:|-------|------|
+| 401 | `invalid_token` | Missing, expired, or invalid Bearer token |
+| 403 | `access_denied` | Token lacks required scope |
+| 404 | `not_found` | Grant ID doesn't exist |
 
 ---
 
-## Part 6: Client SPA Testing Tool Walkthrough
+## Part 6: Testing with curl
 
-### Accessing the Grant Management Section
-
-1. Start the client: `npm --prefix client run dev`
-2. Navigate to `http://localhost:3001`
-3. Click **"Grant Management"** in the sidebar (under the Admin group)
-
-### UI Components
-
-The testing UI provides:
-
-- **Access Token** input — Paste a Bearer token with the appropriate GM scope
-- **Grant ID** input — Paste the `grant_id` from a token response
-- **Query** button — Calls `GET /api/gm/{grantId}`
-- **Revoke** button (danger) — Calls `DELETE /api/gm/{grantId}`
-- **Response** panel — Displays the JSON response
-
-### How to Obtain the Required Tokens
-
-#### Token with `grant_management_query` scope
-
-```bash
-curl -X POST http://localhost:3000/api/token \
-  -u "your_client_id:your_client_secret" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&scope=grant_management_query"
-```
-
-#### Token with `grant_management_revoke` scope
-
-```bash
-curl -X POST http://localhost:3000/api/token \
-  -u "your_client_id:your_client_secret" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&scope=grant_management_revoke"
-```
-
-### How to Obtain a Grant ID
-
-The `grant_id` is returned in the token response when you include `grant_management_action=create` in the authorization request. For a confidential client using the authorization code flow:
-
-```bash
-# Step 1: Start authorization with grant_management_action=create
-# (Use browser or SPA to follow the redirect)
-curl "http://localhost:3000/api/authorization?\
-response_type=code&\
-client_id=your_client_id&\
-redirect_uri=http://localhost:3001/callback&\
-scope=openid profile&\
-state=test&\
-grant_management_action=create"
-
-# Step 2: After login + consent, exchange the code for tokens
-curl -X POST http://localhost:3000/api/token \
-  -u "your_client_id:your_client_secret" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code&code=THE_CODE&redirect_uri=http://localhost:3001/callback"
-
-# Response includes:
-# { "access_token": "...", "grant_id": "abc123", ... }
-```
-
----
-
-## Part 7: Complete End-to-End Test Scenarios
-
-### Scenario 1: Create and Query a Grant
-
-**Prerequisites:** Confidential client with `grant_management_query` scope configured in Authlete.
+### Scenario 1: Create and Query
 
 ```bash
 # 1. Create a grant via authorization code flow
-# (Complete the full auth flow with grant_management_action=create)
-# Result: You have an access_token, refresh_token, and grant_id
+# (Complete auth flow with grant_management_action=create)
+# Result: access_token + grant_id
 
 # 2. Get a query-scoped token
 QUERY_TOKEN=$(curl -s -X POST http://localhost:3000/api/token \
@@ -492,49 +285,30 @@ QUERY_TOKEN=$(curl -s -X POST http://localhost:3000/api/token \
 # 3. Query the grant
 curl -s http://localhost:3000/api/gm/GRANT_ID \
   -H "Authorization: Bearer $QUERY_TOKEN" | jq .
-
-# Expected: Full grant status JSON
 ```
 
-### Scenario 2: Create, Merge, and Verify
+### Scenario 2: Create, Merge, Verify
 
 ```bash
-# 1. Create initial grant with scope "openid profile"
-# (Complete auth flow with grant_management_action=create, scope=openid profile)
-# Result: grant_id = "g1", access_token with "openid profile"
+# 1. Create initial grant with "openid profile"
+# Result: grant_id = "g1"
 
-# 2. Query to see current state
+# 2. Query current state
 curl -s http://localhost:3000/api/gm/g1 \
   -H "Authorization: Bearer $QUERY_TOKEN" | jq .scopes
 # Expected: [{ "scope": "openid profile" }]
 
-# 3. Merge additional scope "payments" into the same grant
-# (Complete auth flow with grant_management_action=merge, grant_id=g1, scope=openid profile payments)
-# Result: New access_token, same grant_id "g1"
+# 3. Merge additional scope "payments"
+# (Complete auth flow with grant_management_action=merge, grant_id=g1)
+# Result: New token, same grant_id
 
-# 4. Query again to see merged state
+# 4. Query again
 curl -s http://localhost:3000/api/gm/g1 \
   -H "Authorization: Bearer $QUERY_TOKEN" | jq .scopes
-# Expected: Both "openid profile" AND "openid profile payments" scope-resource clusters
+# Expected: Both "openid profile" AND "openid profile payments"
 ```
 
-### Scenario 3: Replace Grant Permissions
-
-```bash
-# 1. Start with a grant containing "openid profile payments"
-# (From Scenario 2)
-
-# 2. Replace with only "openid" scope
-# (Complete auth flow with grant_management_action=replace, grant_id=g1, scope=openid)
-# Result: New access_token with only "openid", same grant_id "g1"
-
-# 3. Query to verify old scopes are gone
-curl -s http://localhost:3000/api/gm/g1 \
-  -H "Authorization: Bearer $QUERY_TOKEN" | jq .scopes
-# Expected: Only "openid" scope-resource cluster
-```
-
-### Scenario 4: Revoke a Grant
+### Scenario 3: Revoke a Grant
 
 ```bash
 # 1. Get a revoke-scoped token
@@ -544,24 +318,21 @@ REVOKE_TOKEN=$(curl -s -X POST http://localhost:3000/api/token \
   | jq -r '.access_token')
 
 # 2. Revoke the grant
-curl -s -X http://localhost:3000/api/gm/g1 \
+curl -s -X DELETE http://localhost:3000/api/gm/g1 \
   -H "Authorization: Bearer $REVOKE_TOKEN" -w "%{http_code}"
 # Expected: 204
 
-# 3. Try to query the revoked grant
+# 3. Try to query (should fail)
 curl -s http://localhost:3000/api/gm/g1 \
-  -H "Authorization: Bearer $QUERY_TOKEN" | jq .
-# Expected: 404 with { "error": "not_found" }
+  -H "Authorization: Bearer $QUERY_TOKEN"
+# Expected: 404 { "error": "not_found" }
 ```
 
-### Scenario 5: Concurrent Grants
+### Scenario 4: Concurrent Grants
 
 ```bash
-# 1. Create grant A with scope "openid profile"
-# (Complete auth flow with grant_management_action=create)
-
-# 2. Create grant B with scope "openid payments" (same user, same client)
-# (Complete ANOTHER auth flow with grant_management_action=create)
+# 1. Create grant A with "openid profile"
+# 2. Create grant B with "openid payments" (same user, same client)
 # Result: Two different grant_ids: "gA" and "gB"
 
 # 3. Query both — they coexist independently
@@ -572,70 +343,23 @@ curl -s http://localhost:3000/api/gm/gB -H "Authorization: Bearer $QT" | jq .sco
 # Expected: [{ "scope": "openid payments" }]
 ```
 
-### Scenario 6: Introspection with Resource Indicators
-
-```bash
-# 1. Create a grant with resource indicators
-# (Complete auth flow with:
-#   grant_management_action=create,
-#   scope=openid profile,
-#   resource=https://api.example.com/)
-
-# 2. Exchange code for token (resource is embedded in the access token)
-# Result: access_token with audience restricted to https://api.example.com/
-
-# 3. Introspect the token
-curl -s -X POST http://localhost:3000/api/introspection \
-  -u "CID:SEC" \
-  -d "token=THE_ACCESS_TOKEN" | jq .
-# Expected: Response includes "aud": ["https://api.example.com/"]
-
-# 4. Query the grant — see scope-resource clusters
-curl -s http://localhost:3000/api/gm/g1 \
-  -H "Authorization: Bearer $QT" | jq .scopes
-# Expected: [{ "scope": "openid profile", "resource": ["https://api.example.com/"] }]
-```
-
-### Scenario 7: Narrowing Resources with Refresh Token
-
-```bash
-# 1. Create grant with multiple resources
-# (Complete auth flow with:
-#   grant_management_action=create,
-#   scope=read write,
-#   resource=https://api.example.com/&
-#   resource=https://other-api.example.com/)
-
-# 2. Exchange code — token has both resources
-# Result: access_token + refresh_token, grant_id = "g1"
-
-# 3. Use refresh token with narrowed resource
-curl -s -X POST http://localhost:3000/api/token \
-  -u "CID:SEC" \
-  -d "grant_type=refresh_token&refresh_token=THE_RT&resource=https://api.example.com/"
-
-# Result: New access_token scoped to only https://api.example.com/
-```
-
 ---
 
-## Part 8: Error Scenarios
+## Part 7: Error Scenarios
 
 ### Missing Bearer Token
 
 ```bash
 curl http://localhost:3000/api/gm/some-grant
-# Response: 401 { "error": "invalid_token" }
-# Header: WWW-Authenticate: ...
+# 401 { "error": "invalid_token" }
 ```
 
 ### Wrong Scope Token
 
 ```bash
-# Token with grant_management_revoke scope used for query
 curl http://localhost:3000/api/gm/some-grant \
   -H "Authorization: Bearer $REVOKE_SCOPED_TOKEN"
-# Response: 401 { "error": "invalid_token" }
+# 401 { "error": "invalid_token" }
 ```
 
 ### Non-Existent Grant
@@ -643,169 +367,132 @@ curl http://localhost:3000/api/gm/some-grant \
 ```bash
 curl http://localhost:3000/api/gm/non-existent \
   -H "Authorization: Bearer $QUERY_TOKEN"
-# Response: 404 { "error": "not_found" }
+# 404 { "error": "not_found" }
 ```
 
-### Missing grant_id with merge/replace
+### Missing grant_id with merge
 
 ```bash
-# Authorization request with grant_management_action=merge but no grant_id
 curl "http://localhost:3000/api/authorization?\
 response_type=code&\
 client_id=CID&\
 scope=openid&\
 grant_management_action=merge"
-# Response: Authlete returns error — grant_id is required for merge
+# Error: grant_id required for merge
 ```
 
-### Grant ID with create action
+### Grant ID with create
 
 ```bash
-# Authorization request with grant_management_action=create AND grant_id
 curl "http://localhost:3000/api/authorization?\
 response_type=code&\
 client_id=CID&\
 scope=openid&\
 grant_management_action=create&\
 grant_id=some-id"
-# Response: Authlete returns error — grant_id must NOT be present with create
+# Error: grant_id must NOT be present with create
 ```
 
-### Public Client Attempt
+### Summary
 
-```bash
-# Public client (no client_secret) trying to use grant management
-# Per spec: "Grant management is restricted to confidential only clients"
-# Authlete enforces this automatically
-```
+| Scenario | Result |
+|----------|--------|
+| No Bearer token | 401 |
+| Wrong scope | 401 |
+| Grant not found | 404 |
+| merge without grant_id | Error |
+| create with grant_id | Error |
+| Public client | Rejected (spec requires confidential) |
 
 ---
 
-## Part 9: Relationship to Resource Indicators (RFC 8707)
-
-Resource Indicators (RFC 8707) and Grant Management are complementary specifications that work together:
-
-| Aspect | Resource Indicators (RFC 8707) | Grant Management |
-|--------|-------------------------------|------------------|
-| **Purpose** | Specifies which resource server(s) a token is for | Manages the lifecycle of authorizations |
-| **Parameter** | `resource` in authorization/token requests | `grant_management_action` + `grant_id` in authorization requests |
-| **Effect on token** | Restricts token audience (`aud` claim) | Assigns a `grant_id` to track the authorization |
-| **Effect on introspection** | Returns `aud` with resource URIs | Returns `scopes` as scope-resource clusters |
-| **Server-side** | Authlete handles natively | Authlete handles natively |
-
-### How they interact
-
-When you use both together:
-
-1. Authorization request includes `resource=https://api.example.com/` and `grant_management_action=create`
-2. Authlete creates a grant AND binds the token to the specified resource
-3. The token response includes `grant_id`
-4. The access token's `aud` claim contains the resource URI
-5. Querying the grant shows `scope-resource clusters` with the resource binding
-
-This is the recommended approach for FAPI 2.0 deployments — use both Resource Indicators AND Grant Management together.
-
----
-
-## Part 10: Industry Use Cases
+## Part 8: Use Cases
 
 ### UK Open Banking (PSD2)
 
-```
-TPP (Client)                  ASPSP (Auth Server)
-    │                               │
-    │  POST /account-access-consents│
-    │  { permissions: [...] }       │
-    │──────────────────────────────>│
-    │                               │
-    │  201 Created                  │
-    │  { ConsentId: "abc123" }      │  ← Equivalent to grant_id
-    │<──────────────────────────────│
-    │                               │
-    │  GET /account-access-consents/abc123
-    │──────────────────────────────>│
-    │                               │
-    │  200 OK                       │
-    │  { status: "Authorised",      │
-    │    permissions: [...] }       │  ← Equivalent to GM query
-    │<──────────────────────────────│
-    │                               │
-    │  DELETE /account-access-consents/abc123
-    │──────────────────────────────>│
-    │                               │
-    │  204 No Content               │  ← Equivalent to GM revoke
-    │<──────────────────────────────│
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant TPP as 🏦 TPP
+    participant ASPSP as 🏛️ ASPSP
+
+    TPP->>ASPSP: POST /account-access-consents<br/>{ permissions: [...] }
+    ASPSP->>TPP: 201 { ConsentId: "abc123" }
+    
+    Note over TPP,ASPSP: ConsentId ≈ grant_id
+
+    TPP->>ASPSP: GET /account-access-consents/abc123
+    ASPSP->>TPP: 200 { status: "Authorised", permissions: [...] }
+
+    TPP->>ASPSP: DELETE /account-access-consents/abc123
+    ASPSP->>TPP: 204 No Content
 ```
 
 ### Australian Consumer Data Right
 
-```
-Data Recipient              Data Holder
-    │                           │
-    │  POST /arrangements       │
-    │  (create consent)         │
-    │──────────────────────────>│
-    │                           │
-    │  { arrangement_id: "x" }  │  ← Equivalent to grant_id
-    │<──────────────────────────│
-    │                           │
-    │  POST /arrangements/revoke │
-    │  { arrangement_id: "x" }  │  ← Equivalent to GM revoke
-    │──────────────────────────>│
-    │                           │
-    │  204 No Content           │
-    │<──────────────────────────│
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant DR as 📊 Data Recipient
+    participant DH as 🏛️ Data Holder
+
+    DR->>DH: POST /arrangements<br/>(create consent)
+    DH->>DR: { arrangement_id: "x" }
+
+    Note over DR,DH: arrangement_id ≈ grant_id
+
+    DR->>DH: POST /arrangements/revoke<br/>{ arrangement_id: "x" }
+    DH->>DR: 204 No Content
 ```
 
-### FAPI 2.0 Compliance Checklist
+### FAPI 2.0 Compliance
 
-- [ ] Grant Management endpoint configured in Authlete console
-- [ ] `grant_management_actions_supported` includes `create`, `query`, `merge`, `replace`, `revoke`
-- [ ] `grant_management_endpoint` is set in service metadata
-- [ ] Server implements `GET /api/gm/:grantId` and `DELETE /api/gm/:grantId`
-- [ ] Both endpoints require Bearer token authentication
-- [ ] Scope validation (`grant_management_query`, `grant_management_revoke`) delegated to Authlete
-- [ ] `grant_management_action` parameter accepted in authorization requests (passed through to Authlete)
-- [ ] `grant_id` returned in token responses (delegated to Authlete)
-- [ ] Confidential clients only enforced (delegated to Authlete)
+- [x] Grant Management endpoint configured
+- [x] `grant_management_actions_supported` includes all actions
+- [x] Server implements GET and DELETE endpoints
+- [x] Both endpoints require Bearer token
+- [x] Scope validation delegated to Authlete
+- [x] Confidential clients only enforced
 
 ---
 
-## Part 11: Troubleshooting
+## Part 9: Troubleshooting
 
-### "Grant not found" when querying
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| "Grant not found" | Wrong `grant_id` | Copy from token response |
+| 401 "invalid_token" | Wrong scope or expired token | Check scope: query vs. revoke |
+| No `grant_id` in response | Missing `grant_management_action` | Include in authorization request |
+| Authlete error for action | GM not configured | Enable in Authlete Console |
+| Merge doesn't work | Different user | Same user must authenticate |
+| Refresh token conflict | Token rotation enabled | Check Authlete settings |
 
-- Verify the `grant_id` is correct (copy from token response)
-- Check that the grant was created with `grant_management_action=create`
-- Grants with expired tokens may no longer be "live" in Authlete's view
+---
 
-### 401 "invalid_token" when querying/revoking
+## Summary
 
-- Ensure the token has the correct scope:
-  - Query requires `grant_management_query`
-  - Revoke requires `grant_management_revoke`
-- Check token expiry
-- Ensure `Authorization: Bearer <token>` header format
+Grant Management is simple:
 
-### No `grant_id` in token response
+1. **Create** grant with `grant_management_action=create`
+2. **Query** with `GET /gm/:grantId` (needs `grant_management_query` scope)
+3. **Merge** with `grant_management_action=merge` (add permissions)
+4. **Replace** with `grant_management_action=replace` (swap permissions)
+5. **Revoke** with `DELETE /gm/:grantId` (needs `grant_management_revoke` scope)
 
-- Verify `grant_management_action=create` was included in the authorization request
-- Check that the Authlete service has Grant Management enabled
-- The `grant_id` is only in the token response, not the authorization response
+**Use Grant Management when:**
+- FAPI 2.0 compliance required
+- Clients need visibility into their permissions
+- Selective revocation needed
+- Concurrent grants for same client+user
 
-### Authlete returns error for `grant_management_action`
+**Don't use Grant Management when:**
+- Simple OAuth deployment (tokens are enough)
+- No regulatory requirements
 
-- Ensure the Authlete service has `grantManagementEndpoint` configured
-- Check that `feature.gm.enabled` is `true` in Authlete server properties
-- Verify the client is confidential (public clients are rejected per spec)
+---
 
-### Merge doesn't seem to work
+## References
 
-- `merge` requires an existing `grant_id` from a previous `create`
-- The user authenticating for the merge must be the SAME user who created the original grant
-- Authlete silently skips GM operations if the user is different (no error, but no merge either)
-
-### Refresh token rotation conflict
-
-- If "single access token per subject" is enabled in Authlete, using a refresh token invalidates the previous access token
-- When narrowing resources via refresh token, each use produces a new access token and the old one is revoked
+- [Grant Management for OAuth 2.0](https://openid.net/specs/oauth-v2-grant-management.html)
+- [FAPI 2.0 Security Profile](https://openid.net/specs/openid-financial-api-2_0.html)
+- [Authlete KB: Grant Management](https://www.authlete.com/kb/grant-management/)
