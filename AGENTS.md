@@ -9,6 +9,20 @@ Two independent packages in `server/` and `client/`. No monorepo tooling — use
 | `server/` | Express + Authlete SDK    | `src/server.ts`           |
 | `client/` | React OAuth debugger (Vite + SWC) | `src/main.tsx`      |
 | root      | Docker Compose            | `docker-compose.yml`      |
+| `.github/` | CI, templates, CODEOWNERS | `workflows/ci.yml`       |
+
+### Community Health Files
+
+| File | Purpose |
+|------|---------|
+| `LICENSE` | MIT License |
+| `CONTRIBUTING.md` | Contribution guide (setup, workflow, PR process) |
+| `CODE_OF_CONDUCT.md` | Contributor Covenant v2.1 |
+| `SECURITY.md` | Vulnerability reporting policy |
+| `.github/CODEOWNERS` | Auto-assign reviewers |
+| `.github/ISSUE_TEMPLATE/` | Bug report + feature request forms |
+| `.github/PULL_REQUEST_TEMPLATE.md` | PR checklist |
+| `.github/dependabot.yml` | Auto-update dependencies weekly |
 
 ## Commands
 
@@ -20,12 +34,12 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (316 tests, 43 files)
+npm --prefix server run test              # unit + integration (318 tests, 44 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (247 tests, 39 files)
-npm --prefix server run test:integration  # integration tests only (23 tests)
-npm --prefix server run lint               # ESLint (flat config, 0 errors/warnings)
+npm --prefix server run test:unit         # unit tests only (287 tests, 43 files)
+npm --prefix server run test:integration  # integration tests only (31 tests)
+npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (100 tests, requires real Authlete creds)
 
@@ -71,7 +85,7 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 39 files across 5 categories (247 tests):
+- **Unit tests**: 43 files across 5 categories (287 tests):
   - `tests/unit/services/` — 21 files (86 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par)
   - `tests/unit/controllers/` — 6 files (60 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device
   - `tests/unit/middleware/` — 4 files (28 tests), error handler, session, audit-log, csrf
@@ -79,7 +93,7 @@ docker compose up -d prometheus grafana
   - `tests/unit/routes/` — 2 files (24 tests), metrics routes + openapi routes
 - **Integration tests**: 1 file `tests/integration/routes.test.ts` (31 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 316 tests across 43 files, completes in ~2s
+- Run with `npm --prefix server run test` — 318 tests across 44 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 

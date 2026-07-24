@@ -4,6 +4,14 @@
   <img src="./authlete-server.jpg" alt="Authlete Server" width="300">
 </p>
 
+<p align="center">
+  <a href="https://github.com/blackadi/OAUTH2.0/blob/main/LICENSE"><img src="https://img.shields.io/github/license/blackadi/OAUTH2.0" alt="License"></a>
+  <a href="https://github.com/blackadi/OAUTH2.0/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/blackadi/OAUTH2.0/ci.yml?branch=main" alt="CI"></a>
+  <a href="https://github.com/blackadi/OAUTH2.0"><img src="https://img.shields.io/github/stars/blackadi/OAUTH2.0" alt="Stars"></a>
+  <a href="https://github.com/blackadi/OAUTH2.0"><img src="https://img.shields.io/github/forks/blackadi/OAUTH2.0" alt="Forks"></a>
+  <a href="https://github.com/blackadi/OAUTH2.0/issues"><img src="https://img.shields.io/github/issues/blackadi/OAUTH2.0" alt="Issues"></a>
+</p>
+
 > **The easiest way to build a production-grade OAuth 2.0 / OpenID Connect server — without building the hard parts.**
 
 This project implements a complete OAuth 2.0 and OpenID Connect authorization server using [Express](https://expressjs.com/) and the [Authlete TypeScript SDK](https://github.com/authlete/authlete-typescript-sdk). Here's the key insight: **all the complex OAuth logic is handled by Authlete's cloud API**. This server is the "last mile" — the HTTP layer, session management, and user-facing pages that sit in front of Authlete.
@@ -164,6 +172,28 @@ Each tutorial explains **why** a feature exists, **how** it works, and **how to 
 | [Grant Management](docs/GRANT-MANAGEMENT.md) | Querying and revoking granted authorizations |
 | [FAPI 2.0](docs/FAPI-TUTORIAL.md) | Financial-grade security with DPoP |
 
+## Community
+
+| Document | Purpose |
+|----------|---------|
+| [Contributing Guide](CONTRIBUTING.md) | How to set up, develop, and submit changes |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community behavior standards (Contributor Covenant v2.1) |
+| [Security Policy](SECURITY.md) | How to report vulnerabilities |
+| [License](LICENSE) | MIT License |
+
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) first. Quick start:
+
+```bash
+git clone https://github.com/blackadi/OAUTH2.0.git
+cd OAUTH2.0
+npm --prefix server install && npm --prefix client install
+cp server/.env.example server/.env
+# Edit server/.env with your Authlete credentials
+npm --prefix server run dev
+```
+
 ## License
 
-Provided for educational purposes. See LICENSE for details.
+[MIT](LICENSE) — provided for educational purposes and production use.
