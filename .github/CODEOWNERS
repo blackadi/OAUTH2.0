@@ -1,0 +1,16 @@
+# Default owner for everything
+* @blackadi
+
+# Server
+/server/src/ @blackadi
+/server/tests/ @blackidi
+
+# Client
+/client/src/ @blackadi
+/client/test/ @blackadi
+
+# Documentation
+/docs/ @blackadi
+
+# CI/CD
+/.github/ @blackadi
