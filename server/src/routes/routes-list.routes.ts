@@ -260,6 +260,215 @@ const ROUTES: RouteEntry[] = [
     description: "List all hardware security keys — requires Basic auth",
   },
 
+  // ── Device Flow (RFC 8628) ───────────────────────────────────────────
+  {
+    method: "POST",
+    path: "/api/device/authorization",
+    description: "RFC 8628 Device Authorization — initiates device flow, returns device_code + user_code + verification_uri. Supports public clients (no secret) and confidential clients.",
+    body: JSON.stringify({ parameters: "client_id=your_client_id&scope=openid", clientId: "your_client_id" }),
+  },
+  {
+    method: "POST",
+    path: "/api/device/verification",
+    description: "Device Flow — verify user code entered by end-user on their browser",
+    body: JSON.stringify({ userCode: "ABCD-1234" }),
+  },
+  {
+    method: "POST",
+    path: "/api/device/complete",
+    description: "Device Flow — complete with end-user decision (AUTHORIZED, ACCESS_DENIED, or TRANSACTION_FAILED). Requires subject.",
+    body: JSON.stringify({ userCode: "ABCD-1234", result: "AUTHORIZED", subject: "admin" }),
+  },
+  {
+    method: "GET",
+    path: "/device",
+    description: "Device Flow — browser verification page (user enters code here)",
+  },
+
+  // ── Native SSO (Shared Signals Framework) ────────────────────────────
+  {
+    method: "POST",
+    path: "/api/nativesso",
+    description: "Native SSO — process SSF (Shared Signals Framework) event for cross-device session management",
+    body: JSON.stringify({ /* SSF event payload */ }),
+  },
+  {
+    method: "POST",
+    path: "/api/nativesso/logout",
+    description: "Native SSO — process logout signal to terminate sessions for a subject",
+    body: JSON.stringify({ /* SSF logout event payload */ }),
+  },
+
+  // ── JAR (RFC 9101 — JWT-Secured Authorization Request) ───────────────
+  {
+    method: "POST",
+    path: "/api/jar/process",
+    description: "RFC 9101 JAR — validate a JWT request object and extract OAuth parameters",
+    body: JSON.stringify({ request: "eyJhbGciOiJSUz...", clientId: "your_client_id" }),
+  },
+
+  // ── Federation (OpenID Federation 1.0) ───────────────────────────────
+  {
+    method: "GET",
+    path: "/api/federation/configuration",
+    description: "OpenID Federation entity configuration — returns federation metadata for this entity",
+  },
+  {
+    method: "POST",
+    path: "/api/federation/registration",
+    description: "OpenID Federation — handle entity registration request",
+    body: JSON.stringify({ /* federation registration request */ }),
+  },
+  {
+    method: "GET",
+    path: "/.well-known/openid-federation",
+    description: "OpenID Federation well-known endpoint (served at root for spec compliance)",
+  },
+
+  // ── VCI (Verifiable Credential Issuance — OID4VCI) ───────────────────
+  {
+    method: "GET",
+    path: "/api/vci/metadata",
+    description: "OID4VCI credential issuer metadata — returns VCI configuration (public endpoint)",
+  },
+  {
+    method: "GET",
+    path: "/api/vci/jwtissuer",
+    description: "OID4VCI JWT issuer metadata — returns JWT issuer configuration (public endpoint)",
+  },
+  {
+    method: "GET",
+    path: "/api/vci/jwks",
+    description: "OID4VCI JWKS — returns the JWK Set for VCI (public endpoint)",
+  },
+  {
+    method: "GET",
+    path: "/api/vci/well-known",
+    description: "OID4VCI well-known metadata (alias for /vci/metadata)",
+  },
+  {
+    method: "POST",
+    path: "/api/vci/offer/create",
+    description: "OID4VCI — create a credential offer (requires Basic auth)",
+    body: JSON.stringify({ credentialConfigurationIds: ["my_credential"], subject: "user123" }),
+  },
+  {
+    method: "POST",
+    path: "/api/vci/offer/info",
+    description: "OID4VCI — get credential offer info by identifier (requires Basic auth)",
+    body: JSON.stringify({ identifier: "offer_id" }),
+  },
+  {
+    method: "POST",
+    path: "/api/vci/credential/issue",
+    description: "OID4VCI §8 — issue a single verifiable credential (requires Bearer token)",
+    body: JSON.stringify({ accessToken: "access_token_from_pre_auth_code_flow" }),
+  },
+  {
+    method: "POST",
+    path: "/api/vci/credential/batch",
+    description: "OID4VCI §10 — issue multiple verifiable credentials in a single request (requires Bearer token)",
+    body: JSON.stringify({ accessToken: "access_token", orders: [] }),
+  },
+  {
+    method: "POST",
+    path: "/api/vci/deferred/issue",
+    description: "OID4VCI §9 — issue a deferred verifiable credential (requires Bearer token)",
+    body: JSON.stringify({ order: {} }),
+  },
+  {
+    method: "GET",
+    path: "/.well-known/openid-credential-issuer",
+    description: "OID4VCI well-known credential issuer metadata (served at root for spec compliance)",
+  },
+
+  // ── Client Management ────────────────────────────────────────────────
+  {
+    method: "GET",
+    path: "/api/client/list",
+    description: "List all clients — requires Basic auth. Supports pagination with start/end query params.",
+  },
+  {
+    method: "GET",
+    path: "/api/client/get/:clientId",
+    description: "Get client details by ID — requires Basic auth",
+  },
+  {
+    method: "POST",
+    path: "/api/client/create",
+    description: "Create a new client — requires Basic auth",
+    body: JSON.stringify({ client: { clientName: "My App", clientType: "CONFIDENTIAL", applicationType: "WEB", grantTypes: ["AUTHORIZATION_CODE"], responseTypes: ["CODE"], redirectUris: ["http://localhost:3000/callback"], tokenAuthMethod: "CLIENT_SECRET_BASIC" } }),
+  },
+  {
+    method: "PATCH",
+    path: "/api/client/update/:clientId",
+    description: "Update client properties — requires Basic auth",
+  },
+  {
+    method: "DELETE",
+    path: "/api/client/delete/:clientId",
+    description: "Delete a client — requires Basic auth",
+  },
+  {
+    method: "PATCH",
+    path: "/api/client/flag/:clientIdentifier",
+    description: "Update client lock flag (prevent/allow credential refresh) — requires Basic auth",
+    body: JSON.stringify({ clientLocked: true }),
+  },
+  {
+    method: "POST",
+    path: "/api/client/secret/refresh/:clientIdentifier",
+    description: "Generate a new client secret — requires Basic auth",
+  },
+  {
+    method: "PUT",
+    path: "/api/client/secret/update/:clientIdentifier",
+    description: "Set a known client secret value — requires Basic auth",
+    body: JSON.stringify({ clientSecret: "your_known_secret" }),
+  },
+  {
+    method: "GET",
+    path: "/api/client/auth/list/:subject",
+    description: "List all client authorizations for a subject — requires Basic auth",
+  },
+  {
+    method: "POST",
+    path: "/api/client/auth/update/:clientId",
+    description: "Update client authorization for a user — requires Basic auth",
+    body: JSON.stringify({ subject: "user123", scopes: ["openid", "profile"] }),
+  },
+  {
+    method: "DELETE",
+    path: "/api/client/auth/delete/:clientId/:subject",
+    description: "Delete client authorization for a user — requires Basic auth",
+  },
+  {
+    method: "GET",
+    path: "/api/client/scopes/granted/:clientId/:subject",
+    description: "Get granted scopes for a client+user — requires Basic auth",
+  },
+  {
+    method: "DELETE",
+    path: "/api/client/scopes/granted/:clientId/:subject",
+    description: "Delete all granted scopes for a client+user — requires Basic auth",
+  },
+  {
+    method: "GET",
+    path: "/api/client/scopes/requestable/:clientId",
+    description: "Get requestable scopes for a client — requires Basic auth",
+  },
+  {
+    method: "PUT",
+    path: "/api/client/scopes/requestable/:clientId",
+    description: "Set requestable scopes for a client — requires Basic auth",
+    body: JSON.stringify({ requestableScopes: ["openid", "profile", "email"] }),
+  },
+  {
+    method: "DELETE",
+    path: "/api/client/scopes/requestable/:clientId",
+    description: "Delete all requestable scopes for a client — requires Basic auth",
+  },
+
   // ── FAPI 2.0 ──────────────────────────────────────────────────
   {
     method: "GET",
