@@ -18,6 +18,7 @@ async function revokeGrant(accessToken: string, grantId: string): Promise<unknow
     },
   );
   if (!response.ok) throw new Error(await response.text());
+  if (response.status === 204) return null;
   return response.json();
 }
 
