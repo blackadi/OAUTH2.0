@@ -1,28 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import { VciService } from "../services/vci.service";
-import logger from "../utils/logger";
-import { AppError } from "../utils/app-error";
+import { requireBasicAuth } from "../middleware/require-basic-auth";
+import { handleControllerError } from "../utils/controller-error";
 
-function requireBasicAuth(req: Request, res: Response): boolean {
-  const mgmtClientId = process.env.MGMT_CLIENT_ID;
-  const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
-  if (!mgmtClientId || !mgmtClientSecret) return true;
-
-  const { authorization } = req.headers;
-  if (!authorization?.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="vci"');
-    res.status(401).json({ error: "invalid_client", error_description: "Client authentication required" });
-    return false;
-  }
-  const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-  const [id, secret] = credentials.split(":");
-  if (id !== mgmtClientId || secret !== mgmtClientSecret) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="vci"');
-    res.status(401).json({ error: "invalid_client", error_description: "Invalid client credentials" });
-    return false;
-  }
-  return true;
-}
+const checkAuth = requireBasicAuth("vci");
 
 function extractBearerToken(req: Request): string | null {
   const auth = req.headers.authorization;
@@ -79,19 +60,6 @@ const DEFERRED_ISSUE_MAP: Record<string, number> = {
   INTERNAL_SERVER_ERROR: 500,
   CALLER_ERROR: 400,
 };
-
-function handleControllerError(err: unknown, req: Request, res: Response, next: NextFunction, label: string): void {
-  if (err instanceof AppError && err.status === 400) {
-    const log = req.logger || logger;
-    log.error(`VCI ${label} Validation Error`, { message: err.message });
-    res.status(400).json({ error: "invalid_request", error_description: err.message });
-    return;
-  }
-  const error = err instanceof Error ? err : new Error(String(err));
-  const log = req.logger || logger;
-  log.error(`VCI ${label} Response Error`, { message: error.message });
-  next(error);
-}
 
 function sendDiscoverResponse(res: Response, response: any, _label: string): void {
   if (response.responseContent) {
@@ -152,7 +120,7 @@ export function createVciControllers(serviceInstance = new VciService()) {
     offer: {
       handleCreateOffer: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          if (!requireBasicAuth(req, res)) return;
+          if (!checkAuth(req, res)) return;
           const result = await serviceInstance.createOffer(req);
           const status = statusForAction(result.action, OFFER_CREATE_MAP);
           res.status(status).json(result);
@@ -162,7 +130,7 @@ export function createVciControllers(serviceInstance = new VciService()) {
       },
       handleGetOfferInfo: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          if (!requireBasicAuth(req, res)) return;
+          if (!checkAuth(req, res)) return;
           const { identifier } = req.body as { identifier?: string };
           const result = await serviceInstance.getOfferInfo(identifier || "");
           const status = statusForAction(result.action, OFFER_INFO_MAP);

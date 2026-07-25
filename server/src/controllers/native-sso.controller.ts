@@ -6,8 +6,12 @@ import {
   nativeSsoProcessSchema,
   nativeSsoLogoutSchema,
 } from "../utils/validation";
-import logger from "../utils/logger";
+import { requireBasicAuth } from "../middleware/require-basic-auth";
+import { handleControllerError } from "../utils/controller-error";
 import { AppError } from "../utils/app-error";
+import logger from "../utils/logger";
+
+const checkAuth = requireBasicAuth("nativesso");
 
 function mapProcessActionToStatus(action?: string): number {
   switch (action) {
@@ -27,69 +31,29 @@ function mapLogoutActionToStatus(action?: string): number {
   }
 }
 
-function handleControllerError(err: unknown, req: Request, next: NextFunction, label: string): void {
-  const error = err instanceof Error ? err : new Error(String(err));
-  const log = req.logger || logger;
-  log.error(`NativeSso ${label} Error`, { message: error.message });
-  next(error);
-}
-
-function handleValidationError(err: unknown, req: Request, res: Response): boolean {
-  if (err instanceof AppError && err.status === 400) {
-    const log = req.logger || logger;
-    log.error("NativeSso Validation Error", { message: err.message });
-    res.status(400).json({ error: "invalid_request", error_description: err.message });
-    return true;
-  }
-  return false;
-}
-
-function requireBasicAuth(req: Request, res: Response): boolean {
-  const mgmtClientId = process.env.MGMT_CLIENT_ID;
-  const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
-  if (!mgmtClientId || !mgmtClientSecret) return true;
-
-  const { authorization } = req.headers;
-  if (!authorization?.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="nativesso"');
-    res.status(401).json({ error: "invalid_client", error_description: "Client authentication required" });
-    return false;
-  }
-  const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-  const [id, secret] = credentials.split(":");
-  if (id !== mgmtClientId || secret !== mgmtClientSecret) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="nativesso"');
-    res.status(401).json({ error: "invalid_client", error_description: "Invalid client credentials" });
-    return false;
-  }
-  return true;
-}
-
 export function createNativeSsoControllers(serviceInstance = new NativeSsoService()) {
   return {
     process: {
       handle: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          if (!requireBasicAuth(req, res)) return;
+          if (!checkAuth(req, res)) return;
           validateOrThrow(nativeSsoProcessSchema, req.body);
           const result = await serviceInstance.process(req);
           sendApiResponse(res, mapProcessActionToStatus(result.action), result);
         } catch (err) {
-          if (handleValidationError(err, req, res)) return;
-          handleControllerError(err, req, next, "Process");
+          handleControllerError(err, req, res, next, "NativeSso Process");
         }
       },
     },
     logout: {
       handle: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          if (!requireBasicAuth(req, res)) return;
+          if (!checkAuth(req, res)) return;
           validateOrThrow(nativeSsoLogoutSchema, req.body);
           const result = await serviceInstance.logout(req);
           sendApiResponse(res, mapLogoutActionToStatus(result.action), result);
         } catch (err) {
-          if (handleValidationError(err, req, res)) return;
-          handleControllerError(err, req, next, "Logout");
+          handleControllerError(err, req, res, next, "NativeSso Logout");
         }
       },
     },

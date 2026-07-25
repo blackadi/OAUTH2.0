@@ -156,9 +156,9 @@ export function createApp() {
   app.use(routerURL, cibaRoutes);
   app.use(routerURL, parRoutes);
   app.use(routerURL, federationRoutes);
-app.use("/", vciWellKnownRouter); // .well-known/openid-credential-issuer at root
-app.use("/", federationRootRouter); // .well-known/openid-federation at root
-app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths)
+  app.use("/", vciWellKnownRouter); // .well-known/openid-credential-issuer at root
+  app.use("/", federationRootRouter); // .well-known/openid-federation at root
+  app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths)
   app.use(routerURL, vciRoutes);
   app.use(routerURL, hskRoutes);
   app.use(routerURL, healthRoutes);

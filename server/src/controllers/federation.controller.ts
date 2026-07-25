@@ -4,29 +4,10 @@ import {
   validateOrThrow,
   federationRegistrationSchema,
 } from "../utils/validation";
-import logger from "../utils/logger";
-import { AppError } from "../utils/app-error";
+import { requireBasicAuth } from "../middleware/require-basic-auth";
+import { handleControllerError } from "../utils/controller-error";
 
-function requireBasicAuth(req: Request, res: Response): boolean {
-  const mgmtClientId = process.env.MGMT_CLIENT_ID;
-  const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
-  if (!mgmtClientId || !mgmtClientSecret) return true;
-
-  const { authorization } = req.headers;
-  if (!authorization?.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="federation"');
-    res.status(401).json({ error: "invalid_client", error_description: "Client authentication required" });
-    return false;
-  }
-  const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-  const [id, secret] = credentials.split(":");
-  if (id !== mgmtClientId || secret !== mgmtClientSecret) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="federation"');
-    res.status(401).json({ error: "invalid_client", error_description: "Invalid client credentials" });
-    return false;
-  }
-  return true;
-}
+const checkAuth = requireBasicAuth("federation");
 
 function mapConfigurationActionToStatus(action?: string): number {
   switch (action) {
@@ -45,19 +26,6 @@ function mapRegistrationActionToStatus(action?: string): number {
     case "INTERNAL_SERVER_ERROR": return 500;
     default: return 500;
   }
-}
-
-function handleControllerError(err: unknown, req: Request, res: Response, next: NextFunction, label: string): void {
-  if (err instanceof AppError && err.status === 400) {
-    const log = req.logger || logger;
-    log.error(`Federation ${label} Validation Error`, { message: err.message });
-    res.status(400).json({ error: "invalid_request", error_description: err.message });
-    return;
-  }
-  const error = err instanceof Error ? err : new Error(String(err));
-  const log = req.logger || logger;
-  log.error(`Federation ${label} Response Error`, { message: error.message });
-  next(error);
 }
 
 export function createFederationControllers(serviceInstance = new FederationService()) {
@@ -85,7 +53,7 @@ export function createFederationControllers(serviceInstance = new FederationServ
     registration: {
       handleRegistration: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          if (!requireBasicAuth(req, res)) return;
+          if (!checkAuth(req, res)) return;
           validateOrThrow(federationRegistrationSchema, req.body);
           const result = await serviceInstance.registration(req);
           const status = mapRegistrationActionToStatus(result.action);

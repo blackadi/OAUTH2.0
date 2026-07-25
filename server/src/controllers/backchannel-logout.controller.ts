@@ -1,34 +1,15 @@
 import { NextFunction, Request, Response } from "express";
 import { BackchannelLogoutService } from "../services/backchannel-logout.service";
+import { requireBasicAuth } from "../middleware/require-basic-auth";
 import logger from "../utils/logger";
 
 const backchannelLogoutService = new BackchannelLogoutService();
-
-function requireBasicAuth(req: Request, res: Response): boolean {
-  const mgmtClientId = process.env.MGMT_CLIENT_ID;
-  const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
-  if (!mgmtClientId || !mgmtClientSecret) return true;
-
-  const { authorization } = req.headers;
-  if (!authorization?.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="client_management"');
-    res.status(401).json({ error: "invalid_client", error_description: "Client authentication required" });
-    return false;
-  }
-  const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-  const [id, secret] = credentials.split(":");
-  if (id !== mgmtClientId || secret !== mgmtClientSecret) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="client_management"');
-    res.status(401).json({ error: "invalid_client", error_description: "Invalid client credentials" });
-    return false;
-  }
-  return true;
-}
+const checkAuth = requireBasicAuth("client_management");
 
 export const backchannelLogoutIssueController = {
   handleIssueToken: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
 
       const { clientIdentifier, subject, sessionId } = req.body as Record<string, string | undefined>;
 
@@ -59,7 +40,7 @@ export const backchannelLogoutIssueController = {
 export const backchannelLogoutDeliverController = {
   handleDeliver: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
 
       const { clientIdentifier, subject, sessionId } = req.body as Record<string, string | undefined>;
 
@@ -85,7 +66,7 @@ export const backchannelLogoutDeliverController = {
 export const backchannelLogoutDeliverAllController = {
   handleDeliverAll: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
 
       const { subject, sessionId } = req.body as Record<string, string | undefined>;
 

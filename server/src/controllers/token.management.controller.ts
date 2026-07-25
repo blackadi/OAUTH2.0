@@ -3,29 +3,10 @@ import { TokenManagementService } from "../services/token.operations.service";
 import logger from "../utils/logger";
 import { server } from "../config/app.config";
 import { jwt } from "../config/authlete.config";
+import { requireBasicAuth } from "../middleware/require-basic-auth";
 
 const tokenManagementService = new TokenManagementService();
-
-function requireBasicAuth(req: Request, res: Response): boolean {
-  const mgmtClientId = process.env.MGMT_CLIENT_ID;
-  const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
-  if (!mgmtClientId || !mgmtClientSecret) return true; // skip if unconfigured
-
-  const { authorization } = req.headers;
-  if (!authorization?.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="token_management"');
-    res.status(401).json({ error: "invalid_client", error_description: "Client authentication required" });
-    return false;
-  }
-  const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-  const [id, secret] = credentials.split(":");
-  if (id !== mgmtClientId || secret !== mgmtClientSecret) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="token_management"');
-    res.status(401).json({ error: "invalid_client", error_description: "Invalid client credentials" });
-    return false;
-  }
-  return true;
-}
+const checkAuth = requireBasicAuth("token_management");
 
 export const tokenCreateController = {
   handleCreateToken: async (
@@ -34,7 +15,7 @@ export const tokenCreateController = {
     next: NextFunction
   ) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
       const result = await tokenManagementService.create(req);
 
       switch (result.action) {
@@ -76,7 +57,7 @@ export const tokenDeleteController = {
     next: NextFunction
   ) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
       const accessTokenIdentifier = req.params.accessTokenIdentifier as string;
       const log = req.logger || logger;
       log("TokenDeleteService: calling Authlete token management endpoint", {
@@ -113,7 +94,7 @@ export const tokenUpdateController = {
     next: NextFunction
   ) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
       const result = await tokenManagementService.update(req);
 
       switch (result.action) {
@@ -155,7 +136,7 @@ export const tokenUpdateController = {
 export const tokensListController = {
   handleListTokens: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
       const result = await tokenManagementService.list();
       res.setHeader("Content-Type", "application/json");
       return res.status(200).send(result);
@@ -175,7 +156,7 @@ export const tokenRevokeToken = {
     next: NextFunction
   ) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
       const result = await tokenManagementService.revoke(req);
 
       switch (result.resultCode) {
@@ -227,7 +208,7 @@ export const tokenReissueIdToken = {
     next: NextFunction
   ) => {
     try {
-      if (!requireBasicAuth(req, res)) return;
+      if (!checkAuth(req, res)) return;
       const result = await tokenManagementService.reissueIdToken(req);
 
       switch (result.action) {

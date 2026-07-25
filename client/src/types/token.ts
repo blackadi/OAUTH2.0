@@ -19,15 +19,6 @@ export interface TokenResponse {
   [key: string]: unknown;
 }
 
-export interface TokenSet {
-  access_token?: string;
-  refresh_token?: string;
-  id_token?: string;
-  token_type?: string;
-  expires_in?: number;
-  scope?: string;
-}
-
 export interface JwksResponse {
   keys: Array<{
     kty: string;

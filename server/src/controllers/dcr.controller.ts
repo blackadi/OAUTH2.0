@@ -7,33 +7,14 @@ import {
   dcrUpdateSchema,
   dcrDeleteSchema,
 } from "../utils/validation";
-import logger from "../utils/logger";
-import { AppError } from "../utils/app-error";
+import { requireBasicAuth } from "../middleware/require-basic-auth";
+import { handleControllerError } from "../utils/controller-error";
 
 function safeParseJSON(str: string): unknown {
   try { return JSON.parse(str); } catch { return str; }
 }
 
-function requireBasicAuth(req: Request, res: Response): boolean {
-  const mgmtClientId = process.env.MGMT_CLIENT_ID;
-  const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
-  if (!mgmtClientId || !mgmtClientSecret) return true;
-
-  const { authorization } = req.headers;
-  if (!authorization?.startsWith("Basic ")) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="dcr"');
-    res.status(401).json({ error: "invalid_client", error_description: "Client authentication required" });
-    return false;
-  }
-  const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-  const [id, secret] = credentials.split(":");
-  if (id !== mgmtClientId || secret !== mgmtClientSecret) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="dcr"');
-    res.status(401).json({ error: "invalid_client", error_description: "Invalid client credentials" });
-    return false;
-  }
-  return true;
-}
+const checkAuth = requireBasicAuth("dcr");
 
 function mapActionToStatus(action?: string): number {
   switch (action) {
@@ -59,32 +40,19 @@ function buildResponse(result: any) {
   return { status, body };
 }
 
-function handleDcrError(err: unknown, req: Request, res: Response, next: NextFunction, label: string): void {
-  if (err instanceof AppError && err.status === 400) {
-    const log = req.logger || logger;
-    log.error(`DCR ${label} Validation Error`, { message: err.message });
-    res.status(400).json({ error: "invalid_request", error_description: err.message });
-    return;
-  }
-  const error = err instanceof Error ? err : new Error(String(err));
-  const log = req.logger || logger;
-  log.error(`DCR ${label} Response Error`, { message: error.message });
-  next(error);
-}
-
 export function createDcrControllers(dcrServiceInstance = new DcrService()) {
   return {
     register: {
       handleDcrRegister: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          if (!requireBasicAuth(req, res)) return;
+          if (!checkAuth(req, res)) return;
           validateOrThrow(dcrRegisterSchema, req.body);
           const result = await dcrServiceInstance.register(req);
           const { status, body } = buildResponse(result);
           if (status === 204) return res.status(status).send();
           return res.status(status).json(body);
         } catch (err) {
-          handleDcrError(err, req, res, next, "Register");
+          handleControllerError(err, req, res, next, "Register");
         }
       },
     },
@@ -97,7 +65,7 @@ export function createDcrControllers(dcrServiceInstance = new DcrService()) {
           if (status === 204) return res.status(status).send();
           return res.status(status).json(body);
         } catch (err) {
-          handleDcrError(err, req, res, next, "Get");
+          handleControllerError(err, req, res, next, "Get");
         }
       },
     },
@@ -110,7 +78,7 @@ export function createDcrControllers(dcrServiceInstance = new DcrService()) {
           if (status === 204) return res.status(status).send();
           return res.status(status).json(body);
         } catch (err) {
-          handleDcrError(err, req, res, next, "Update");
+          handleControllerError(err, req, res, next, "Update");
         }
       },
     },
@@ -123,7 +91,7 @@ export function createDcrControllers(dcrServiceInstance = new DcrService()) {
           if (status === 204) return res.status(status).send();
           return res.status(status).json(body);
         } catch (err) {
-          handleDcrError(err, req, res, next, "Delete");
+          handleControllerError(err, req, res, next, "Delete");
         }
       },
     },

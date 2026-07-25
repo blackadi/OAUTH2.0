@@ -9,7 +9,6 @@ const router = Router();
 
 // API routes (under /api)
 router.get("/federation/configuration", generalLimiter, federationConfigurationController.handleConfiguration);
-router.get("/.well-known/openid-federation", generalLimiter, federationConfigurationController.handleConfiguration);
 router.post("/federation/registration", generalLimiter, federationRegistrationController.handleRegistration);
 
 // Root-level well-known for spec compliance (mounted at / separately)
