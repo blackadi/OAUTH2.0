@@ -144,9 +144,29 @@ docker compose up -d prometheus grafana
 - **Test framework**: Vitest with 17 test files across `test/components/ui/`, `test/hooks/`, `test/services/`, `test/utils/`. Runs with `npm --prefix client run test`.
 - **Styling**: Tailwind CSS v4 via `styles/globals.css`. Dark palette (slate-900/950), Inter + JetBrains Mono fonts, custom scrollbar, grid background utility.
 
+## Documentation style guide
+
+All documentation in `docs/` follows a clear, highly visual, step-by-step, and beginner-friendly technical style. Keep the writing warm, clear, direct, and heavily focused on practical, step-by-step examples with clear diagrams or flow breakdowns. Maintain a neutral voice — do not reference external individuals, personal brands, or third-party authors in documentation, commit messages, or prompts.
+
+**Structure:**
+- "The short version" intro (1-2 sentence summary)
+- Mermaid sequence/flow diagrams with dark theme
+- Real-world analogies (airport, bank, hotel)
+- "Why before how" — explain the problem before the solution
+- "What just happened?" recaps after complex flows
+- Common mistakes sections with red/green examples
+- Troubleshooting tables at the end
+
+**Tone:**
+- Direct, conversational, no jargon without explanation
+- Use "you" to address the reader
+- Bold key terms on first use
+- Tables for quick reference
+- Code blocks with comments explaining each line
+
 ## Authlete service configuration
 
-The Authlete service (configured via the [Authlete web console](https://console.authlete.com/)) controls most OAuth/OIDC spec behavior through boolean flags. These flags map directly to lessons learned from real-world spec implementation mistakes documented in [this article](https://darutk.medium.com/oauth-oidc-mistakes-7f3bb909518b).
+The Authlete service (configured via the [Authlete web console](https://console.authlete.com/)) controls most OAuth/OIDC spec behavior through boolean flags. These flags address common spec implementation mistakes documented in [OAuth & OIDC Implementation Mistakes](https://darutk.medium.com/oauth-oidc-mistakes-7f3bb909518b).
 
 | Flag | Recommended | Rationale | Article Ref |
 |------|------------|-----------|-------------|

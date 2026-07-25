@@ -131,7 +131,7 @@ Include:
 
 ## Documentation
 
-- **Tutorials** in `docs/` follow Aaron Parecki's teaching style:
+- **Tutorials** in `docs/` follow a clear, highly visual, step-by-step, and beginner-friendly technical style:
   - "The short version" intro
   - Mermaid sequence/flow diagrams
   - Real-world analogies

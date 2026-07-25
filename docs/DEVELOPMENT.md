@@ -109,7 +109,7 @@ Client env vars are prefixed with `VITE_` and accessed via `import.meta.env` at 
 
 ## Service Configuration
 
-The Authlete service (configured via the [Authlete web console](https://console.authlete.com/)) controls OAuth/OIDC behavior through boolean flags. These map to common spec implementation mistakes documented in [this article](https://darutk.medium.com/oauth-oidc-mistakes-7f3bb909518b).
+The Authlete service (configured via the [Authlete web console](https://console.authlete.com/)) controls OAuth/OIDC behavior through boolean flags. These address common spec implementation mistakes documented in [OAuth & OIDC Implementation Mistakes](https://darutk.medium.com/oauth-oidc-mistakes-7f3bb909518b).
 
 ### Recommended Flags
 
