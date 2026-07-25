@@ -563,6 +563,18 @@ const docs: Record<string, Record<string, OpDoc>> = {
       returns: 'JSON with action (SUCCESS, ACCESS_DENIED, USER_CODE_NOT_EXIST, USER_CODE_EXPIRED, or SERVER_ERROR) and resultCode/resultMessage.',
       tips: 'After AUTHORIZED, the device polls the token endpoint with grant_type=urn:ietf:params:oauth:grant-type:device_code and the device_code. Authlete returns tokens once the flow is complete.',
     },
+    'poll': {
+      title: 'Poll Token Endpoint',
+      description: 'Polls the token endpoint with the device_code to obtain an access token. After the end-user authorizes on another device, the device repeatedly sends token requests until Authlete returns tokens. Per RFC 8628 §6.1, the device should honor the polling interval returned in Step 1 (default 5s).',
+      params: [
+        { name: 'Device Code', desc: 'The device_code from the authorization step (Step 1).' },
+        { name: 'Client ID', desc: 'The client identifier — must match the client_id used in Step 1.' },
+        { name: 'Client Secret', desc: 'Only for confidential clients. Public clients leave empty.' },
+        { name: 'Poll Interval', desc: 'Seconds between requests. Match the interval from Step 1 (default 5s).' },
+      ],
+      returns: 'On success: JSON with access_token, token_type, expires_in, and scope. While pending: JSON with error="authorization_pending". On expiry: error="expired_token". On denial: error="access_denied".',
+      tips: 'Auto-stops on terminal errors (expired_token, access_denied, invalid_grant). The device_code is single-use — once tokens are issued, it cannot be reused. If the user_code expires before authorization, you get expired_token and must restart the flow.',
+    },
   },
   'discovery': {
     'discovery': {
