@@ -134,7 +134,8 @@ function DeviceSection() {
           msg.includes('expired_token') ||
           msg.includes('access_denied') ||
           msg.includes('invalid_grant') ||
-          msg.includes('invalid_client')
+          msg.includes('invalid_client') ||
+          msg.includes('invalid_request')
         ) {
           stopPolling();
           toast.error(`Stopped: ${msg.includes('error_description') ? msg.substring(0, 80) : msg}`);
