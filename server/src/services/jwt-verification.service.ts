@@ -8,8 +8,8 @@ import { TokenManagementService } from "./token.operations.service";
 import jwt from "jsonwebtoken";
 
 export type JwtBearerResult =
-  | { ok: true; response: TokenCreateResponse; accessToken: string; tokenType: string; expiresIn: number; scope: string; clientId: string | number; subject: string }
-  | { ok: false; status: 400 | 403 | 500; body: TokenCreateResponse | { error: string; error_description: string } };
+  | { ok: true; response: TokenCreateResponse; accessToken: string; tokenType: string; expiresIn: number; scope: string }
+  | { ok: false; status: 400 | 500; body: TokenCreateResponse | { error: string; error_description: string } };
 
 export class JwtVerificationService {
   constructor(
@@ -24,15 +24,15 @@ export class JwtVerificationService {
       return {
         ok: false,
         status: 400,
-        body: { error: "invalid_request", error_description: "Missing assertion" },
+        body: { error: "invalid_grant", error_description: "Missing assertion" },
       };
     }
 
     if (result.clientId === undefined && !result.clientIdAlias) {
       return {
         ok: false,
-        status: 500,
-        body: { error: "server_error", error_description: "Client identifier not available from token response" },
+        status: 400,
+        body: { error: "invalid_request", error_description: "This authorization server requires that the client be identifiable." },
       };
     }
 
@@ -52,7 +52,7 @@ export class JwtVerificationService {
       return {
         ok: false,
         status: 400,
-        body: { error: "invalid_request", error_description: "Invalid assertion" },
+        body: { error: "invalid_grant", error_description: "Invalid assertion" },
       };
     }
 
@@ -61,7 +61,7 @@ export class JwtVerificationService {
       return {
         ok: false,
         status: 400,
-        body: { error: "invalid_request", error_description: "Invalid assertion format" },
+        body: { error: "invalid_grant", error_description: "The assertion failed to be parsed as a JWT." },
       };
     }
 
@@ -69,6 +69,14 @@ export class JwtVerificationService {
     const subject = decodedPayload.sub;
     const issuer = decodedPayload.iss;
     const audience = decodedPayload.aud;
+
+    if (!subject) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "invalid_grant", error_description: "The value of the 'sub' claim failed to be extracted from the payload of the assertion." },
+      };
+    }
 
     const createRequest = {
       grantType: "JWT_BEARER",
@@ -90,13 +98,9 @@ export class JwtVerificationService {
           tokenType: createResp.tokenType || "Bearer",
           expiresIn: createResp.expiresIn ?? 0,
           scope: createResp.scopes?.join(" ") || "",
-          clientId: createResp.clientId ?? 0,
-          subject: createResp.subject ?? "",
         };
       case "BAD_REQUEST":
         return { ok: false, status: 400, body: createResp };
-      case "FORBIDDEN":
-        return { ok: false, status: 403, body: createResp };
       default:
         return { ok: false, status: 500, body: createResp };
     }

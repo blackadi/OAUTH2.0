@@ -68,6 +68,24 @@ async function refreshToken(
   return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
 }
 
+async function jwtBearerGrant(
+  assertion: string,
+  clientId?: string,
+  clientSecret?: string,
+  scope?: string,
+): Promise<TokenResponse> {
+  const params = new URLSearchParams({
+    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    assertion,
+  });
+  if (scope) params.append('scope', scope);
+  if (clientId && clientSecret) {
+    return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+  }
+  if (clientId) params.append('client_id', clientId);
+  return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;
+}
+
 export interface UserinfoResponseWithNonce {
   data: unknown;
   dpopNonce?: string;
@@ -96,14 +114,21 @@ async function userInfoWithDpop(
   return { data, dpopNonce };
 }
 
-async function introspection(token: string, accessToken?: string): Promise<unknown> {
-  const params = new URLSearchParams({ token });
+async function introspection(
+  token: string,
+  accessToken?: string,
+  options?: { acrValues?: string; maxAge?: number },
+): Promise<unknown> {
+  const params: Record<string, string> = { token };
+  if (options?.acrValues) params.acrValues = options.acrValues;
+  if (options?.maxAge !== undefined) params.maxAge = String(options.maxAge);
+  const urlParams = new URLSearchParams(params);
   const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
   const response = await fetch(INTROSPECTION_ENDPOINT, {
     method: 'POST',
     headers,
-    body: params.toString(),
+    body: urlParams.toString(),
   });
   if (!response.ok) throw new Error(await response.text());
   return response.json();
@@ -158,6 +183,7 @@ export const tokenService = {
   clientCredentials,
   passwordGrant,
   refreshToken,
+  jwtBearerGrant,
   userInfo,
   userInfoWithDpop,
   introspection,

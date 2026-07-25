@@ -14,6 +14,7 @@
 - [Dynamic Client Registration](#dynamic-client-registration)
 - [Pushed Authorization Requests (PAR)](#pushed-authorization-requests)
 - [Token Exchange](#token-exchange)
+- [Step-Up Authentication (RFC 9470)](#step-up-authentication-rfc-9470)
 
 ---
 
@@ -66,6 +67,8 @@ sequenceDiagram
 | Consent persistence | `consent-store.service.ts` stores `{clientId}:{subject}` → scopes with 24h TTL |
 | `prompt=none` | Auto-issues if user has valid session + persistent consent covers requested scopes; otherwise returns `CONSENT_REQUIRED` error |
 | `prompt=consent` | Always shows consent form, bypassing stored consent |
+| `prompt=login` | Forces re-authentication; records `authTime` and `acr` for step-up binding |
+| Step-up enforcement | On login, checks `acrs`/`acrEssential`/`maxAge` from session; fails with `ACR_NOT_SATISFIED` or `EXCEEDS_MAX_AGE` |
 | Fail responses | Various error reasons mapped via `sendAuthorizationFailResponse` |
 
 ---
@@ -431,3 +434,60 @@ sequenceDiagram
         AS-->>C: Error response
     end
 ```
+
+---
+
+## Step-Up Authentication (RFC 9470)
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#475569', 'lineColor': '#6366f1', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'fontFamily': 'Inter'}}}%%
+sequenceDiagram
+    participant C as Client
+    participant RS as Protected Resource
+    participant AS as Authorization Server
+    participant AL as Authlete Cloud
+
+    Note over C,AL: Phase 1 — Introspect with ACR Requirements
+    C->>RS: GET /resource<br/>Authorization: Bearer <token>
+    RS->>AL: POST /auth/introspection<br/>(token, acrValues="silver", maxAge=600)
+    AL->>AL: Check token acr="pwd"<br/>vs required "silver"
+    AL-->>RS: action=FORBIDDEN<br/>responseContent={error: insufficient_user_authentication,<br/>acr_values: "silver"}
+    RS->>RS: Parse WWW-Authenticate header
+    RS-->>C: 403 Forbidden<br/>WWW-Authenticate: Bearer error="insufficient_user_authentication",<br/>acr_values="silver"<br/>{error, error_description, acr_values, acr, auth_time}
+
+    Note over C,AL: Phase 2 — Re-Authorize with Higher ACR
+    C->>AS: GET /api/authorization?<br/>response_type=code&scope=openid&<br/>claims={"id_token":{"acr":{"essential":true,"values":["silver"]}}}&<br/>prompt=login
+    AS->>AL: /auth/authorization API
+    AL-->>AS: action=INTERACTION (acrs=["silver"], acrEssential=true)
+    AS->>AS: Store acrs, acrEssential in session
+    AS-->>C: Redirect to login
+
+    Note over C,AL: Phase 3 — Stronger Authentication
+    C->>AS: POST /api/session/login (username, password)
+    AS->>AS: Record authTime, acr="pwd"
+    AS->>AS: Check: "pwd" not in ["silver"]<br/>→ ACR_NOT_SATISFIED
+    AS->>AL: /auth/authorization/fail<br/>(reason=ACR_NOT_SATISFIED)
+    AL-->>AS: Error response
+    AS-->>C: unmet_authentication_requirements error
+
+    Note over C,AL: Phase 4 — Success (after proper auth)
+    C->>AS: GET /api/authorization?...<br/>(with proper credentials)
+    AS->>AS: Record authTime, acr="silver"
+    AS->>AL: /auth/authorization/issue<br/>(subject, acr="silver", authTime=...)
+    AL->>AL: Embed acr + auth_time<br/>in JWT access token
+    AL-->>C: New tokens with acr="silver"
+    C->>RS: GET /resource<br/>Authorization: Bearer <new_token>
+    RS->>AL: /auth/introspection<br/>(token, acrValues="silver")
+    AL-->>RS: action=OK (acr="silver" matches)
+    RS-->>C: 200 OK (resource data)
+```
+
+### Key Behaviors
+
+| Aspect | Detail |
+|--------|--------|
+| ACR binding | `acr` and `auth_time` are embedded in JWT access tokens during `/auth/authorization/issue` |
+| ACR enforcement | `session.controller.ts` checks `acrs` + `acrEssential` on login; fails with `ACR_NOT_SATISFIED` |
+| Max age enforcement | `session.controller.ts` checks `authTime + maxAge < now`; fails with `EXCEEDS_MAX_AGE` |
+| Challenge response | `insufficient_user_authentication` error with `acr_values`/`max_age` in `WWW-Authenticate` header |
+| Client re-auth | Request `claims` with essential ACR + `prompt=login` for fresh authentication |

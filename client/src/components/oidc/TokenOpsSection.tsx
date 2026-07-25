@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
@@ -33,6 +34,10 @@ function TokenOpsSection() {
     sessionStorage.getItem('active_client_secret') || '',
   );
 
+  // RFC 9470: Step-up auth validation inputs for Authlete introspection
+  const [introspectAcrValues, setIntrospectAcrValues] = useState('');
+  const [introspectMaxAge, setIntrospectMaxAge] = useState('');
+
   const doc = activeOp ? getDoc('token-ops', activeOp) : undefined;
 
   const handleCall = async (label: TokenOp, fn: () => Promise<unknown>) => {
@@ -49,6 +54,26 @@ function TokenOpsSection() {
     <SectionPanel title="Token Operations" description="Inspect, introspect, and manage tokens">
       {error && <p className="text-xs text-red-400">{error}</p>}
 
+      {!at && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <p className="font-medium">No access token available</p>
+          <p className="mt-1 text-xs text-amber-300/80">
+            Obtain a token first via the Grant Flows section (Authorization Code, Client Credentials, etc.), then return here.
+          </p>
+          <Link to="/auth-flows">
+            <Button variant="outline" size="sm" className="mt-2 border-amber-500/50 text-amber-200 hover:bg-amber-500/20">
+              Go to Grant Flows
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {at && (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-emerald-300">
+          Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {OPS.map((op) => (
           <Button
@@ -62,8 +87,12 @@ function TokenOpsSection() {
                 switch (op.key) {
                   case 'userinfo':
                     return tokenService.userInfo(at!);
-                  case 'introspect':
-                    return tokenService.introspection(at!, at!);
+                  case 'introspect': {
+                    const opts: { acrValues?: string; maxAge?: number } = {};
+                    if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();
+                    if (introspectMaxAge.trim()) opts.maxAge = Number(introspectMaxAge.trim());
+                    return tokenService.introspection(at!, at!, Object.keys(opts).length ? opts : undefined);
+                  }
                   case 'introspect-std':
                     return tokenService.introspectionStandard(at!);
                   case 'revoke':
@@ -83,6 +112,28 @@ function TokenOpsSection() {
         <div className="space-y-3">
           <Input label="Revocation Client ID" value={revClientId} onChange={(e) => setRevClientId(e.target.value)} placeholder="The client the token belongs to" />
           <Input label="Revocation Client Secret" type="password" value={revClientSecret} onChange={(e) => setRevClientSecret(e.target.value)} placeholder="Client secret for revocation auth" />
+        </div>
+      )}
+
+      {activeOp === 'introspect' && (
+        <div className="space-y-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+          <p className="text-xs font-medium text-blue-300">RFC 9470 Step-Up Authentication Validation</p>
+          <Input
+            label="ACR Values (space-separated)"
+            value={introspectAcrValues}
+            onChange={(e) => setIntrospectAcrValues(e.target.value)}
+            placeholder="e.g. pwd urn:mace:incommon:iap:silver"
+          />
+          <Input
+            label="Max Authentication Age (seconds)"
+            type="number"
+            value={introspectMaxAge}
+            onChange={(e) => setIntrospectMaxAge(e.target.value)}
+            placeholder="e.g. 3600"
+          />
+          <p className="text-[0.6rem] text-muted-foreground">
+            If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns <code>insufficient_user_authentication</code> with the required values.
+          </p>
         </div>
       )}
 

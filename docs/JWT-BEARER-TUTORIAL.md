@@ -12,12 +12,13 @@
 - [Part 4: JWT Claims and Validation](#part-4-jwt-claims-and-validation)
 - [Part 5: Authlete Setup](#part-5-authlete-setup)
 - [Part 6: Server Implementation](#part-6-server-implementation)
-- [Part 7: Testing with curl](#part-7-testing-with-curl)
-- [Part 8: Use Cases](#part-8-use-cases)
-- [Part 9: Security Hardening](#part-9-security-hardening)
-- [Part 10: Error Scenarios](#part-10-error-scenarios)
-- [Part 11: Comparison with Other Flows](#part-11-comparison-with-other-flows)
-- [Part 12: Troubleshooting](#part-12-troubleshooting)
+- [Part 7: Testing with the Client UI](#part-7-testing-with-the-client-ui)
+- [Part 8: Testing with curl](#part-8-testing-with-curl)
+- [Part 9: Use Cases](#part-9-use-cases)
+- [Part 10: Security Hardening](#part-10-security-hardening)
+- [Part 11: Error Scenarios](#part-11-error-scenarios)
+- [Part 12: Comparison with Other Flows](#part-12-comparison-with-other-flows)
+- [Part 13: Troubleshooting](#part-13-troubleshooting)
 - [Appendix: Server Architecture](#appendix-server-architecture)
 
 ---
@@ -230,17 +231,34 @@ flowchart TB
 
 ### Action Mapping
 
-| Action | HTTP Status | Meaning |
-|--------|:-----------:|---------|
-| `JWT_BEARER` | — | Routed to handler (not final) |
-| (success) | 200 | Token created |
-| `BAD_REQUEST` | 400 | Invalid JWT |
-| `FORBIDDEN` | 403 | Client not authorized |
-| `INTERNAL_SERVER_ERROR` | 500 | Server error |
+| Action | HTTP Status | Error Code | Meaning |
+|--------|:-----------:|:----------:|---------|
+| `JWT_BEARER` | — | — | Routed to handler (not final) |
+| (success) | 200 | — | Token created (RFC 6749 response) |
+| missing client | 400 | `invalid_request` | Client not identifiable |
+| invalid JWT / signature / claims | 400 | `invalid_grant` | JWT validation failed per RFC 7523 §3.1 |
+| `BAD_REQUEST` | 400 | — | Authlete-level rejection |
+| `INTERNAL_SERVER_ERROR` | 500 | `server_error` | Server error |
 
 ---
 
-## Part 7: Testing with curl
+## Part 7: Testing with the Client UI
+
+The SPA provides a **"JWT Bearer (RFC 7523)"** tab in the Grant Flows section (`/auth-flows`):
+
+1. **Paste a signed JWT** into the Assertion textarea
+2. Optionally set **Scope** and **Client ID/Secret**
+3. Click **"Exchange JWT for Token"**
+
+The request preview shows the exact HTTP call being made to `/api/token`.
+
+### Generating a test JWT
+
+Use the same `node` one-liner from Part 7 (curl) to generate a JWT, then paste it into the client UI.
+
+---
+
+## Part 8: Testing with curl
 
 ### Scenario 1: Basic JWT Bearer Grant (RS256)
 
@@ -344,7 +362,7 @@ No `client_id` or `client_secret` — the JWT itself is the proof.
 
 ---
 
-## Part 8: Use Cases
+## Part 9: Use Cases
 
 ### 1. Cross-Domain SSO
 
@@ -402,7 +420,7 @@ SAML assertion → converted to JWT → exchanged for OAuth token.
 
 ---
 
-## Part 9: Security Hardening
+## Part 10: Security Hardening
 
 ### 1. Stateless Authentication
 
@@ -438,12 +456,12 @@ Unlike API keys, JWTs are short-lived. Signing keys can be rotated regularly.
 
 ---
 
-## Part 10: Error Scenarios
+## Part 11: Error Scenarios
 
 ### Missing assertion
 
 ```json
-{"error": "invalid_request", "error_description": "Missing assertion"}
+{"error": "invalid_grant", "error_description": "Missing assertion"}
 ```
 
 ### Expired JWT
@@ -461,30 +479,32 @@ Unlike API keys, JWTs are short-lived. Signing keys can be rotated regularly.
 ### Invalid signature
 
 ```json
-{"error": "invalid_request", "error_description": "Invalid assertion"}
+{"error": "invalid_grant", "error_description": "Invalid assertion"}
 ```
 
-### Missing required claims
+### Missing required claims (e.g. `sub`)
 
 ```json
-{"error": "invalid_request", "error_description": "Invalid assertion"}
+{"error": "invalid_grant", "error_description": "The value of the 'sub' claim failed to be extracted from the payload of the assertion."}
 ```
 
 ### Unsigned JWT
 
 ```json
-{"error": "invalid_grant", "error_description": "The JWT is not signed"}
+{"error": "invalid_grant", "error_description": "This authorization server requires that the assertion be a signed JWT."}
 ```
 
 ### Unauthenticated client
 
 ```json
-{"error": "invalid_client", "error_description": "Client authentication required"}
+{"error": "invalid_request", "error_description": "This authorization server requires that the client be identifiable."}
 ```
+
+> **RFC 7523 §3.1 compliance:** All JWT-related errors use `invalid_grant`. Only the missing client ID error uses `invalid_request`. This matches the Authlete reference implementation.
 
 ---
 
-## Part 11: Comparison with Other Flows
+## Part 12: Comparison with Other Flows
 
 | Feature | Auth Code | Client Credentials | JWT Bearer | Token Exchange |
 |---------|:---------:|:-----------------:|:----------:|:--------------:|
@@ -510,7 +530,7 @@ Unlike API keys, JWTs are short-lived. Signing keys can be rotated regularly.
 
 ---
 
-## Part 12: Troubleshooting
+## Part 13: Troubleshooting
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
@@ -530,16 +550,18 @@ Unlike API keys, JWTs are short-lived. Signing keys can be rotated regularly.
 
 | File | Role |
 |------|------|
-| `server/src/controllers/token.controller.ts:84-99` | Routes `JWT_BEARER` action |
+| `server/src/controllers/token.controller.ts` | Routes `JWT_BEARER` action |
 | `server/src/services/jwt-verification.service.ts` | Signature verification + token creation |
 | `server/src/services/token.service.ts` | Forwards to Authlete |
 | `server/src/services/token.operations.service.ts` | Maps grant type to action |
+| `client/src/components/auth/AuthFlowsSection.tsx` | Client UI for testing JWT bearer grants |
+| `client/src/services/token.service.ts` | `jwtBearerGrant()` method |
 
 ### Test Coverage
 
-- **Unit:** `jwt-verification.service.test.ts` — 7 tests
-- **Unit:** `token.controller.test.ts:136-177` — 2 tests
-- **E2E:** `e2e.test.ts:1261-1277` — 1 test
+- **Unit:** `jwt-verification.service.test.ts` — 8 tests
+- **Unit:** `token.controller.test.ts` — 2 tests
+- **E2E:** `e2e.test.ts` — 1 test
 
 ---
 

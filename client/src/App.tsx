@@ -7,7 +7,7 @@ import CallbackPage from './pages/CallbackPage';
 import {
   KeyRound, Shield, LogOut,
   UserPlus, Bell, Send, Smartphone, BellOff, Compass, Globe,
-  Settings, Users, FileCheck, HeartPulse, BadgeCheck, ListChecks, FileText,
+  Settings, Users, FileCheck, HeartPulse, BadgeCheck, ListChecks, FileText, ShieldAlert,
 } from 'lucide-react';
 
 const AuthFlowsSection = lazy(() => import('@/components/auth/AuthFlowsSection'));
@@ -28,10 +28,12 @@ const FapiSection = lazy(() => import('@/components/fapi/FapiSection').then((m) 
 const RarSection = lazy(() => import('@/components/oidc/RarSection').then((m) => ({ default: m.RarSection })));
 const JarSection = lazy(() => import('@/components/oidc/JarSection').then((m) => ({ default: m.JarSection })));
 const HealthSection = lazy(() => import('@/components/admin/HealthSection').then((m) => ({ default: m.HealthSection })));
+const StepUpSection = lazy(() => import('@/components/oidc/StepUpSection').then((m) => ({ default: m.StepUpSection })));
 
 export type SectionId =
   | 'auth-flows'
   | 'token-ops'
+  | 'step-up'
   | 'logout'
   | 'dcr'
   | 'ciba'
@@ -67,6 +69,7 @@ const SECTIONS: SectionGroup[] = [
     sections: [
       { id: 'auth-flows', label: 'Grant Flows', path: '/auth-flows', icon: <KeyRound className="h-4 w-4" /> },
       { id: 'token-ops', label: 'Token Operations', path: '/token-ops', icon: <Shield className="h-4 w-4" /> },
+      { id: 'step-up', label: 'Step-Up Auth', path: '/step-up', icon: <ShieldAlert className="h-4 w-4" /> },
       { id: 'logout', label: 'Logout', path: '/logout', icon: <LogOut className="h-4 w-4" /> },
     ],
   },
@@ -102,6 +105,7 @@ const allSectionsFlat = SECTIONS.flatMap((g) => g.sections);
 const sectionComponents: Record<SectionId, React.FC> = {
   'auth-flows': AuthFlowsSection,
   'token-ops': TokenOpsSection,
+  'step-up': StepUpSection,
   'logout': LogoutSection,
   'dcr': DcrSection,
   'ciba': CibaSection,

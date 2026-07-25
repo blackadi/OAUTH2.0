@@ -142,8 +142,6 @@ describe("tokenController.handleToken", () => {
       tokenType: "Bearer",
       expiresIn: 3600,
       scope: "openid",
-      clientId: 1,
-      subject: "user-1",
     })
     const req = mockReq()
     const res = mockRes()
@@ -157,15 +155,13 @@ describe("tokenController.handleToken", () => {
       token_type: "Bearer",
       expires_in: 3600,
       scope: "openid",
-      client_id: 1,
-      subject: "user-1",
     }))
   })
 
   it("passes through JWT_BEARER error result", async () => {
     mocks.mockValidate.mockReturnValue(null)
     mocks.mockProcess.mockResolvedValue({ action: "JWT_BEARER", assertion: "jwt", clientId: 1 })
-    mocks.mockProcessJwtBearer.mockResolvedValue({ ok: false, status: 400, body: { error: "invalid_request", error_description: "Missing assertion" } })
+    mocks.mockProcessJwtBearer.mockResolvedValue({ ok: false, status: 400, body: { error: "invalid_grant", error_description: "Missing assertion" } })
     const req = mockReq()
     const res = mockRes()
     const next = mockNext()
@@ -173,7 +169,7 @@ describe("tokenController.handleToken", () => {
     await tokenController.handleToken(req, res, next)
 
     expect(res.status).toHaveBeenCalledWith(400)
-    expect(res.json).toHaveBeenCalledWith({ error: "invalid_request", error_description: "Missing assertion" })
+    expect(res.json).toHaveBeenCalledWith({ error: "invalid_grant", error_description: "Missing assertion" })
   })
 
   it("returns 200 on PASSWORD with valid credentials", async () => {

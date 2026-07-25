@@ -85,6 +85,18 @@ export class AuthorizationService {
       ...req.session.authorization?.authorizationIssueRequest,
     } as AuthorizationIssueRequest;
 
+    // RFC 9470: Pass authentication context to Authlete so it binds
+    // acr and auth_time to the access token (and ID token).
+    // These come from session.stepUp set during the login flow.
+    if (req.session.stepUp) {
+      if (req.session.stepUp.acr !== undefined) reqBody.acr = req.session.stepUp.acr;
+      if (req.session.stepUp.authTime !== undefined) reqBody.authTime = req.session.stepUp.authTime;
+      log("RFC 9470: binding step-up auth context to tokens", {
+        acr: req.session.stepUp.acr,
+        authTime: req.session.stepUp.authTime,
+      });
+    }
+
     // For Native SSO: generate a sessionId and include it in the issue request
     // when nativeSsoRequested is true
     if (req.session.authorization?.nativeSsoRequested) {

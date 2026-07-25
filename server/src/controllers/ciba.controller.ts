@@ -106,8 +106,8 @@ export function createCibaControllers(cibaServiceInstance = new CibaService()) {
     complete: {
       handle: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          const { ticket, result, subject } = validateOrThrow(cibaCompleteSchema, req.body);
-          const apiResult = await cibaServiceInstance.complete(ticket, result, subject);
+          const { ticket, result, subject, acr, authTime, claims } = validateOrThrow(cibaCompleteSchema, req.body);
+          const apiResult = await cibaServiceInstance.complete(ticket, result, subject, { acr, authTime, claims });
           sendApiResponse(res, mapCompleteActionToStatus(apiResult.action), apiResult);
         } catch (err) {
           if (handleValidationError(err, req, res)) return;

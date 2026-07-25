@@ -67,4 +67,26 @@ describe("createLocalJWT", () => {
       "jeQR9ibbekADE-Bb_szzi3pKK_WeLUvRJ4FneHEnk4s"
     )
   })
+
+  it("includes acr and auth_time when provided (RFC 9470)", () => {
+    const authTime = Math.floor(Date.now() / 1000) - 60
+    const { token } = createLocalJWT("iss", "sub", ["aud"], { acr: "pwd", authTime })
+    const decoded = jwt.decode(token) as any
+    expect(decoded.acr).toBe("pwd")
+    expect(decoded.auth_time).toBe(authTime)
+  })
+
+  it("omits acr and auth_time when not provided", () => {
+    const { token } = createLocalJWT("iss", "sub", ["aud"])
+    const decoded = jwt.decode(token) as any
+    expect(decoded.acr).toBeUndefined()
+    expect(decoded.auth_time).toBeUndefined()
+  })
+
+  it("includes acr without auth_time", () => {
+    const { token } = createLocalJWT("iss", "sub", ["aud"], { acr: "pwd" })
+    const decoded = jwt.decode(token) as any
+    expect(decoded.acr).toBe("pwd")
+    expect(decoded.auth_time).toBeUndefined()
+  })
 })

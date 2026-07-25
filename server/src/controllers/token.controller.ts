@@ -86,16 +86,19 @@ export const tokenController = {
           const jwtResult = await jwtVerificationService.processJwtBearer(result);
           if (jwtResult.ok) {
             res.setHeader("Content-Type", "application/json");
+            res.setHeader("Cache-Control", "no-store");
+            res.setHeader("Pragma", "no-cache");
             const body = JSON.stringify({
               access_token: jwtResult.accessToken,
               token_type: jwtResult.tokenType,
               expires_in: jwtResult.expiresIn,
               scope: jwtResult.scope,
-              client_id: jwtResult.clientId,
-              subject: jwtResult.subject,
             });
             return res.status(200).send(body);
           }
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("Pragma", "no-cache");
           return res.status(jwtResult.status).json(jwtResult.body);
         }
 

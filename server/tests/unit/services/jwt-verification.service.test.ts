@@ -32,29 +32,29 @@ function mockCreateResp(action: string = "OK"): TokenCreateResponse {
 }
 
 describe("JwtVerificationService", () => {
-  it("returns 400 when assertion is missing", async () => {
+  it("returns 400 with invalid_grant when assertion is missing", async () => {
     const verifyApi = vi.fn()
     const mockApi = { joseObject: { joseVerifyApi: verifyApi } }
     const service = new JwtVerificationService(mockApi as any, "svc-1")
 
     const result = await service.processJwtBearer(mockResult({ assertion: undefined }))
 
-    expect(result).toEqual({ ok: false, status: 400, body: { error: "invalid_request", error_description: "Missing assertion" } })
+    expect(result).toEqual({ ok: false, status: 400, body: { error: "invalid_grant", error_description: "Missing assertion" } })
     expect(verifyApi).not.toHaveBeenCalled()
   })
 
-  it("returns 500 when no clientId or clientIdAlias", async () => {
+  it("returns 400 with invalid_request when no clientId or clientIdAlias", async () => {
     const verifyApi = vi.fn()
     const mockApi = { joseObject: { joseVerifyApi: verifyApi } }
     const service = new JwtVerificationService(mockApi as any, "svc-1")
 
     const result = await service.processJwtBearer(mockResult({ clientId: undefined, clientIdAlias: undefined }))
 
-    expect(result).toEqual({ ok: false, status: 500, body: { error: "server_error", error_description: "Client identifier not available from token response" } })
+    expect(result).toEqual({ ok: false, status: 400, body: { error: "invalid_request", error_description: "This authorization server requires that the client be identifiable." } })
     expect(verifyApi).not.toHaveBeenCalled()
   })
 
-  it("returns 400 when JWT verification fails", async () => {
+  it("returns 400 with invalid_grant when JWT verification fails", async () => {
     const verifyApi = vi.fn().mockResolvedValue({ valid: false, signatureValid: false, errorDescriptions: ["Bad signature"] })
     const mockApi = { joseObject: { joseVerifyApi: verifyApi } }
     const createFn = vi.fn()
@@ -63,7 +63,7 @@ describe("JwtVerificationService", () => {
     const input = mockResult()
     const result = await service.processJwtBearer(input)
 
-    expect(result).toEqual({ ok: false, status: 400, body: { error: "invalid_request", error_description: "Invalid assertion" } })
+    expect(result).toEqual({ ok: false, status: 400, body: { error: "invalid_grant", error_description: "Invalid assertion" } })
     expect(verifyApi).toHaveBeenCalledTimes(1)
     expect(verifyApi).toHaveBeenCalledWith({
       serviceId: "svc-1",
@@ -104,8 +104,6 @@ describe("JwtVerificationService", () => {
       tokenType: "Bearer",
       expiresIn: 3600,
       scope: "openid",
-      clientId: 12345,
-      subject: "user-1",
     })
     expect(createFn).toHaveBeenCalledTimes(1)
   })
@@ -122,18 +120,6 @@ describe("JwtVerificationService", () => {
     expect(result).toEqual({ ok: false, status: 400, body: createResp })
   })
 
-  it("returns 403 when token creation returns FORBIDDEN", async () => {
-    const verifyApi = vi.fn().mockResolvedValue({ valid: true, signatureValid: true })
-    const mockApi = { joseObject: { joseVerifyApi: verifyApi } }
-    const createResp = mockCreateResp("FORBIDDEN")
-    const createFn = vi.fn().mockResolvedValue(createResp)
-    const service = new JwtVerificationService(mockApi as any, "svc-1", { create: createFn } as any)
-
-    const result = await service.processJwtBearer(mockResult())
-
-    expect(result).toEqual({ ok: false, status: 403, body: createResp })
-  })
-
   it("returns 500 for unknown token creation action", async () => {
     const verifyApi = vi.fn().mockResolvedValue({ valid: true, signatureValid: true })
     const mockApi = { joseObject: { joseVerifyApi: verifyApi } }
@@ -144,5 +130,18 @@ describe("JwtVerificationService", () => {
     const result = await service.processJwtBearer(mockResult())
 
     expect(result).toEqual({ ok: false, status: 500, body: createResp })
+  })
+
+  it("returns 400 with invalid_grant when sub claim is missing", async () => {
+    const verifyApi = vi.fn().mockResolvedValue({ valid: true, signatureValid: true })
+    const mockApi = { joseObject: { joseVerifyApi: verifyApi } }
+    const noSubJwt = jwt.sign({ iss: "issuer", aud: "audience" }, "dummy-secret")
+    const createFn = vi.fn()
+    const service = new JwtVerificationService(mockApi as any, "svc-1", { create: createFn } as any)
+
+    const result = await service.processJwtBearer(mockResult({ assertion: noSubJwt }))
+
+    expect(result).toEqual({ ok: false, status: 400, body: { error: "invalid_grant", error_description: "The value of the 'sub' claim failed to be extracted from the payload of the assertion." } })
+    expect(createFn).not.toHaveBeenCalled()
   })
 })

@@ -34,7 +34,7 @@ Get a working CIBA POLL flow in 5 minutes.
 ### 2. Create a Client
 
 1. **Clients → Create** → Client Type: `Confidential`
-2. Token Auth Method: `CLIENT_SECRET_POST`
+2. Token Auth Method: `CLIENT_SECRET_BASIC`
 3. CIBA tab → Token Delivery Mode: `POLL`
 4. Save and note `clientId` and `clientSecret`
 
@@ -119,23 +119,42 @@ sequenceDiagram
 
 ### Service-Level Configuration
 
-In the [Authlete Console](https://console.authlete.com/):
+In the [Authlete Console](https://console.authlete.com/), configure your service:
 
-| Setting | Recommended Value | Why |
-|---------|------------------|-----|
-| Supported Backchannel Token Delivery Modes | `["POLL"]` | Start simple |
-| Backchannel Authentication Endpoint | `http://localhost:3000/api/ciba/authentication` | Where clients send requests |
-| Auth Req ID Duration | `600` (10 minutes) | Long enough for user to respond |
-| Polling Interval | `5` (seconds) | Prevents server overload |
+**Step 1: Enable CIBA grant type**
+
+| Tab | Setting | Value |
+|-----|---------|-------|
+| Endpoints → Global Settings | Supported Grant Types | Enable `CIBA` |
+
+**Step 2: Configure CIBA endpoint and parameters**
+
+| Tab | Setting | Value |
+|-----|---------|-------|
+| Endpoints → CIBA | Supported Backchannel Token Delivery Modes | Check `POLL` (and `PING`/`PUSH` if needed) |
+| Endpoints → CIBA | Backchannel Authentication Endpoint | `http://localhost:3000/api/ciba/authentication` |
+| Endpoints → CIBA | Auth Req ID Duration | `600` (10 minutes) |
+| Endpoints → CIBA | Polling Interval | `5` (seconds) |
+
+**Step 3: Enable CLIENT_SECRET_BASIC**
+
+| Tab | Setting | Value |
+|-----|---------|-------|
+| Endpoints → Token | Supported Client Authentication Methods | Enable `CLIENT_SECRET_BASIC` |
+
+> **Critical Rule:** The client authentication method at the backchannel authentication endpoint **must be the same** as at the token endpoint. Both endpoints must use the same method. See [Authlete CIBA Guide §2.2](https://developers.authlete.com/guides/flows-and-protocols/grant-types-and-token-flows/how-to-implement-ciba-with-authlete).
 
 ### Client-Level Configuration
 
-| Setting | Recommended | Why |
-|---------|-------------|-----|
-| Client Type | `Confidential` | CIBA requires confidential clients |
-| Token Auth Method | `CLIENT_SECRET_POST` | Simplest for testing |
-| Token Delivery Mode | `POLL` | Start simple |
-| User Code Required | `Not Required` | Simplify initial testing |
+| Tab | Setting | Value | Why |
+|-----|---------|-------|-----|
+| Basic | Client Type | `Confidential` | CIBA requires confidential clients |
+| Endpoints → Token | Client Authentication Method | `CLIENT_SECRET_BASIC` | Must match service's supported methods |
+| CIBA | Token Delivery Mode | `POLL` | Start simple (no notification endpoint needed) |
+| CIBA | Notification Endpoint | *(leave empty for POLL)* | Required only for PING/PUSH modes |
+| CIBA | User Code Required | `Not Required` | Simplify initial testing |
+
+> **Why CLIENT_SECRET_BASIC?** Authlete's own [CIBA implementation guide](https://developers.authlete.com/guides/flows-and-protocols/grant-types-and-token-flows/how-to-implement-ciba-with-authlete) uses `client_secret_basic` exclusively. The client sends credentials via `Authorization: Basic` header, not in the request body. This is also more secure — RFC 6749 states authorization servers SHOULD prefer Basic auth over POST.
 
 ### Verify Configuration
 
@@ -503,7 +522,9 @@ HTTP/1.1 403 Forbidden
 | "authorization_pending" forever | `complete` not called | Call `POST /api/ciba/complete` with `AUTHORIZED` |
 | "slow_down" | Polling too fast | Wait `interval` seconds between polls |
 | "INVALID_TICKET" | Ticket used/expired | Get fresh ticket from authentication |
-| "CIBA not enabled" | Service not configured | Enable in Authlete Console |
+| "CIBA not enabled" | Service not configured | Enable CIBA in Authlete Service Settings → Global Settings → Supported Grant Types |
+| Token endpoint returns 401 for polling | Client auth method mismatch | Client must use the same auth method configured in Authlete. If configured as `CLIENT_SECRET_BASIC`, use `-u "cid:secret"` (Basic auth), not `client_id`/`client_secret` in body |
+| Backchannel auth returns 401 | Wrong credentials or auth method | Verify `clientId`/`clientSecret` match Authlete client settings. For `CLIENT_SECRET_BASIC`, credentials go in `Authorization: Basic` header |
 | PING/PUSH: `NOTIFICATION` action | Caller must deliver | Send `responseContent` to notification endpoint |
 
 ---
@@ -566,5 +587,6 @@ CIBA is simple:
 ## References
 
 - [CIBA Core 1.0](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html)
-- [Authlete KB: CIBA](https://www.authlete.com/kb/ciba/)
+- [Authlete: How to Implement CIBA](https://developers.authlete.com/guides/flows-and-protocols/grant-types-and-token-flows/how-to-implement-ciba-with-authlete) — Service and client configuration details
+- [Authlete: Configuring Client Authentication](https://developers.authlete.com/configuration-reference/endpoints/configuring-client-authentication.md) — CLIENT_SECRET_BASIC vs CLIENT_SECRET_POST
 - [FAPI-CIBA Profile](https://openid.net/specs/fapi-1_0-final.html#client-initiated-backchannel-authentication-profile)

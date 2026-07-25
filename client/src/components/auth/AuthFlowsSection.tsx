@@ -16,16 +16,17 @@ import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { RequestBuilder } from '@/components/ui/RequestBuilder';
 import { getDoc } from '@/data/operationDocs';
-import { KeyRound, ArrowRightLeft, LogIn, RefreshCw } from 'lucide-react';
+import { KeyRound, ArrowRightLeft, LogIn, RefreshCw, FileText } from 'lucide-react';
 import type { TokenResponse } from '@/types';
 
-type GrantType = 'authorization_code' | 'client_credentials' | 'password' | 'refresh_token';
+type GrantType = 'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
 
 const GRANTS: { value: GrantType; label: string }[] = [
   { value: 'authorization_code', label: 'Auth Code (PKCE)' },
   { value: 'client_credentials', label: 'Client Credentials' },
   { value: 'password', label: 'Password (ROPC)' },
   { value: 'refresh_token', label: 'Refresh Token' },
+  { value: 'jwt_bearer', label: 'JWT Bearer (RFC 7523)' },
 ];
 
 const grantIcons: Record<GrantType, React.ReactNode> = {
@@ -33,6 +34,7 @@ const grantIcons: Record<GrantType, React.ReactNode> = {
   client_credentials: <ArrowRightLeft className="h-4 w-4" />,
   password: <LogIn className="h-4 w-4" />,
   refresh_token: <RefreshCw className="h-4 w-4" />,
+  jwt_bearer: <FileText className="h-4 w-4" />,
 };
 
 const flowSteps: Record<GrantType, { id: string; label: string }[]> = {
@@ -54,6 +56,10 @@ const flowSteps: Record<GrantType, { id: string; label: string }[]> = {
   refresh_token: [
     { id: 'verify', label: 'Verify Token' },
     { id: 'refresh', label: 'Refresh' },
+  ],
+  jwt_bearer: [
+    { id: 'sign', label: 'Sign JWT' },
+    { id: 'exchange', label: 'Exchange' },
   ],
 };
 
@@ -80,6 +86,11 @@ const AuthFlowsSection: React.FC = () => {
   const [rtToken, setRtToken] = useState(tokenSet?.refresh_token || '');
   const [rtId, setRtId] = useState(CLIENT_ID);
   const [rtSecret, setRtSecret] = useState(CLIENT_SECRET);
+
+  const [jwtAssertion, setJwtAssertion] = useState('');
+  const [jwtId, setJwtId] = useState(CLIENT_ID);
+  const [jwtSecret, setJwtSecret] = useState(CLIENT_SECRET);
+  const [jwtScope, setJwtScope] = useState(DEFAULT_SCOPES);
 
   const doc = getDoc('auth-flows', grantType);
 
@@ -173,8 +184,18 @@ const AuthFlowsSection: React.FC = () => {
           },
           body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(rtToken)}`,
         };
+      case 'jwt_bearer':
+        return {
+          method: 'POST' as const,
+          url: '/api/token',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...(jwtId && jwtSecret ? { 'Authorization': `Basic ${btoa(`${jwtId}:${jwtSecret}`)}` } : {}),
+          },
+          body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwtAssertion ? '<signed_jwt>' : '<empty>'}${jwtScope ? `&scope=${encodeURIComponent(jwtScope)}` : ''}`,
+        };
     }
-  }, [grantType, acId, acRedirectUri, ccId, ccSecret, ccScope, pwUser, pwPass, pwId, pwSecret, pwScope, rtToken, rtId, rtSecret]);
+  }, [grantType, acId, acRedirectUri, ccId, ccSecret, ccScope, pwUser, pwPass, pwId, pwSecret, pwScope, rtToken, rtId, rtSecret, jwtAssertion, jwtId, jwtSecret, jwtScope]);
 
   return (
     <SectionPanel
@@ -266,6 +287,34 @@ const AuthFlowsSection: React.FC = () => {
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh Token
                   </Button>
+                </div>
+              )}
+
+              {grantType === 'jwt_bearer' && (
+                <div className="space-y-3">
+                  <Input
+                    label="Signed JWT Assertion"
+                    value={jwtAssertion}
+                    onChange={(e) => setJwtAssertion(e.target.value)}
+                    placeholder="Paste a signed JWT (RS256, ES256, etc.)"
+                  />
+                  <Input
+                    label="Scope"
+                    value={jwtScope}
+                    onChange={(e) => setJwtScope(e.target.value)}
+                    placeholder="e.g. openid profile email (optional)"
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input label="Client ID" value={jwtId} onChange={(e) => setJwtId(e.target.value)} placeholder="Your registered client ID" />
+                    <Input label="Client Secret" type="password" value={jwtSecret} onChange={(e) => setJwtSecret(e.target.value)} placeholder="Client secret (optional)" />
+                  </div>
+                  <Button onClick={() => handleCall(jwtId, jwtSecret, () => tokenService.jwtBearerGrant(jwtAssertion, jwtId || undefined, jwtSecret || undefined, jwtScope || undefined))} loading={loading} disabled={!jwtAssertion || loading !== null} className="w-full sm:w-auto">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Exchange JWT for Token
+                  </Button>
+                  <p className="text-[0.6rem] text-muted-foreground">
+                    The JWT must be signed with a key registered to the client (RS256 or ES256)
+                  </p>
                 </div>
               )}
 

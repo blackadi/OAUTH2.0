@@ -63,6 +63,21 @@ UserInfo via POST. Token in body or Authorization header.
 ### `POST /api/introspection`
 Authlete-specific token introspection (non-standard).
 
+**Body Parameters:**
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `token` | ✓ | The access token to introspect |
+
+**Optional Step-Up Auth Parameters (RFC 9470):**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `acrValues` | string | Space-separated required ACR values. Returns 403 if token's ACR doesn't match |
+| `maxAge` | number | Maximum authentication age in seconds. Returns 403 if token's `auth_time` + `maxAge` < now |
+
+**Response:** 200 with token info, or 403 with `insufficient_user_authentication` error (RFC 9470) including `acr_values`/`max_age` challenge.
+
 ### `POST /api/introspection/standard`
 RFC 7662 standard token introspection.
 

@@ -27,6 +27,46 @@ describe("IntrospectionService", () => {
       )
       expect(result).toEqual(mockResponse)
     })
+
+    it("passes acrValues and maxAge for RFC 9470 step-up validation", async () => {
+      const mockResponse = { action: "FORBIDDEN", responseContent: "insufficient_user_authentication" }
+      vi.mocked(mockApi.introspection.process).mockResolvedValue(mockResponse as any)
+
+      const req = {
+        body: { token: "tok-1", acrValues: "urn:mace:incommon:iap:silver", maxAge: "600" },
+        headers: {},
+      } as any
+      const result = await service.process(req)
+
+      expect(mockApi.introspection.process).toHaveBeenCalledWith(
+        expect.objectContaining({
+          introspectionRequest: {
+            token: "tok-1",
+            acrValues: ["urn:mace:incommon:iap:silver"],
+            maxAge: 600,
+          },
+        })
+      )
+      expect(result).toEqual(mockResponse)
+    })
+
+    it("normalizes acrValues to array when string", async () => {
+      vi.mocked(mockApi.introspection.process).mockResolvedValue({ action: "OK" } as any)
+
+      const req = {
+        body: { token: "tok-1", acrValues: "acr1 acr2" },
+        headers: {},
+      } as any
+      await service.process(req)
+
+      expect(mockApi.introspection.process).toHaveBeenCalledWith(
+        expect.objectContaining({
+          introspectionRequest: expect.objectContaining({
+            acrValues: ["acr1 acr2"],
+          }),
+        })
+      )
+    })
   })
 
   describe("standardProcess", () => {

@@ -213,7 +213,7 @@ flowchart TB
     SECTION_PANEL --> HELP_POPOVER["HelpPopover<br/>Contextual help tooltips"]
     
     SECTION_PANEL --- AUTH_SECTION["AuthFlowsSection<br/>All grant types"]
-    SECTION_PANEL --- OIDC_SECTIONS["9 OIDC Sections<br/>DCR, CIBA, PAR, Device,<br/>Logout, Discovery,<br/>Backchannel, TokenOps, VCI"]
+    SECTION_PANEL --- OIDC_SECTIONS["10 OIDC Sections<br/>DCR, CIBA, PAR, Device,<br/>Logout, Discovery,<br/>Backchannel, TokenOps, VCI,<br/>StepUp"]
     SECTION_PANEL --- ADMIN_SECTIONS["4 Admin Sections<br/>Token Mgmt, Client Mgmt,<br/>Grant Mgmt, Health"]
     
     subgraph UI_Components["UI Primitives"]
@@ -257,6 +257,7 @@ flowchart TB
 | `BackchannelLogoutSection.tsx` | Backchannel Logout |
 | `TokenOpsSection.tsx` | Token Operations |
 | `VciSection.tsx` | Verifiable Credential Issuance (OID4VCI) |
+| `StepUpSection.tsx` | Step-Up Authentication (RFC 9470) |
 
 #### Admin Components (`components/admin/`)
 | Component | Section |

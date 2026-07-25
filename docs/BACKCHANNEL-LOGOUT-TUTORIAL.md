@@ -250,6 +250,8 @@ Unlike Front-Channel (browser redirect chain), Back-Channel sends all Logout Tok
 
 ## Part 5: Authlete Setup
 
+> **Version requirement:** Back-Channel Logout support requires Authlete **3.0.32 or later**.
+
 ### Service-Level Settings
 
 In the [Authlete Console](https://console.authlete.com/):
@@ -276,6 +278,8 @@ If your server needs to **receive** Logout Tokens from other OPs:
 # In server/.env
 JWKS_URI=https://your-op.example.com/.well-known/jwks.json
 ```
+
+> **Important:** Authlete's `/api/{service-id}/backchannel/logout/token` API generates the Logout Token but does **not** automatically revoke the user's tokens. If token revocation is needed, call Authlete's revocation endpoint separately after delivering the Logout Token.
 
 ---
 
@@ -331,6 +335,13 @@ flowchart TB
 ### Important: Raw Fetch (Not SDK)
 
 The Authlete TypeScript SDK v1.1.6 **does not** expose the Back-Channel Logout API. The server uses raw `fetch()` — one of only 3 services that do this.
+
+**Two different auth methods are in play:**
+
+| Layer | Auth Method | Credentials |
+|-------|-------------|-------------|
+| **Our server's endpoints** (`/api/backchannel_logout/*`) | Basic auth | `MGMT_CLIENT_ID` / `MGMT_CLIENT_SECRET` |
+| **Authlete API** (`/api/{serviceId}/backchannel/logout/token`) | Bearer token | Service Access Token |
 
 ---
 
@@ -571,6 +582,11 @@ HTTP/1.1 400 Bad Request
 | Backchannel not triggered | Missing `backchannel=true` | Add `&backchannel=true` to logout URL |
 | No `sid` in Logout Token | `backchannelLogoutSessionSupported` disabled | Enable in Authlete Console |
 | Clients not receiving tokens | `backchannel_logout_uri` misconfigured | Verify in Authlete Console |
+| 401 on `/api/backchannel_logout/*` | Missing admin auth header | Include `Authorization: Basic` header |
+| Authlete API returns 500 | Authlete version < 3.0.32 | Upgrade Authlete service to 3.0.32+ |
+| Logout Token has no `sid` claim | `backchannelLogoutSessionRequired` not enabled on client | Enable in Authlete Console client settings |
+| RP rejects Logout Token | RP expects `sid` but OP doesn't include it | Enable `backchannelLogoutSessionSupported` at service level |
+| Tokens not revoked after logout | Authlete doesn't auto-revoke | Call Authlete revocation endpoint separately |
 
 ---
 
@@ -639,4 +655,5 @@ Back-Channel Logout is simple but powerful:
 
 - [OpenID Connect Back-Channel Logout 1.0](https://openid.net/specs/openid-connect-backchannel-1_0.html)
 - [OIDC Core §12 (Logout)](https://openid.net/specs/openid-connect-core-1_0.html#Logout)
-- [Authlete KB: Back-Channel Logout](https://www.authlete.com/kb/back-channel-logout/)
+- [Authlete: Back-Channel Logout API](https://developers.authlete.com/protocols-and-flows/protocol-extensions/openid-connect-back-channel-logout-1-0) — Logout Token generation, metadata, and configuration
+- [Authlete: Service Configuration](https://developers.authlete.com/configuration-reference/service-settings/service-management.md) — `backchannelLogoutSupported`, `backchannelLogoutSessionSupported` settings

@@ -108,6 +108,7 @@ npm --prefix client run dev    # SPA on :3001 (proxies /api → :3000)
 | JWT Bearer (RFC 7523) | Working | [JWT Bearer Tutorial](docs/JWT-BEARER-TUTORIAL.md) |
 | Token Exchange (RFC 8693) | Working | [Token Exchange Tutorial](docs/TOKEN-EXCHANGE-TUTORIAL.md) |
 | DCR (RFC 7591/7592) | Working | [API Reference](docs/API.md) |
+| Step-Up Auth (RFC 9470) | Working | [Step-Up Auth Tutorial](docs/STEP-UP-AUTH-TUTORIAL.md) |
 
 ### Security & Logout
 
@@ -133,7 +134,7 @@ npm --prefix client run dev    # SPA on :3001 (proxies /api → :3000)
 ```bash
 # Server
 npm --prefix server run dev          # Dev server (auto-reload)
-npm --prefix server run test         # 287 tests (unit + integration)
+npm --prefix server run test         # 329 tests (unit + integration)
 npm --prefix server run test:e2e     # 100 E2E tests (needs Authlete creds)
 npm --prefix server run lint         # ESLint (0 errors)
 npm --prefix server run typecheck    # TypeScript (0 errors)
@@ -171,6 +172,7 @@ Each tutorial explains **why** a feature exists, **how** it works, and **how to 
 | [Backchannel Logout](docs/BACKCHANNEL-LOGOUT-TUTORIAL.md) | Coordinating logout across services |
 | [Grant Management](docs/GRANT-MANAGEMENT.md) | Querying and revoking granted authorizations |
 | [FAPI 2.0](docs/FAPI-TUTORIAL.md) | Financial-grade security with DPoP |
+| [Step-Up Auth](docs/STEP-UP-AUTH-TUTORIAL.md) | RFC 9470 — re-authorize with stronger authentication |
 
 ## Community
 

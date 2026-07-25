@@ -86,6 +86,10 @@ export const authorizationController = {
               ...(storedProperties ? { properties: storedProperties } : {}),
             },
             nativeSsoRequested: result.nativeSsoRequested ?? false,
+            // RFC 9470: Store authentication requirements from Authlete
+            acrs: result.acrs,
+            acrEssential: result.acrEssential,
+            maxAge: result.maxAge,
           };
 
           // If prompt=none and user is logged in, check persistent consent
@@ -97,6 +101,15 @@ export const authorizationController = {
               clientId &&
               consentStore.isConsentGranted(clientId, subject, requiredScopes)
             ) {
+              // RFC 9470: For prompt=none with existing session, bind the
+              // current session auth context so Authlete embeds acr/auth_time
+              // in the issued tokens.
+              if (!req.session.stepUp) {
+                req.session.stepUp = {
+                  acr: "pwd",
+                  authTime: Math.floor(Date.now() / 1000),
+                };
+              }
               req.logger("prompt=none with valid consent, auto-issuing", {
                 clientId,
                 subject,

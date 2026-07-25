@@ -87,8 +87,8 @@ export function createDeviceControllers(deviceService = new DeviceService()) {
     complete: {
       handle: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          const { userCode, result, subject } = validateOrThrow(deviceCompleteSchema, req.body);
-          const apiResult = await deviceService.complete(userCode, result, subject);
+          const { userCode, result, subject, acr, authTime, claims } = validateOrThrow(deviceCompleteSchema, req.body);
+          const apiResult = await deviceService.complete(userCode, result, subject, { acr, authTime, claims });
           sendApiResponse(res, mapCompleteActionToStatus(apiResult.action), apiResult);
         } catch (err) {
           if (handleValidationError(err, req, res)) return;

@@ -37,6 +37,9 @@ export const cibaCompleteSchema = z.object({
   ticket: z.string().min(1, required("ticket")),
   result: z.string().min(1, required("result")),
   subject: z.string().min(1, required("subject")),
+  acr: z.string().optional(),
+  authTime: z.number().optional(),
+  claims: z.string().optional(),
 });
 
 export const deviceAuthorizationSchema = z.object({
@@ -53,6 +56,9 @@ export const deviceCompleteSchema = z.object({
   userCode: z.string().min(1, required("userCode")),
   result: z.string().min(1, required("result")),
   subject: z.string().min(1, required("subject")),
+  acr: z.string().optional(),
+  authTime: z.number().optional(),
+  claims: z.string().optional(),
 });
 
 export const parSchema = z.object({

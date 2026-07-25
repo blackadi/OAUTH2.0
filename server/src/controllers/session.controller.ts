@@ -104,6 +104,64 @@ export function createSessionController(
       // Save user subject in session (used as the Authlete subject parameter)
       req.session.user = user.subject;
 
+      // RFC 9470: Record authentication time and ACR for step-up checks.
+      // For this demo server, password authentication satisfies ACR "pwd".
+      const authTimeNow = Math.floor(Date.now() / 1000);
+      const satisfiedAcr = "pwd";
+
+      // Store authTime in session so subsequent authorizations can check maxAge
+      if (req.session.authorization) {
+        req.session.authorization.authTime = authTimeNow;
+      }
+
+      // RFC 9470 §2: Check if the authorization request requires specific ACRs.
+      // Authlete returns `acrs` (requested ACR values) and `acrEssential`
+      // (whether the `acr` claim was requested as essential).
+      if (authz?.acrs && authz.acrs.length > 0) {
+        const acrMatched = authz.acrs.includes(satisfiedAcr);
+
+        // If ACR is essential and none of the requested ACRs match, fail.
+        if (authz.acrEssential && !acrMatched) {
+          req.logger("RFC 9470: ACR not satisfied", {
+            requested: authz.acrs,
+            satisfied: satisfiedAcr,
+            essential: true,
+          });
+          const failResponse = await authorizationServiceInstance.fail(
+            authz.authorizationIssueRequest?.ticket ?? "",
+            "ACR_NOT_SATISFIED"
+          );
+          delete req.session.authorization;
+          return sendAuthorizationFailResponse(res, failResponse);
+        }
+      }
+
+      // RFC 9470 §3: Check maxAge. If the client specified max_age and
+      // the previous authentication is too old, re-authentication is required.
+      // On first login there is no previous authTime, so this always passes.
+      if (authz?.maxAge && authz.authTime) {
+        const elapsed = authTimeNow - authz.authTime;
+        if (elapsed > authz.maxAge) {
+          req.logger("RFC 9470: max_age exceeded", {
+            elapsed,
+            maxAge: authz.maxAge,
+          });
+          const failResponse = await authorizationServiceInstance.fail(
+            authz.authorizationIssueRequest?.ticket ?? "",
+            "EXCEEDS_MAX_AGE"
+          );
+          delete req.session.authorization;
+          return sendAuthorizationFailResponse(res, failResponse);
+        }
+      }
+
+      // RFC 9470: Bind authentication context to the session so
+      // authorization.service.issue() can pass it to Authlete.
+      req.session.stepUp = {
+        acr: satisfiedAcr,
+        authTime: authTimeNow,
+      };
+
       // Check if persistent consent covers the requested scopes
       const requiredScopes = authz?.authorizationIssueRequest?.scopes || [];
       const clientId = authz?.clientId;

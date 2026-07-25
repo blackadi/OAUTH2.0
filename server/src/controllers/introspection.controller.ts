@@ -6,6 +6,35 @@ import { setDpopNonce } from "../utils/dpop";
 
 const introspectionService = new IntrospectionService();
 
+/**
+ * RFC 9470: Parse a WWW-Authenticate Bearer error string from Authlete
+ * into structured fields. Authlete returns strings like:
+ *   Bearer error="insufficient_user_authentication",
+ *     error_description="...",
+ *     acr_values="acrX acrY"
+ * or:
+ *   Bearer error="insufficient_user_authentication",
+ *     error_description="...",
+ *     max_age="600"
+ */
+function parseBearerError(responseContent: string): {
+  error?: string;
+  error_description?: string;
+  acr_values?: string;
+  max_age?: string;
+} {
+  const result: Record<string, string> = {};
+  const pairs = responseContent.replace(/^Bearer\s+/i, "").split(/,\s*/);
+  for (const pair of pairs) {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = pair.slice(0, eqIdx).trim();
+    const val = pair.slice(eqIdx + 1).replace(/^"|"$/g, "").trim();
+    result[key] = val;
+  }
+  return result;
+}
+
 export const introspectionController = {
   handleIntrospection: async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -44,11 +73,32 @@ export const introspectionController = {
           res.setHeader("Pragma", "no-cache");
           return res.status(500).send(result.responseContent ?? "");
 
-        case "FORBIDDEN":
+        case "FORBIDDEN": {
           res.setHeader("WWW-Authenticate", result.responseContent ?? "");
           res.setHeader("Cache-Control", "no-store");
           res.setHeader("Pragma", "no-cache");
+
+          // RFC 9470: Parse the responseContent to detect step-up auth challenges.
+          // Authlete returns insufficient_user_authentication with acr_values or max_age
+          // so the client knows how to re-authorize.
+          if (result.responseContent?.includes("insufficient_user_authentication")) {
+            const parsed = parseBearerError(result.responseContent);
+            return res.status(403).json({
+              error: parsed.error || "insufficient_user_authentication",
+              error_description: parsed.error_description || "",
+              error_uri: result.responseContent.match(/error_uri="([^"]+)"/)?.[1] || "",
+              // RFC 9470 parameters — the client uses these to re-authorize
+              ...(parsed.acr_values ? { acr_values: parsed.acr_values } : {}),
+              ...(parsed.max_age ? { max_age: parsed.max_age } : {}),
+              // Also include the token metadata Authlete returned
+              acr: result.acr,
+              auth_time: result.authTime,
+            });
+          }
+
+          // Non-step-up FORBIDDEN (e.g. insufficient_scope)
           return res.status(403).send(result.responseContent);
+        }
 
         case "OK":
           res.setHeader("Content-Type", "application/json");

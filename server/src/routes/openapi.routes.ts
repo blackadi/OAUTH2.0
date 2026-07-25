@@ -196,20 +196,45 @@ const spec: Record<string, unknown> = {
     "/introspection": {
       post: {
         summary: "Authlete-specific token introspection",
-        description: "Non-standard token introspection returning Authlete's raw response.",
+        description: "Non-standard token introspection returning Authlete's raw response. Supports RFC 9470 step-up authentication validation via acrValues and maxAge parameters.",
         requestBody: {
           content: {
             "application/x-www-form-urlencoded": {
               schema: {
                 type: "object",
-                properties: { token: { type: "string" } },
+                properties: {
+                  token: { type: "string", description: "The access token to introspect." },
+                  scopes: { type: "string", description: "Space-separated list of required scopes." },
+                  subject: { type: "string", description: "Required subject (user) for the token." },
+                  acrValues: { type: "string", description: "RFC 9470: Space-separated ACR values one of which the token must satisfy." },
+                  maxAge: { type: "integer", description: "RFC 9470: Maximum authentication age in seconds." },
+                  resources: { type: "string", description: "Space-separated resource indicators." },
+                },
                 required: ["token"],
               },
             },
           },
         },
         responses: {
-          "200": { description: "Introspection result" },
+          "200": { description: "Introspection result with token metadata including acr, auth_time, and step-up validation." },
+          "403": {
+            description: "RFC 9470: Insufficient user authentication. Returns acr_values or max_age for the client to use in re-authorization.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    error: { type: "string", example: "insufficient_user_authentication" },
+                    error_description: { type: "string" },
+                    acr_values: { type: "string", description: "Required ACR values for re-authorization." },
+                    max_age: { type: "string", description: "Maximum authentication age for re-authorization." },
+                    acr: { type: "string", description: "Current ACR of the token." },
+                    auth_time: { type: "integer", description: "Current auth_time of the token." },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
