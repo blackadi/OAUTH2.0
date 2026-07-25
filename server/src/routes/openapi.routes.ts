@@ -8,7 +8,7 @@ const spec: Record<string, unknown> = {
     title: "Authlete Node Authorization Server API",
     version: "1.0.0",
     description:
-      "OAuth 2.0 / OpenID Connect authorization server built on Authlete. Supports authorization code, client credentials, ROPG, refresh token, CIBA, Device Flow, PAR, Token Exchange, JWT Bearer, and more.",
+      "OAuth 2.0 / OpenID Connect authorization server built on Authlete. Supports authorization code, client credentials, password (ROPC), refresh token, CIBA, Device Flow, PAR, Token Exchange, JWT Bearer, and more.",
   },
   servers: [{ url: "/api", description: "API prefix" }],
   paths: {
@@ -452,17 +452,18 @@ const spec: Record<string, unknown> = {
       post: {
         summary: "CIBA backchannel authentication",
         description:
-          "Starts a CIBA authentication request (Client-Initiated Backchannel Authentication).",
+          "Starts a CIBA authentication request (Client-Initiated Backchannel Authentication, OIDC CIBA Core). The `parameters` field is a URL-encoded string containing the backchannel authentication request (login_hint, scope, client_notification_token, etc.). Client credentials are passed as `clientId`/`clientSecret` in the JSON body.",
         requestBody: {
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
-                  parameters: { type: "string" },
-                  clientId: { type: "string" },
-                  clientSecret: { type: "string" },
+                  parameters: { type: "string", description: "URL-encoded backchannel authentication request parameters" },
+                  clientId: { type: "string", description: "Client identifier" },
+                  clientSecret: { type: "string", description: "Client secret for authentication" },
                 },
+                required: ["parameters"],
               },
             },
           },
@@ -495,30 +496,32 @@ const spec: Record<string, unknown> = {
     "/ciba/fail": {
       post: {
         summary: "Fail CIBA request",
-        description: "Marks a CIBA authentication request as failed.",
+        description: "Marks a CIBA authentication request as failed. The `reason` field describes why the request failed (e.g., TRANSACTION_FAILED, ACCESS_DENIED).",
         requestBody: {
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
-                  ticket: { type: "string" },
-                  reason: { type: "string" },
+                  ticket: { type: "string", description: "Ticket from the authentication endpoint" },
+                  reason: { type: "string", description: "Failure reason (e.g. TRANSACTION_FAILED, ACCESS_DENIED)" },
                 },
+                required: ["ticket", "reason"],
               },
             },
           },
         },
         responses: {
           "403": { description: "Access denied" },
-          "400": { description: "Bad request" },
+          "400": { description: "Bad request (invalid ticket)" },
+          "500": { description: "Server error" },
         },
       },
     },
     "/ciba/complete": {
       post: {
         summary: "Complete CIBA request",
-        description: "Completes a CIBA authentication request with end-user result.",
+        description: "Completes a CIBA authentication request with end-user result. Requires `subject` to identify the authenticated user.",
         requestBody: {
           content: {
             "application/json": {
@@ -530,32 +533,38 @@ const spec: Record<string, unknown> = {
                     type: "string",
                     enum: ["AUTHORIZED", "ACCESS_DENIED", "TRANSACTION_FAILED"],
                   },
-                  subject: { type: "string" },
+                  subject: { type: "string", description: "Authenticated user subject" },
+                  acr: { type: "string", description: "ACR satisfied during authentication" },
+                  authTime: { type: "integer", description: "Authentication time (epoch seconds)" },
+                  claims: { type: "string", description: "JSON string of additional claims" },
                 },
+                required: ["ticket", "result", "subject"],
               },
             },
           },
         },
         responses: {
-          "200": { description: "CIBA request completed" },
+          "200": { description: "CIBA request completed (poll or notification mode)" },
+          "500": { description: "Server error" },
         },
       },
     },
     "/par": {
       post: {
-        summary: "Pushed Authorization Request",
+        summary: "Pushed Authorization Request (RFC 9126)",
         description:
-          "Pushes authorization request parameters to a PAR endpoint (RFC 9126). Returns a request_uri for use in /authorization.",
+          "Pushes authorization request parameters to the PAR endpoint. Returns a `request_uri` for use in `/authorization`. For `CLIENT_SECRET_POST` clients, `client_id` and `client_secret` are merged into the `parameters` string (not sent as separate JSON fields).",
         requestBody: {
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
-                  parameters: { type: "string" },
-                  clientId: { type: "string" },
-                  clientSecret: { type: "string" },
+                  parameters: { type: "string", description: "URL-encoded authorization request parameters" },
+                  clientId: { type: "string", description: "Client ID (merged into parameters for CLIENT_SECRET_POST)" },
+                  clientSecret: { type: "string", description: "Client secret (merged into parameters for CLIENT_SECRET_POST)" },
                 },
+                required: ["parameters"],
               },
             },
           },
@@ -721,7 +730,7 @@ const spec: Record<string, unknown> = {
       post: {
         summary: "Issue and deliver logout tokens to all clients",
         description:
-          "Issues and delivers backchannel logout tokens to every client with a backchannel_logout_uri configured. Requires admin Basic auth.",
+          "Issues and delivers backchannel logout tokens to every client with a backchannel_logout_uri configured. At least one of `subject` or `sessionId` is required. Requires admin Basic auth.",
         security: [{ basicAuth: [] }],
         requestBody: {
           content: {
@@ -729,9 +738,9 @@ const spec: Record<string, unknown> = {
               schema: {
                 type: "object",
                 properties: {
-                  subject: { type: "string" },
+                  subject: { type: "string", description: "End-user subject to include in logout tokens" },
+                  sessionId: { type: "string", description: "Session ID to include in logout tokens" },
                 },
-                required: ["subject"],
               },
             },
           },
@@ -744,7 +753,7 @@ const spec: Record<string, unknown> = {
     "/token/list": {
       get: {
         summary: "List tokens",
-        description: "Lists all tokens via Authlete token management. Requires admin Basic auth.",
+        description: "Lists all tokens via Authlete token management. Returns paginated results. Requires admin Basic auth.",
         security: [{ basicAuth: [] }],
         responses: {
           "200": {
@@ -753,7 +762,10 @@ const spec: Record<string, unknown> = {
               "application/json": {
                 schema: {
                   type: "object",
-                  properties: { totalCount: { type: "integer" } },
+                  properties: {
+                    totalCount: { type: "integer" },
+                    tokens: { type: "array", items: { type: "object" } },
+                  },
                 },
               },
             },
@@ -765,7 +777,7 @@ const spec: Record<string, unknown> = {
     "/token/create": {
       post: {
         summary: "Create token programmatically",
-        description: "Creates a new token via Authlete token management. Requires admin Basic auth.",
+        description: "Creates a new token via Authlete token management. Requires admin Basic auth. The `grantType` uses Authlete enum format (e.g. AUTHORIZATION_CODE, CLIENT_CREDENTIALS).",
         security: [{ basicAuth: [] }],
         requestBody: {
           content: {
@@ -773,17 +785,23 @@ const spec: Record<string, unknown> = {
               schema: {
                 type: "object",
                 properties: {
-                  grantType: { type: "string" },
-                  subject: { type: "string" },
-                  clientId: { type: "string" },
-                  scopes: { type: "string" },
+                  grantType: { type: "string", description: "Authlete grant type enum (AUTHORIZATION_CODE, CLIENT_CREDENTIALS, PASSWORD, REFRESH_TOKEN, etc.)" },
+                  clientId: { type: "integer", description: "Numeric client ID" },
+                  subject: { type: "string", description: "End-user subject identifier" },
+                  scopes: { type: "string", description: "Space-separated scope values" },
+                  accessTokenDuration: { type: "integer", description: "Access token duration in seconds" },
+                  refreshTokenDuration: { type: "integer", description: "Refresh token duration in seconds" },
+                  accessToken: { type: "string", description: "Pre-defined access token value" },
+                  refreshToken: { type: "string", description: "Pre-defined refresh token value" },
                 },
+                required: ["grantType", "clientId"],
               },
             },
           },
         },
         responses: {
           "200": { description: "Token created" },
+          "400": { description: "Bad request (missing required fields)" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -834,14 +852,19 @@ const spec: Record<string, unknown> = {
     "/token/revoke": {
       post: {
         summary: "Revoke token via management API",
-        description: "Revokes a token using the token management API. Requires admin Basic auth.",
+        description: "Revokes a token using the Authlete token management API. Accepts multiple identifier fields — at least one is recommended. Requires admin Basic auth.",
         security: [{ basicAuth: [] }],
         requestBody: {
           content: {
             "application/x-www-form-urlencoded": {
               schema: {
                 type: "object",
-                properties: { accessTokenIdentifier: { type: "string" } },
+                properties: {
+                  accessTokenIdentifier: { type: "string", description: "Access token identifier to revoke" },
+                  refreshTokenIdentifier: { type: "string", description: "Refresh token identifier to revoke" },
+                  clientIdentifier: { type: "string", description: "Client identifier to scope the revocation" },
+                  subject: { type: "string", description: "Subject to scope the revocation" },
+                },
               },
             },
           },
@@ -855,7 +878,7 @@ const spec: Record<string, unknown> = {
     "/token/reissue": {
       post: {
         summary: "Reissue ID token",
-        description: "Reissues an ID token for an existing session. Requires admin Basic auth.",
+        description: "Reissues an ID token for an existing session using Authlete's ID Token Reissue API. Requires admin Basic auth.",
         security: [{ basicAuth: [] }],
         requestBody: {
           content: {
@@ -863,16 +886,21 @@ const spec: Record<string, unknown> = {
               schema: {
                 type: "object",
                 properties: {
-                  accessToken: { type: "string" },
-                  refreshToken: { type: "string" },
+                  accessToken: { type: "string", description: "Current access token" },
+                  refreshToken: { type: "string", description: "Current refresh token" },
+                  sub: { type: "string", description: "Subject to override in the reissued ID token" },
+                  claims: { type: "string", description: "JSON string of additional claims to embed" },
+                  idtHeaderParams: { type: "string", description: "JSON string of additional JOSE header parameters" },
+                  idTokenAudType: { type: "string", description: "Audience type for the reissued ID token (string or array)" },
                 },
+                required: ["accessToken", "refreshToken"],
               },
             },
           },
         },
         responses: {
           "200": { description: "ID token reissued" },
-          "400": { description: "Bad request" },
+          "400": { description: "Bad request (missing required fields)" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -881,7 +909,7 @@ const spec: Record<string, unknown> = {
       get: {
         summary: "Create local JWT",
         description:
-          "Creates a locally-signed JWT (development only, no Authlete call).",
+          "Creates a locally-signed JWT (development only, no Authlete call). Returns the JWT and the public key for verification.",
         parameters: [
           {
             name: "sub",
@@ -894,9 +922,21 @@ const spec: Record<string, unknown> = {
             in: "query",
             schema: { type: "string" },
           },
+          {
+            name: "acr",
+            in: "query",
+            schema: { type: "string" },
+            description: "ACR claim to embed in the JWT",
+          },
+          {
+            name: "authTime",
+            in: "query",
+            schema: { type: "integer" },
+            description: "Authentication time (epoch seconds) to embed as auth_time claim",
+          },
         ],
         responses: {
-          "200": { description: "Local JWT created" },
+          "200": { description: "Local JWT created with token and publicKey" },
           "404": { description: "Not available in production mode" },
         },
       },
@@ -999,10 +1039,15 @@ const spec: Record<string, unknown> = {
     "/client/list": {
       get: {
         summary: "List all clients",
-        description: "Lists all OAuth clients. Requires admin Basic auth.",
+        description: "Lists all OAuth clients registered in Authlete. Supports pagination via `start` and `end` query parameters. Requires admin Basic auth.",
         security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "start", in: "query", schema: { type: "integer", default: 0 }, description: "Start index for pagination" },
+          { name: "end", in: "query", schema: { type: "integer", default: 20 }, description: "End index for pagination" },
+          { name: "developer", in: "query", schema: { type: "string" }, description: "Filter by developer name" },
+        ],
         responses: {
-          "200": { description: "Client list" },
+          "200": { description: "Client list with totalCount and clients array" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -1142,20 +1187,197 @@ const spec: Record<string, unknown> = {
         },
       },
     },
-    "/device/authorization": {
+    "/client/flag/{clientIdentifier}": {
+      patch: {
+        summary: "Update client lock flag",
+        description: "Updates the lock flag on a client to prevent or allow credential refresh. Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientIdentifier", in: "path", required: true, schema: { type: "string" } },
+        ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { clientLocked: { type: "boolean" } },
+                required: ["clientLocked"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Lock flag updated" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/client/secret/refresh/{clientIdentifier}": {
       post: {
-        summary: "Device authorization",
-        description: "Initiates the Device Authorization Flow (RFC 8628).",
+        summary: "Refresh client secret",
+        description: "Generates a new randomly-generated client secret and deactivates the old one. Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientIdentifier", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "New client secret returned in responseContent" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/client/secret/update/{clientIdentifier}": {
+      put: {
+        summary: "Update client secret",
+        description: "Sets a known client secret value (replaces the current secret). Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientIdentifier", in: "path", required: true, schema: { type: "string" } },
+        ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { clientSecret: { type: "string" } },
+                required: ["clientSecret"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Client secret updated" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/client/auth/list/{subject}": {
+      get: {
+        summary: "List client authorizations for a subject",
+        description: "Lists all authorizations granted by a specific end-user. Supports pagination.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "subject", in: "path", required: true, schema: { type: "string" } },
+          { name: "start", in: "query", schema: { type: "integer", default: 0 } },
+          { name: "end", in: "query", schema: { type: "integer", default: 5 } },
+          { name: "developer", in: "query", schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Authorization list" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/client/auth/update/{clientId}": {
+      post: {
+        summary: "Update client authorization",
+        description: "Updates a client's authorization for a specific user (e.g., modify granted scopes).",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientId", in: "path", required: true, schema: { type: "string" } },
+        ],
         requestBody: {
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
-                  parameters: { type: "string" },
+                  subject: { type: "string" },
+                  scopes: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Authorization updated" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/client/auth/delete/{clientId}/{subject}": {
+      delete: {
+        summary: "Delete client authorization",
+        description: "Deletes a client's authorization for a specific user.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientId", in: "path", required: true, schema: { type: "string" } },
+          { name: "subject", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "204": { description: "Authorization deleted" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/client/scopes/granted/{clientId}/{subject}": {
+      get: {
+        summary: "Get granted scopes",
+        description: "Returns the scopes that have been granted to a specific client for a specific user.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientId", in: "path", required: true, schema: { type: "string" } },
+          { name: "subject", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Granted scopes" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/client/scopes/requestable/{clientId}": {
+      get: {
+        summary: "Get requestable scopes",
+        description: "Returns the scopes that a client is allowed to request.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientId", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Requestable scopes" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+      put: {
+        summary: "Update requestable scopes",
+        description: "Sets the scopes that a client is allowed to request.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientId", in: "path", required: true, schema: { type: "string" } },
+        ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  scopes: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Requestable scopes updated" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+    },
+    "/device/authorization": {
+      post: {
+        summary: "Device authorization",
+        description: "Initiates the Device Authorization Flow (RFC 8628). Requires `parameters` as a URL-encoded string containing the device authorization request parameters, plus optional `clientId` and `clientSecret` for client authentication.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  parameters: { type: "string", description: "URL-encoded device authorization request parameters (scope, client_id, etc.)" },
                   clientId: { type: "string" },
                   clientSecret: { type: "string" },
                 },
+                required: ["parameters"],
               },
             },
           },
@@ -1178,25 +1400,29 @@ const spec: Record<string, unknown> = {
               },
             },
           },
+          "400": { description: "Bad request (missing parameters)" },
+          "401": { description: "Unauthorized (invalid client credentials)" },
         },
       },
     },
     "/device/verification": {
       post: {
         summary: "Verify device user code",
-        description: "Verifies a user code from the Device Flow.",
+        description: "Verifies a user code from the Device Flow. Returns VALID if the code exists and has not expired, NOT_EXIST if not found, EXPIRED if expired.",
         requestBody: {
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: { userCode: { type: "string" } },
+                required: ["userCode"],
               },
             },
           },
         },
         responses: {
           "200": { description: "User code valid" },
+          "400": { description: "User code expired" },
           "404": { description: "User code not found" },
         },
       },
@@ -1204,7 +1430,7 @@ const spec: Record<string, unknown> = {
     "/device/complete": {
       post: {
         summary: "Complete device authentication",
-        description: "Completes device authentication with end-user approval or denial.",
+        description: "Completes device authentication with end-user approval or denial. Requires `subject` to identify the authenticated user.",
         requestBody: {
           content: {
             "application/json": {
@@ -1212,14 +1438,20 @@ const spec: Record<string, unknown> = {
                 type: "object",
                 properties: {
                   userCode: { type: "string" },
-                  decision: { type: "string", enum: ["approve", "deny"] },
+                  result: { type: "string", enum: ["SUCCESS", "ACCESS_DENIED", "TRANSACTION_FAILED"] },
+                  subject: { type: "string", description: "Authenticated user subject" },
+                  acr: { type: "string", description: "ACR satisfied during authentication" },
+                  authTime: { type: "integer", description: "Authentication time (epoch seconds)" },
+                  claims: { type: "string", description: "JSON string of additional claims" },
                 },
+                required: ["userCode", "result", "subject"],
               },
             },
           },
         },
         responses: {
           "200": { description: "Authentication completed" },
+          "400": { description: "Invalid request or user code expired" },
           "403": { description: "Access denied" },
           "404": { description: "User code not found" },
         },
@@ -1279,7 +1511,7 @@ const spec: Record<string, unknown> = {
     "/vci/offer/create": {
       post: {
         summary: "Create credential offer",
-        description: "Creates a credential offer. Requires admin Basic auth.",
+        description: "Creates a new OID4VCI credential offer. Requires admin Basic auth. The `credentialConfigurationIds` field must reference pre-configured credential configurations in Authlete.",
         security: [{ basicAuth: [] }],
         requestBody: {
           content: {
@@ -1290,12 +1522,23 @@ const spec: Record<string, unknown> = {
                   credentialConfigurationIds: {
                     type: "array",
                     items: { type: "string" },
+                    description: "IDs of credential configurations to offer",
                   },
-                  subject: { type: "string" },
-                  duration: { type: "number" },
-                  acr: { type: "string" },
-                  txCode: { type: "string" },
+                  subject: { type: "string", description: "Pre-determined subject for the credential" },
+                  duration: { type: "number", description: "Offer duration in seconds" },
+                  acr: { type: "string", description: "ACR value for the offer" },
+                  txCode: { type: "string", description: "Pre-defined transaction code" },
+                  txCodeInputMode: { type: "string", description: "Transaction code input mode (text or numeric)" },
+                  txCodeDescription: { type: "string", description: "Description of the transaction code for the user" },
+                  authorizationCodeGrantIncluded: { type: "boolean", description: "Include authorization code grant in the offer" },
+                  issuerStateIncluded: { type: "boolean", description: "Include issuer state in the offer" },
+                  preAuthorizedCodeGrantIncluded: { type: "boolean", description: "Include pre-authorized code grant in the offer" },
+                  context: { type: "string", description: "Context string for the offer" },
+                  properties: { type: "array", items: { type: "object" }, description: "Additional properties to include" },
+                  jwtAtClaims: { type: "string", description: "JSON string of additional JWT access token claims" },
+                  authTime: { type: "integer", description: "Authentication time (epoch seconds)" },
                 },
+                required: ["credentialConfigurationIds"],
               },
             },
           },
@@ -1338,7 +1581,7 @@ const spec: Record<string, unknown> = {
     "/vci/credential/issue": {
       post: {
         summary: "Issue single credential",
-        description: "Issues a single credential. Returns 202 for deferred issuance.",
+        description: "Issues a single verifiable credential. Requires a Bearer access token (from the pre-authorized code flow) in the Authorization header, or `accessToken` in the request body. Returns 202 for deferred issuance.",
         requestBody: {
           content: {
             "application/json": {
@@ -1356,6 +1599,33 @@ const spec: Record<string, unknown> = {
         responses: {
           "200": { description: "Credential issued" },
           "202": { description: "Accepted (deferred)" },
+          "400": { description: "Caller error" },
+          "401": { description: "Unauthorized" },
+          "403": { description: "Forbidden" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/vci/credential/batch": {
+      post: {
+        summary: "Issue batch credentials",
+        description: "Issues multiple verifiable credentials in a single request (OID4VCI §10). Requires a Bearer access token in the Authorization header or `accessToken` in the body.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  accessToken: { type: "string", description: "Access token from pre-authorized code flow" },
+                  orders: { type: "array", items: { type: "object" }, description: "Array of credential issuance orders" },
+                },
+                required: ["accessToken"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Batch credentials issued" },
           "400": { description: "Caller error" },
           "401": { description: "Unauthorized" },
           "403": { description: "Forbidden" },

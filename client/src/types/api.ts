@@ -58,3 +58,20 @@ export interface AuthleteHealthResponse {
   body?: string;
   error?: string;
 }
+
+export interface RedisHealthResponse {
+  healthy: boolean;
+  connected: boolean;
+  configured: boolean;
+  error?: string;
+}
+
+export interface OverallHealthResponse {
+  status: string;
+  uptime: number;
+  timestamp: string;
+  checks: {
+    redis: RedisHealthResponse;
+    authlete?: AuthleteHealthResponse;
+  };
+}

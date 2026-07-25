@@ -6,6 +6,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { Badge } from '@/components/ui/Badge';
 import { getDoc } from '@/data/operationDocs';
+import type { OverallHealthResponse } from '@/types';
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
@@ -23,6 +24,7 @@ function formatUptime(seconds: number): string {
 function HealthSection() {
   const [serverStatus, setServerStatus] = useState<{ status: string; uptime: number; timestamp: string } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [overallResult, setOverallResult] = useState<OverallHealthResponse | null>(null);
   const [authleteResult, setAuthleteResult] = useState<unknown>(null);
   const [authleteError, setAuthleteError] = useState<string | null>(null);
   const [extended, setExtended] = useState(false);
@@ -33,6 +35,7 @@ function HealthSection() {
 
   useEffect(() => {
     checkServer();
+    checkOverall();
   }, []);
 
   async function checkServer() {
@@ -47,6 +50,15 @@ function HealthSection() {
       setServerStatus(null);
     } finally {
       setLoading((s) => ({ ...s, server: false }));
+    }
+  };
+
+  async function checkOverall() {
+    try {
+      const res = await healthService.overallHealth();
+      setOverallResult(res);
+    } catch {
+      // Silently fail — Redis status is supplementary
     }
   };
 
@@ -66,10 +78,12 @@ function HealthSection() {
   };
 
   const serverHealthy = serverStatus?.status === 'ok';
+  const redis = overallResult?.checks?.redis;
 
   return (
-    <SectionPanel title="Health Check" description="Server and Authlete health monitoring">
+    <SectionPanel title="Health Check" description="Server, Redis, and Authlete health monitoring">
       <div className="space-y-4">
+        {/* Server Health */}
         <div>
           {doc && <OperationDescription doc={doc} />}
           <div className="flex items-center gap-2 flex-wrap">
@@ -83,7 +97,7 @@ function HealthSection() {
                   ? `Server OK — up ${formatUptime(serverStatus!.uptime)}`
                   : serverError || 'Unknown'}
             </span>
-            <Button size="sm" variant="ghost" onClick={checkServer} disabled={loading.server} loading={loading.server}>
+            <Button size="sm" variant="ghost" onClick={() => { checkServer(); checkOverall(); }} disabled={loading.server} loading={loading.server}>
               Refresh
             </Button>
           </div>
@@ -91,6 +105,33 @@ function HealthSection() {
 
         <hr className="border-border" />
 
+        {/* Redis Status */}
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-medium">Redis Session Store</span>
+            {redis ? (
+              <Badge variant={redis.connected ? 'success' : redis.configured ? 'danger' : 'default'}>
+                {redis.connected ? 'Connected' : redis.configured ? 'Disconnected' : 'Not Configured'}
+              </Badge>
+            ) : (
+              <Badge variant="default">Loading...</Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-1">
+            {redis?.configured
+              ? redis.connected
+                ? 'Sessions are stored in Redis. Active sessions survive server restarts.'
+                : 'Redis is configured but unreachable. Sessions fall back to in-memory storage and are lost on restart.'
+              : 'Redis is not configured (REDIS_URL unset). Sessions use in-memory storage — they are lost when the server restarts.'}
+          </p>
+          {redis?.error && (
+            <p className="text-xs text-red-400">{redis.error}</p>
+          )}
+        </div>
+
+        <hr className="border-border" />
+
+        {/* Authlete Health */}
         <div>
           {docAuthlete && <OperationDescription doc={docAuthlete} />}
           <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2 cursor-pointer">

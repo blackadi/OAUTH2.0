@@ -1,9 +1,13 @@
-import { HEALTH_ENDPOINT, HEALTH_AUTHLETE_ENDPOINT } from '@/config';
+import { HEALTH_ENDPOINT, HEALTH_ALL_ENDPOINT, HEALTH_AUTHLETE_ENDPOINT } from '@/config';
 import { http } from './http';
-import type { HealthResponse, AuthleteHealthResponse } from '@/types';
+import type { HealthResponse, AuthleteHealthResponse, OverallHealthResponse } from '@/types';
 
 async function serverHealth(): Promise<HealthResponse> {
   return http.getJson(HEALTH_ENDPOINT) as Promise<HealthResponse>;
+}
+
+async function overallHealth(): Promise<OverallHealthResponse> {
+  return http.getJson(HEALTH_ALL_ENDPOINT) as Promise<OverallHealthResponse>;
 }
 
 async function authleteHealth(extended: boolean): Promise<AuthleteHealthResponse> {
@@ -13,4 +17,4 @@ async function authleteHealth(extended: boolean): Promise<AuthleteHealthResponse
   return http.getJson(url) as Promise<AuthleteHealthResponse>;
 }
 
-export const healthService = { serverHealth, authleteHealth };
+export const healthService = { serverHealth, overallHealth, authleteHealth };
