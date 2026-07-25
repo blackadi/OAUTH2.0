@@ -50,6 +50,7 @@ function DeviceSection() {
   const [deviceCode, setDeviceCode] = useState('');
   const [pollClientId, setPollClientId] = useState('');
   const [pollClientSecret, setPollClientSecret] = useState('');
+  const [pollAuthMethod, setPollAuthMethod] = useState<'basic' | 'post'>('basic');
   const [pollInterval, setPollInterval] = useState('5');
   const [polling, setPolling] = useState(false);
   const [pollResult, setPollResult] = useState<unknown>(null);
@@ -119,6 +120,7 @@ function DeviceSection() {
           deviceCode.trim(),
           pollClientId.trim(),
           pollClientSecret.trim() || undefined,
+          pollClientSecret.trim() ? pollAuthMethod : undefined,
         );
         setPollResult(res);
         stopPolling();
@@ -147,7 +149,7 @@ function DeviceSection() {
     pollTimerRef.current = setInterval(async () => {
       await doPoll();
     }, intervalMs);
-  }, [deviceCode, pollClientId, pollClientSecret, pollInterval, stopPolling]);
+  }, [deviceCode, pollClientId, pollClientSecret, pollAuthMethod, pollInterval, stopPolling]);
 
   const handleCall = async (fn: () => Promise<unknown>) => {
     const { data, error: err } = await call(fn);
@@ -214,6 +216,17 @@ function DeviceSection() {
           <Input label="Device Code" value={deviceCode} onChange={(e) => setDeviceCode(e.target.value)} placeholder="device_code from Step 1 (Authorization)" />
           <Input label="Client ID" value={pollClientId} onChange={(e) => setPollClientId(e.target.value)} placeholder="your_client_id" />
           <Input label="Client Secret (optional — public clients leave empty)" type="password" value={pollClientSecret} onChange={(e) => setPollClientSecret(e.target.value)} placeholder="leave empty for public clients" />
+          {pollClientSecret && (
+            <Select
+              label="Client Auth Method"
+              options={[
+                { value: 'basic', label: 'client_secret_basic (Authorization header)' },
+                { value: 'post', label: 'client_secret_post (body parameter)' },
+              ]}
+              value={pollAuthMethod}
+              onChange={(e) => setPollAuthMethod(e.target.value as 'basic' | 'post')}
+            />
+          )}
           <Select label="Poll Interval" options={POLL_INTERVALS} value={pollInterval} onChange={(e) => setPollInterval(e.target.value)} />
 
           <div className="flex items-center gap-2">

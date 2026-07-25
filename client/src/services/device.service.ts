@@ -26,14 +26,18 @@ async function pollToken(
   deviceCode: string,
   clientId: string,
   clientSecret?: string,
+  authMethod: 'basic' | 'post' = 'basic',
 ): Promise<unknown> {
   const params = new URLSearchParams({
     grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
     device_code: deviceCode,
     client_id: clientId,
   });
-  if (clientSecret) {
+  if (clientSecret && authMethod === 'post') {
     params.append('client_secret', clientSecret);
+  }
+  if (clientSecret && authMethod === 'basic') {
+    return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret);
   }
   return http.postForm(TOKEN_ENDPOINT, params);
 }
