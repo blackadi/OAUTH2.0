@@ -1366,7 +1366,7 @@ const spec: Record<string, unknown> = {
     "/device/authorization": {
       post: {
         summary: "Device authorization",
-        description: "Initiates the Device Authorization Flow (RFC 8628). Requires `parameters` as a URL-encoded string containing the device authorization request parameters, plus optional `clientId` and `clientSecret` for client authentication.",
+        description: "Initiates the Device Authorization Flow (RFC 8628). Designed for public clients (smart TVs, CLI, IoT) that cannot securely store a client secret. Public clients only need `client_id`; confidential clients can optionally provide `client_secret` for authentication.",
         requestBody: {
           content: {
             "application/json": {
@@ -1374,8 +1374,8 @@ const spec: Record<string, unknown> = {
                 type: "object",
                 properties: {
                   parameters: { type: "string", description: "URL-encoded device authorization request parameters (scope, client_id, etc.)" },
-                  clientId: { type: "string" },
-                  clientSecret: { type: "string" },
+                  clientId: { type: "string", description: "Client identifier (required for public clients, optional if embedded in parameters)" },
+                  clientSecret: { type: "string", description: "Client secret — only for confidential clients. Public clients omit this." },
                 },
                 required: ["parameters"],
               },

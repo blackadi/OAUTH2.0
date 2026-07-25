@@ -67,9 +67,12 @@ function DeviceSection() {
 
       {activeOp === 'authorization' && (
         <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Device Flow (RFC 8628) is designed for <strong>public clients</strong> (smart TVs, CLI tools, IoT) that cannot securely store a client secret. If your client is public, leave Client Secret empty. Confidential clients can optionally provide it.
+          </p>
           <Textarea label="Parameters (URL-encoded)" rows={4} value={parameters} onChange={(e) => setParameters(e.target.value)} placeholder="client_id=xxx&scope=openid+profile" />
           <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
-          <Input label="Client Secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
+          <Input label="Client Secret (optional — public clients leave empty)" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="leave empty for public clients" />
           <Button onClick={() => handleCall(() => deviceService.authorization({ parameters, clientId, clientSecret }))} loading={loading}>Run</Button>
         </div>
       )}
