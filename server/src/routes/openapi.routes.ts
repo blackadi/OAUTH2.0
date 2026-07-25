@@ -1139,54 +1139,6 @@ const spec: Record<string, unknown> = {
         },
       },
     },
-    "/client/secret/refresh/{clientId}": {
-      post: {
-        summary: "Refresh client secret",
-        description: "Generates a new client secret. Requires admin Basic auth.",
-        security: [{ basicAuth: [] }],
-        parameters: [
-          {
-            name: "clientId",
-            in: "path",
-            required: true,
-            schema: { type: "string" },
-          },
-        ],
-        responses: {
-          "200": { description: "New client secret" },
-          "401": { description: "Unauthorized" },
-        },
-      },
-    },
-    "/client/secret/update/{clientId}": {
-      put: {
-        summary: "Update client secret",
-        description: "Sets a known client secret value. Requires admin Basic auth.",
-        security: [{ basicAuth: [] }],
-        parameters: [
-          {
-            name: "clientId",
-            in: "path",
-            required: true,
-            schema: { type: "string" },
-          },
-        ],
-        requestBody: {
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: { clientSecret: { type: "string" } },
-              },
-            },
-          },
-        },
-        responses: {
-          "200": { description: "Client secret updated" },
-          "401": { description: "Unauthorized" },
-        },
-      },
-    },
     "/client/flag/{clientIdentifier}": {
       patch: {
         summary: "Update client lock flag",
@@ -1324,6 +1276,19 @@ const spec: Record<string, unknown> = {
           "401": { description: "Unauthorized" },
         },
       },
+      delete: {
+        summary: "Delete granted scopes",
+        description: "Deletes all granted scopes for a specific client and user combination.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientId", in: "path", required: true, schema: { type: "string" } },
+          { name: "subject", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "204": { description: "Granted scopes deleted" },
+          "401": { description: "Unauthorized" },
+        },
+      },
     },
     "/client/scopes/requestable/{clientId}": {
       get: {
@@ -1359,6 +1324,18 @@ const spec: Record<string, unknown> = {
         },
         responses: {
           "200": { description: "Requestable scopes updated" },
+          "401": { description: "Unauthorized" },
+        },
+      },
+      delete: {
+        summary: "Delete requestable scopes",
+        description: "Deletes all requestable scopes for a client.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "clientId", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "204": { description: "Requestable scopes deleted" },
           "401": { description: "Unauthorized" },
         },
       },
@@ -1653,6 +1630,215 @@ const spec: Record<string, unknown> = {
           "200": { description: "Deferred credential issued" },
           "400": { description: "Caller error" },
           "403": { description: "Forbidden" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/vci/well-known": {
+      get: {
+        summary: "VCI well-known metadata",
+        description: "Alias for VCI metadata endpoint. Returns Verifiable Credential Issuer metadata per OID4VCI §12.2. Public endpoint.",
+        parameters: [
+          { name: "pretty", in: "query", schema: { type: "boolean" } },
+        ],
+        responses: {
+          "200": { description: "VCI metadata" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/federation/configuration": {
+      get: {
+        summary: "OIDC Federation configuration",
+        description: "Returns the OpenID Federation entity configuration per OpenID Federation 1.0. Public endpoint.",
+        responses: {
+          "200": { description: "Federation entity configuration" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/.well-known/openid-federation": {
+      get: {
+        summary: "OpenID Federation well-known",
+        description: "Returns the OpenID Federation entity configuration at the well-known URL for spec compliance.",
+        responses: {
+          "200": { description: "Federation entity configuration" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/federation/registration": {
+      post: {
+        summary: "Federation registration",
+        description: "Handles entity registration in the OpenID Federation.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                description: "Federation registration request",
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Registration successful" },
+          "400": { description: "Bad request" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/hsk/create": {
+      post: {
+        summary: "Create hardware security key",
+        description: "Creates a new Hardware Security Key (HSK). Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  kty: { type: "string", description: "Key type (e.g., EC, RSA)" },
+                  use: { type: "string", description: "Key use (e.g., sig, enc)" },
+                  kid: { type: "string", description: "Key ID" },
+                  hsmName: { type: "string", description: "HSM provider name" },
+                  alg: { type: "string", description: "Algorithm (e.g., ES256, RS256)" },
+                },
+                required: ["kty", "hsmName"],
+              },
+            },
+          },
+        },
+        responses: {
+          "201": { description: "HSK created" },
+          "400": { description: "Invalid request" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/hsk/get/{handle}": {
+      get: {
+        summary: "Get hardware security key",
+        description: "Retrieves a Hardware Security Key by its handle. Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "handle", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "HSK details" },
+          "404": { description: "HSK not found" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/hsk/delete/{handle}": {
+      delete: {
+        summary: "Delete hardware security key",
+        description: "Deletes a Hardware Security Key by its handle. Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        parameters: [
+          { name: "handle", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "204": { description: "HSK deleted" },
+          "404": { description: "HSK not found" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/hsk/list": {
+      get: {
+        summary: "List hardware security keys",
+        description: "Lists all Hardware Security Keys. Requires admin Basic auth.",
+        security: [{ basicAuth: [] }],
+        responses: {
+          "200": { description: "List of HSKs" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/fapi/config": {
+      get: {
+        summary: "FAPI configuration",
+        description: "Returns the FAPI 2.0 configuration including supported algorithms, DPoP settings, and signing parameters.",
+        responses: {
+          "200": { description: "FAPI configuration" },
+        },
+      },
+    },
+    "/fapi/status": {
+      get: {
+        summary: "FAPI status",
+        description: "Returns the current FAPI 2.0 compliance status including active configurations and test results.",
+        responses: {
+          "200": { description: "FAPI status" },
+        },
+      },
+    },
+    "/jar/process": {
+      post: {
+        summary: "Process JWT-authenticated request",
+        description: "Processes a JAR (JWT-Secured Authorization Request) per RFC 9101. Validates the request object JWT and extracts OAuth parameters.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  request: { type: "string", description: "JWT-encoded request object" },
+                  clientId: { type: "string", description: "Client identifier" },
+                },
+                required: ["request"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Processed request parameters" },
+          "400": { description: "Invalid request object" },
+          "401": { description: "Client authentication failed" },
+        },
+      },
+    },
+    "/nativesso": {
+      post: {
+        summary: "Native SSO processing",
+        description: "Processes a Native SSO (Shared Signal Framework) request per OpenID Native SSO spec. Handles cross-device session management signals.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                description: "SSF (Shared Signals Framework) event payload",
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Signal processed" },
+          "400": { description: "Bad request" },
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
+    "/nativesso/logout": {
+      post: {
+        summary: "Native SSO logout",
+        description: "Processes a logout signal via Native SSO. Terminates sessions associated with the subject.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                description: "SSF logout event payload",
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Logout processed" },
+          "400": { description: "Bad request" },
           "500": { description: "Internal server error" },
         },
       },

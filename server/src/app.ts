@@ -164,7 +164,6 @@ app.use("/", deviceRoutes); // Device flow (both /api/device/* and /device paths
   app.use(routerURL, healthRoutes);
   app.use("/", metricsRoutes); // /metrics (standard Prometheus convention)
   app.use(routerURL, metricsRoutes); // /api/metrics (consistency)
-  app.use(routerURL, healthRoutes);
   app.use(routerURL, fapiRoutes);
   app.use(routerURL, jarRoutes);
   app.use(routerURL, nativeSsoRoutes);
