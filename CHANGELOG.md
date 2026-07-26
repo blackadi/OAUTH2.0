@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **MCP (Model Context Protocol) OAuth 2.1 testing section**: Full client UI with 3 tabs (AS Metadata, Protected Resource Metadata, CIMD Metadata) and 5-step Full Flow Wizard (Discover → Register → Authorize → Token → UserInfo)
+- **`/.well-known/oauth-authorization-server` endpoint**: RFC 8414 AS metadata served at root for MCP spec compliance
+- **`McpSection.tsx`**: MCP discovery with dual well-known fallback, CIMD client registration, PKCE S256 + RFC 8707 resource indicator authorization URL builder, token exchange, and UserInfo
+- **`mcp.service.ts`**: Service layer for MCP flows — `fetchAsMetadata()`, `fetchProtectedResourceMetadata()`, `fetchCimdMetadata()`, `buildAuthorizationUrl()`, `exchangeCode()`, `introspectToken()`, `fetchUserInfo()`
+- **`MCP-OAUTH-TUTORIAL.md`**: Visual tutorial with airport analogy, step-by-step flow diagrams, common mistakes, and troubleshooting table
+- **`consentedClaims` flow**: Claim-level consent propagated from authorization to userinfo — new `scope-claims.ts` utility, consent page checkboxes, session storage, Authlete API pass-through
+- **`scope-claims.ts`**: OIDC scope-to-claims mapping utility (`claimsFromScopes()`, `claimLabel()`)
+
+### Fixed
+
+- **Token revoke bug** (`token.management.controller.ts:152`): `TokenRevokeResponse` has no `action` field — replaced `resultCode`-based switch with correct handling, sanitized response body to `{ count }`, improved catch block for `ResultError`
+- **`revokeGrant()` bug** (`grant.service.ts:21`): Was calling `response.json()` on 204 No Content
+- **Routes view gap**: `routes-list.routes.ts` static `ROUTES` array updated — 80+ endpoints now listed including Device Flow, Native SSO, JAR, Federation, VCI, Client Management, HSK, FAPI
+
+### Changed
+
+- **OpenAPI spec full audit** (`openapi.routes.ts`): 15 missing endpoints added, duplicate path keys fixed, duplicate `healthRoutes` mount removed
+- **Code deduplication** (net -361 lines): Extracted shared `requireBasicAuth` middleware (was 8 copies), `handleControllerError` utility (was 6 copies), `crypto-utils.ts` shared module for JWK/CryptoKeyPair/base64UrlEncode
+- **Deleted dead code**: Unused hooks (`useApi`, `useClipboard`, `useLocalStorage`), unused types (`TokenInfo`, `AdminTokenResponse`), unused test fixtures
+- **`userinfo.controller.ts`**: Uses `result.consentedClaims` when available, falls back to `result.claims`
+- **`authorization.service.ts`**: Passes `consentedClaims` to Authlete's `/auth/authorization/issue` API
+- **`consent.ejs`**: Added claim-level checkboxes with `name="consentedClaims"`
+- **`session.controller.ts`**: Derives claims from scopes for consent view, captures selected claims from form
+- **`express-session.d.ts`**: Added `consentedClaims?: string[]` to session data
+
+### Documentation
+
+- **Authlete doc audits completed**: CIMD (no implementation needed), Comprehensive API Protection (resource server concerns), Handling Request Parameters (fully implemented), Handling Responses from Authlete APIs (fixed tokenRevokeToken), Implementing an Authorization Endpoint (fully implemented), Ticket Parameter (fully implemented), When response_type Contains id_token (fully implemented), Requiring PKCE/S256 (fully implemented), Using Request Objects (fully implemented), Adding Custom Claims to UserInfo (implemented with consentedClaims), Access Token Verification (fully implemented), Client Attributes (fully implemented), Using Client ID Alias (fully implemented)
+- **AGENTS.md**: Updated with MCP section details, section count (21), components, services
+
 ## [1.0.0] - 2026-07-25
 
 ### Added
