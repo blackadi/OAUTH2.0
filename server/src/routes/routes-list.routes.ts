@@ -481,6 +481,13 @@ const ROUTES: RouteEntry[] = [
     description: "FAPI 2.0 status — returns Authlete service config including fapiModes, DPoP, and CIMD (clientIdMetadataDocumentSupported) settings",
   },
 
+  // ── MCP (Model Context Protocol) ────────────────────────────
+  {
+    method: "GET",
+    path: "/.well-known/oauth-authorization-server",
+    description: "RFC 8414 Authorization Server Metadata — MCP spec requires this for AS discovery (serves same content as openid-configuration)",
+  },
+
   // ── Metrics ──────────────────────────────────────────────────
   {
     method: "GET",

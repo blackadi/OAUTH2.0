@@ -15,6 +15,21 @@
       <ul class="scope-list">
         <%- include('partials/scope-list', { scopes: scopes || ['openid', 'profile'] }) %>
       </ul>
+      <% if (claims && claims.length > 0) { %>
+        <div class="claims-section">
+          <p class="claims-heading">Information to share</p>
+          <p class="claims-subheading">Select which information this application can access:</p>
+          <div class="claims-list">
+            <% claims.forEach(function(claim) { %>
+              <label class="claim-item">
+                <input type="checkbox" name="consentedClaims" value="<%= claim.name %>" checked />
+                <span class="claim-label"><%= claim.label %></span>
+                <span class="claim-name">(<%= claim.name %>)</span>
+              </label>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
       <% if (authorizationDetails && authorizationDetails.length > 0) { %>
         <div class="rar-section">
           <p class="rar-heading">Rich Authorization Details</p>

@@ -9,6 +9,7 @@ import { sendAuthorizationIssueResponse } from "./authorization-response.handler
 import { sendAuthorizationFailResponse } from "./authorization-fail-response.handler";
 import { validateOrThrow, loginSchema } from "../utils/validation";
 import consentStore from "../services/consent-store.service";
+import { claimsFromScopes, claimLabel } from "../utils/scope-claims";
 
 const loginAttempts = new Map<string, { count: number; banUntil: number }>()
 const MAX_LOGIN_ATTEMPTS = 5
@@ -210,7 +211,12 @@ export function createSessionController(
     }
     const { clientName = "", redirectUri = "", authorizationIssueRequest: { scopes = [], authorizationDetails } = {} } =
       req.session.authorization || {};
-    res.render("consent", { clientName, scopes, redirectUri, authorizationDetails });
+
+    // Derive claim names from scopes per OIDC Core 1.0 §5.4
+    const claimNames = claimsFromScopes(scopes as string[]);
+    const claims = claimNames.map(name => ({ name, label: claimLabel(name) }));
+
+    res.render("consent", { clientName, scopes, redirectUri, authorizationDetails, claims });
   },
 
   handleConsent: async (
@@ -226,6 +232,17 @@ export function createSessionController(
       const decision = req.body.decision; // "approve" or "deny"
       const ticket =
         req.session.authorization.authorizationIssueRequest?.ticket;
+
+      // Capture claim-level consent from form checkboxes
+      const consentedClaimsRaw = req.body.consentedClaims;
+      const consentedClaims: string[] | undefined = Array.isArray(consentedClaimsRaw)
+        ? consentedClaimsRaw
+        : consentedClaimsRaw
+          ? [consentedClaimsRaw]
+          : undefined;
+      if (consentedClaims) {
+        req.session.authorization.consentedClaims = consentedClaims;
+      }
 
       if (decision === "approve") {
         // Call Authlete /authorization/issue API

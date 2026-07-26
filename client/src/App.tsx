@@ -8,6 +8,7 @@ import {
   KeyRound, Shield, LogOut,
   UserPlus, Bell, Send, Smartphone, BellOff, Compass, Globe,
   Settings, Users, FileCheck, HeartPulse, BadgeCheck, ListChecks, FileText, ShieldAlert,
+  Bot,
 } from 'lucide-react';
 
 const AuthFlowsSection = lazy(() => import('@/components/auth/AuthFlowsSection'));
@@ -25,6 +26,7 @@ const DiscoverySection = lazy(() => import('@/components/oidc/DiscoverySection')
 const FederationSection = lazy(() => import('@/components/oidc/FederationSection').then((m) => ({ default: m.FederationSection })));
 const VciSection = lazy(() => import('@/components/vci/VciSection').then((m) => ({ default: m.VciSection })));
 const FapiSection = lazy(() => import('@/components/fapi/FapiSection').then((m) => ({ default: m.FapiSection })));
+const McpSection = lazy(() => import('@/components/mcp/McpSection').then((m) => ({ default: m.McpSection })));
 const RarSection = lazy(() => import('@/components/oidc/RarSection').then((m) => ({ default: m.RarSection })));
 const JarSection = lazy(() => import('@/components/oidc/JarSection').then((m) => ({ default: m.JarSection })));
 const HealthSection = lazy(() => import('@/components/admin/HealthSection').then((m) => ({ default: m.HealthSection })));
@@ -45,6 +47,7 @@ export type SectionId =
   | 'discovery'
   | 'federation'
   | 'fapi'
+  | 'mcp'
   | 'vci'
   | 'admin'
   | 'client-mgmt'
@@ -86,6 +89,7 @@ const SECTIONS: SectionGroup[] = [
       { id: 'discovery', label: 'Discovery', path: '/discovery', icon: <Compass className="h-4 w-4" /> },
       { id: 'federation', label: 'OIDC Federation', path: '/federation', icon: <Globe className="h-4 w-4" /> },
       { id: 'fapi', label: 'FAPI 2.0 / DPoP', path: '/fapi', icon: <Shield className="h-4 w-4" /> },
+      { id: 'mcp', label: 'MCP (Model Context)', path: '/mcp', icon: <Bot className="h-4 w-4" /> },
       { id: 'vci', label: 'Verifiable Credentials', path: '/vci', icon: <BadgeCheck className="h-4 w-4" /> },
     ],
   },
@@ -117,6 +121,7 @@ const sectionComponents: Record<SectionId, React.FC> = {
   'discovery': DiscoverySection,
   'federation': FederationSection,
   'fapi': FapiSection,
+  'mcp': McpSection,
   'vci': VciSection,
   'admin': AdminSection,
   'client-mgmt': ClientManagementSection,

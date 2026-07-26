@@ -85,6 +85,15 @@ export class AuthorizationService {
       ...req.session.authorization?.authorizationIssueRequest,
     } as AuthorizationIssueRequest;
 
+    // Pass consented claims to Authlete so they are stored and later
+    // returned in /auth/userinfo and /auth/introspection responses.
+    if (req.session.authorization?.consentedClaims) {
+      reqBody.consentedClaims = req.session.authorization.consentedClaims;
+      log("Passing consented claims to Authlete", {
+        consentedClaims: reqBody.consentedClaims,
+      });
+    }
+
     // RFC 9470: Pass authentication context to Authlete so it binds
     // acr and auth_time to the access token (and ID token).
     // These come from session.stepUp set during the login flow.

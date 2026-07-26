@@ -1851,6 +1851,18 @@ const spec: Record<string, unknown> = {
         },
       },
     },
+    "/.well-known/oauth-authorization-server": {
+      get: {
+        summary: "Authorization Server Metadata (RFC 8414)",
+        description: "Returns the authorization server metadata document for MCP (Model Context Protocol) discovery. Serves the same OpenID Connect Discovery content at the RFC 8414 well-known path. MCP clients try this path first, then fall back to /.well-known/openid-configuration.",
+        responses: {
+          "200": {
+            description: "AS metadata document (same as openid-configuration)",
+            content: { "application/json": { schema: { type: "object" } } },
+          },
+        },
+      },
+    },
     "/nativesso": {
       post: {
         summary: "Native SSO processing",

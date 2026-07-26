@@ -84,6 +84,9 @@ export const VCI_DEFERRED_ISSUE_ENDPOINT = `${API_BASE_URL}/api/vci/deferred/iss
 export const FAPI_CONFIG_ENDPOINT = `${API_BASE_URL}/api/fapi/config`;
 export const FAPI_STATUS_ENDPOINT = `${API_BASE_URL}/api/fapi/status`;
 
+export const MCP_AS_METADATA_ENDPOINT = `${API_BASE_URL}/api/.well-known/oauth-authorization-server`;
+export const MCP_CIMD_ENDPOINT = `${API_BASE_URL}/api/authorization`; // CIMD uses standard auth endpoint
+
 export const HEALTH_ENDPOINT = `${API_BASE_URL}/api/health`;
 export const HEALTH_ALL_ENDPOINT = `${API_BASE_URL}/api/health/all`;
 export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;

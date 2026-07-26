@@ -159,43 +159,48 @@ export const tokenRevokeToken = {
       if (!checkAuth(req, res)) return;
       const result = await tokenManagementService.revoke(req);
 
+      // TokenRevokeResponse has no `action` field — only `resultCode`, `resultMessage`, `count`.
+      // The SDK throws ResultError for HTTP 400/401/403/500, so this switch only handles 200 responses.
       switch (result.resultCode) {
+        // A000000: success, tokens revoked
+        // A135001/A312001: token not found — per OAuth spec, revocation of non-existent token is success (RFC 7009 §2.1)
+        case "A000000":
         case "A135001":
         case "A312001":
           res.setHeader("Content-Type", "application/json");
-          return res.status(200).send(result);
+          return res.status(200).json({ count: result.count ?? 0 });
 
-        case "A001201":
+        default: {
+          const log = req.logger || logger;
+          log.error("Token Revoke: unexpected resultCode", {
+            resultCode: result.resultCode,
+            resultMessage: result.resultMessage,
+          });
           res.setHeader("Content-Type", "application/json");
-          return res.status(400).send(result);
-
-        case "A001202":
-          res.setHeader("Content-Type", "application/json");
-          return res.status(401).send(result);
-
-        case "A001215":
-          res.setHeader("Content-Type", "application/json");
-          return res.status(403).send(result);
-
-        case "A001101":
-          res.setHeader("Content-Type", "application/json");
-          return res.status(500).send(result);
-
-        default:
-          res.setHeader("Content-Type", "application/json");
-          return res.status(404).json(result);
+          return res.status(500).json({
+            error: "server_error",
+            error_description: "Token revocation failed",
+          });
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       const log = req.logger || logger;
       log.error("Token Revoke Response Error", { message: error.message });
-      // Handle Authlete API errors (e.g., token not found on this service)
-      if (error.message.includes("A313301") || error.message.includes("The specified access token does not exist")) {
+
+      // SDK throws ResultError for HTTP 400/401/403/500 from Authlete.
+      // Extract resultCode if available for token-not-found detection.
+      const errWithCode = err as Record<string, unknown>;
+      const resultCode =
+        typeof errWithCode.resultCode === "string" ? errWithCode.resultCode : undefined;
+
+      if (resultCode?.startsWith("A313301") || error.message.includes("does not exist")) {
         return res.status(404).json({
-          resultCode: "A313301",
-          resultMessage: "[A313301] The specified access token does not exist.",
+          error: "not_found",
+          error_description: "The specified access token does not exist.",
         });
       }
+
       return next(error);
     }
   },

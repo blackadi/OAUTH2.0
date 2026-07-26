@@ -55,7 +55,11 @@ export const userinfoController = {
           }
 
           const subject = result.subject;
-          const claimNames: string[] = result.claims || [];
+          // Use consentedClaims if available (user-level consent),
+          // otherwise fall back to claims (scope-derived list).
+          const claimNames: string[] = result.consentedClaims?.length
+            ? result.consentedClaims
+            : result.claims || [];
 
           if (!subject) {
             const log1 = req.logger || logger;

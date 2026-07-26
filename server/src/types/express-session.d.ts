@@ -12,6 +12,8 @@ declare module "express-session" {
       redirectUri?: string;
       authorizationIssueRequest?: AuthorizationIssueRequest;
       nativeSsoRequested?: boolean;
+      // Claims the user consented to share (passed to Authlete at issue time)
+      consentedClaims?: string[];
       // RFC 9470: Authentication requirements from the authorization request
       acrs?: string[];
       acrEssential?: boolean;

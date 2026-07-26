@@ -676,6 +676,81 @@ const docs: Record<string, Record<string, OpDoc>> = {
       tips: 'The interval between polling attempts depends on the server configuration. If the server returns another 202, keep polling with the same transaction_id.',
     },
   },
+  'mcp': {
+    'discovery': {
+      title: 'AS Metadata Discovery',
+      description: 'Fetches the Authorization Server metadata document. MCP clients use this to auto-discover all server endpoints, supported features (CIMD, resource indicators, PKCE), and capabilities. The client first tries RFC 8414 (/.well-known/oauth-authorization-server), then falls back to OIDC Discovery (/.well-known/openid-configuration).',
+      params: [
+        { name: 'Issuer URL', desc: 'The base URL of the authorization server (e.g. http://localhost:3000). No path component needed.' },
+      ],
+      returns: 'JSON with issuer, authorization_endpoint, token_endpoint, registration_endpoint (if DCR supported), resource_indicators_supported, code_challenge_methods_supported, scopes_supported, and other AS metadata fields.',
+      tips: 'MCP spec requires clients to support both discovery mechanisms. This server publishes metadata at both well-known paths. Use the metadata to build authorization URLs and token requests automatically.',
+    },
+    'resource-metadata': {
+      title: 'Protected Resource Metadata',
+      description: 'Fetches the Protected Resource Metadata (RFC 9728) from an MCP server. This tells the AI client which authorization servers are trusted for accessing the resource, and what scopes are available. The MCP server publishes this at its well-known path.',
+      params: [
+        { name: 'Resource URL', desc: 'The base URL of the MCP server (e.g. https://mcp-server.example.com).' },
+      ],
+      returns: 'JSON with resource identifier, authorization_servers array (list of trusted AS issuers), scopes_supported, and bearer_methods_supported.',
+      tips: 'The Protected Resource Metadata tells the client which AS to use. If the MCP server returns multiple authorization_servers, the client can choose any of them. This is how MCP achieves trust without pre-configuration.',
+    },
+    'cimd': {
+      title: 'CIMD Metadata (Client ID Metadata Document)',
+      description: 'Fetches a Client ID Metadata Document from an HTTPS URL. In MCP, clients register by providing a URL (the client_id itself) that points to their metadata. The server fetches this URL to learn the client name, redirect URIs, and other properties — no client_secret needed.',
+      params: [
+        { name: 'CIMD URL', desc: 'An HTTPS URL pointing to the client metadata JSON document (e.g. https://myapp.com/.well-known/oauth-client).' },
+      ],
+      returns: 'JSON with client_name, redirect_uris, grant_types, response_types, token_endpoint_auth_method, scope, and other client metadata fields per CIMD spec.',
+      tips: 'CIMD URLs must use HTTPS. The metadata document should include at minimum: client_name, redirect_uris, grant_types, response_types, and token_endpoint_auth_method. For MCP, set token_endpoint_auth_method to "none" (public client).',
+    },
+    'authorize-url': {
+      title: 'Build Authorization URL',
+      description: 'Constructs a complete MCP authorization URL with PKCE (S256) and optional resource indicator. The URL includes all required OAuth 2.1 parameters: response_type=code, client_id, redirect_uri, scope, state, code_challenge, and code_challenge_method=S256. Optionally adds the resource parameter per RFC 8707.',
+      params: [
+        { name: 'Issuer URL', desc: 'The authorization server base URL from metadata discovery.' },
+        { name: 'Client ID', desc: 'The client identifier — can be an HTTPS URL (CIMD) or a traditional client_id.' },
+        { name: 'Redirect URI', desc: 'Where the AS sends the user after consent. Must match the client metadata.' },
+        { name: 'Scope', desc: 'Space-separated scopes (e.g. "mcp:tools mcp:resources openid").' },
+        { name: 'Resource', desc: 'Optional: The MCP server URL (RFC 8707 resource indicator). Tokens will be scoped to this resource.' },
+      ],
+      returns: 'A complete authorization URL ready to open in a browser. Includes PKCE code_challenge in the URL.',
+      tips: 'The resource parameter (RFC 8707) scopes the access token to a specific MCP server. Without it, the token may be accepted by any resource server. Always use PKCE S256 for public clients — it is mandatory per OAuth 2.1.',
+    },
+    'token-exchange': {
+      title: 'Token Exchange (PKCE)',
+      description: 'Exchanges an authorization code for tokens using PKCE. Sends the code_verifier to prove the client initiated the authorization. This is the standard OAuth 2.1 token exchange for public clients — no client_secret required.',
+      params: [
+        { name: 'Token Endpoint', desc: 'The token endpoint URL from AS metadata (e.g. http://localhost:3000/api/token).' },
+        { name: 'Authorization Code', desc: 'The code received from the authorization redirect callback.' },
+        { name: 'Client ID', desc: 'The client identifier (same as used in the authorization request).' },
+        { name: 'Redirect URI', desc: 'Must match exactly the redirect_uri used in the authorization request.' },
+        { name: 'Code Verifier', desc: 'The PKCE code_verifier that was used to generate the code_challenge.' },
+      ],
+      returns: 'JSON with access_token, token_type (Bearer), expires_in, scope, and optionally refresh_token.',
+      tips: 'The code_verifier must match the one used to generate the code_challenge in the authorization request. If you lose it, you must restart the flow. The token response may include refresh_token for long-lived access.',
+    },
+    'introspect': {
+      title: 'Introspect MCP Token',
+      description: 'Validates an MCP access token using RFC 7662 standard introspection. Returns the token metadata including scopes, expiration, resource binding, and client identity. Use this to verify a token before granting access to MCP tools.',
+      params: [
+        { name: 'Token Endpoint', desc: 'The introspection endpoint URL (e.g. http://localhost:3000/api/introspection/standard).' },
+        { name: 'Access Token', desc: 'The access token to validate.' },
+      ],
+      returns: 'JSON with active (boolean), sub, scope, client_id, token_type, exp, iat, and other standard fields per RFC 7662.',
+      tips: 'An inactive token (active=false) means it has expired, been revoked, or was never issued. Always check the active field before trusting the token. For JWT tokens, you can also verify the signature locally using the JWKS endpoint.',
+    },
+    'userinfo': {
+      title: 'Fetch UserInfo',
+      description: 'Calls the UserInfo endpoint with an access token to get the identity of the authenticated user. Returns standard OIDC claims. This is how MCP clients learn who approved the access.',
+      params: [
+        { name: 'UserInfo Endpoint', desc: 'The UserInfo endpoint URL from AS metadata (e.g. http://localhost:3000/api/userinfo).' },
+        { name: 'Access Token', desc: 'The access token from the token exchange.' },
+      ],
+      returns: 'JSON with sub, name, email, and other OIDC claims. The claims depend on the scopes granted during authorization.',
+      tips: 'UserInfo requires an access token with the openid scope. Without it, the endpoint returns minimal information. Use this to personalize the AI experience based on the user identity.',
+    },
+  },
   'fapi': {
     'config': {
       title: 'FAPI 2.0 Configuration',
