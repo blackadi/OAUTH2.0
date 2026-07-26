@@ -1761,18 +1761,68 @@ const spec: Record<string, unknown> = {
     "/fapi/config": {
       get: {
         summary: "FAPI configuration",
-        description: "Returns the FAPI 2.0 configuration including supported algorithms, DPoP settings, and signing parameters.",
+        description: "Returns the FAPI 2.0 configuration including supported algorithms, DPoP settings, signing parameters, and CIMD (Client ID Metadata Document) support status.",
         responses: {
-          "200": { description: "FAPI configuration" },
+          "200": {
+            description: "FAPI configuration",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    mode: { type: "string", enum: ["sp", "ms", "disabled"], description: "FAPI mode: sp=Security Profile, ms=Message Signing, disabled" },
+                    dpopEnabled: { type: "boolean", description: "Whether DPoP nonce requirement is enabled" },
+                    requiredClientAuth: { type: "string", description: "Required client authentication method" },
+                    senderConstrainedTokens: { type: "string", description: "Token binding method (DPoP or none)" },
+                    parRequired: { type: "boolean", description: "Whether PAR is required" },
+                    pkceRequired: { type: "boolean", description: "Whether PKCE is required" },
+                    refreshTokenRotation: { type: "boolean", description: "Whether refresh token rotation is enabled" },
+                    scopeRequired: { type: "boolean", description: "Whether scope parameter is required" },
+                    cimdSupported: { type: "boolean", description: "Whether OAuth Client ID Metadata Document (CIMD) is supported. When enabled, clients can use HTTPS URLs as client_id and Authlete auto-fetches metadata from that URL." },
+                    specs: {
+                      type: "object",
+                      properties: {
+                        securityProfile: { type: "string" },
+                        messageSigning: { type: "boolean" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
     "/fapi/status": {
       get: {
         summary: "FAPI status",
-        description: "Returns the current FAPI 2.0 compliance status including active configurations and test results.",
+        description: "Returns the current FAPI 2.0 compliance status including active configurations, test results, and whether CIMD (Client ID Metadata Document) is enabled on the Authlete service.",
         responses: {
-          "200": { description: "FAPI status" },
+          "200": {
+            description: "FAPI status",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    mode: { type: "string" },
+                    dpopEnabled: { type: "boolean" },
+                    issuer: { type: "string" },
+                    fapiModes: { type: "array", items: { type: "string" } },
+                    dpopNonceRequired: { type: "boolean" },
+                    dpopNonceDuration: { type: "integer" },
+                    scopeRequired: { type: "boolean" },
+                    refreshTokenKept: { type: "boolean" },
+                    refreshTokenIdempotent: { type: "boolean" },
+                    pkceRequired: { type: "boolean" },
+                    parRequired: { type: "boolean" },
+                    clientIdMetadataDocumentSupported: { type: "boolean", description: "Whether CIMD is enabled on the Authlete service (clientIdMetadataDocumentSupported)" },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },

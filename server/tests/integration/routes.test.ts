@@ -234,6 +234,7 @@ describe("Integration: all API routes", () => {
       mockApi.service.get.mockResolvedValue({
         fapiModes: ["FAPI2_SECURITY"],
         dpopNonceRequired: true,
+        clientIdMetadataDocumentSupported: true,
       })
       const res = await request(app).get("/api/fapi/config").expect(200)
       expect(res.body.mode).toBe("sp")
@@ -242,6 +243,7 @@ describe("Integration: all API routes", () => {
       expect(res.body.parRequired).toBe(true)
       expect(res.body.pkceRequired).toBe(true)
       expect(res.body.scopeRequired).toBe(true)
+      expect(res.body.cimdSupported).toBe(true)
     })
   })
 
@@ -257,6 +259,7 @@ describe("Integration: all API routes", () => {
         refreshTokenIdempotent: false,
         pkceRequired: true,
         parRequired: true,
+        clientIdMetadataDocumentSupported: false,
       })
       const res = await request(app).get("/api/fapi/status").expect(200)
       expect(res.body.mode).toBe("sp")
@@ -264,6 +267,7 @@ describe("Integration: all API routes", () => {
       expect(res.body.dpopNonceRequired).toBe(true)
       expect(res.body.fapiModes).toContain("FAPI2_SECURITY")
       expect(res.body.issuer).toBe("https://auth.example.com")
+      expect(res.body.clientIdMetadataDocumentSupported).toBe(false)
     })
 
     it("returns 500 when Authlete call fails", async () => {

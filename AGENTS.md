@@ -183,6 +183,7 @@ The Authlete service (configured via the [Authlete web console](https://console.
 | `nbfOptional` | `false` | Enforce request object lifespan ≤60s for FAPI 1.0 compliance | Mistake #13 |
 | `unauthorizedOnClientConfigSupported` | `true` | Return proper 401 for non-existent DCR clients (RFC 7592) | Mistake #11 |
 | `idTokenReissuable` | `true` | Enable ID token reissuance during refresh token flow (OIDC Core §12.2) | Mistake #16 |
+| `clientIdMetadataDocumentSupported` | `false` | Enable OAuth Client ID Metadata Document (CIMD) — allows HTTPS URLs as client_id with auto-fetched metadata. Set `true` only if targeting MCP or CIMD-aware ecosystems. | CIMD spec |
 
 **Brazil-specific flags** (set only if targeting Brazil's API ecosystem):
 
@@ -238,3 +239,4 @@ The token controller (`src/controllers/token.controller.ts`) handles every Authl
 - **Request object E2E test** creates ephemeral DCR client (deleted in `afterAll`). Guarded by `hasManagement`
 - **Authlete rate limit**: ~15+ token calls in short window → 429; E2E tests accept 429 as valid
 - **`requireBasicAuth`** checks `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`; if unset, all management routes are unprotected
+- **CIMD (Client ID Metadata Document)**: Authlete handles CIMD entirely server-side — when `clientIdMetadataDocumentSupported: true`, an HTTPS URL as `client_id` triggers automatic metadata fetch and client registration. No new endpoints or client code needed. Surfaced in FAPI config/status endpoints and client UI. [CIMD spec](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)

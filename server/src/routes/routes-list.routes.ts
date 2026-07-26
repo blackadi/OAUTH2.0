@@ -473,12 +473,12 @@ const ROUTES: RouteEntry[] = [
   {
     method: "GET",
     path: "/api/fapi/config",
-    description: "FAPI 2.0 configuration — returns the server's FAPI mode, DPoP status, and compliance info",
+    description: "FAPI 2.0 configuration — returns FAPI mode, DPoP status, CIMD support, and compliance info",
   },
   {
     method: "GET",
     path: "/api/fapi/status",
-    description: "FAPI 2.0 status — returns Authlete service configuration including fapiModes and DPoP settings",
+    description: "FAPI 2.0 status — returns Authlete service config including fapiModes, DPoP, and CIMD (clientIdMetadataDocumentSupported) settings",
   },
 
   // ── Metrics ──────────────────────────────────────────────────

@@ -26,6 +26,7 @@ interface FapiConfig {
   pkceRequired: boolean;
   refreshTokenRotation: boolean;
   scopeRequired: boolean;
+  cimdSupported: boolean;
 }
 
 function FapiSection() {
@@ -217,6 +218,11 @@ function FapiSection() {
                   <Badge variant="success">DPoP Enabled</Badge>
                 ) : (
                   <Badge variant="info">DPoP Disabled</Badge>
+                )}
+                {configData.cimdSupported ? (
+                  <Badge variant="success">CIMD Enabled</Badge>
+                ) : (
+                  <Badge variant="info">CIMD Disabled</Badge>
                 )}
               </div>
             )}

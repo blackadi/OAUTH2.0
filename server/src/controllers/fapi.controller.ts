@@ -28,6 +28,9 @@ export const fapiController = {
 
       const mode = computeFapiMode(service.fapiModes);
       const dpopEnabled = service.dpopNonceRequired ?? false;
+      const cimdSupported =
+        (service as Record<string, unknown>)
+          .clientIdMetadataDocumentSupported === true;
 
       res.json({
         mode,
@@ -38,6 +41,7 @@ export const fapiController = {
         pkceRequired: true,
         refreshTokenRotation: false,
         scopeRequired: true,
+        cimdSupported,
         specs: {
           securityProfile: "FAPI 2.0 Security Profile",
           messageSigning: mode === "ms",
@@ -72,6 +76,9 @@ export const fapiController = {
         refreshTokenIdempotent: service.refreshTokenIdempotent,
         pkceRequired: service.pkceRequired,
         parRequired: service.parRequired,
+        clientIdMetadataDocumentSupported:
+          (service as Record<string, unknown>)
+            .clientIdMetadataDocumentSupported ?? false,
       });
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

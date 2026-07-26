@@ -27,6 +27,7 @@ describe("FAPI routes", () => {
     mockServiceGet.mockResolvedValue({
       fapiModes: ["FAPI2_SECURITY"],
       dpopNonceRequired: true,
+      clientIdMetadataDocumentSupported: true,
     });
 
     const res = await request(app).get("/fapi/config");
@@ -39,6 +40,7 @@ describe("FAPI routes", () => {
     expect(res.body.pkceRequired).toBe(true);
     expect(res.body.refreshTokenRotation).toBe(false);
     expect(res.body.scopeRequired).toBe(true);
+    expect(res.body.cimdSupported).toBe(true);
     expect(res.body.specs.securityProfile).toBe("FAPI 2.0 Security Profile");
     expect(res.body.specs.messageSigning).toBe(false);
     expect(mockServiceGet).toHaveBeenCalledOnce();
@@ -67,6 +69,7 @@ describe("FAPI routes", () => {
     expect(res.body.mode).toBe("disabled");
     expect(res.body.dpopEnabled).toBe(false);
     expect(res.body.senderConstrainedTokens).toBe("none");
+    expect(res.body.cimdSupported).toBe(false);
   });
 
   it("GET /fapi/status returns live Authlete config", async () => {
@@ -80,6 +83,7 @@ describe("FAPI routes", () => {
       refreshTokenIdempotent: false,
       pkceRequired: true,
       parRequired: true,
+      clientIdMetadataDocumentSupported: true,
     });
 
     const res = await request(app).get("/fapi/status");
@@ -90,6 +94,7 @@ describe("FAPI routes", () => {
     expect(res.body.fapiModes).toContain("FAPI2_SECURITY");
     expect(res.body.dpopNonceRequired).toBe(true);
     expect(res.body.dpopNonceDuration).toBe(3600);
+    expect(res.body.clientIdMetadataDocumentSupported).toBe(true);
     expect(mockServiceGet).toHaveBeenCalledOnce();
   });
 
