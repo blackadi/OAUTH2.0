@@ -24,7 +24,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 02 · OAuth core + threats | Draw the authorization-code flow at wire level; name two grants RFC 9700 deprecates and why. |
 | [x] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
 | [x] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
-| [ ] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
+| [x] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
 | [ ] | 06 · Machine + delegated grants | Distinguish impersonation from delegation in a token-exchange response; choose a grant for a daemon. |
 | [ ] | 07 · OAuth 2.1 + Security BCP | Map five RFC 9700 attacks to the module that defends each; state what OAuth 2.1 removes. |
 | [ ] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user; validate an ID token step by step; `nonce` vs. `state`. |
@@ -75,20 +75,37 @@ against it before calling the capstone complete._
 - [x] **Module 02 — OAuth Core + Threats** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 03 — PKCE + Public Clients** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 04 — Token Lifecycle + Metadata** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 05 — Request Integrity + Binding  ← **next** (carries the gated mTLS proposal)
-- [ ] Modules 06–12 (09a/09b) — pending
+- [x] **Module 05 — Request Integrity + Binding** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 06 — Machine + Delegated Grants  ← **next**
+- [ ] Modules 07–12 (09a/09b) — pending
 - [ ] Stage 4 — consistency pass
 
-### Awaiting a decision — gated source change (Module 04)
+### Awaiting a decision — gated source changes
 
-**Serve RFC 9728 Protected Resource Metadata.** Proposed in full at the end of
-[Module 04's README](modules/04-token-lifecycle-and-metadata/README.md#proposed-source-change--serve-rfc-9728-needs-your-approval).
-No code written. One additive route + controller + config value + unit test at true root, next to
-`oauthAsMetadataRoutes`. If declined, the lab stands as written — it uses the missing endpoint as a
-detection exercise. Nothing else depends on it until Module 09a's MCP material.
+**Two proposals are open. No code has been written for either.**
+
+1. **RFC 9728 Protected Resource Metadata** (Module 04) — one additive route + controller + config value +
+   unit test at true root, beside `oauthAsMetadataRoutes`. Small.
+2. **mTLS / RFC 8705** (Module 05) — dev TLS listener requesting a client certificate, a local-CA script,
+   certificate pass-through to Authlete on token/PAR/introspection calls, `cnf["x5t#S256"]` in introspection
+   output, and registration examples for `tls_client_auth` / `self_signed_tls_client_auth`. **Substantially
+   larger**; my recommendation is to treat it as its own piece of work rather than a curriculum side effect.
+   If declined, Module 10 teaches mTLS against the spec and the Authlete configuration surface, labelled as
+   not-run-here.
+
+Each is written up in full at the end of its module README —
+[RFC 9728](modules/04-token-lifecycle-and-metadata/README.md#proposed-source-change--serve-rfc-9728-needs-your-approval)
+and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-change--implement-mtls-needs-your-approval).
 
 ### Findings worth acting on outside the curriculum
 
+- **UserInfo cannot accept a DPoP-bound token.** `server/src/services/userinfo.service.ts:21` does
+  `authHeader.replace("Bearer ", "")`, so `Authorization: DPoP <token>` — the scheme RFC 9449 §7.1 **requires**
+  for DPoP-bound tokens — passes the literal string `"DPoP <token>"` to Authlete, which answers `[A088302] The
+  access token does not exist.` Verified end to end during the Module 05 build: the token endpoint issues a
+  `token_type: DPoP` token with a valid `cnf.jkt`, and the resource endpoint then cannot accept it. One-line
+  fix (strip either scheme, case-insensitively). Taught as Module 05's Tier-3 finding; not fixed, because it is
+  server source.
 - **The introspection endpoint is unauthenticated.** `POST /api/introspection/standard` (and
   `/api/introspection`) answer fully with no client credentials and no bearer token. RFC 7662 §2.1: *"To
   prevent token scanning attacks, the endpoint MUST also require some form of authorization to access this
@@ -128,6 +145,41 @@ Nothing on the Authlete service was changed by the curriculum build; the repo ow
 
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
+
+### Module 05 — done / verified / uncertain
+
+- **Done:** `README.md` — two unexamined assumptions (the request is not trustworthy; possession is not
+  entitlement) drive the whole module; PAR vs JAR as a genuine design choice rather than two names for one
+  thing; mix-up and why PKCE does not stop it; DPoP built up claim by claim with each element tied to the
+  attack it defends; a DPoP-vs-mTLS comparison table; and the observation that PKCE → DPoP is the same
+  commit-then-prove pattern one level up (third occurrence in the curriculum, named as a pattern). `lab.md` —
+  five exercises plus a four-way DPoP break. `quiz.md` + `quiz-answers.md` (19 items across 4 tiers). Added
+  five terms to GLOSSARY. Contains the gated mTLS proposal.
+- **Verified against the live server (every lab command executed):** PAR → **201** with
+  `urn:ietf:params:oauth:request_uri:…` and `expires_in: 600`; the handle drives a complete authorization
+  flow carrying only `client_id` + `request_uri` through the browser; **reuse → `invalid_request_uri`
+  `[A008303]`** (RFC 9126 §4 single-use enforced). JAR: `alg:none` request object → **`[A008311]` "the service
+  is configured to conform to JAR … request objects must be always signed."** `iss` present on success **and**
+  error redirects; `authorization_response_iss_parameter_supported: true`. DPoP: proof built by hand
+  (64-byte raw P1363 signature confirmed), token exchange → **`token_type: DPoP`**, introspection →
+  `cnf: {"jkt": …}`, and **an independently computed RFC 7638 thumbprint matched the `jkt` exactly**. Four
+  break cases: DER signature → `[A254301] Signed JWT rejected: Invalid signature`; `kid` without `jwk` →
+  `[A254303] The DPoP header did not include a public key in JWK format.`; wrong `htu` → `[A254301]` htu
+  mismatch; correct proof → success. Resource access with `Authorization: DPoP` → `[A088302]` (the server bug
+  above). **Verified (primary sources):** RFC 9126 title/date, §2.2 201 requirement, unguessability and
+  client-binding sentences, the 5–600 s guidance, §4 single-use sentence, and the client-authentication
+  sentence — all quoted verbatim. RFC 9101 title/date, §5 parameter-precedence sentence, §10.1 signing
+  requirement, §4 `iss`/`aud` guidance, §10.8 on `oauth-authz-req+jwt`. RFC 9207 title/date, §2 definition and
+  AS requirement (including error responses), §2.4 client extraction and rejection requirements, §3 metadata
+  name. RFC 9449 title/date, §4.2 header and claim requirements and the `ath` definition, §6.1 `jkt`
+  definition, §7 and §7.1 scheme and `ath` requirements. RFC 8705 title/date, §2.1/§2.2/§3, both auth-method
+  values, the `x5t#S256` definition, and the protected-resource verification sentence.
+- **Uncertain / notes:** **the signed-JAR path is not exercised** — the lab's public client has no registered
+  JWKS, so only the `alg:none` rejection is demonstrated; labelled in the lab as a client-configuration limit,
+  not a spec or server limit. **mTLS is not implemented and nothing claims to run it.** The `htu` this server
+  compares against is derived from its own `Host` header and omitted the port on this deployment
+  (`http://localhost/api/par`) — noted in the lab as deployment behaviour, and flagged as the shape of a
+  classic false failure behind a proxy. Bracketed Authlete codes are labelled vendor behavior throughout.
 
 ### Module 04 — done / verified / uncertain
 
