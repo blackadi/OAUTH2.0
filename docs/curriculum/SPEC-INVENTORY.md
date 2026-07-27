@@ -21,6 +21,14 @@ table and as a map from "what the spec says" to "what runs here."
 
 ---
 
+## 0. Transport & encoding foundations (Module 00)
+
+| Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
+|---|---|---|---|---|---|---|
+| RFC 8446 | The Transport Layer Security (TLS) Protocol Version 1.3 | Published RFC | Aug 2018 | Modern transport encryption between two endpoints | Eavesdropping/tampering on the wire (not at the endpoints) | all HTTPS transport; production/tunnel deployment |
+| RFC 9110 | HTTP Semantics | Published RFC (Internet Standard) | Jun 2022 | Version-independent HTTP methods, status, headers | Common vocabulary for every request/response | every route in `server/src` |
+| RFC 4648 | The Base16, Base32, and Base64 Data Encodings | Published RFC | Oct 2006 | base64url (§5) — URL-safe, usually unpadded | The encoding of every JOSE segment | `scripts/decode-jwt.mjs`; `dpop.service.ts` |
+
 ## 1. JOSE — the cryptographic envelope (Module 00)
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |

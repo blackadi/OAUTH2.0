@@ -19,7 +19,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 
 | ✓ | Module | Self-assessment gate (do this without notes) |
 |---|--------|----------------------------------------------|
-| [ ] | 00 · Web + JOSE | Given a raw JWT, decode it locally and explain why decoding ≠ trusting; name the three JWS parts and what each protects. |
+| [x] | 00 · Web + JOSE | Given a raw JWT, decode it locally and explain why decoding ≠ trusting; name the three JWS parts and what each protects. |
 | [ ] | 01 · Delegation problem | Explain the password anti-pattern and name all six core roles + which endpoint each talks to. |
 | [ ] | 02 · OAuth core + threats | Draw the authorization-code flow at wire level; name two grants RFC 9700 deprecates and why. |
 | [ ] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
@@ -56,3 +56,40 @@ Each module quiz has 15–20 items across four tiers. You have passed a module w
 
 _The definition of done for the entire curriculum is at the bottom of [README.md](README.md). Measure yourself
 against it before calling the capstone complete._
+
+---
+
+## Build Log (resume state for a fresh session)
+
+> This section is the author's build tracker, not learner content. A fresh session should read it to know
+> exactly what is written, what was verified, and what is still open. Newest entry first. Modules are written
+> one per turn in order (00 → 12, with 09a/09b). Plan file:
+> `/home/blackadi/.claude/plans/playful-stargazing-hoare.md`.
+
+### Stage / module status
+
+- [x] Stage 1 — plan (approved)
+- [x] Stage 2 — scaffold + top-level docs (README, SPEC-INVENTORY, GLOSSARY, PROGRESS, scripts) — committed
+- [x] **Module 00 — Web + JOSE Foundations** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 01 — The Delegation Problem  ← **next**
+- [ ] Modules 02–12 (09a/09b) — pending
+- [ ] Stage 4 — consistency pass
+
+### Module 00 — done / verified / uncertain
+
+- **Done:** full lesson (`README.md`) covering front/back channel, TLS scope, JOSE stack, decode≠verify;
+  `lab.md` (discovery + JWKS + AS-metadata inspection, local decode, three break-it exercises); `quiz.md` +
+  `quiz-answers.md` (16 items across 4 tiers, incl. two DPoP JOSE-precision Tier-3 items previewing Module 05).
+  Added transport/encoding foundations (RFC 8446, 9110, 4648) to SPEC-INVENTORY §0.
+- **Verified (ran against the live server on :3000 / locally):** `GET /api/health` → 200; `GET
+  /api/.well-known/openid-configuration` → JSON (issuer/jwks_uri/endpoints); `GET
+  /api/.well-known/jwks.json` → 1 EC P-256 ES256 sig key (fields kty/use/crv/kid/x/y/alg); `GET
+  /.well-known/oauth-authorization-server` → JSON. `decode-jwt.mjs` sample decode + `--ath`; Break 1 (tamper
+  claim, keep sig → decodes as `sub:attacker`) and Break 2 (`alg:none`) both run as written. Spec dates
+  verified against primary sources (RFC 8446 Aug 2018, RFC 9110 Jun 2022, RFC 4648 Oct 2006, JOSE RFC
+  7515–7519/7638).
+- **Uncertain / notes:** the running server advertises a tunnel hostname + issuer `https://blackadi.dev` in
+  discovery (deployment-specific) — lab notes this and uses `localhost` directly; JWKS lives at
+  `/api/.well-known/jwks.json` (the `/api/jwks` path is the SPA fallback — corrected before writing). Two
+  Tier-3 quiz items reference DPoP (`ath` vs `sub`, required `jwk` header) as forward previews but embed the
+  RFC 9449 requirement in the question so they stay self-contained.
