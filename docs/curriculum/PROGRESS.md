@@ -23,7 +23,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 01 · Delegation problem | Explain the password anti-pattern and name all six core roles + which endpoint each talks to. |
 | [x] | 02 · OAuth core + threats | Draw the authorization-code flow at wire level; name two grants RFC 9700 deprecates and why. |
 | [x] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
-| [ ] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
+| [x] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
 | [ ] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
 | [ ] | 06 · Machine + delegated grants | Distinguish impersonation from delegation in a token-exchange response; choose a grant for a daemon. |
 | [ ] | 07 · OAuth 2.1 + Security BCP | Map five RFC 9700 attacks to the module that defends each; state what OAuth 2.1 removes. |
@@ -74,9 +74,26 @@ against it before calling the capstone complete._
 - [x] **Module 01 — The Delegation Problem** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 02 — OAuth Core + Threats** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 03 — PKCE + Public Clients** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 04 — Token Lifecycle + Metadata  ← **next**
-- [ ] Modules 05–12 (09a/09b) — pending
+- [x] **Module 04 — Token Lifecycle + Metadata** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 05 — Request Integrity + Binding  ← **next** (carries the gated mTLS proposal)
+- [ ] Modules 06–12 (09a/09b) — pending
 - [ ] Stage 4 — consistency pass
+
+### Awaiting a decision — gated source change (Module 04)
+
+**Serve RFC 9728 Protected Resource Metadata.** Proposed in full at the end of
+[Module 04's README](modules/04-token-lifecycle-and-metadata/README.md#proposed-source-change--serve-rfc-9728-needs-your-approval).
+No code written. One additive route + controller + config value + unit test at true root, next to
+`oauthAsMetadataRoutes`. If declined, the lab stands as written — it uses the missing endpoint as a
+detection exercise. Nothing else depends on it until Module 09a's MCP material.
+
+### Findings worth acting on outside the curriculum
+
+- **The introspection endpoint is unauthenticated.** `POST /api/introspection/standard` (and
+  `/api/introspection`) answer fully with no client credentials and no bearer token. RFC 7662 §2.1: *"To
+  prevent token scanning attacks, the endpoint MUST also require some form of authorization to access this
+  endpoint."* Verified repeatedly during the Module 04 build. It is taught as the module's Tier-3 finding
+  rather than silently fixed, but it is a real defect in the server and worth a separate issue.
 
 ### Service configuration — resolved, and what is still outstanding
 
@@ -111,6 +128,41 @@ Nothing on the Authlete service was changed by the curriculum build; the repo ow
 
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
+
+### Module 04 — done / verified / uncertain
+
+- **Done:** `README.md` — the self-contained-vs-reference decision framed as a real trade-off (latency,
+  revocation lag, availability); RFC 7662 with both anti-oracle rules quoted; RFC 7009 including the cascade
+  **SHOULD**; RFC 9068's `typ: at+jwt` and seven required claims, with token confusion explained; RFC 8707
+  `resource` → `aud`; a table separating the **three** metadata documents by consumer; RFC 7591/7592 and the
+  registration access token; a flowchart converging both token formats on the same three RS checks; and the
+  gated RFC 9728 proposal. `lab.md` — six exercises. `quiz.md` + `quiz-answers.md` (18 items across 4 tiers).
+  Added eight terms to GLOSSARY.
+- **Verified against the live server (every lab command executed):** `/api/introspection/standard` →
+  `{"active":true,"scope":"profile","client_id":…,"token_type":"Bearer","exp":…,"sub":"admin","iss":…,
+  "auth_time":…,"acr":"pwd"}`; `/api/introspection` → Authlete's richer object (`existent`/`usable`/
+  `sufficient`/`refreshable`/`scopes`/`grantType`/`consentedClaims`/`scopeDetails`). Revocation → 200, then
+  introspection → `{"active":false}`. Garbage token: revoke → **200**, introspect → **200
+  `{"active":false}`** — both anti-oracle rules confirmed. **`resource=https://api.example.com/orders` →
+  `aud":["https://api.example.com/orders"]` in the introspection response.** Both RFC 8707 violations →
+  `invalid_target`, delivered as a **redirect**: `[A251308]` (fragment) and `[A251307]` (not absolute).
+  AS metadata at true root and OIDC discovery under `/api` are **byte-identical key sets** on this
+  deployment. `/.well-known/oauth-protected-resource` → **200 `text/html`** (SPA catch-all), as does an
+  invented path; `grep -rn "oauth-protected-resource" server/src/` finds nothing. DCR → `[A206201] Service
+  does not support dynamic client registration.` **Verified (primary sources):** RFC 7662 title/date, §2.1
+  endpoint-protection sentence and §2.2 not-active sentence quoted verbatim, full member list; RFC 7009
+  title/date, §2.2 200-on-invalid sentence and the cascade SHOULD quoted verbatim; RFC 9068 title/date, §2.1
+  `typ` requirement quoted, all seven §2.2 required claims; RFC 8707 title/date, §2 absolute-URI/no-fragment
+  and multiple-occurrence sentences and the `invalid_target` definition quoted; RFC 9728 title, Apr 2025, §3
+  path, sole REQUIRED field `resource`, and the `WWW-Authenticate` sentence quoted.
+- **Uncertain / notes:** **the introspection endpoint is unauthenticated** — surfaced above as a real finding
+  and taught as the module's Tier-3 exercise, not fixed. The DCR exercise is marked optional because the
+  service does not have dynamic registration enabled, so its output is described from the spec rather than
+  claimed as observed; the one thing verified about it is the **request shape**, which wraps RFC 7591 metadata
+  in a `{"json": "…"}` field — a deployment adaptation, labelled as such. `at+jwt` access tokens **cannot** be
+  produced on this deployment (opaque tokens), so RFC 9068 is taught but no lab step claims to show one. The
+  identical AS-metadata/OIDC-discovery documents are labelled a deployment simplification, explicitly not a
+  spec equivalence.
 
 ### Module 03 — done / verified / uncertain
 

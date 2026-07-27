@@ -42,6 +42,13 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Refresh token rotation** | RFC 9700 §2.2.2, §4.14 | New refresh token on each use, old one invalidated; reuse ⇒ revoke the grant. One of the two permitted treatments for public clients. | `refreshTokenKept` flag (`AGENTS.md`) |
 | **Sender-constrained token** | RFC 9449 / RFC 8705 | Token bound to a key the client must prove possession of. The other permitted treatment. | Module 05 |
 | **External user-agent** | RFC 8252 §8.12 | The system browser, not an embedded webview — native apps **MUST NOT** use embedded user-agents. | Module 03 |
+| **Opaque / reference token** | RFC 6749 (format unspecified) | A token with no readable structure; the RS must introspect it. | This deployment's access tokens; Module 04 |
+| **Self-contained token** | RFC 9068 | A JWT the RS validates locally — fast, but stale until `exp`. | Module 04 |
+| **Introspection** | RFC 7662 | RS asks the AS "is this token active, and for what?" | `introspection.routes.ts` |
+| **Revocation lag** | *(consequence of RFC 9068 vs RFC 7662)* | The window in which a revoked JWT is still accepted — equal to its remaining lifetime. | Module 04 |
+| **Audience restriction** | RFC 8707 §2 → `aud` | Binding a token to the API it was requested for. | Module 04 |
+| **Token confusion** | *(mitigated by RFC 9068 §2.1 `typ`)* | An RS accepting an ID token (or other JWT) as an access token. | Modules 04, 08 |
+| **Registration access token** | RFC 7592 | Credential authorizing read/update/delete of **one** client registration. | `dcr.routes.ts` |
 
 ## Endpoints
 
