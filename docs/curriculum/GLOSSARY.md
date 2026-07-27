@@ -35,6 +35,9 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Front channel / back channel** | RFC 6749 §1.2 + §3.1/§3.2 | Via the browser (visible + editable) vs. direct server-to-server. | Module 00; every later threat |
 | **Confused deputy** | *(security literature; instances throughout RFC 9700)* | A privileged party tricked into misusing its authority for someone else. | Mix-up, audience confusion — Modules 01, 05 |
 | **Credential boundary** | *(design principle; follows from RFC 6749 §1.1)* | The rule that the credential is typed only on the AS's own origin. | `views/login.ejs:18` |
+| **Authorization code** | RFC 6749 §4.1.2 | Short-lived, single-use reference returned on the front channel; redeemable only with client authentication. | `/api/authorization` → `/api/token` |
+| **Code interception** | RFC 9700 §4.5 (Authorization Code Injection) | Stealing a code from the front channel and redeeming it. Fatal for public clients without PKCE. | Module 03 |
+| **Polling** | RFC 8628 §3.5 | Device repeatedly calls the token endpoint until the user finishes; `authorization_pending` / `slow_down`. | `device.routes.ts`; Module 02 |
 
 ## Endpoints
 

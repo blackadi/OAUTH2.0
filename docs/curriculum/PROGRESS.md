@@ -72,20 +72,70 @@ against it before calling the capstone complete._
 - [x] Stage 2 — scaffold + top-level docs (README, SPEC-INVENTORY, GLOSSARY, PROGRESS, scripts) — committed
 - [x] **Module 00 — Web + JOSE Foundations** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 01 — The Delegation Problem** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 02 — OAuth Core + Threats  ← **next** (read the blocker note under Module 01 first)
-- [ ] Modules 03–12 (09a/09b) — pending
+- [~] **Module 02 — OAuth Core + Threats** — README, quiz, quiz-answers written & committed;
+      **`lab.md` NOT written — blocked on the config change below**
+- [ ] Module 03 — PKCE + Public Clients
+- [ ] Modules 04–12 (09a/09b) — pending
 - [ ] Stage 4 — consistency pass
 
-### Open decisions the author needs from the repo owner
+### BLOCKER — one Authlete setting gates every token-issuing lab
 
-| # | Question | Blocks | Raised in |
-|---|----------|--------|-----------|
-| 1 | The Authlete service has **`require_pushed_authorization_requests` = true at the service level**, so *no* plain `GET /api/authorization` works. Should Module 02 (a) teach the code flow *through PAR* and forward-reference Module 05, or (b) should the flag be turned off in the Authlete console for the early modules and re-enabled at Module 05/10? | Module 02 onwards (any lab that issues a token) | Module 01 build |
-| 2 | The service also refuses **`client_secret_basic`** (`[A295301]`) and the **`password`** grant (`[A295306]`) for the existing `test` client, though both are advertised in discovery. Which client-auth method should the curriculum's labs standardise on? | Modules 02, 04, 06 | Module 01 build |
-| 3 | `GET /api/fapi/config` currently 500s with an SDK `ResponseValidationError` (`serviceGet`). Pre-existing, unrelated to the curriculum. Fix, or leave and route Module 10 around it? | Module 10 | Module 01 build |
+**Root cause (diagnosed during the Module 02 build, read directly from `/service/get`):**
 
-*(Gated source changes — JARM, mTLS, RFC 9728 PRM — are proposed inside Modules 05/09a/10 as planned; these
-three are configuration/pre-existing issues, not those.)*
+```
+fapiModes               = ["FAPI2_SECURITY"]
+supportedServiceProfiles = ["FAPI"]
+```
+
+The FAPI 2.0 Security Profile is enforced service-wide. That single setting — **not**
+`require_pushed_authorization_requests`, which now correctly reads `false` at both service and client level —
+explains every failure observed so far:
+
+| Symptom | Observed error | Why |
+|---|---|---|
+| Plain `GET /api/authorization` refused | `[A294308] The authorization request was sent without PAR.` | FAPI 2.0 mandates PAR |
+| `client_secret_basic` refused | `[A295301] The client authentication method ('client_secret_basic') is not allowed.` | FAPI 2.0 requires `private_key_jwt` or mTLS |
+| `password` grant refused | `[A295306] The grant type ('password') is not allowed.` | FAPI 2.0 forbids ROPC |
+| `GET /api/fapi/config` returns 500 | SDK `ResponseValidationError` in `serviceGet` | the SDK's response schema very likely does not know the `fapiModes` field — **UNVERIFIED**, plausible from the evidence |
+
+**To unblock Modules 02–08, clear `fapiModes` in the Authlete console** (and consider clearing
+`supportedServiceProfiles`), then re-enable it at Module 10, where FAPI is the subject. Also needed:
+
+- Client `4277838306` is `clientType: PUBLIC` but has `tokenAuthMethod: CLIENT_SECRET_BASIC`, which Authlete
+  rejects: `[A157302] The client type of the client is 'public' but the client authentication method is not
+  'none'.` Set it to `none` to get a usable public client for the Module 03 PKCE labs.
+- Client `1523514379` (confidential, `client_secret_basic`) is fine once FAPI 2.0 mode is off.
+
+Nothing was changed on the Authlete service by the curriculum build — this is a console change for the repo
+owner to make.
+
+*(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
+this is a configuration issue, not one of those.)*
+
+### Module 02 — done / verified / uncertain
+
+- **Done:** `README.md` — derives the code-vs-token choice from the front-channel constraint; full
+  parameter-by-parameter walk of RFC 6749 §4.1.1–§4.1.4; "why a code, not a token" comparison; the grant
+  catalogue keyed on *human present?* + *can the client keep a secret?*; the device grant (RFC 8628) with its
+  four polling error codes quoted; the two error channels (§4.1.2.1 vs §5.2) and the rule that an error may
+  only be redirected to an already-validated URI; the complete RFC 9700 §4 attack catalogue (17 rows) mapped
+  to the module that defends each; and what `state` does *not* do, as the setup for Module 03. `quiz.md` +
+  `quiz-answers.md` (18 items across 4 tiers). Added authorization code / code interception / polling to
+  `GLOSSARY.md`.
+- **NOT done:** `lab.md`. Blocked — see the BLOCKER section above. Writing lab commands I cannot execute
+  would break the curriculum's own accuracy rule, so the file is deliberately absent rather than speculative.
+  `README.md` links to it and carries an inline prerequisite note.
+- **Verified (primary sources, this session):** RFC 6749 §3.1.1 "Response Type", §3.3 "Access Token Scope",
+  §4.1 + §4.1.1–§4.1.4 titles, §4.2, §4.4, §5.1, §5.2, §6, §10.12 "Cross-Site Request Forgery"; the six §5.2
+  error codes and the seven §4.1.2.1 error codes (both enumerated from the RFC). RFC 8628 title, Standards
+  Track, August 2019, §3.1/§3.2/§3.4/§3.5, the grant-type URN, and all four polling error definitions quoted
+  verbatim. RFC 9700 §2 and §4 subsection lists in full, plus the PKCE sentence (§2.1.1) and the exact-string
+  redirect-matching sentence (§4.1) quoted verbatim. **Verified against the live server:** the three FAPI 2.0
+  symptoms in the BLOCKER table, plus `[A157302]` on the public client, plus `fapiModes`/`parRequired` read
+  from `/service/get`.
+- **Uncertain:** the SDK-schema explanation for the `/api/fapi/config` 500 is marked UNVERIFIED above —
+  plausible from the evidence, not confirmed. `state`'s §10.12 purpose is cited by section number and title
+  only; the fetched text of that paragraph came back paraphrased, so nothing from §10.12 is quoted verbatim.
 
 ### Module 01 — done / verified / uncertain
 
