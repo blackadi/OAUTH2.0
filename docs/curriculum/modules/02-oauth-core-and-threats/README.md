@@ -378,13 +378,16 @@ and why it comes next.
 
 ## Lab
 
-See **[lab.md](lab.md)**.
+See **[lab.md](lab.md)**. You will drive all four legs of the code flow with `curl` and a cookie jar, decode
+the tokens locally, then break it five ways: replay the code, lie about the `redirect_uri` at the token
+endpoint, request an unregistered `redirect_uri` and watch the AS refuse to redirect the error, run the
+retired implicit grant and watch a live access token land in a URL fragment, and start a device flow that has
+no redirect at all.
 
-> **Prerequisite for this lab:** the Authlete service backing this repo currently has
-> `fapiModes = ["FAPI2_SECURITY"]`, which mandates PAR (Module 05) and rejects `client_secret_basic` and the
-> `password` grant regardless of what the service and client metadata advertise. The plain code flow taught in
-> this module cannot complete until that profile is cleared. See the *Open decisions* table in
-> [`PROGRESS.md`](../../PROGRESS.md).
+> **Configuration prerequisite:** the lab needs `fapiModes` **empty** on your Authlete service — the FAPI 2.0
+> profile mandates PAR (Module 05) and rejects `client_secret_basic`, so the plain code flow cannot run while
+> it is set. Re-enable it at Module 10, where FAPI is the subject. The lab's setup section lists the full set
+> of settings it depends on.
 
 ## Threat notes — what breaks if you get this wrong
 

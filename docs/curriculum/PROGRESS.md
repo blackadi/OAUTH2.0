@@ -21,7 +21,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 |---|--------|----------------------------------------------|
 | [x] | 00 · Web + JOSE | Given a raw JWT, decode it locally and explain why decoding ≠ trusting; name the three JWS parts and what each protects. |
 | [x] | 01 · Delegation problem | Explain the password anti-pattern and name all six core roles + which endpoint each talks to. |
-| [ ] | 02 · OAuth core + threats | Draw the authorization-code flow at wire level; name two grants RFC 9700 deprecates and why. |
+| [x] | 02 · OAuth core + threats | Draw the authorization-code flow at wire level; name two grants RFC 9700 deprecates and why. |
 | [ ] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
 | [ ] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
 | [ ] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
@@ -72,42 +72,38 @@ against it before calling the capstone complete._
 - [x] Stage 2 — scaffold + top-level docs (README, SPEC-INVENTORY, GLOSSARY, PROGRESS, scripts) — committed
 - [x] **Module 00 — Web + JOSE Foundations** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 01 — The Delegation Problem** — README, lab, quiz, quiz-answers written & committed
-- [~] **Module 02 — OAuth Core + Threats** — README, quiz, quiz-answers written & committed;
-      **`lab.md` NOT written — blocked on the config change below**
-- [ ] Module 03 — PKCE + Public Clients
+- [x] **Module 02 — OAuth Core + Threats** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 03 — PKCE + Public Clients  ← **next** (needs the public-client fix below)
 - [ ] Modules 04–12 (09a/09b) — pending
 - [ ] Stage 4 — consistency pass
 
-### BLOCKER — one Authlete setting gates every token-issuing lab
+### Service configuration — resolved, and what is still outstanding
 
-**Root cause (diagnosed during the Module 02 build, read directly from `/service/get`):**
+**RESOLVED 2026-07-27.** `fapiModes` and `supportedServiceProfiles` were cleared on service `local-testing`
+(API key `3693555522`). The full authorization-code flow now runs end to end. For the record, that one
+setting — **not** `require_pushed_authorization_requests` — was the cause of every earlier failure:
 
-```
-fapiModes               = ["FAPI2_SECURITY"]
-supportedServiceProfiles = ["FAPI"]
-```
+| Symptom while `fapiModes = ["FAPI2_SECURITY"]` | Observed error |
+|---|---|
+| Plain `GET /api/authorization` refused | `[A294308] The authorization request was sent without PAR.` |
+| `client_secret_basic` refused | `[A295301] The client authentication method … is not allowed.` |
+| `password` grant refused | `[A295306] The grant type ('password') is not allowed.` |
 
-The FAPI 2.0 Security Profile is enforced service-wide. That single setting — **not**
-`require_pushed_authorization_requests`, which now correctly reads `false` at both service and client level —
-explains every failure observed so far:
+> **Re-enable `fapiModes` at Module 10**, where FAPI is the subject. Modules 03–09 assume it is off.
 
-| Symptom | Observed error | Why |
-|---|---|---|
-| Plain `GET /api/authorization` refused | `[A294308] The authorization request was sent without PAR.` | FAPI 2.0 mandates PAR |
-| `client_secret_basic` refused | `[A295301] The client authentication method ('client_secret_basic') is not allowed.` | FAPI 2.0 requires `private_key_jwt` or mTLS |
-| `password` grant refused | `[A295306] The grant type ('password') is not allowed.` | FAPI 2.0 forbids ROPC |
-| `GET /api/fapi/config` returns 500 | SDK `ResponseValidationError` in `serviceGet` | the SDK's response schema very likely does not know the `fapiModes` field — **UNVERIFIED**, plausible from the evidence |
-
-**To unblock Modules 02–08, clear `fapiModes` in the Authlete console** (and consider clearing
-`supportedServiceProfiles`), then re-enable it at Module 10, where FAPI is the subject. Also needed:
+**Still outstanding — blocks the Module 03 public-client/PKCE labs:**
 
 - Client `4277838306` is `clientType: PUBLIC` but has `tokenAuthMethod: CLIENT_SECRET_BASIC`, which Authlete
   rejects: `[A157302] The client type of the client is 'public' but the client authentication method is not
-  'none'.` Set it to `none` to get a usable public client for the Module 03 PKCE labs.
-- Client `1523514379` (confidential, `client_secret_basic`) is fine once FAPI 2.0 mode is off.
+  'none'.` It also still has `parRequired: true`. **Set `tokenAuthMethod` to `none` and `parRequired` to
+  `false`**, or register a fresh public client, before Module 03.
+- `GET /api/fapi/config` still fails: the body is an SDK `ResponseValidationError` from `serviceGet`
+  (`{"error":"Bad Request","message":"Response validation failed",…}`). Pre-existing and unrelated to the
+  curriculum; it affects Module 10. Two notes: the earlier guess that `fapiModes` caused it is **disproven**
+  — the field is cleared and the failure persists; and the endpoint returned that error body under HTTP
+  **200** on the last check (400 earlier), so the status code itself may be a second, separate bug.
 
-Nothing was changed on the Authlete service by the curriculum build — this is a console change for the repo
-owner to make.
+Nothing on the Authlete service was changed by the curriculum build; the repo owner made the console change.
 
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
@@ -122,9 +118,21 @@ this is a configuration issue, not one of those.)*
   to the module that defends each; and what `state` does *not* do, as the setup for Module 03. `quiz.md` +
   `quiz-answers.md` (18 items across 4 tiers). Added authorization code / code interception / polling to
   `GLOSSARY.md`.
-- **NOT done:** `lab.md`. Blocked — see the BLOCKER section above. Writing lab commands I cannot execute
-  would break the curriculum's own accuracy rule, so the file is deliberately absent rather than speculative.
-  `README.md` links to it and carries an inline prerequisite note.
+- **Done (second pass, after `fapiModes` was cleared):** `lab.md` — the full code flow driven leg by leg with
+  `curl` + a cookie jar; local decode of the real tokens; five break-it exercises (code replay, mismatched
+  `redirect_uri` at the token endpoint, unregistered `redirect_uri` at the authorization endpoint, the
+  implicit grant, the device grant).
+- **Verified against the live server (every lab command was executed):** full flow → `302` to
+  `/api/session/login` → 64-char CSRF → login `302` to `/api/session/consent?…&scopes=openid,profile` →
+  consent `302` to the callback with `code` (43 chars) + `state` + `iss` → token exchange returns
+  `access_token, token_type, expires_in, scope, refresh_token, id_token`. The **access token is opaque**
+  (43 chars, no dots) so `decode-jwt.mjs` prints its "not a JWS … introspect it instead" path; the **ID token
+  decodes** as `alg:HS256` with `iss/sub/aud/exp/iat/auth_time/acr:"pwd"/s_hash`; `GET /api/userinfo` with the
+  access token returns the profile claims. Breaks: replay → `invalid_grant [A050305] No such authorization
+  code.`; mismatched redirect → `invalid_grant [A050309]`; unregistered redirect → **400 with no `Location`
+  header**, `[A011304]`; `response_type=token` → live access token in the URL **fragment** alongside
+  `token_type/expires_in/scope/iss`; device authorization → `userCode`, `interval:5`, `expiresIn:600`, and
+  polling → `authorization_pending [A242307]`.
 - **Verified (primary sources, this session):** RFC 6749 §3.1.1 "Response Type", §3.3 "Access Token Scope",
   §4.1 + §4.1.1–§4.1.4 titles, §4.2, §4.4, §5.1, §5.2, §6, §10.12 "Cross-Site Request Forgery"; the six §5.2
   error codes and the seven §4.1.2.1 error codes (both enumerated from the RFC). RFC 8628 title, Standards
@@ -133,9 +141,13 @@ this is a configuration issue, not one of those.)*
   redirect-matching sentence (§4.1) quoted verbatim. **Verified against the live server:** the three FAPI 2.0
   symptoms in the BLOCKER table, plus `[A157302]` on the public client, plus `fapiModes`/`parRequired` read
   from `/service/get`.
-- **Uncertain:** the SDK-schema explanation for the `/api/fapi/config` 500 is marked UNVERIFIED above —
-  plausible from the evidence, not confirmed. `state`'s §10.12 purpose is cited by section number and title
-  only; the fetched text of that paragraph came back paraphrased, so nothing from §10.12 is quoted verbatim.
+- **Uncertain:** `state`'s §10.12 purpose is cited by section number and title only — the fetched text of that
+  paragraph came back paraphrased, so nothing from §10.12 is quoted verbatim. Two behaviors are labelled in
+  the lab as **Authlete-specific, not normative**: opaque (non-JWT) access tokens, and the fact that a
+  *failed* token exchange does **not** consume the authorization code (only a successful one does) — verified
+  by retrying the same code with the correct `redirect_uri` after a mismatch and getting tokens. Break 4
+  requires the learner to temporarily enable the `IMPLICIT` grant; the lab says so twice and tells them to
+  turn it back off.
 
 ### Module 01 — done / verified / uncertain
 
