@@ -146,6 +146,10 @@ npm --prefix client run test         # Client tests
 
 ## Documentation
 
+> **New to OAuth/OIDC? Start with the [Learning Path](docs/curriculum/README.md).** The tutorials below are
+> organized by feature; the [curriculum](docs/curriculum/README.md) sequences them into a progressive, assessed
+> course — from HTTP/JOSE foundations through FAPI 2.0 and a capstone — using this server as the lab.
+
 | Document | What You'll Learn |
 |----------|-------------------|
 | [Architecture](docs/ARCHITECTURE.md) | How the system is designed, middleware pipeline, deployment |
