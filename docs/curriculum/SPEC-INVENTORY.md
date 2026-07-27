@@ -53,7 +53,8 @@ table and as a map from "what the spec says" to "what runs here."
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
-| RFC 7636 | Proof Key for Code Exchange by OAuth Public Clients | Published RFC | Sep 2015 | `code_challenge`/`code_verifier` (S256) | Closes authorization-code interception on public/native clients | `client/src/services/pkce.ts`; enforced by Authlete; `docs/PKCE-TUTORIAL.md` |
+| RFC 7636 | Proof Key for Code Exchange by OAuth Public Clients | Published RFC | Sep 2015 | `code_challenge`/`code_verifier` (S256) | Closes authorization-code interception on public/native clients | `client/src/pkce.ts`; enforced by Authlete; `docs/PKCE-TUTORIAL.md` |
+| RFC 8252 | OAuth 2.0 for Native Apps | Published RFC (**BCP 212**) | Oct 2017 | External user-agent requirement; three redirect strategies (private-use scheme, claimed `https`, loopback) | Credential capture by embedded webviews; redirect hijacking on mobile | `loopbackRedirectionUriVariable` flag (`AGENTS.md`); Module 03 |
 
 ## 4. Token lifecycle & metadata (Module 04)
 

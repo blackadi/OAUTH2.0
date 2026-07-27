@@ -22,7 +22,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 00 · Web + JOSE | Given a raw JWT, decode it locally and explain why decoding ≠ trusting; name the three JWS parts and what each protects. |
 | [x] | 01 · Delegation problem | Explain the password anti-pattern and name all six core roles + which endpoint each talks to. |
 | [x] | 02 · OAuth core + threats | Draw the authorization-code flow at wire level; name two grants RFC 9700 deprecates and why. |
-| [ ] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
+| [x] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
 | [ ] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
 | [ ] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
 | [ ] | 06 · Machine + delegated grants | Distinguish impersonation from delegation in a token-exchange response; choose a grant for a daemon. |
@@ -73,8 +73,9 @@ against it before calling the capstone complete._
 - [x] **Module 00 — Web + JOSE Foundations** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 01 — The Delegation Problem** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 02 — OAuth Core + Threats** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 03 — PKCE + Public Clients  ← **next** (needs the public-client fix below)
-- [ ] Modules 04–12 (09a/09b) — pending
+- [x] **Module 03 — PKCE + Public Clients** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 04 — Token Lifecycle + Metadata  ← **next**
+- [ ] Modules 05–12 (09a/09b) — pending
 - [ ] Stage 4 — consistency pass
 
 ### Service configuration — resolved, and what is still outstanding
@@ -91,12 +92,15 @@ setting — **not** `require_pushed_authorization_requests` — was the cause of
 
 > **Re-enable `fapiModes` at Module 10**, where FAPI is the subject. Modules 03–09 assume it is off.
 
-**Still outstanding — blocks the Module 03 public-client/PKCE labs:**
+**Public client — RESOLVED 2026-07-27.** Client `4277838306` now reads `clientType: PUBLIC`,
+`tokenAuthMethod: NONE`, `parRequired: false`. The Module 03 labs run against it.
 
-- Client `4277838306` is `clientType: PUBLIC` but has `tokenAuthMethod: CLIENT_SECRET_BASIC`, which Authlete
-  rejects: `[A157302] The client type of the client is 'public' but the client authentication method is not
-  'none'.` It also still has `parRequired: true`. **Set `tokenAuthMethod` to `none` and `parRequired` to
-  `false`**, or register a fresh public client, before Module 03.
+**Still outstanding:**
+
+- Client `4277838306` has `idTokenSignAlg: HS256`, which a public client cannot use — requesting the `openid`
+  scope fails with `[A406301] The algorithm is symmetric (HS256), but the client type of the client … is not
+  'confidential'.` Module 03 sidesteps this by using `scope=profile`, but **Module 08 (OIDC) needs it set to
+  an asymmetric algorithm — `ES256`.**
 - `GET /api/fapi/config` still fails: the body is an SDK `ResponseValidationError` from `serviceGet`
   (`{"error":"Bad Request","message":"Response validation failed",…}`). Pre-existing and unrelated to the
   curriculum; it affects Module 10. Two notes: the earlier guess that `fapiModes` caused it is **disproven**
@@ -107,6 +111,37 @@ Nothing on the Authlete service was changed by the curriculum build; the repo ow
 
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
+
+### Module 03 — done / verified / uncertain
+
+- **Done:** `README.md` — derives PKCE from four requirements rather than asserting it (fresh per request /
+  one-way front-channel value / bound at the server / not downgradable); public-vs-confidential table; a
+  `state`-vs-PKCE table that settles the most common confusion; the §4.8 downgrade rule **in both
+  directions**; RFC 8252 native-app hardening (embedded-webview prohibition + the three redirect strategies);
+  and the public-client refresh-token rule with the FAPI 2.0 tension spelled out. `lab.md` — six exercises.
+  `quiz.md` + `quiz-answers.md` (18 items across 4 tiers). Added RFC 8252 to SPEC-INVENTORY and five terms to
+  GLOSSARY.
+- **Verified against the live server (every lab command executed against public client `4277838306`):**
+  S256 pair generation and the round-trip check; full flow → token with **no client secret in the request**
+  (`access_token, token_type, expires_in, scope, refresh_token`, `scope=profile`). Breaks: no verifier →
+  `invalid_grant [A050312]`; wrong verifier → `invalid_grant [A050315]`; **no PKCE at all → ACCESS TOKEN
+  ISSUED** (43 chars) from a bare `client_id` replay, which is the module's headline demonstration;
+  `code_challenge_method=plain` → accepted; verifier-without-challenge → `invalid_grant [A050317]`, so this
+  deployment enforces **both** directions of RFC 9700 §4.8; `refresh_token` grant → the refresh token
+  **rotated** (consistent with the service's `refreshTokenKept = false`, read from `/service/get`).
+  **Verified (primary sources):** RFC 7636 title/status/date, §4.1 ABNF and the 43–128 bound quoted verbatim,
+  §4.2 S256 formula, §4.3 `plain` default, §4.6 `invalid_grant` requirement; RFC 8252 title/BCP 212/Oct 2017,
+  §7.1–§7.3, §8.12 embedded-user-agent prohibition and the §7.3 loopback-port sentence quoted verbatim;
+  RFC 9700 §2.1.1 (S256 recommendation), §2.2.2 (public-client refresh tokens), §4.8 (downgrade) quoted
+  verbatim. Service flags read directly: `pkceRequired`/`pkceS256Required`/`refreshTokenKept` all `false`.
+- **Uncertain / notes:** the lesson's modulo-bias observation about `client/src/pkce.ts` is my own arithmetic
+  (66-character alphabet, `% 66` on a byte ⇒ ~6.039 vs 6.044 bits/char, ~386 vs ~387 bits over 64
+  characters) — presented as *not* exploitable, and used deliberately to teach calibrated severity judgement
+  rather than as a finding. Two behaviors are labelled non-normative: refresh-token rotation (service
+  config) and the bracketed Authlete error codes. The lab **cannot** verify the `pkceRequired=true` fix,
+  since that is a console change on the reader's own service; it is described as configuration guidance, not
+  as an exercise with a claimed output. Corrected the SPEC-INVENTORY path for PKCE: it is
+  `client/src/pkce.ts`, not `client/src/services/pkce.ts`.
 
 ### Module 02 — done / verified / uncertain
 

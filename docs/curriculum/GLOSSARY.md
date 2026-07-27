@@ -38,6 +38,10 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Authorization code** | RFC 6749 §4.1.2 | Short-lived, single-use reference returned on the front channel; redeemable only with client authentication. | `/api/authorization` → `/api/token` |
 | **Code interception** | RFC 9700 §4.5 (Authorization Code Injection) | Stealing a code from the front channel and redeeming it. Fatal for public clients without PKCE. | Module 03 |
 | **Polling** | RFC 8628 §3.5 | Device repeatedly calls the token endpoint until the user finishes; `authorization_pending` / `slow_down`. | `device.routes.ts`; Module 02 |
+| **PKCE downgrade** | RFC 9700 §4.8 | Stripping `code_challenge` so the code is issued unprotected. AS must reject in **both** directions. | Module 03 |
+| **Refresh token rotation** | RFC 9700 §2.2.2, §4.14 | New refresh token on each use, old one invalidated; reuse ⇒ revoke the grant. One of the two permitted treatments for public clients. | `refreshTokenKept` flag (`AGENTS.md`) |
+| **Sender-constrained token** | RFC 9449 / RFC 8705 | Token bound to a key the client must prove possession of. The other permitted treatment. | Module 05 |
+| **External user-agent** | RFC 8252 §8.12 | The system browser, not an embedded webview — native apps **MUST NOT** use embedded user-agents. | Module 03 |
 
 ## Endpoints
 
