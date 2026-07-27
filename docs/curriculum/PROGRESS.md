@@ -20,7 +20,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | ✓ | Module | Self-assessment gate (do this without notes) |
 |---|--------|----------------------------------------------|
 | [x] | 00 · Web + JOSE | Given a raw JWT, decode it locally and explain why decoding ≠ trusting; name the three JWS parts and what each protects. |
-| [ ] | 01 · Delegation problem | Explain the password anti-pattern and name all six core roles + which endpoint each talks to. |
+| [x] | 01 · Delegation problem | Explain the password anti-pattern and name all six core roles + which endpoint each talks to. |
 | [ ] | 02 · OAuth core + threats | Draw the authorization-code flow at wire level; name two grants RFC 9700 deprecates and why. |
 | [ ] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
 | [ ] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
@@ -71,9 +71,51 @@ against it before calling the capstone complete._
 - [x] Stage 1 — plan (approved)
 - [x] Stage 2 — scaffold + top-level docs (README, SPEC-INVENTORY, GLOSSARY, PROGRESS, scripts) — committed
 - [x] **Module 00 — Web + JOSE Foundations** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 01 — The Delegation Problem  ← **next**
-- [ ] Modules 02–12 (09a/09b) — pending
+- [x] **Module 01 — The Delegation Problem** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 02 — OAuth Core + Threats  ← **next** (read the blocker note under Module 01 first)
+- [ ] Modules 03–12 (09a/09b) — pending
 - [ ] Stage 4 — consistency pass
+
+### Open decisions the author needs from the repo owner
+
+| # | Question | Blocks | Raised in |
+|---|----------|--------|-----------|
+| 1 | The Authlete service has **`require_pushed_authorization_requests` = true at the service level**, so *no* plain `GET /api/authorization` works. Should Module 02 (a) teach the code flow *through PAR* and forward-reference Module 05, or (b) should the flag be turned off in the Authlete console for the early modules and re-enabled at Module 05/10? | Module 02 onwards (any lab that issues a token) | Module 01 build |
+| 2 | The service also refuses **`client_secret_basic`** (`[A295301]`) and the **`password`** grant (`[A295306]`) for the existing `test` client, though both are advertised in discovery. Which client-auth method should the curriculum's labs standardise on? | Modules 02, 04, 06 | Module 01 build |
+| 3 | `GET /api/fapi/config` currently 500s with an SDK `ResponseValidationError` (`serviceGet`). Pre-existing, unrelated to the curriculum. Fix, or leave and route Module 10 around it? | Module 10 | Module 01 build |
+
+*(Gated source changes — JARM, mTLS, RFC 9728 PRM — are proposed inside Modules 05/09a/10 as planned; these
+three are configuration/pre-existing issues, not those.)*
+
+### Module 01 — done / verified / uncertain
+
+- **Done:** full lesson (`README.md`) — the password anti-pattern and its five structural harms, deriving the
+  role separation from the "client never touches the credential" constraint, the six-actor cast (four RFC 6749
+  §1.1 roles + user agent + Authlete as policy engine, both explicitly flagged as *not* spec roles), an
+  endpoint→actor→channel table, credential-vs-token across five properties, and a dark-theme mermaid diagram
+  contrasting the anti-pattern with delegation. `lab.md` — actor inventory from live metadata, the credential
+  boundary in `login.ejs:18`, server-side enforcement, three break-it exercises. `quiz.md` +
+  `quiz-answers.md` (17 items across 4 tiers). Added a **Concepts** table + `User agent` / `Policy engine`
+  rows to `GLOSSARY.md`. No new SPEC-INVENTORY rows needed (RFC 6749/6750/9700 already present).
+- **Verified (ran against the live server on :3000):** discovery one-liner prints issuer + all six endpoints +
+  `grant_types_supported`; `curl "$API/session/login" | grep -o '<form[^>]*>'` →
+  `action="/api/session/login"`; `grep -n 'action=' server/src/views/consent.ejs` → line 13; POST of **valid**
+  credentials to `/api/session/login` with a fresh CSRF token → **401** `"Missing authorization context -
+  session not found"`; `GET /api/session/consent` → **403** `"Unauthorized - no ticket in session"`; ROPC
+  token request (both `client_secret_basic` and `client_secret_post`) → `[A295306] The grant type ('password')
+  is not allowed.`; `Authorization: Bearer <password>` on `/api/userinfo` → **401** with
+  `WWW-Authenticate: Bearer error="invalid_token" … [A088302]`. Spec citations verified against rfc-editor.org
+  this session: RFC 6749 §1.1 role definitions (quoted verbatim), §1.2, §2.1, §3.1, §3.2, §4.3 (both quoted
+  sentences); RFC 6750 title/date, §2.1, §3, §3.1 `invalid_token` definition; RFC 9700 title, BCP 240,
+  January 2025, **§2.4** *"The resource owner password credentials grant [RFC6749] MUST NOT be used."* and
+  §2.1.2 on the implicit grant.
+- **Uncertain / notes:** the ROPC lab documents **both** outcomes (refused here; if a learner's deployment
+  permits it, they analyse what they did and did not gain) because the refusal is Authlete policy, not
+  something the spec makes observable. Three deployment issues surfaced that affect *later* modules, not this
+  one — see **Open decisions** above; the most consequential is service-level mandatory PAR, which means no
+  Module 02 lab can complete a plain authorization-code flow until that is resolved. Error strings with
+  bracketed codes are labelled in-lab as Authlete vendor behavior, distinct from the spec-defined status codes
+  and `WWW-Authenticate` structure.
 
 ### Module 00 — done / verified / uncertain
 

@@ -21,6 +21,20 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Relying Party (RP)** | OIDC Core 1.0 | An OIDC client that consumes ID tokens. | The SPA when requesting `openid` scope |
 | **Public client** | RFC 6749 §2.1 | A client that cannot keep a secret (SPA, native app). | SPA / `PUB_CLIENT_ID` in labs |
 | **Confidential client** | RFC 6749 §2.1 | A client that can hold a secret. | `CLIENT_ID`/`CLIENT_SECRET` in labs |
+| **User agent** | RFC 6749 §1.2 (protocol flow) — *not* one of the four §1.1 roles | The browser that relays front-channel redirects. Untrusted and unavoidable. | your browser; `curl` following redirects |
+| **Policy engine** | *No spec role — deployment architecture* | The component the AS delegates every OAuth decision to. | Authlete Cloud; `services/authlete.service.ts` |
+
+## Concepts
+
+| Term | Defining spec | Meaning | Where it bites |
+|------|---------------|---------|----------------|
+| **Password anti-pattern** | *(named in practice; the grant is RFC 6749 §4.3)* | Giving a client the resource owner's credential so it can act as them. | Unbounded scope, no revocation, no attribution — Module 01 |
+| **Delegation** | RFC 6749 §1 | Granting a client narrow, revocable authority *without* sharing the credential. | The problem OAuth exists to solve |
+| **Authorization grant** | RFC 6749 §1.3 | The credential representing the resource owner's authorization, exchanged for a token. | Consent step; `views/consent.ejs` |
+| **Access token** | RFC 6749 §1.4, presented per RFC 6750 §2.1 | A scoped, expiring, revocable capability — **not** an identity assertion. | `Authorization: Bearer`; Module 08 for why it ≠ authN |
+| **Front channel / back channel** | RFC 6749 §1.2 + §3.1/§3.2 | Via the browser (visible + editable) vs. direct server-to-server. | Module 00; every later threat |
+| **Confused deputy** | *(security literature; instances throughout RFC 9700)* | A privileged party tricked into misusing its authority for someone else. | Mix-up, audience confusion — Modules 01, 05 |
+| **Credential boundary** | *(design principle; follows from RFC 6749 §1.1)* | The rule that the credential is typed only on the AS's own origin. | `views/login.ejs:18` |
 
 ## Endpoints
 
