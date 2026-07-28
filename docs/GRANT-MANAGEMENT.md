@@ -93,6 +93,26 @@ A unique, URL-safe identifier assigned to each grant. It appears in:
 | `grant_management_query` | Query grant status (GET) |
 | `grant_management_revoke` | Revoke grants (DELETE) |
 
+### The scope is not enough — the token must belong to the grant
+
+**A correctly-scoped token is only half the check.** This server additionally requires that the access token
+you present was *itself issued under the grant you are addressing*. A token bound to grant `gA` cannot query
+or revoke grant `gB`, and gets **403 `access_denied`**.
+
+Without that rule, any holder of a `grant_management_revoke` token could enumerate grant IDs and read or
+destroy every other user's grant — verified end to end before it was fixed. Authlete's `/gm` API validates
+the token but not who owns the grant, and its response carries no owner information, so the check has to
+happen here, before the call. See `server/src/middleware/require-grant-ownership.ts`.
+
+> **Two consequences, and they will bite if you skip them.**
+> **(1) A `client_credentials` token can no longer be used.** It has no grant, so it is always denied. This is
+> deliberate — it was precisely the hole. Machine-to-machine grant management is not supported.
+> **(2) Each grant needs its own token.** With concurrent grants you must keep the token minted alongside
+> each one; a token from grant A will not open grant B.
+>
+> This is stricter than [Grant Management for OAuth 2.0](https://openid.net/specs/oauth-v2-grant-management.html),
+> which entitles a *client* to manage grants it owns using any suitably-scoped token.
+
 ---
 
 ## Part 3: Authlete Setup
@@ -262,8 +282,13 @@ sequenceDiagram
 | Status | Error | When |
 |:------:|-------|------|
 | 401 | `invalid_token` | Missing, expired, or invalid Bearer token |
-| 403 | `access_denied` | Token lacks required scope |
+| 403 | `access_denied` | Token lacks the required scope |
+| 403 | `access_denied` | **Token is not associated with the requested grant** — it belongs to a different grant, or to none at all (e.g. `client_credentials`) |
 | 404 | `not_found` | Grant ID doesn't exist |
+
+The two 403s return an **identical** body, so a caller cannot use the response to tell "not your grant" from
+"your token has no grant" — nor to discover whether a grant exists. The ownership check runs *before* any
+Authlete lookup, so a mismatched request looks the same whether or not the grant is real.
 
 ---
 
@@ -272,18 +297,20 @@ sequenceDiagram
 ### Scenario 1: Create and Query
 
 ```bash
-# 1. Create a grant via authorization code flow
-# (Complete auth flow with grant_management_action=create)
-# Result: access_token + grant_id
+# 1. Create a grant via the authorization code flow, requesting the management scopes
+#    in the SAME authorization as grant_management_action=create:
+#      scope=openid profile grant_management_query grant_management_revoke
+#      &grant_management_action=create
+#    The token response then carries a sixth member, grant_id.
+#
+#    KEEP THIS TOKEN. It is the only token that can manage this grant.
+QUERY_TOKEN=<access_token from that token response>
+GRANT_ID=<grant_id from that token response>
 
-# 2. Get a query-scoped token
-QUERY_TOKEN=$(curl -s -X POST http://localhost:3000/api/token \
-  -u "CID:SEC" \
-  -d "grant_type=client_credentials&scope=grant_management_query" \
-  | jq -r '.access_token')
+# A client_credentials token will NOT work here — it has no grant, so it gets 403.
 
-# 3. Query the grant
-curl -s http://localhost:3000/api/gm/GRANT_ID \
+# 2. Query the grant
+curl -s http://localhost:3000/api/gm/$GRANT_ID \
   -H "Authorization: Bearer $QUERY_TOKEN" | jq .
 ```
 
@@ -311,11 +338,9 @@ curl -s http://localhost:3000/api/gm/g1 \
 ### Scenario 3: Revoke a Grant
 
 ```bash
-# 1. Get a revoke-scoped token
-REVOKE_TOKEN=$(curl -s -X POST http://localhost:3000/api/token \
-  -u "CID:SEC" \
-  -d "grant_type=client_credentials&scope=grant_management_revoke" \
-  | jq -r '.access_token')
+# 1. Use the token issued alongside grant g1, which must carry grant_management_revoke.
+#    Request both management scopes at create time so one token can query AND revoke.
+REVOKE_TOKEN=<access_token issued alongside g1>
 
 # 2. Revoke the grant
 curl -s -X DELETE http://localhost:3000/api/gm/g1 \
@@ -324,8 +349,10 @@ curl -s -X DELETE http://localhost:3000/api/gm/g1 \
 
 # 3. Try to query (should fail)
 curl -s http://localhost:3000/api/gm/g1 \
-  -H "Authorization: Bearer $QUERY_TOKEN"
+  -H "Authorization: Bearer $REVOKE_TOKEN"
 # Expected: 404 { "error": "not_found" }
+# Note the grant is gone but the token still exists, so it passes the ownership
+# check and reaches Authlete — which reports the grant as missing.
 ```
 
 ### Scenario 4: Concurrent Grants
@@ -335,12 +362,18 @@ curl -s http://localhost:3000/api/gm/g1 \
 # 2. Create grant B with "openid payments" (same user, same client)
 # Result: Two different grant_ids: "gA" and "gB"
 
-# 3. Query both — they coexist independently
-curl -s http://localhost:3000/api/gm/gA -H "Authorization: Bearer $QT" | jq .scopes
+# 3. Query both — they coexist independently, but each needs ITS OWN token.
+#    $TOKEN_A was issued alongside gA, $TOKEN_B alongside gB.
+curl -s http://localhost:3000/api/gm/gA -H "Authorization: Bearer $TOKEN_A" | jq .scopes
 # Expected: [{ "scope": "openid profile" }]
 
-curl -s http://localhost:3000/api/gm/gB -H "Authorization: Bearer $QT" | jq .scopes
+curl -s http://localhost:3000/api/gm/gB -H "Authorization: Bearer $TOKEN_B" | jq .scopes
 # Expected: [{ "scope": "openid payments" }]
+
+# 4. Crossing them over is denied — this is the object-level authorization check.
+curl -s http://localhost:3000/api/gm/gB -H "Authorization: Bearer $TOKEN_A"
+# Expected: 403 { "error": "access_denied",
+#                 "error_description": "The access token is not associated with the requested grant" }
 ```
 
 ---
@@ -359,7 +392,28 @@ curl http://localhost:3000/api/gm/some-grant
 ```bash
 curl http://localhost:3000/api/gm/some-grant \
   -H "Authorization: Bearer $REVOKE_SCOPED_TOKEN"
-# 401 { "error": "invalid_token" }
+# 403 { "error": "access_denied" }
+# The ownership pre-check introspects with the required scope, so Authlete returns
+# insufficient_scope before the grant-management call is made.
+```
+
+### Token Belonging to Another Grant
+
+```bash
+# $TOKEN_A was issued alongside grant gA
+curl http://localhost:3000/api/gm/gB \
+  -H "Authorization: Bearer $TOKEN_A"
+# 403 { "error": "access_denied",
+#       "error_description": "The access token is not associated with the requested grant" }
+```
+
+### client_credentials Token
+
+```bash
+CC=$(curl -s -X POST http://localhost:3000/api/token -u "CID:SEC" \
+  -d "grant_type=client_credentials&scope=grant_management_query" | jq -r '.access_token')
+curl http://localhost:3000/api/gm/any-grant -H "Authorization: Bearer $CC"
+# 403 — a client_credentials token has no grant. Identical body to the case above.
 ```
 
 ### Non-Existent Grant
@@ -398,7 +452,9 @@ grant_id=some-id"
 | Scenario | Result |
 |----------|--------|
 | No Bearer token | 401 |
-| Wrong scope | 401 |
+| Wrong scope | 403 |
+| Token belongs to a different grant | 403 |
+| `client_credentials` token (no grant) | 403 |
 | Grant not found | 404 |
 | merge without grant_id | Error |
 | create with grant_id | Error |

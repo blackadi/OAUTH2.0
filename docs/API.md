@@ -181,7 +181,7 @@ Browser consent after code verification. No `/api` prefix.
 
 ## Dynamic Client Registration
 
-All endpoints require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth for `register`. The `get`, `update`, and `delete` endpoints use the registration access token from the body.
+All endpoints require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth for `register`. **Authentication fails closed**: if either variable is unset, these endpoints return 401 rather than allowing the request. The `get`, `update`, and `delete` endpoints use the registration access token from the body.
 
 ### `POST /api/client/dcr/register`
 Register new OAuth client (RFC 7591).
@@ -220,13 +220,24 @@ Push authorization parameters (RFC 9126). No admin auth.
 
 ## Grant Management
 
+Both endpoints require a Bearer token that carries the relevant scope
+(`grant_management_query` / `grant_management_revoke`) **and that was itself issued under the grant being
+addressed**. A token bound to a different grant — or to none at all, such as a `client_credentials` token —
+gets 403. See [GRANT-MANAGEMENT.md](./GRANT-MANAGEMENT.md) and
+`server/src/middleware/require-grant-ownership.ts`.
+
 ### `GET /api/gm/:grantId`
-Query grant status. Bearer token required.
+Query grant status.
+
+**Response:** 200 with the grant's scopes and claims
 
 ### `DELETE /api/gm/:grantId`
-Revoke grant. Bearer token required.
+Revoke grant.
 
 **Response:** 204 No Content
+
+**Errors (both):** 401 `invalid_token` (missing/invalid token) · 403 `access_denied` (insufficient scope, or
+the token is not associated with this grant) · 404 `not_found` (no such grant)
 
 ---
 
@@ -359,7 +370,7 @@ Create and deliver logout tokens to all clients. Admin Basic auth required.
 
 ## Token Management (Admin)
 
-All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth.
+All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth. **Authentication fails closed**: if either variable is unset, these endpoints return 401 rather than allowing the request.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -375,7 +386,7 @@ All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth.
 
 ## Client Management (Admin)
 
-All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth.
+All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth. **Authentication fails closed**: if either variable is unset, these endpoints return 401 rather than allowing the request.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
