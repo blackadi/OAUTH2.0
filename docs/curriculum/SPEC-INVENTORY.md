@@ -91,6 +91,14 @@ table and as a map from "what the spec says" to "what runs here."
 | RFC 7523 | JSON Web Token (JWT) Profile for OAuth 2.0 Client Authentication and Authorization Grants | Published RFC | May 2015 | JWT bearer grant + `private_key_jwt` client auth | Keyed client auth; trust federation | `jwt-verification.service.ts`; token `JWT_BEARER`; `docs/JWT-BEARER-TUTORIAL.md` |
 | RFC 8693 | OAuth 2.0 Token Exchange | Published RFC | Jan 2020 | `grant_type=token-exchange`; `actor_token`/`may_act` | Impersonation vs. delegation; identity chaining | token `TOKEN_EXCHANGE`; `docs/TOKEN-EXCHANGE-TUTORIAL.md` — **partial, see below** |
 
+> **JARM correction (2026-07-28).** Two earlier claims in this file were wrong. (1) The **title** carried a
+> "Financial-grade API:" prefix it no longer has, and no errata/date; it is *"JWT Secured Authorization Response
+> Mode for OAuth 2.0 (JARM) incorporating errata set 1"*, Final, 17 August 2025. (2) It was listed as an
+> implementation gap requiring code. On the **AS side it is a configuration gap**: requesting `response_mode=jwt`
+> returns `[A012305] … the 'authorization_signed_response_alg' metadata of the client … is not set`, and the
+> authorization server already builds and signs the response object. A **client** consuming JARM does need new
+> code, and the dashboard SPA has none. Verified live during the Module 09a build.
+
 > **RFC 8693 is only partly implemented here, and the gaps are silent.** Verified during the Module 06 build:
 > `actor_token`, `resource`, `audience`, and `requested_token_type` are accepted and discarded, so a
 > delegation request returns an impersonation token with **no `act`** and HTTP 200; the REQUIRED
@@ -127,7 +135,7 @@ table and as a map from "what the spec says" to "what runs here."
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
-| JARM | Financial-grade API: JWT Secured Authorization Response Mode for OAuth 2.0 (JARM) | OpenID Final | — | Signed/encrypted authorization **response** (`response_mode=jwt`) | Response tampering, mix-up, leakage | **ABSENT** — Module 09a implements (gated) |
+| JARM | JWT Secured Authorization Response Mode for OAuth 2.0 (JARM) *incorporating errata set 1* | OpenID **Final** | errata set 1, **17 Aug 2025** | Signed/encrypted authorization **response** (`response_mode=jwt`); `iss`/`aud`/`exp` claims; four `response_mode` values | Response tampering, mix-up (strong form), response replay | **Supported by the AS; not configured.** Needs only the client's `authorization_signed_response_alg`. No `server/src` change — see note below |
 | CIBA Core 1.0 | OpenID Connect Client-Initiated Backchannel Authentication Flow – Core 1.0 | OpenID Final | Sep 2021 | Decoupled auth (poll/ping/push), `auth_req_id` | Auth without a browser redirect | `ciba.routes.ts`, `ciba.service.ts`; `docs/CIBA-TUTORIAL.md` |
 | Native SSO 1.0 | OpenID Connect Native SSO for Mobile Apps 1.0 | OpenID **2nd Implementer's Draft** (draft 07) | approved 2025-10-17 | `device_secret`, `urn:openid:params:grant-type:device_secret` | SSO across native apps on one device | `docs/NATIVE-SSO-TUTORIAL.md`; Authlete |
 | RFC 9470 | OAuth 2.0 Step Up Authentication Challenge Protocol | Published RFC | Sep 2023 | `acr_values`/`max_age` challenge; `insufficient_user_authentication` | Force stronger auth for sensitive ops | `session.controller.ts`, `introspection.controller.ts`; `docs/STEP-UP-AUTH-TUTORIAL.md` |
@@ -167,7 +175,7 @@ table and as a map from "what the spec says" to "what runs here."
 
 | Capability | Spec | Reality here | Plan |
 |---|---|---|---|
-| JARM | JARM (OpenID Final) | Absent (no code/section/tutorial) | **Implement** in Module 09a (gated) |
+| JARM | JARM (OpenID Final, errata set 1) | **AS side: supported, unconfigured** (one client metadata field). Client side: absent — the SPA cannot consume a `response` JWT | **Configure** on the AS (no code); a client-side consumer remains a genuine gap |
 | mTLS / cert-bound tokens | RFC 8705 | Thin — registration flags only | **Implement** in Module 05/10 (gated) |
 | Protected Resource Metadata endpoint | RFC 9728 | Consumed client-side; not served | **Serve** it in Module 04 (small, gated) |
 | Dedicated resource server endpoint | RFC 6750 | None; use UserInfo + Introspection as RS stand-ins | Teach with existing endpoints |

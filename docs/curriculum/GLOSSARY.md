@@ -73,6 +73,11 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Algorithm confusion** | *(mitigated by OIDC Core §3.1.3.7 step 7)* | Reading `alg` from the token header to select a key — e.g. verifying HS256 with a published RSA public key. Pin `alg` from registration. | Modules 00, 08 |
 | **Silent renewal** | OIDC Core §3.1.2.1 (`prompt=none`) | Checking "is the user still signed in?" without a visible redirect. Must return one of four §3.1.2.6 errors on failure. | Module 08 |
 | **Logout token** | OIDC Back-Channel Logout 1.0 | A signed JWT POSTed OP→RP carrying the `events` claim; MUST identify the session by `sub`/`sid` and MUST NOT contain `nonce`. | Module 08 |
+| **JARM response** | JARM (OpenID Final) | The whole authorization response as one signed JWT in a `response` parameter; MUST carry `iss`, `aud`, `exp`. | Module 09a |
+| **Consumption / authentication device** | CIBA Core 1.0 | The device that wants the token vs. the device where the user authenticates. Different machines — nothing is redirected. | Module 09a |
+| **Step-up authentication** | RFC 9470 | An RS answering 401 with `insufficient_user_authentication` **plus** `acr_values`/`max_age`, so the client knows what would suffice. | Module 09a |
+| **ACR theatre** | *No spec term — failure pattern* | An `acr` claim emitted with no registered definition behind it: reads as a control, behaves as a comment. | Module 09a |
+| **Permitted but not configured** | *No spec term — audit state* | A capability the client is allowed to use and cannot, because an enabling field is unset. An **availability** finding, distinct from Module 07's supported-but-not-required. | Module 09a |
 
 ## Endpoints
 
@@ -128,6 +133,10 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `prompt` | OIDC Core §3.1.2.1 | `none` / `login` / `consent` / `select_account`. | `none` MUST NOT show UI; drives silent renewal |
 | `max_age` | OIDC Core §3.1.2.1 | Maximum age, in seconds, of the authentication event. | Makes `auth_time` REQUIRED |
 | `id_token_hint` / `post_logout_redirect_uri` | OIDC RP-Initiated Logout 1.0 | Which session to end, and where to return. | The redirect URI needs **exact** matching |
+| `response_mode=jwt` family | JARM | `jwt`, `query.jwt`, `fragment.jwt`, `form_post.jwt`. | Enabled by `authorization_signed_response_alg` |
+| `login_hint` / `binding_message` / `user_code` | CIBA Core 1.0 | Who to authenticate; a string the user can match; a secret they must supply. | `binding_message` does not defend an *unsolicited* prompt |
+| `auth_req_id` | CIBA Core 1.0 | Handle the client polls the token endpoint with. | Reuses the device grant's polling errors |
+| `authorization_details` | RFC 9396 | JSON array of typed authorization objects; `type` is the only REQUIRED field. | `invalid_authorization_details` covers five failure classes |
 | `assertion` | RFC 7523 §2.1 | The JWT used **as the authorization grant**. | Whoever holds the signing key can name any `sub` unless the deployment restricts it |
 | `client_assertion` / `client_assertion_type` | RFC 7523 §2.2 | The JWT used **as client authentication**; composes with any grant. | `private_key_jwt` — the strongest common client auth |
 | `subject_token` / `subject_token_type` | RFC 8693 §2.1 | Who the exchanged token is *for*. Both REQUIRED. | Type is explicit so the AS never sniffs |

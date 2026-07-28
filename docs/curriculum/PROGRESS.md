@@ -28,7 +28,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 06 · Machine + delegated grants | Choose a grant for a daemon; explain why a client-credentials token has no `sub`; given a token-exchange response, say whether you got impersonation or delegation and what a correct response would have contained. |
 | [x] | 07 · OAuth 2.1 + Security BCP | Audit a deployment against RFC 9700 §2 from three sources and write findings with evidence, severity, and a defensible remediation order; state precisely what OAuth 2.1 does and does not do. |
 | [x] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user and describe token substitution concretely; run all 13 OIDC Core §3.1.3.7 steps on a real ID token; `nonce` vs. `state`; name the four logout specs and what each cannot reach. |
-| [ ] | 09a · Interaction extensions | Explain what JARM adds over `state`; pick poll/ping/push for a CIBA scenario; force a step-up challenge. |
+| [x] | 09a · Interaction extensions | Name the four assumptions these extensions lift; explain what JARM adds over `state`/PAR/JAR and its three mandatory claims; pick poll/ping/push and defend it; write an RFC 9470 challenge and say what breaks without `acr_values`; judge RAR vs scopes. |
 | [ ] | 09b · Identity + credentials | Explain selective disclosure in SD-JWT; place OID4VCI/VP and federation in the graph. |
 | [ ] | 10 · FAPI + grant management | State the FAPI 2.0 attacker model in your own words; explain why refresh-token rotation is forbidden. |
 | [ ] | 11 · API security beyond the token | Find a BOLA in a code snippet; explain why a valid token can't stop it; choose RBAC vs. ABAC vs. ReBAC. |
@@ -79,13 +79,22 @@ against it before calling the capstone complete._
 - [x] **Module 06 — Machine + Delegated Grants** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 07 — OAuth 2.1 + the Security BCP** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 08 — OIDC Core + Logout** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 09a — Interaction Extensions  ← **next**
-- [ ] Modules 09b–12 — pending
+- [x] **Module 09a — Interaction Extensions** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 09b — Identity + Credentials  ← **next**
+- [ ] Modules 10–12 — pending
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
 ### Awaiting a decision — gated source changes
 
-**Two proposals are open. No code has been written for either.**
+**JARM is no longer one of them.** Module 09a established that the authorization server already builds and
+signs JARM responses: `response_mode=jwt` returns `[A012305] … the 'authorization_signed_response_alg' metadata
+of the client … is not set`, i.e. **a configuration gap, not an implementation gap, on the AS side.** No
+`server/src` change is needed and the proposal to "implement JARM" is withdrawn. What *does* remain a genuine
+gap is **client-side consumption** — the dashboard SPA cannot parse or verify a `response` JWT — which is
+optional for the curriculum since the labs verify JARM with a standalone script. SPEC-INVENTORY has been
+corrected in two places (the spec's title was also wrong).
+
+**Two proposals remain open. No code has been written for either.**
 
 1. **RFC 9728 Protected Resource Metadata** (Module 04) — one additive route + controller + config value +
    unit test at true root, beside `oauthAsMetadataRoutes`. Small.
@@ -201,6 +210,17 @@ exchange requests.`, because the service sets `tokenExchangeByPermittedClientsOn
 documents both states. Service-level grant types already included `TOKEN_EXCHANGE` and `JWT_BEARER`, and the
 client already had both in its `grantTypes` — the per-client permission flag was the only gate.
 
+**Module 09a config — requested 2026-07-28, NOT YET APPLIED.** The repo owner chose "set all five." As of the
+end of that turn none had landed. Each unblocks exactly one thing:
+
+| Where | Field | Set to | Unblocks |
+|---|---|---|---|
+| Service | `supportedAcrs` | `pwd`, `mfa` | RFC 9470 step-up (lab 4b) — currently `[A021303]` |
+| Service | `supportedAuthorizationDetailsTypes` | `payment_initiation` | RAR success path (lab 5b) — currently `[A249302]` |
+| Client `1523514379` | `authorizationSignAlg` | `ES256` | JARM (lab 2c) — currently `[A012305]` |
+| Client `1523514379` | `bcDeliveryMode` | `POLL` | CIBA (lab 3d) — currently `[A169301]` |
+| Both clients | `idTokenSignAlg` | `ES256` | Module 08 lab 3d + public-client `openid` |
+
 **Still outstanding:**
 
 - **`idTokenSignAlg: HS256` on BOTH clients — still outstanding as of 2026-07-28.** The repo owner chose
@@ -240,6 +260,55 @@ Interim cover: Module 07's quiz Tier 4 was written to reach back across 02–06 
 stands in for A. When writing them, note that Module 07 introduced the audit method and Module 08 the
 thirteen-step validation — both are natural exam material that did not exist when the earlier module quizzes
 were written.
+
+### Module 09a — done / verified / uncertain
+
+- **Done:** `README.md` — organised around **four unexamined assumptions** the earlier modules baked in (the
+  response is trustworthy → JARM; there is a browser → CIBA; one authentication covers the session → RFC 9470;
+  scopes describe authority well enough → RAR), plus Native SSO's "one app per device" as a fifth. Contains:
+  JARM framed as **completing Module 05's triangle** (PAR = request confidentiality, JAR = request integrity,
+  JARM = response integrity) with all three mandatory claims quoted and the observation that `iss` inside a
+  signature makes mix-up *structurally impossible* rather than merely detectable; the four `response_mode`
+  values and three client metadata parameters; CIBA with a dark mermaid showing the
+  consumption-device/authentication-device split, a poll/ping/push decision table, and **the threat that has no
+  redirect analogue** — the prompt is unsolicited, so `binding_message` cannot do what people think it does;
+  RFC 9470's full round trip with the error and both challenge parameters quoted, and the observation that
+  omitting `acr_values` converts a recoverable state into a dead end; RAR with all five common data fields
+  quoted, three properties scopes cannot provide, and an explicit "when not to use it"; and Native SSO with a
+  prominent not-Final caveat. `lab.md` — five exercises on one repeated shape: **request → read the refusal →
+  find the one field → enable → re-run.** `quiz.md` + `quiz-answers.md` (19 items across 4 tiers). Added six
+  concepts and four parameter groups to GLOSSARY.
+- **Verified against the live server (every refusal executed):** **JARM** — `response_mode=jwt` and
+  `query.jwt` → `[A012305]`, naming `authorization_signed_response_alg` **in spec vocabulary**. **CIBA** →
+  `[A169301] The backchannel token delivery mode of the client application is not set.` **Step-up** —
+  `acr_values=pwd` *and* an essential `acr` claim both → `[A021303] ACR values cannot be specified by any means
+  ('claim', 'acr_values' or 'default_acr_values') because this service supports no ACR value.` **RAR** — four
+  malformations, four distinct diagnostics under one spec error code: `[A249302]` unsupported type,
+  `[A249301]` absent type, `[A249304]` malformed JSON, `[A249304]` not-an-array. CIBA sub-endpoints with a
+  bogus ticket: `issue` → **400** `[A181201]`, `fail` → **403** `[A185001]`, `complete` → **500** `[A186202]`;
+  and the CIBA token grant → a clean `invalid_grant [A200304]`. Full service and client configuration read for
+  Exercise 1's inventory. **Verified (primary sources, this session):** JARM — title, Final status, **errata
+  set 1 dated 17 Aug 2025**, the three mandatory claims quoted, all four `response_mode` values, all three
+  client metadata parameters. RFC 9470 — title, Standards Track, Sep 2023, the `insufficient_user_authentication`
+  definition, both challenge parameters, §3 on `acr`/`auth_time`, and the example header. RFC 9396 — title,
+  Standards Track, May 2023, the `authorization_details` and `type` definitions, all five common data fields,
+  `invalid_authorization_details`, and the scope-coexistence sentences.
+- **Two findings, plus a corrected inventory entry:** (1) a **vendor anomaly** — `response_mode=form_post.jwt`
+  produces a 302 whose `Location` is a URL-encoded HTML document, traced by direct API call to Authlete
+  returning `action: LOCATION` with HTML in `responseContent`, so the repo's controller behaved correctly and
+  the fault is upstream; scoped explicitly to the **error** path, since the success path cannot be observed
+  until JARM is configured. (2) the **CIBA endpoints return Authlete's internal envelope** (`resultCode`,
+  `resultMessage`, `action`, `clientId`) with the real OAuth error JSON-escaped inside a `responseContent`
+  string — unlike the token endpoint, which is correct; and `complete` maps a nonexistent ticket to **500**.
+  (3) **ACR theatre**, established by holding two verified facts together: `supportedAcrs` is absent, yet live
+  ID tokens carry `acr: "pwd"` — the value is not wrong, it is unaccountable.
+- **Uncertain / notes:** **`UNVERIFIED` — every post-enablement step.** None of the five requested settings had
+  landed by the end of the turn, so the lab shows **no success transcripts** for JARM, CIBA, step-up or RAR;
+  each is marked `UNVERIFIED on this deployment as of 2026-07-28` inline, and the lab states up front that
+  refusals are observed and enablement steps are the spec's promise. This is the largest UNVERIFIED surface of
+  any module so far and the main reason to re-run Module 09a's lab once the console changes land. Native SSO is
+  **not run at all** (`nativeSsoSupported: false`) and is labelled a 2nd Implementer's Draft throughout.
+  `verify-jarm.mjs` is an adaptation of Module 08's validator whose asymmetric branch is likewise unexercised.
 
 ### Module 08 — done / verified / uncertain
 
