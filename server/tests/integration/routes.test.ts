@@ -42,8 +42,9 @@ describe("Integration: all API routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubEnv("MGMT_CLIENT_ID", "")
-    vi.stubEnv("MGMT_CLIENT_SECRET", "")
+    vi.unstubAllEnvs()
+    vi.stubEnv("MGMT_CLIENT_ID", "test-admin")
+    vi.stubEnv("MGMT_CLIENT_SECRET", "test-secret")
     app = createApp()
   })
 
@@ -153,7 +154,7 @@ describe("Integration: all API routes", () => {
   describe("POST /api/client/dcr/register", () => {
     it("returns 201 with action CREATED", async () => {
       mockApi.dynamicClientRegistration.register.mockResolvedValue({ action: "CREATED", responseContent: JSON.stringify({ client_id: "dcr-1" }) })
-      const res = await request(app).post("/api/client/dcr/register").send({ json: '{"client_name":"test"}' }).expect(201)
+      const res = await request(app).post("/api/client/dcr/register").auth("test-admin", "test-secret").send({ json: '{"client_name":"test"}' }).expect(201)
       expect(res.body.action).toBe("CREATED")
     })
   })
@@ -181,24 +182,76 @@ describe("Integration: all API routes", () => {
   })
 
   describe("GET /api/gm/:grantId", () => {
-    it("returns 200", async () => {
+    it("returns 200 when the token is bound to that grant", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-1", subject: "alice" })
       mockApi.grantManagement.processRequest.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ grantId: "g-1" }) })
       const res = await request(app).get("/api/gm/g-1").set("Authorization", "Bearer tok-1").expect(200)
       expect(res.body.grantId).toBe("g-1")
     })
+
+    it("returns 403 for another user's grant, without reaching Authlete", async () => {
+      // The cross-user BOLA, verified live before this fix: bob's token read alice's grant.
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-bob", subject: "bob" })
+      const res = await request(app).get("/api/gm/g-alice").set("Authorization", "Bearer bob-tok").expect(403)
+      expect(res.body.error).toBe("access_denied")
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
+
+    it("returns 403 for a token with no grant binding (client credentials)", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "OK" })
+      await request(app).get("/api/gm/g-1").set("Authorization", "Bearer cc-tok").expect(403)
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
+
+    it("returns 401 with no bearer token, without introspecting", async () => {
+      const res = await request(app).get("/api/gm/g-1").expect(401)
+      expect(res.body.error).toBe("invalid_token")
+      expect(mockApi.introspection.process).not.toHaveBeenCalled()
+    })
+
+    it("returns 403 when the token lacks the query scope", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "FORBIDDEN", responseContent: 'Bearer error="insufficient_scope"' })
+      await request(app).get("/api/gm/g-1").set("Authorization", "Bearer weak-tok").expect(403)
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
   })
 
   describe("DELETE /api/gm/:grantId", () => {
-    it("returns 204", async () => {
+    it("returns 204 when the token is bound to that grant", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-1", subject: "alice" })
       mockApi.grantManagement.processRequest.mockResolvedValue({ action: "OK" })
       await request(app).delete("/api/gm/g-1").set("Authorization", "Bearer tok-1").expect(204)
+    })
+
+    it("returns 403 when deleting another user's grant, without reaching Authlete", async () => {
+      // The destructive half: before the fix this returned 204 and destroyed the other user's grant.
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-bob", subject: "bob" })
+      await request(app).delete("/api/gm/g-alice").set("Authorization", "Bearer bob-tok").expect(403)
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("administrative auth fails closed", () => {
+    it("rejects an unauthenticated management request", async () => {
+      const res = await request(app).get("/api/client/list").expect(401)
+      expect(res.body.error).toBe("invalid_client")
+      expect(mockApi.client.list).not.toHaveBeenCalled()
+    })
+
+    it("rejects management requests when MGMT credentials are unset", async () => {
+      // Regression for the fail-open defect: an unset env var must not disable authentication.
+      vi.stubEnv("MGMT_CLIENT_ID", "")
+      vi.stubEnv("MGMT_CLIENT_SECRET", "")
+      const unconfigured = createApp()
+      await request(unconfigured).get("/api/client/list").expect(401)
+      expect(mockApi.client.list).not.toHaveBeenCalled()
     })
   })
 
   describe("GET /api/client/list", () => {
     it("returns client list", async () => {
       mockApi.client.list.mockResolvedValue({ clients: [{ clientId: "c-1" }], totalCount: 1 })
-      const res = await request(app).get("/api/client/list").expect(200)
+      const res = await request(app).get("/api/client/list").auth("test-admin", "test-secret").expect(200)
       expect(res.body.clients).toHaveLength(1)
     })
   })
@@ -206,7 +259,7 @@ describe("Integration: all API routes", () => {
   describe("POST /api/client/create", () => {
     it("creates a client", async () => {
       mockApi.client.create.mockResolvedValue({ action: "OK", clientId: "c-new" } as any)
-      const res = await request(app).post("/api/client/create")
+      const res = await request(app).post("/api/client/create").auth("test-admin", "test-secret")
         .send({ client: { clientName: "test", grantTypes: ["AUTHORIZATION_CODE"] } }).expect(201)
       expect(res.body.clientId).toBe("c-new")
     })
@@ -215,7 +268,7 @@ describe("Integration: all API routes", () => {
   describe("POST /api/token/create", () => {
     it("creates a token", async () => {
       mockApi.token.management.create.mockResolvedValue({ action: "OK", accessToken: "at-1" })
-      const res = await request(app).post("/api/token/create")
+      const res = await request(app).post("/api/token/create").auth("test-admin", "test-secret")
         .send({ grantType: "AUTHORIZATION_CODE", clientId: "123", subject: "user-1" }).expect(200)
       expect(res.body.accessToken).toBe("at-1")
     })
@@ -224,7 +277,7 @@ describe("Integration: all API routes", () => {
   describe("GET /api/token/list", () => {
     it("lists tokens", async () => {
       mockApi.token.management.list.mockResolvedValue({ tokens: [{ accessToken: "at-1" }] })
-      const res = await request(app).get("/api/token/list").expect(200)
+      const res = await request(app).get("/api/token/list").auth("test-admin", "test-secret").expect(200)
       expect(res.body.tokens).toHaveLength(1)
     })
   })

@@ -856,7 +856,7 @@ if (!hasRealAuthleteCreds) {
         gmRevokeToken = res.body.access_token
       })
 
-      it("queries a non-existent grant (returns 404)", async () => {
+      it("rejects a client_credentials token, which has no grant binding (403)", async () => {
         if (!gmQueryToken) return
         const res = await request
           .get("/api/gm/non-existent-grant")
@@ -865,7 +865,7 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("error", "not_found")
       })
 
-      it("revokes a non-existent grant (returns 204)", async () => {
+      it("rejects revoke with a client_credentials token (403)", async () => {
         if (!gmRevokeToken) return
         const res = await request
           .delete("/api/gm/non-existent-grant")

@@ -2,8 +2,11 @@ import { app } from "./app";
 import logger from "./utils/logger";
 import { server } from "./config/app.config";
 import { closeRedis } from "./middleware/session";
+import { warnIfManagementCredentialsMissing } from "./middleware/require-basic-auth";
 
 const PORT = server.port;
+
+warnIfManagementCredentialsMissing();
 
 const serverInstance = app.listen(PORT, () => {
   logger(`Authorization Server running on port ${PORT}`);

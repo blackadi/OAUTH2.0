@@ -150,12 +150,13 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
 
 ### Findings worth acting on outside the curriculum
 
-> Fourteen now, and **the two added by Module 11 are the most serious of the build** — they are listed first.
+> **⚠️ The two Module 11 findings were FIXED on 2026-07-28** — see the ✅ notes on each. Twelve remain open.
+> They are listed first.
 > Four of the rest are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
 > logout/authorization path. None were fixed — all are server source, and the standing rule is to surface
 > rather than repair. Each is taught as a Tier-3 exercise in the module that found it.
 
-- **🔴 Cross-user BOLA on `/api/gm/:grantId`, with a write primitive.** Verified live on an isolated
+- **✅ FIXED — Cross-user BOLA on `/api/gm/:grantId`, with a write primitive.** Verified live on an isolated
   two-user instance (`PORT=3005 AUTH_USERS="alice:…;bob:…"`; nothing on :3000 or in Authlete's config was
   changed, and the instance was killed afterwards). With **valid, correctly scoped, unexpired** tokens:
   **bob's token read alice's grant → 200 with alice's contents**, alice's token read bob's grant → 200 with
@@ -173,7 +174,7 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   with the vendor, do not assert.** What is not ambiguous is the expectation: Grant Management §5.2 says
   *"the respective client must be authorized to use the particular grant id"*, and a grant is defined
   throughout as belonging to a client **and** a resource owner.
-- **🔴 Unauthenticated read of a confidential client's secret.** `GET /api/client/get/<clientId>` with **no
+- **✅ FIXED — Unauthenticated read of a confidential client's secret.** `GET /api/client/get/<clientId>` with **no
   credentials of any kind** returns the full client object including `clientSecret` in plaintext — the
   credential that PKCE, PAR and DPoP exist to protect. Also unauthenticated: `GET /api/client/auth/list/<subject>`
   (enumerate any subject's authorized clients), `GET /api/client/scopes/granted/<clientId>/<subject>`, and
@@ -383,6 +384,46 @@ generous to yourself on *rejected alternatives* and on *limitations*.
 
 Module 07's quiz Tier 4 was the interim stand-in for Exam B while it was unwritten; Exam B now says so and
 does not duplicate it.
+
+### Both serious findings fixed — 2026-07-28
+
+The repo owner approved fixing the two red findings after Stage 4. Design decisions were theirs: a **strict
+grant match** for the BOLA (the caller's token must have been issued under the grant it addresses — a
+client-credentials token is therefore denied, which removes machine-to-machine grant management by design),
+and **fail-closed at runtime** for admin auth rather than a hard startup failure.
+
+- **BOLA** → new `server/src/middleware/require-grant-ownership.ts`, wired into both `/api/gm/:grantId`
+  routes. Introspects the bearer token *before* the grant-management call. Middleware rather than service, so
+  it cannot be bypassed by a future handler and the existing service tests stay untouched. Mismatch and
+  no-grant-binding return an **identical** 403 body, so a caller cannot tell them apart. 403 rather than 404
+  is correct here: the check runs before any Authlete lookup, so the response is the same whether or not the
+  grant exists — there is no oracle for a lying 404 to hide.
+- **Fail-open auth** → `require-basic-auth.ts` rewritten. Unset credentials now deny, with a response
+  byte-identical to "no credentials supplied" (telling an anonymous caller the server is misconfigured is free
+  recon) and a distinct `log.error` plus a one-off startup warning from `server.ts`. Also fixed in the same
+  function: non-constant-time comparison (now `timingSafeEqual`) and `split(":")` truncating secrets that
+  contain a colon. Added the missing `checkAuth` to `GET /api/token/createLocalToken`, the one admin route
+  that had none — `AGENTS.md` already claimed it was protected.
+
+**Verified live, both exploits re-run against the original repro.** Admin: unauthenticated
+`GET /api/client/get/<id>` → **401**, zero `clientSecret` occurrences in the body; `client/list`,
+`client/auth/list/:subject`, `token/list`, `hsk/list` and `token/createLocalToken` all **401**; the startup
+warning fires. BOLA (two users on an isolated `PORT=3005` instance): alice reads her own grant → **200**
+(feature intact), bob reads alice's grant → **403**, bob deletes alice's grant → **403**, and **alice's grant
+survived** → 200. Before the fix those were 200, 200 and 204-then-destroyed.
+
+**Gate:** `typecheck` 0 errors, `lint` 0 errors, **366 tests / 47 files, 0 failures** (was 318/44). 30 new
+middleware tests plus 7 integration regressions, including "bob's token → 403 and
+`grantManagement.processRequest` never called" and "MGMT unset → 401". Four existing tests that *asserted the
+vulnerable behaviour* — two literally named *"skips auth when MGMT vars not set"* — were rewritten to assert
+401.
+
+**Not run, per the standing rule: `test:e2e`.** Two test names in section 17 were updated blind; their
+assertions still expect the old 404/204 and will need adjusting to 403 when someone next runs the suite. The
+insufficient-scope case also moves 401 → 403, since introspection now returns `FORBIDDEN` before the GM call.
+
+**Action required at deploy:** `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` are still empty in `server/.env`, so the
+SPA's four Admin sections now return 401 until they are set — locally and in Render.
 
 ### Module 12 — Capstone — done / verified / uncertain
 

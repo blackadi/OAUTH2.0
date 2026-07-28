@@ -34,11 +34,11 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (318 tests, 44 files)
+npm --prefix server run test              # unit + integration (366 tests, 47 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (287 tests, 43 files)
-npm --prefix server run test:integration  # integration tests only (31 tests)
+npm --prefix server run test:unit         # unit tests only (328 tests, 45 files)
+npm --prefix server run test:integration  # integration tests only (38 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (100 tests, requires real Authlete creds)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 43 files across 5 categories (287 tests):
+- **Unit tests**: 45 files across 5 categories (328 tests):
   - `tests/unit/services/` — 21 files (86 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par)
   - `tests/unit/controllers/` — 6 files (60 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device
-  - `tests/unit/middleware/` — 4 files (28 tests), error handler, session, audit-log, csrf
+  - `tests/unit/middleware/` — 6 files (58 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership
   - `tests/unit/utils/` — 4 files (22 tests), createLocalJWT/jwksClient/validate/validation
   - `tests/unit/routes/` — 2 files (24 tests), metrics routes + openapi routes
-- **Integration tests**: 1 file `tests/integration/routes.test.ts` (31 tests) — full Express stack with mocked SDK
+- **Integration tests**: 1 file `tests/integration/routes.test.ts` (38 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 318 tests across 44 files, completes in ~2s
+- Run with `npm --prefix server run test` — 366 tests across 47 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -110,8 +110,8 @@ docker compose up -d prometheus grafana
 - `client/` Vite dev server proxies `/api` → `http://localhost:3000`
 - Security headers set globally (X-Content-Type-Options, X-Frame-Options, XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS in production)
 - CORS restricted to `http://localhost:3000,http://localhost:3001` by default (configurable via `ALLOWED_ORIGINS`)
-- Admin token management under `/api/token/*` requires Basic auth with `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` if set
-- Grant Management API at `/api/gm/:grantId` (GET=query, DELETE=revoke) delegates to `authleteApi.grantManagement.processRequest()`. Bearer token required. Spec-compliant with [Grant Management for OAuth 2.0](https://openid.net/specs/oauth-v2-grant-management.html).
+- Admin token management under `/api/token/*` requires Basic auth with `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`. **Fails closed**: if either is unset the routes return 401 rather than allowing the request
+- Grant Management API at `/api/gm/:grantId` (GET=query, DELETE=revoke) delegates to `authleteApi.grantManagement.processRequest()`. Bearer token required. **`requireGrantOwnership` (`middleware/require-grant-ownership.ts`) runs first**: it introspects the token and requires the grant it was issued under to equal `:grantId`, returning 403 otherwise — Authlete's `/gm` API validates the token but not who owns the grant, and its response carries no owner information. This is deliberately stricter than [Grant Management for OAuth 2.0](https://openid.net/specs/oauth-v2-grant-management.html): a client-credentials token has no grant, so machine-to-machine grant management is not supported.
 - Client SPA stores tokens in sessionStorage via React Context (`src/context/TokenContext.tsx`)
 - **Prometheus metrics**: `GET /metrics` and `GET /api/metrics` — tracks HTTP request duration (histogram) + total (counter) via `prom-client` + `collectDefaultMetrics`. Labels: `method`, `route`, `status`. See `src/services/metrics.service.ts` and `src/middleware/metrics.ts`.
 - **Audit logging**: Winston daily-rotate-file logger at `logs/audit-*.log` (90-day retention). Captures `reqId`, method, path, status, duration, IP, user-agent, `user`, `clientId`. Records client identity from Basic auth headers. See `src/utils/audit-logger.ts` and `src/middleware/audit-log.ts`.
@@ -239,5 +239,5 @@ The token controller (`src/controllers/token.controller.ts`) handles every Authl
 - **Supertest 7.2.2 bug**: `_attachCookies` throws `Invalid URL` on relative URL redirects with JSON chars. Workaround: avoid browser-flow tests or use `request` (non-agent)
 - **Request object E2E test** creates ephemeral DCR client (deleted in `afterAll`). Guarded by `hasManagement`
 - **Authlete rate limit**: ~15+ token calls in short window → 429; E2E tests accept 429 as valid
-- **`requireBasicAuth`** checks `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`; if unset, all management routes are unprotected
+- **`requireBasicAuth`** checks `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` and **fails closed** — if either is unset, every management route returns 401 (it previously allowed all requests). Uses `timingSafeEqual` and splits the Basic payload on the first colon only, so a secret may contain colons
 - **CIMD (Client ID Metadata Document)**: Authlete handles CIMD entirely server-side — when `clientIdMetadataDocumentSupported: true`, an HTTPS URL as `client_id` triggers automatic metadata fetch and client registration. No new endpoints or client code needed. Surfaced in FAPI config/status endpoints and client UI. [CIMD spec](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)

@@ -256,6 +256,9 @@ export const localSignedToken = {
       if (server.nodeEnv !== "development") {
         return res.status(404).json({ error: "not_found" });
       }
+      // After the nodeEnv guard, so production keeps returning a flat 404 rather than revealing that
+      // the endpoint exists. This is an admin route and was previously the only one with no auth check.
+      if (!checkAuth(req, res)) return;
       const { ...reqBody } = req.query;
       logger("Local Signed Token parameters", { reqBody });
       //read iss parameter from env if not provided
