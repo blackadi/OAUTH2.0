@@ -93,8 +93,9 @@ graph TD
    predict, then run it and explain the gap. This is where the learning is.
 5. **Gate yourself with the quizzes.** Don't advance until you can pass Tier 4 (adversarial/design). Answers
    are in `quiz-answers.md` and explain *why the wrong answers are wrong*.
-6. **Track progress** in [`PROGRESS.md`](PROGRESS.md). Cumulative exams follow Modules 03, 07, and 11; a final
-   exam precedes the capstone.
+6. **Track progress** in [`PROGRESS.md`](PROGRESS.md). Sit the [cumulative exams](exams/) after Modules 03,
+   07 and 11, and the Final before the capstone — they are closed-book and test what a single module's quiz
+   structurally cannot: combining mechanisms when nobody tells you which module the answer is in.
 
 ## Companion documents
 
@@ -103,6 +104,8 @@ graph TD
 - **[GLOSSARY.md](GLOSSARY.md)** — every role, endpoint, parameter, claim, and acronym, with its defining spec
   and where it appears in the code.
 - **[PROGRESS.md](PROGRESS.md)** — a checklist with self-assessment gates.
+- **[exams/](exams/)** — four cumulative exams (A after Module 03, B after 07, C after 11, and a Final before
+  the capstone), each with an answer key that points back at the module to revisit.
 - **[scripts/](scripts/)** — `decode-jwt.mjs` (offline token decoder), `sd-jwt.mjs` (offline SD-JWT
   issuer/holder/verifier for Module 09b) and `curriculum.env.example`.
 

@@ -36,11 +36,11 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 
 ## Assessment gates
 
-- [ ] **Cumulative Exam A** (after Module 03) — foundations through PKCE
-- [ ] **Cumulative Exam B** (after Module 07) — full OAuth 2.0 + hardening + consolidation
-- [ ] **Cumulative Exam C** (after Module 11) — OIDC, extensions, FAPI, API security
-- [ ] **Final Exam** (before Module 12) — everything, with a self-grading rubric
-- [ ] **Capstone** — design + adversarial review, graded against the rubric
+- [ ] **[Cumulative Exam A](exams/exam-a.md)** (after Module 03) — foundations through PKCE · 15 items, 90 min
+- [ ] **[Cumulative Exam B](exams/exam-b.md)** (after Module 07) — OAuth 2.0 complete, hardened, consolidated · 15 items, 2 h
+- [ ] **[Cumulative Exam C](exams/exam-c.md)** (after Module 11) — OIDC, extensions, credentials, FAPI, API security · 15 items, 2 h
+- [ ] **[Final Exam](exams/final-exam.md)** (before Module 12) — everything, almost all synthesis · 12 items, 2–3 h
+- [ ] **[Capstone](modules/12-capstone/README.md)** — design + adversarial review, graded against the rubric
 
 ## Quiz tiers (what "passing" means)
 
@@ -86,7 +86,8 @@ against it before calling the capstone complete._
 - [x] **Module 12 — Capstone** — README (brief + rubric), lab (Aurora brief + Meridian vulnerable variant), quiz, quiz-answers written & committed
 - [x] **STAGE 3 COMPLETE** — all 14 modules written, verified and committed
 - [x] **Stage 4a — consistency pass** — run, 2 real errors found and fixed (see below)
-- [ ] Stage 4b — backfill the four exams (A, B, C, Final)  ← **all that remains**
+- [x] **Stage 4b — the four exams written** (A, B, C, Final) under `exams/`, each with an answer key
+- [x] **STAGE 4 COMPLETE — the curriculum is finished.**
 
 ### Stage 4a — consistency pass: what was checked and what was found
 
@@ -357,22 +358,31 @@ Nothing on the Authlete service was changed by the curriculum build; the repo ow
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
 
-### The cumulative exams — DECIDED: backfill in Stage 4
+### The cumulative exams — WRITTEN (Stage 4b, 2026-07-28)
 
-**Decision (repo owner, 2026-07-28): all four exams are written in Stage 4, not as they come due.** Stage 3
-stays one-module-per-turn through Module 12.
+All four are now in [`exams/`](exams/), each with a separate answer key. They were deliberately backfilled
+after all fourteen modules existed, which had one real benefit: an exam written last can draw on framings the
+earlier module quizzes could not have known about — Exam A's A13, for instance, poses a Module-07-shaped
+question that is answerable from Modules 02–03.
 
-To write in Stage 4:
+| Exam | After | Covers | Items | Time |
+|---|---|---|---|---|
+| [A](exams/exam-a.md) | Module 03 | 00–03 | 15 | 90 min |
+| [B](exams/exam-b.md) | Module 07 | 00–07, weighted to 04–07 | 15 | 2 h |
+| [C](exams/exam-c.md) | Module 11 | 08–11 | 15 | 2 h |
+| [Final](exams/final-exam.md) | before 12 | everything, almost all synthesis | 12 | 2–3 h |
 
-- **Cumulative Exam A** (after Module 03) — foundations through PKCE
-- **Cumulative Exam B** (after Module 07) — full OAuth 2.0 + hardening + consolidation
-- **Cumulative Exam C** (after Module 11) — OIDC, extensions, FAPI, API security
-- **Final Exam** (before Module 12) — everything, with a self-grading rubric
+**Design decisions, for a future editor.** (1) Exams test *integration*, which is the thing a module quiz
+structurally cannot — every exam has items requiring two or more modules, and those carry the most marks.
+(2) **Answer keys point back at modules rather than re-teaching**, and each ends with a missed-item → module
+table; the stated output of an exam is that list, not the score. (3) Closed book, with two exceptions
+(`curl`, and `[lab]`-marked items) because those measure typing rather than understanding. (4) Three items
+depend on material taught *later* than the module the exam follows; each is marked inline and optional.
+(5) The Final's self-grading rubric targets the same two inflation risks the capstone rubric names — being
+generous to yourself on *rejected alternatives* and on *limitations*.
 
-Interim cover: Module 07's quiz Tier 4 was written to reach back across 02–06 and stands in for B. Nothing
-stands in for A. When writing them, note that Module 07 introduced the audit method and Module 08 the
-thirteen-step validation — both are natural exam material that did not exist when the earlier module quizzes
-were written.
+Module 07's quiz Tier 4 was the interim stand-in for Exam B while it was unwritten; Exam B now says so and
+does not duplicate it.
 
 ### Module 12 — Capstone — done / verified / uncertain
 
