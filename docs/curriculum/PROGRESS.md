@@ -32,7 +32,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 09b · Identity + credentials | Compute an SD-JWT digest that matches RFC 9901's own test vector; explain why the salt is load-bearing; strip a KB-JWT and say which verifier accepts it and why; name the one unlinkability property SD-JWT cannot provide; place OID4VCI/VP and federation in the graph. |
 | [x] | 10 · FAPI + grant management | Name all six FAPI 2.0 attackers and four things the model puts out of scope; explain why refresh-token rotation is *forbidden*; show a deployment where every mechanism is supported and none required; run the grant lifecycle and say what a revocation does **not** revoke. |
 | [x] | 11 · API security beyond the token | Find a BOLA in a code snippet and say why a valid token cannot stop it; name the three OWASP 2023 authorization failures and what the attacker changes in each; choose RBAC/ABAC/ReBAC and defend it; say what a gateway cannot enforce; write a regression test with its control assertion. |
-| [ ] | 12 · Capstone | Design a high-assurance multi-tenant authZ architecture and defend it; then find the flaws in the vulnerable variant. |
+| [x] | 12 · Capstone | Design a high-assurance multi-tenant authZ architecture, defending nine decisions against a **named** attacker model with an honest limitations section; then find **25** planted defects in the vulnerable variant, sever them correctly, and defend a remediation order — scoring 85+ on the rubric. |
 
 ## Assessment gates
 
@@ -83,7 +83,9 @@ against it before calling the capstone complete._
 - [x] **Module 09b — Identity + Credentials** — README, lab, quiz, quiz-answers + `scripts/sd-jwt.mjs` written & committed
 - [x] **Module 10 — FAPI + Grant Management** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 11 — API Security Beyond the Token** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 12 — Capstone  ← **next, and the last of Stage 3**
+- [x] **Module 12 — Capstone** — README (brief + rubric), lab (Aurora brief + Meridian vulnerable variant), quiz, quiz-answers written & committed
+- [x] **STAGE 3 COMPLETE** — all 14 modules written, verified and committed
+- [ ] Stage 4 — consistency pass **+ backfill all four exams**  ← **all that remains**
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
 ### Awaiting a decision — gated source changes
@@ -337,6 +339,53 @@ Interim cover: Module 07's quiz Tier 4 was written to reach back across 02–06 
 stands in for A. When writing them, note that Module 07 introduced the audit method and Module 08 the
 thirteen-step validation — both are natural exam material that did not exist when the earlier module quizzes
 were written.
+
+### Module 12 — Capstone — done / verified / uncertain
+
+- **Done:** the capstone is a different artifact from the other thirteen — it teaches nothing new and measures
+  whether the rest transferred. `README.md` — the brief, the **nine decisions** a design must make and defend,
+  and a **100-point rubric** deliberately weighted so the two criteria people skip (*rejected alternatives*
+  and *an honest limitations section*, 14 points together) are what separate an architecture document from a
+  list of technologies; an absent limitations section scores zero on that line however good the rest is. Also
+  a score-to-reading table, an explicit "how to grade yourself honestly" sequence (write Part A **before**
+  reading Part B, score **before** reading the model answer), and a mapping from every clause of the
+  curriculum README's definition of done to where the capstone tests it. `lab.md` — **Part A: Aurora**, a
+  multi-tenant clinical platform brief with four client types, three API tiers and five non-negotiable
+  constraints, containing **three deliberate tensions** a strong answer must name (offline validation vs
+  demonstrable revocation; self-service onboarding vs strong client auth; attributability vs service
+  accounts). **Part B: Meridian Health v4.2**, a complete, plausible, real-shaped architecture document for
+  the same brief with **exactly 25 planted defects** spanning Modules 01–11. `quiz.md` + `quiz-answers.md`
+  (18 items across 4 tiers), where Tier 4 asks the learner to attack **their own** design rather than
+  Meridian's.
+- **Verified (self-consistency, since this module has nothing to run):** all **25 defects re-read against the
+  Meridian text one by one** and confirmed present, each mapped to its module and given a severity as
+  *strength × reachability* rather than by modal verb. The count is stated identically in three places
+  (README, lab, answer key) and the rubric line scores `round(found / 25 × 20)` so the totals still sum to
+  100. **Seven deliberately correct passages** are planted as false-positive traps — PAR + `private_key_jwt`
+  + DCR-with-JWKS for partners, `typ: at+jwt`/RS256, a tenant-scoped query, 404-not-403, and an explicit
+  response projection — and the rubric deducts for reporting them; quiz Q15 makes mis-reporting one of them
+  an explicit exercise. Every spec citation in the answer key (RFC 9700 §2.1.2/§2.4/§4.1, RFC 8707, RFC 7662
+  §2.1, RFC 9068, RFC 8693 §1.1, RFC 9449, RFC 9470, RFC 9901 §7.1/5 + §7.3/1 + §9.5, OIDC Core §3.1.3.7,
+  FAPI 2.0 §5.3.2.1, Grant Management §6.5) reuses wording already verified against primary sources in
+  Modules 01–11 — **no new spec claims were introduced**, deliberately, so the capstone cannot contradict the
+  inventory.
+- **Design decisions worth recording for a future editor:** (1) the defect count was raised from 20 to **25**
+  after the Meridian document was drafted and the planted defects were actually counted — the number is
+  stated because "I found them all" is otherwise unfalsifiable, so it must stay accurate if the document is
+  ever edited; (2) the answer key's remediation order is argued by *exposure removed per unit of effort* and
+  explicitly notes two places where a different order is equally defensible, so a learner who disagrees with
+  reasons is not marked wrong; (3) Meridian is deliberately written as competent-but-insecure — quiz Q18 asks
+  *how a document like this happens*, which is the most transferable question in the curriculum and the real
+  ending of the course.
+- **Uncertain / notes:** **nothing in this module was executed** — it is a paper exercise by design, and the
+  Meridian document is fictional. Its code snippets are illustrative and are **not** drawn from this repo,
+  though several defects deliberately mirror real ones found during the build (the fail-open and BOLA themes
+  from Module 11, the userinfo-login bug from Module 08) so a learner who did the labs has seen the shapes
+  before. The **four exams are still unwritten** (Stage 4), so the capstone README states plainly that they
+  are not a prerequisite and points at Module 07's Tier 4 as the interim stand-in for Exam B — this is the
+  one place the curriculum's advertised structure and its actual contents currently differ, and it is
+  flagged to the learner rather than hidden. The rubric's score bands are a judgement call and are labelled
+  as such.
 
 ### Module 11 — done / verified / uncertain
 
