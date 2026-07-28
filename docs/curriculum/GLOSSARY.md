@@ -23,6 +23,9 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Confidential client** | RFC 6749 §2.1 | A client that can hold a secret. | `CLIENT_ID`/`CLIENT_SECRET` in labs |
 | **User agent** | RFC 6749 §1.2 (protocol flow) — *not* one of the four §1.1 roles | The browser that relays front-channel redirects. Untrusted and unavoidable. | your browser; `curl` following redirects |
 | **Policy engine** | *No spec role — deployment architecture* | The component the AS delegates every OAuth decision to. | Authlete Cloud; `services/authlete.service.ts` |
+| **Assertion Issuer** | RFC 7521 §3 | The entity that creates and signs an assertion. Its key is the trust anchor for every token minted from it. | Module 06 — here, the calling client itself |
+| **Relying Party** *(assertion sense)* | RFC 7521 §3 | The party that consumes an assertion and relies on it. *"the authorization server acts as a relying party."* Distinct from the OIDC RP above. | Module 06 |
+| **Actor** | RFC 8693 §4.1 | The party doing the acting in a delegation, named in `act`. | Module 06 |
 
 ## Concepts
 
@@ -54,6 +57,11 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **DPoP proof** | RFC 9449 §4.2 | Per-request JWS (`typ: dpop+jwt`) with `jwk` header and `jti`/`htm`/`htu`/`iat` claims. | `client/src/services/dpop.service.ts` |
 | **`jkt` / `x5t#S256`** | RFC 9449 §6.1 / RFC 8705 §3 | Confirmation members naming the bound key (JWK thumbprint) or certificate (SHA-256 of the DER). | Module 05 |
 | **Proof of possession** | RFC 9449 / RFC 8705 | Requiring the presenter to prove control of a key, so possession of the token alone is insufficient. | Module 05 |
+| **Assertion** | RFC 7521 | A signed statement from a trusted issuer, used as an authorization grant (§2.1) or as client authentication (§2.2). | Module 06 |
+| **Impersonation** | RFC 8693 §1.1 | A is *"indistinguishable from B"* to the downstream service — delegation with the audit trail deleted. | Module 06 |
+| **Delegation** | RFC 8693 §1.1 | A keeps *"its own identity separate from B"*; actions are *"taken by A representing B."* Recorded in `act`. | Module 06 |
+| **Identity chaining** | RFC 8693 §4.1 | Nested `act` claims recording every hop of a multi-service call. | Module 06 |
+| **Silent downgrade** | *No spec term — failure pattern* | An optional security parameter accepted, discarded, and answered with HTTP 200. Undetectable from the response. | Module 06 — `actor_token`, `resource` |
 
 ## Endpoints
 
@@ -106,6 +114,13 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `authorization_details` | RFC 9396 | Typed, fine-grained authorization (RAR). | Beyond coarse scopes |
 | `acr_values` / `max_age` | OIDC Core / RFC 9470 | Requested/required auth strength + freshness. | Step-up authentication |
 | `DPoP` (header) | RFC 9449 | Per-request proof-of-possession JWT. | Sender-constrains the token |
+| `assertion` | RFC 7523 §2.1 | The JWT used **as the authorization grant**. | Whoever holds the signing key can name any `sub` unless the deployment restricts it |
+| `client_assertion` / `client_assertion_type` | RFC 7523 §2.2 | The JWT used **as client authentication**; composes with any grant. | `private_key_jwt` — the strongest common client auth |
+| `subject_token` / `subject_token_type` | RFC 8693 §2.1 | Who the exchanged token is *for*. Both REQUIRED. | Type is explicit so the AS never sniffs |
+| `actor_token` / `actor_token_type` | RFC 8693 §2.1 | Who is *acting*. Its presence is what requests delegation. | Silently ignored here — Module 06 |
+| `requested_token_type` | RFC 8693 §2.1 | What kind of token to return. | Meaningless unless the response carries `issued_token_type` |
+| `audience` | RFC 8693 §2.1 | Logical name of the target service (cf. `resource`). | Audience restriction |
+| `issued_token_type` *(response)* | RFC 8693 §2.2.1 | **REQUIRED** — what the AS actually issued. | Absent here; the client cannot tell what it got |
 
 ## Claims (tokens)
 
@@ -122,6 +137,8 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `cnf` (`jkt`, `x5t#S256`) | RFC 9449 / RFC 8705 | Confirmation — bound key/cert. | Sender-constrained token check |
 | `ath` | RFC 9449 §4.3 | Hash of the access token, in a DPoP proof. | **`ath`, not `sub`** — common mistake |
 | `scope` | RFC 9068 | Granted scopes in a JWT AT. | RS authorization input |
+| `act` | RFC 8693 §4.1 | The acting party in a delegation; nests to record a chain. | Absence on a service-issued token should fail closed |
+| `may_act` | RFC 8693 §4.4 | Placed in the *subject's* token: who may become the actor for them. | Pre-authorizes delegation without a bespoke policy table |
 
 ## Acronyms
 

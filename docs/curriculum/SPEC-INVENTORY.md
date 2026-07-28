@@ -89,7 +89,16 @@ table and as a map from "what the spec says" to "what runs here."
 | RFC 7521 | Assertion Framework for OAuth 2.0 Client Authentication and Authorization Grants | Published RFC | May 2015 | Generic assertion grant/auth framework | Basis for JWT/SAML bearer | conceptual; underpins RFC 7523 usage |
 | RFC 7522 | SAML 2.0 Profile for OAuth 2.0 Client Authentication and Authorization Grants | Published RFC | May 2015 | SAML assertion → OAuth token | Enterprise SSO bridging | conceptual (not wired) |
 | RFC 7523 | JSON Web Token (JWT) Profile for OAuth 2.0 Client Authentication and Authorization Grants | Published RFC | May 2015 | JWT bearer grant + `private_key_jwt` client auth | Keyed client auth; trust federation | `jwt-verification.service.ts`; token `JWT_BEARER`; `docs/JWT-BEARER-TUTORIAL.md` |
-| RFC 8693 | OAuth 2.0 Token Exchange | Published RFC | Jan 2020 | `grant_type=token-exchange`; `actor_token`/`may_act` | Impersonation vs. delegation; identity chaining | token `TOKEN_EXCHANGE`; `docs/TOKEN-EXCHANGE-TUTORIAL.md` |
+| RFC 8693 | OAuth 2.0 Token Exchange | Published RFC | Jan 2020 | `grant_type=token-exchange`; `actor_token`/`may_act` | Impersonation vs. delegation; identity chaining | token `TOKEN_EXCHANGE`; `docs/TOKEN-EXCHANGE-TUTORIAL.md` — **partial, see below** |
+
+> **RFC 8693 is only partly implemented here, and the gaps are silent.** Verified during the Module 06 build:
+> `actor_token`, `resource`, `audience`, and `requested_token_type` are accepted and discarded, so a
+> delegation request returns an impersonation token with **no `act`** and HTTP 200; the REQUIRED
+> `issued_token_type` (§2.2.1) is absent from the success response; and an SDK response-schema mismatch makes
+> the whole grant fail for any subject token that carries a scope. Do not read the table row above as "this
+> works." Details and reproductions in
+> [Module 06](modules/06-machine-and-delegated-grants/lab.md#exercise-6--ask-for-delegation-receive-impersonation)
+> and in `PROGRESS.md`.
 
 ## 7. Consolidation — OAuth 2.1 & the Security BCP (Module 07)
 

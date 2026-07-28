@@ -25,7 +25,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 03 · PKCE + public clients | Explain the exact attack PKCE closes and why `state` doesn't close it; compute an `S256` challenge. |
 | [x] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
 | [x] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
-| [ ] | 06 · Machine + delegated grants | Distinguish impersonation from delegation in a token-exchange response; choose a grant for a daemon. |
+| [x] | 06 · Machine + delegated grants | Choose a grant for a daemon; explain why a client-credentials token has no `sub`; given a token-exchange response, say whether you got impersonation or delegation and what a correct response would have contained. |
 | [ ] | 07 · OAuth 2.1 + Security BCP | Map five RFC 9700 attacks to the module that defends each; state what OAuth 2.1 removes. |
 | [ ] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user; validate an ID token step by step; `nonce` vs. `state`. |
 | [ ] | 09a · Interaction extensions | Explain what JARM adds over `state`; pick poll/ping/push for a CIBA scenario; force a step-up challenge. |
@@ -76,8 +76,9 @@ against it before calling the capstone complete._
 - [x] **Module 03 — PKCE + Public Clients** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 04 — Token Lifecycle + Metadata** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 05 — Request Integrity + Binding** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 06 — Machine + Delegated Grants  ← **next**
-- [ ] Modules 07–12 (09a/09b) — pending
+- [x] **Module 06 — Machine + Delegated Grants** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 07 — OAuth 2.1 + Security BCP  ← **next**
+- [ ] Modules 08–12 (09a/09b) — pending
 - [ ] Stage 4 — consistency pass
 
 ### Awaiting a decision — gated source changes
@@ -99,6 +100,40 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
 
 ### Findings worth acting on outside the curriculum
 
+> Six now, four of them in one file. The token-exchange path (`token-exchange-response.handler.ts`, 89 lines)
+> accounts for findings 3–6 below and is the single highest-value thing on this list to fix. None were fixed —
+> all are server source, and the standing rule is to surface rather than repair. Each is taught as a Tier-3
+> exercise in the module that found it.
+
+- **Token exchange is broken for any scoped subject token.** The SDK's `TokenResponse` schema types
+  `subjectTokenInfo.scopes` as `string[]`; Authlete returns `[{"name":"profile","defaultEntry":false}]`. Zod
+  rejects the response inside `tokenProcess`, so the controller never runs and the client gets
+  `{"error":"Bad Request","message":"Response validation failed"}` plus a stack trace — not an OAuth error at
+  all. Verified three ways during the Module 06 build: the failure with a scoped subject token; a direct call
+  to Authlete's `/auth/token` with identical parameters returning `[A311001] … processed successfully`; and a
+  standalone `TokenResponse$inboundSchema.safeParse` reproducing the exact Zod issue. A **scopeless** subject
+  token succeeds, which is why any smoke test built on a bare `client_credentials` token passes. Likely needs
+  a `patches/` entry alongside the existing `clientCreate.js` patch.
+- **The token-exchange handler discards four request parameters.**
+  `token-exchange-response.handler.ts:29-34` builds its `token.create` request from exactly `grantType`,
+  `clientId`, `scopes`, `subject`. Verified live: `actor_token`, `resource`, `audience`, and
+  `requested_token_type` all produce byte-identical 200 responses, and introspection of the `resource` case
+  shows **no `aud`** (the same parameter does produce `aud` on the authorization-code path — Module 04). The
+  consequence that matters: **a delegation request is answered with an impersonation token, HTTP 200, no
+  `act`, no error.** RFC 8693 §1.1 defines impersonation as being *"indistinguishable from B"* — which is
+  exactly what the downstream service gets.
+- **`issued_token_type` is missing from the token-exchange success response.** RFC 8693 §2.2.1 marks it
+  **REQUIRED**. `token-exchange-response.handler.ts:48-55` emits `access_token`, `token_type`, `expires_in`,
+  `scope`, plus two parameters that are not in the spec (`client_id`, `subject`). Since
+  `requested_token_type` is also ignored, the client has no way to learn what it actually received.
+- **A live access token is written into a `sub` claim.** `token-exchange-response.handler.ts:27` does
+  `result.subject || subjectToken`. When Authlete resolves no subject — correct for a client-credentials
+  subject token — the fallback stores **the credential string itself** as the new token's subject. Verified:
+  `sub == subject_token` on the exchanged token, and that value still introspects `active: true`. It is
+  returned to the client in the response body as `subject` and by introspection as `sub`, i.e. placed in a
+  field whose entire contract is "safe to copy into logs." (Checked and *not* over-claimed: this repo's audit
+  logger takes `user` from the session, not from a token subject, so that particular log is unaffected.)
+  Correct behavior is to fail closed.
 - **UserInfo cannot accept a DPoP-bound token.** `server/src/services/userinfo.service.ts:21` does
   `authHeader.replace("Bearer ", "")`, so `Authorization: DPoP <token>` — the scheme RFC 9449 §7.1 **requires**
   for DPoP-bound tokens — passes the literal string `"DPoP <token>"` to Authlete, which answers `[A088302] The
@@ -129,6 +164,13 @@ setting — **not** `require_pushed_authorization_requests` — was the cause of
 **Public client — RESOLVED 2026-07-27.** Client `4277838306` now reads `clientType: PUBLIC`,
 `tokenAuthMethod: NONE`, `parRequired: false`. The Module 03 labs run against it.
 
+**Token exchange — RESOLVED 2026-07-28.** Client `1523514379` now has
+`extension.tokenExchangePermitted: true`; the repo owner made the console change during the Module 06 build.
+Before that, every exchange returned `[A311305] This service does not allow unpermitted clients to make token
+exchange requests.`, because the service sets `tokenExchangeByPermittedClientsOnly: true`. Module 06's lab
+documents both states. Service-level grant types already included `TOKEN_EXCHANGE` and `JWT_BEARER`, and the
+client already had both in its `grantTypes` — the per-client permission flag was the only gate.
+
 **Still outstanding:**
 
 - Client `4277838306` has `idTokenSignAlg: HS256`, which a public client cannot use — requesting the `openid`
@@ -145,6 +187,59 @@ Nothing on the Authlete service was changed by the curriculum build; the repo ow
 
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
+
+### Module 06 — done / verified / uncertain
+
+- **Done:** `README.md` — the module is organised around one question, *where does the authority come from?*,
+  and the three answers (the client's own registration / a trusted issuer's signature / an existing token).
+  Contains: why a client-credentials token has no `sub` and why that absence is the whole semantics; RFC
+  7523's **two** jobs (§2.1 grant vs §2.2 client auth) laid out side by side, because conflating them means
+  having the security properties backwards; the trust shift that makes the AS a *relying party*, and the
+  control the specs deliberately leave to the deployment — which subjects an issuer may assert; RFC 8693's
+  impersonation-vs-delegation definitions quoted verbatim, with the observation that impersonation is
+  *"indistinguishable"* by design, i.e. delegation with the audit trail deleted; `act` nesting for identity
+  chains and `may_act` as the pre-authorisation; and a dark mermaid keyed on the single optional parameter
+  (`actor_token`) that changes the meaning of the whole request. `lab.md` — six exercises plus three breaks.
+  `quiz.md` + `quiz-answers.md` (18 items across 4 tiers). Added three roles, six concepts, seven parameters
+  and two claims to GLOSSARY. **No new SPEC-INVENTORY rows needed** — §6 already carried RFC 7521/7522/7523/8693
+  and all four were re-verified against primary sources this session.
+- **Verified against the live server (every lab command executed):** client credentials → `expires_in: 86400`,
+  **no `refresh_token`**, and introspection with **no `sub`** — contrasted against an authorization-code token
+  carrying `sub`/`auth_time`/`acr`. `scope=openid profile` → `scope: "profile"`, HTTP 200, **silently
+  dropped**. Public client → `unauthorized_client [A052301]`. JWT bearer: an HS256 assertion signed with the
+  client secret → access token; changing one field to `sub: alice` → **an access token introspecting as
+  `"sub": "alice"` for a user who never authenticated** (the module's headline); `iss` set to a nonexistent
+  issuer → **still accepted**, proving the trust anchor is the client's key, not `iss`. Five assertion breaks,
+  all `invalid_grant`: `[A314310]` unsigned, `Invalid assertion` (wrong key), `[A314314]` wrong audience,
+  `[A314309]` expired, and the repo's own "'sub' claim failed to be extracted" — the split between bracketed
+  Authlete codes (phase 1, claims) and bare sentences (phase 2, signature, `jwt-verification.service.ts:55`
+  and `:77`) is taught as a diagnostic. A valid `client_assertion` against a `client_secret_basic` client →
+  `[A157357]`, i.e. auth method is pinned per client. Token exchange: the scoped-subject-token failure, the
+  Authlete-direct call proving Authlete is fine (`[A311001]`), the standalone Zod reproduction, the scopeless
+  success, four identical 200s for `actor_token`/`resource`/`audience`/`requested_token_type`, no `aud` on the
+  `resource` case, and `sub == subject_token` still `active: true`. Breaks: `[A311306]` nonexistent subject
+  token, `[A250302]` missing `subject_token_type`, `[A244305]` no client identification.
+  **Verified (primary sources, this session):** RFC 8693 title/Standards Track/Jan 2020, §1.1 both definitions
+  quoted verbatim, §2.1 full parameter table with REQUIRED/OPTIONAL status, §2.2.1 the three REQUIRED
+  parameters and the conditional-`scope` sentence, §2.2.2 `invalid_target`, §4.1 `act` and §4.4 `may_act`
+  definitions quoted. RFC 7523 title/Standards Track/May 2015, both URNs, §3's four MUSTs and three MAYs
+  quoted individually, §3.1 `invalid_grant` sentence, and the with-or-without-client-authentication sentence.
+  RFC 7521 title/Standards Track/May 2015, §3 Issuer/Relying Party/Subject definitions, §5.2 validation list
+  including the mandatory-audience sentence, §8.1–8.3. RFC 6749 §4.4 confidential-clients-only sentence, the
+  §4.4 opening paragraph, §4.4.3 refresh-token SHOULD NOT, §2.1 client types, and §3.3's
+  scope-divergence MUST.
+- **Uncertain / notes:** **`act` is never produced on this deployment**, so no lab step shows a real delegated
+  token — the module gate was rewritten accordingly, from "read `act` out of a response" to "say which one you
+  got and what a correct response would have contained," which is arguably the better test but is a change
+  from the original plan. **RFC 7522 (SAML) is not wired up** and nothing claims to run it; it is taught only
+  to make the framework/binding split legible. **§2.2 (`private_key_jwt`) is not exercised** — no client here
+  is registered for it; the lab demonstrates the *pinning* refusal instead and defers the real thing to Module
+  10. The assertion grant is verified against the client's own secret via HS256, which is a property of this
+  client's registration (`client_secret_basic`), not of RFC 7523 — flagged in the lab. Exercise 2's condensed
+  auth-code flow needed a `case` branch because stored consent (24 h, in-memory) makes the login leg redirect
+  either to the consent page or straight to the callback; both paths were observed. The lab tells the learner
+  to read `AUTHLETE_BEARER_TOKEN` from `server/.env` for Exercise 6b — necessary to prove the fault is in the
+  SDK and not Authlete, and the only lab in the curriculum that touches the management API.
 
 ### Module 05 — done / verified / uncertain
 
