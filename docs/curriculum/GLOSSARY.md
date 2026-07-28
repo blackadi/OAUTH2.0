@@ -62,6 +62,11 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Delegation** | RFC 8693 §1.1 | A keeps *"its own identity separate from B"*; actions are *"taken by A representing B."* Recorded in `act`. | Module 06 |
 | **Identity chaining** | RFC 8693 §4.1 | Nested `act` claims recording every hop of a multi-service call. | Module 06 |
 | **Silent downgrade** | *No spec term — failure pattern* | An optional security parameter accepted, discarded, and answered with HTTP 200. Undetectable from the response. | Module 06 — `actor_token`, `resource` |
+| **BCP** | IETF process | Best Current Practice. Community consensus, expected to be updated. RFC 9700 is **BCP 240**; RFC 8252 is **BCP 212**. | Cite the BCP number in reviews |
+| **Normative strength** | RFC 2119 / RFC 8174 | MUST / SHOULD / RECOMMENDED / MAY. A SHOULD without a written rationale is a finding; with one it is a decision. | Module 07 |
+| **Three-source triangulation** | *No spec term — audit method* | Advertised metadata vs stored configuration vs observed behaviour. Observed wins; divergence is itself a finding. | Module 07 |
+| **Reachability** | *No spec term — severity axis* | Who can actually drive this, with what access. Severity = normative strength × reachability. | Module 07 |
+| **Conformance theatre** | *No spec term — failure pattern* | Passing a checklist while remaining exploitable: supported≠required, one path≠all paths, correct parts≠safe whole. | Module 07 |
 
 ## Endpoints
 

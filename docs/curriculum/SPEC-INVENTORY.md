@@ -105,7 +105,12 @@ table and as a map from "what the spec says" to "what runs here."
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
 | RFC 9700 | Best Current Practice for OAuth 2.0 Security (BCP 240) | Published RFC (BCP) | Jan 2025 | Consolidated, current attack catalogue + mitigations | Supersedes RFC 6819 in practice; mandates PKCE, exact redirect matching, no implicit/ROPC | attack catalogue mapped across Modules 02–06 |
-| draft-ietf-oauth-v2-1 | The OAuth 2.0 Authorization Framework (OAuth 2.1) | **Active Internet-Draft** (‑15, 2026; ‑14 dated 2025-10-20) | consulted 2026-07-27 | Consolidates 6749/6750/7636/8252 etc.; drops implicit & ROPC; PKCE mandatory | Simplifies + hardens the baseline | — (not a normative target; taught as direction of travel) |
+| draft-ietf-oauth-v2-1 | The OAuth 2.1 Authorization Framework | **Active Internet-Draft** — `draft-ietf-oauth-v2-1-15`, dated **2 March 2026**, expires 3 September 2026 | consulted 2026-07-28 | Requires PKCE; does **not specify** implicit or ROPC; restricts redirect matching to exact strings (§1.8). §10 "Differences from OAuth 2.0" has only two subsections | Simplifies + hardens the baseline | — (not a normative target; taught as direction of travel) |
+
+> **Title correction (2026-07-28):** the document's own title is *"The OAuth 2.1 Authorization Framework"* —
+> not "The OAuth 2.0 Authorization Framework (OAuth 2.1)", as this row previously read. **Never cite this
+> draft as normative**; cite RFC 9700 (BCP 240) for the requirement and mention OAuth 2.1 as direction of
+> travel, always with the revision and the date consulted. Module 07 covers the discipline.
 
 ## 8. OpenID Connect core & logout (Module 08)
 

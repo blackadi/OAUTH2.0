@@ -157,7 +157,8 @@ curl -s -u "$CLIENT_ID:$CLIENT_SECRET" -X POST "$API/token" \
   -d "scope=openid"
 ```
 
-**Observe.** On this deployment the request is refused, with (**Authlete vendor behavior**, not spec wording):
+**Observe.** You will get one of two outcomes, and **both are instructive** — record which one you saw, with
+the date. Either a refusal (**Authlete vendor behavior**, not spec wording):
 
 ```json
 {"error":"invalid_request",
@@ -165,20 +166,35 @@ curl -s -u "$CLIENT_ID:$CLIENT_SECRET" -X POST "$API/token" \
  "error_uri":"https://docs.authlete.com/#A295306"}
 ```
 
+…or a token:
+
+```json
+{"access_token":"EXAMPLE-ropc-token","token_type":"Bearer","expires_in":86400,
+ "scope":"profile","refresh_token":"EXAMPLE-ropc-refresh"}
+```
+
+> **This is not a lab that has two answers because it is vague.** It has two answers because the outcome
+> depends on a service-level setting that has nothing to do with the ROPC grant. When this module was first
+> written the request was refused; today, on the same deployment with no code change and no client change, it
+> returns a token — because a profile flag was cleared for unrelated reasons. **[Module
+> 07](../07-oauth-2-1-and-security-bcp/lab.md#3c--the-finding-that-contradicts-an-earlier-module)** takes that
+> reversal apart, and it is one of the more useful things in this curriculum. For now: note what *your*
+> deployment did, and note the date.
+
 **Explain the gap — three separate lessons here:**
 
 1. **The ecosystem has closed this door.** RFC 6749 §4.3 defined the Resource Owner Password Credentials
    grant; **RFC 9700 §2.4** (Best Current Practice for OAuth 2.0 Security, BCP 240, January 2025) now states:
    *"The resource owner password credentials grant [RFC6749] MUST NOT be used."* OAuth 2.1 (an **active
-   Internet-Draft**, `draft-ietf-oauth-v2-1` — not normative) removes it entirely. A refusal is the correct
-   modern behavior.
-2. **Advertised ≠ permitted.** The metadata in Exercise 1 listed `password`, and the token request was still
-   rejected. Metadata describes a *configuration surface*; the authorization server's policy engine decides
-   per request. Never conclude from discovery that something will work — test it. (This is a live example of
-   the AS-versus-policy-engine split from the lesson: actor 6 said no.)
-3. **The refusal is a policy choice, not physics.** Nothing in HTTP stopped that request. Had the deployment
-   permitted it, you would now be holding an access token *and* the user's password — which is precisely the
-   anti-pattern with extra steps.
+   Internet-Draft**, `draft-ietf-oauth-v2-1` — not normative) does not specify it at all. A refusal is the
+   correct modern behavior.
+2. **Advertised ≠ permitted — and permitted ≠ advertised.** The metadata in Exercise 1 listed `password`.
+   Whether the token request then succeeds is decided per request by the policy engine, not by the metadata.
+   Never conclude from discovery that something will work *or* that it won't — test it. (A live example of
+   the AS-versus-policy-engine split from the lesson: actor 6 gets the last word.)
+3. **Whatever happened is a policy choice, not physics.** Nothing in HTTP stopped — or would stop — that
+   request. If it was refused, some setting refused it, and settings change. If it succeeded, you are now
+   holding an access token *and* the user's password, which is the anti-pattern with extra steps.
 
 **If your deployment does return a token:** you have reproduced the anti-pattern. Decode the token locally
 (`node docs/curriculum/scripts/decode-jwt.mjs "$ACCESS_TOKEN"`), then answer in writing: which of the five
@@ -242,14 +258,16 @@ sufficient design.
 
 ## What was real vs. simulated
 
-- The metadata, the login and consent pages, the 401/403 enforcement, the ROPC refusal, and the
-  `invalid_token` response are all **real** responses from the running server and Authlete.
+- The metadata, the login and consent pages, the 401/403 enforcement, the ROPC outcome (whichever you saw),
+  and the `invalid_token` response are all **real** responses from the running server and Authlete.
 - The budgeting-app and hotel stories in the lesson are **illustrations**; no bank was involved.
 - Error strings prefixed with a bracketed code (`[A295306]`, `[A088302]`) are **Authlete vendor behavior**,
   not spec-defined wording. The *status codes* and the `error`/`WWW-Authenticate` structure are spec-defined
   (RFC 6749 §5.2, RFC 6750 §3).
-- **Deployment note for Module 02:** the Authlete service backing this repo currently has
-  `require_pushed_authorization_requests` enabled at the service level, so a plain `GET /api/authorization`
-  is rejected with *"[A008306] The 'request_uri' parameter must be given…"*. That does not affect this
-  module — no authorization request is needed here — but Module 02 will address it head-on rather than
-  pretend it isn't there.
+- **Deployment note, and a worked example of why findings need dates.** When this module was written, a plain
+  `GET /api/authorization` on this service was rejected with *"[A008306] The 'request_uri' parameter must be
+  given…"* — mandatory PAR. The diagnosis at the time (`require_pushed_authorization_requests`) turned out to
+  be **wrong**: the real cause was `fapiModes: ["FAPI2_SECURITY"]`, which was also what refused ROPC above and
+  `client_secret_basic` in Module 02. Clearing that one field fixed all three at once. Nothing here affects
+  this module — no authorization request is needed — but keep the shape of it: *one setting, three unrelated
+  symptoms, and a plausible first diagnosis that was not the cause.*

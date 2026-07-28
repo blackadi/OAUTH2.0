@@ -26,7 +26,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 04 · Token lifecycle + metadata | Introspect and revoke a token via `curl`; explain when to use a JWT AT vs. an opaque token. |
 | [x] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
 | [x] | 06 · Machine + delegated grants | Choose a grant for a daemon; explain why a client-credentials token has no `sub`; given a token-exchange response, say whether you got impersonation or delegation and what a correct response would have contained. |
-| [ ] | 07 · OAuth 2.1 + Security BCP | Map five RFC 9700 attacks to the module that defends each; state what OAuth 2.1 removes. |
+| [x] | 07 · OAuth 2.1 + Security BCP | Audit a deployment against RFC 9700 §2 from three sources and write findings with evidence, severity, and a defensible remediation order; state precisely what OAuth 2.1 does and does not do. |
 | [ ] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user; validate an ID token step by step; `nonce` vs. `state`. |
 | [ ] | 09a · Interaction extensions | Explain what JARM adds over `state`; pick poll/ping/push for a CIBA scenario; force a step-up challenge. |
 | [ ] | 09b · Identity + credentials | Explain selective disclosure in SD-JWT; place OID4VCI/VP and federation in the graph. |
@@ -77,8 +77,9 @@ against it before calling the capstone complete._
 - [x] **Module 04 — Token Lifecycle + Metadata** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 05 — Request Integrity + Binding** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 06 — Machine + Delegated Grants** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 07 — OAuth 2.1 + Security BCP  ← **next**
-- [ ] Modules 08–12 (09a/09b) — pending
+- [x] **Module 07 — OAuth 2.1 + the Security BCP** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 08 — OIDC Core + Logout  ← **next**
+- [ ] Modules 09a–12 — pending
 - [ ] Stage 4 — consistency pass
 
 ### Awaiting a decision — gated source changes
@@ -187,6 +188,64 @@ Nothing on the Authlete service was changed by the curriculum build; the repo ow
 
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
+
+### Overdue: the cumulative exams
+
+The plan schedules **Cumulative Exam A after Module 03, Exam B after Module 07, Exam C after Module 11, and a
+final exam before the capstone**. None has been written — Stage 3 has been running strictly one module per
+turn, and the exams were never given a turn. **A and B are now overdue.** Module 07's quiz Tier 4 was written
+to reach back across 02–06 and stands in for B in the meantime; nothing stands in for A. Options: write them
+as they come due from Module 08 onward and backfill A and B in one pass, or fold all four into Stage 4. Needs
+a decision.
+
+### Module 07 — done / verified / uncertain
+
+- **Done:** `README.md` — the module adds no mechanism; it adds a **review method**. Contains: the observation
+  that Module 02 only gave you half of RFC 9700 (the §4 attack catalogue) and this module gives the other half
+  (§2's sixteen requirements, all quoted verbatim in one table with normative strength and the module that
+  taught each mechanism); how to read MUST/SHOULD/RECOMMENDED as a reviewer, with the rule that *a SHOULD
+  without a written rationale is a finding and a SHOULD with one is a decision*; **what OAuth 2.1 actually
+  changes**, framed as requires/omits/restricts from §1.8 quoted verbatim, plus the correction that it does
+  not *prohibit* implicit — it does not specify it; draft-citation discipline; **three-source triangulation**
+  (advertised / configured / observed) with a dark mermaid, each source's failure mode, and a worked example
+  of each drawn from Modules 02, 04 and 06; severity as **strength × reachability** with a 2×3 table; and
+  **conformance theatre** named as the meta-threat in three shapes. `lab.md` — six exercises producing an
+  actual conformance report as the deliverable, plus three self-directed breaks. `quiz.md` +
+  `quiz-answers.md` (18 items across 4 tiers; Tier 4 doubles as interim Cumulative Exam B). Added six terms
+  to GLOSSARY. Added `docs/curriculum/.gitignore` for the learner's `my-audit.md`.
+- **Verified against the live server (every lab command executed):** the full advertised/configured evidence
+  base as printed. **§2.1 PASS** — registered URI + `x` and an unrelated `http://evil.example.com/cb` both →
+  **400 with no `Location` header**, which evidences the exact-matching MUST and the open-redirect MUST NOT at
+  once. **§2.1.1 FAIL** — public client, no PKCE parameters at all → access token **plus a refresh token**.
+  **§2.1.2** — `response_type=token` → live 24 h access token in the URL **fragment**. **§2.4 FAIL —
+  `grant_type=password` returns an access token and a 10-day refresh token.** **§2.2.2 PASS** — refresh
+  rotation confirmed *by observation* (new refresh token returned), not by reading `refreshTokenKept`.
+  **§2.3** — `resource` produces `aud` on the client-credentials path (so it works on two of three paths and
+  is discarded on token exchange, per Module 06) and is absent when not requested; `accessTokenDuration`
+  86400, `refreshTokenDuration` 864000. **§2.5 / RFC 7662 §2.1** — introspection with **no credentials** →
+  200 with full metadata, while revocation with no credentials → `[A116302]`, with `client_id` only →
+  `[A157357]`, and with full credentials → 200 and the token dies. Both endpoints advertise an **empty**
+  auth-methods array, so the metadata misdescribes revocation — a three-source divergence found in the lab
+  itself. **Verified (primary sources, this session):** RFC 9700 §2's complete subsection list (2.1, 2.1.1,
+  2.1.2, 2.2, 2.2.1, 2.2.2, 2.3, 2.4, 2.5, 2.6) and the normative sentences in each, quoted; §2.2.1, §2.2.2,
+  §2.3, §2.5 and §2.6 pulled a second time from `rfc9700.txt` for full sentences. `draft-ietf-oauth-v2-1-15`,
+  dated **2 March 2026**, expiring 3 September 2026, title *"The OAuth 2.1 Authorization Framework"*; §1.8
+  quoted verbatim (fetched twice, identical); §10 confirmed to have exactly two subsections, 10.1 and 10.2.
+  SPEC-INVENTORY's draft row was **corrected** — wrong title and imprecise date.
+- **Corrected two stale claims in Module 01's lab** (not silently — the reversal is now taught):
+  ROPC was recorded as *refused* with `[A295306]`, which was true when written and is false now, because
+  clearing `fapiModes` removed a restriction that had been blocking it incidentally. The lab now shows both
+  outcomes, tells the learner to record which they saw **with the date**, and forward-links to Module 07 §3c.
+  The stale "Deployment note for Module 02" about `require_pushed_authorization_requests` was rewritten to
+  record that the original diagnosis was wrong and `fapiModes` was the real cause.
+- **Uncertain / notes:** the lab's transcript is **deployment-specific by design** — it is a template for
+  auditing *a* server, and it says so twice; a learner on a different service will get different rows, which
+  is the intent but does make this the least reproducible lab in the curriculum. The OAuth 2.1 §10 content was
+  fetched three times and the fetcher summarised rather than quoted on two of them; **only §1.8 is quoted
+  verbatim**, and the §10 claim is limited to its subsection titles and count, which came back identically
+  each time. The severity ranking in Exercise 6b is explicitly labelled *a* defensible order, not *the*
+  answer, and item 3 is flagged as arguable. `my-audit.md` is now gitignored, but nothing stops a learner
+  writing their report elsewhere — the redaction warning is the only control.
 
 ### Module 06 — done / verified / uncertain
 
