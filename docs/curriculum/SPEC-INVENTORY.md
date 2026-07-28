@@ -145,12 +145,12 @@ table and as a map from "what the spec says" to "what runs here."
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
-| OIDC Identity Assurance 1.0 | OpenID Connect for Identity Assurance 1.0 | OpenID Final (errata set 1) | Oct 2024 | `verified_claims`, trust frameworks | KYC-grade verified identity | conceptual (09b) |
-| OpenID Federation 1.0 | OpenID Federation 1.0 | OpenID Final | Feb 2026 | Trust chains, entity statements | Multilateral federation at scale | OIDC Federation section |
-| RFC 9901 | Selective Disclosure for JWTs (SD-JWT) | Published RFC (Std Track) | Nov 2025 | Selective disclosure of JWT claims (salted digests) | Minimal disclosure / holder privacy | conceptual (09b) |
-| draft-ietf-oauth-sd-jwt-vc | SD-JWT-based Verifiable (Digital) Credentials (SD-JWT VC) | **Active Internet-Draft** (‑17, 2026) | consulted 2026-07-27 | Credential format on SD-JWT | Interop VC format | conceptual (09b) |
-| OID4VCI 1.0 | OpenID for Verifiable Credential Issuance 1.0 | OpenID Final | Sep 2025 | OAuth-protected credential issuance API | Issuing VCs | `vci.routes.ts`; `.well-known/openid-credential-issuer`; `VciSection.tsx` |
-| OID4VP 1.0 | OpenID for Verifiable Presentations 1.0 | OpenID Final | Jul 2025 | Presenting VCs to a verifier | Credential presentation | conceptual (09b) |
+| OIDC Identity Assurance 1.0 | OpenID Connect for Identity Assurance 1.0 | OpenID Final | **1 Oct 2024** (errata set 1 revision dated **1 Jul 2026**) | `verified_claims` = `verification` + `claims`; trust frameworks, evidence | Provenance for identity claims — *accountability, not cryptography* | conceptual (09b) |
+| OpenID Federation 1.0 | OpenID Federation 1.0 | OpenID Final | **17 Feb 2026** | Entity statements, trust chains, `authority_hints`, metadata policy | Multilateral federation at scale (replaces bilateral registration) | `federation.routes.ts`, `federation.service.ts` — **configuration endpoint is broken**, see Module 09b |
+| RFC 9901 | Selective Disclosure for JSON Web Tokens | Published RFC (Std Track) | Nov 2025 | Salted-digest selective disclosure; `_sd`, `_sd_alg`, Disclosures, KB-JWT | Minimal disclosure; a signature that survives claim removal | **not in `server/`** — taught locally via `scripts/sd-jwt.mjs` (09b) |
+| draft-ietf-oauth-sd-jwt-vc | SD-JWT-based Verifiable Digital Credentials (SD-JWT VC) | **Active Internet-Draft** (‑17, dated 6 Jul 2026; expires 7 Jan 2027) | consulted 2026-07-28 | `vct` claim; media type `application/dc+sd-jwt` (was `vc+sd-jwt`) | Type semantics on top of RFC 9901 | conceptual (09b) |
+| OID4VCI 1.0 | OpenID for Verifiable Credential Issuance 1.0 | OpenID Final | **16 Sep 2025** | Credential offer, pre-authorized code grant, `tx_code`, credential endpoint | Issuing VCs into a wallet | `vci.routes.ts`; `.well-known/openid-credential-issuer`; `VciSection.tsx` — **disabled on this service** |
+| OID4VP 1.0 | OpenID for Verifiable Presentations 1.0 | OpenID Final | **9 Jul 2025** | `dcql_query`, REQUIRED fresh `nonce`, `vp_token`, `direct_post` | Presenting VCs; supplies the `nonce`/`aud` that RFC 9901 key binding consumes | conceptual (09b) |
 
 ## 10. FAPI & grant management (Module 10)
 
@@ -179,6 +179,15 @@ table and as a map from "what the spec says" to "what runs here."
 | mTLS / cert-bound tokens | RFC 8705 | Thin — registration flags only | **Implement** in Module 05/10 (gated) |
 | Protected Resource Metadata endpoint | RFC 9728 | Consumed client-side; not served | **Serve** it in Module 04 (small, gated) |
 | Dedicated resource server endpoint | RFC 6750 | None; use UserInfo + Introspection as RS stand-ins | Teach with existing endpoints |
+| SD-JWT | RFC 9901 | Absent from `server/` and `client/` — and does not need to be there; it is pure JOSE | **Taught locally** with `scripts/sd-jwt.mjs` (issue / present / verify + §7.1 trace). No source change proposed |
+| OID4VCI | OID4VCI 1.0 | Nine endpoints exist and delegate to Authlete, but **verifiable credentials are disabled on this service** — every call refuses (`A364301`, `A416301`, `A402301`, `A366201`, `A383201`) | Console change on the reader's own service; Module 09b verifies the surface and the refusals only |
+| OpenID Federation entity configuration | OpenID Federation 1.0 §9 | Endpoint exists at the correct well-known path but is **broken** — the SDK call omits the request body | Diagnosed as Module 09b's Tier-3 finding; **not fixed** (server source) |
+| OID4VP | OID4VP 1.0 | No verifier implementation | Taught from the spec; the key-binding half is exercised locally via `sd-jwt.mjs` |
 
-_All entries verified against primary sources on 2026-07-27. Report any drift you find while working
-through the modules — a wrong citation here propagates into every module that cites it._
+_Rows verified against primary sources on 2026-07-27, with §9b re-verified and corrected on **2026-07-28**
+(Identity Assurance date split from its errata-set revision; SD-JWT VC pinned to ‑17 with its media-type
+change; exact publication dates added for Federation 1.0, OID4VCI and OID4VP; RFC 9901's title corrected to
+"…for JSON Web Tokens"). Note that OpenID Federation 1.0's own reference list already cites an **OpenID
+Federation 1.1** of the same date — confirm which version an ecosystem targets before citing. Report any
+drift you find while working through the modules — a wrong citation here propagates into every module that
+cites it._

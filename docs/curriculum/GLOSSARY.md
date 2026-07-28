@@ -26,6 +26,12 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Assertion Issuer** | RFC 7521 §3 | The entity that creates and signs an assertion. Its key is the trust anchor for every token minted from it. | Module 06 — here, the calling client itself |
 | **Relying Party** *(assertion sense)* | RFC 7521 §3 | The party that consumes an assertion and relies on it. *"the authorization server acts as a relying party."* Distinct from the OIDC RP above. | Module 06 |
 | **Actor** | RFC 8693 §4.1 | The party doing the acting in a delegation, named in `act`. | Module 06 |
+| **Issuer** *(credential sense)* | RFC 9901 §1.2 | *"An entity that creates SD-JWTs."* Signs once, then is **offline** at presentation time. Not the OIDC `iss`. | Module 09b |
+| **Holder** | RFC 9901 §1.2 | *"An entity that received SD-JWTs from the Issuer and has control over them."* Fuses OAuth's resource owner and client — and is therefore a plausible attacker. | Module 09b |
+| **Verifier** | RFC 9901 §1.2 | *"An entity that requests, checks, and extracts the claims from an SD-JWT with its respective Disclosures."* Nearest to an RS, but cannot introspect. | Module 09b |
+| **Wallet** | OID4VCI 1.0 §2 | The holder's software; *"acts as an OAuth 2.0 Client"* toward the credential issuer. | Module 09b |
+| **Credential Issuer** | OID4VCI 1.0 §2 | The issuance API; *"acts as an OAuth 2.0 Resource Server."* | Module 09b — `vci.routes.ts` (disabled) |
+| **Trust Anchor** | OpenID Federation 1.0 §1.2 | *"An Entity that represents a trusted third party."* One key vouching for a whole ecosystem — pick narrowly. | Module 09b |
 
 ## Concepts
 
@@ -78,6 +84,20 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Step-up authentication** | RFC 9470 | An RS answering 401 with `insufficient_user_authentication` **plus** `acr_values`/`max_age`, so the client knows what would suffice. | Module 09a |
 | **ACR theatre** | *No spec term — failure pattern* | An `acr` claim emitted with no registered definition behind it: reads as a control, behaves as a comment. | Module 09a |
 | **Permitted but not configured** | *No spec term — audit state* | A capability the client is allowed to use and cannot, because an enabling field is unset. An **availability** finding, distinct from Module 07's supported-but-not-required. | Module 09a |
+| **Selective disclosure** | RFC 9901 | Showing some claims from a signed credential and withholding others **without invalidating the signature** — because the signature covers salted digests, not values. | Module 09b |
+| **Disclosure** | RFC 9901 §1.2 | *"A base64url-encoded string of a JSON array that contains a salt, a claim name … and a claim value."* Treat it as an opaque string: hashing a re-serialization gives the wrong digest. | Module 09b |
+| **Salt** | RFC 9901 §9.3 | ≥128 bits of fresh randomness per claim. Without it, a verifier brute-forces small claim value spaces from the digest alone. | Module 09b |
+| **Decoy digest** | RFC 9901 §4.2.5 | A digest in `_sd` with no Disclosure behind it, so nobody can count how many claims the credential really holds. | Module 09b |
+| **Key binding** | RFC 9901 §1.2 | *"Ability of the Holder to prove possession of an SD-JWT by proving control over a private key during the presentation."* Fourth appearance of commit-then-prove. | Module 09b |
+| **KB-JWT** | RFC 9901 §4.3 | The holder's proof: `typ: kb+jwt`, with REQUIRED `iat`, `aud`, `nonce`, `sd_hash`. | Module 09b |
+| **KB stripping** | RFC 9901 §9.5 | Deleting the KB-JWT so a verifier that infers its policy from the input skips key binding entirely. | Module 09b — Lab 5a |
+| **Unlinkability** | RFC 9901 §10.1 | Four distinct properties. Issuer/verifier unlinkability against a coerced verifier *"cannot be achieved"* in SD-JWT; verifier/verifier fails by default because the issuer-signed JWT is byte-identical across presentations. | Module 09b |
+| **Identity assurance** | OIDC Identity Assurance 1.0 §5.1 | Provenance metadata about claims — how, when, under which trust framework — **not** stronger cryptography. | Module 09b |
+| **Entity statement** | OpenID Federation 1.0 §1.2 | *"A signed JWT that contains the information needed for an Entity to participate in federation(s)."* `typ: entity-statement+jwt`. | Module 09b |
+| **Trust chain** | OpenID Federation 1.0 §1.2 | *"A sequence of Entity Statements … ending in a Trust Anchor."* Discovery walks **up** via `authority_hints`; policy flows **down**. | Module 09b |
+| **Metadata policy** | OpenID Federation 1.0 §6.1 | Constraints a superior imposes on subordinates' metadata (`value`, `add`, `one_of`, `subset_of`) — a leaf cannot self-declare its way out. | Module 09b |
+| **Credential offer** | OID4VCI 1.0 §4.1 | What an issuer hands a wallet to start issuance; names the grants, optionally a pre-authorized code. | Module 09b |
+| **Fail-open auth** | *No spec term — failure pattern* | Authentication middleware that allows the request when its configuration is absent. Here: `require-basic-auth.ts` returns *allow* if `MGMT_CLIENT_*` are unset. | Module 09b — Lab 7 |
 
 ## Endpoints
 
@@ -165,6 +185,13 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `at_hash` | OIDC Core §3.1.3.6 | Left-most half of the hash of the access token. | Required when `response_type` includes `token` |
 | `c_hash` | OIDC Core §3.3.2.11 | Left-most half of the hash of the authorization code. | What makes the hybrid flow safe |
 | `s_hash` | FAPI | Left-most half of the hash of `state`. | Integrity for `state`, which is otherwise unprotected |
+| `_sd` | RFC 9901 §4.2.4.1 | Array of digests of Disclosures (and decoys) for object properties. Order MUST be shuffled. | The signature covers these, **not** the claim values |
+| `_sd_alg` | RFC 9901 §4.1.1 | Hash algorithm for the digests; top level only. | Absent ⇒ `sha-256` MUST be assumed |
+| `...` | RFC 9901 §4.2.4.2 | `{"...": "<digest>"}` marks a hidden **array element**, positionally. | The key MUST be exactly three dots |
+| `sd_hash` | RFC 9901 §4.3 | Digest over the issuer-signed JWT plus the Disclosures *selected for presentation*. | Pins the proof to this exact subset |
+| `vct` | SD-JWT VC (**draft**) §2.2.2.1 | Credential type identifier; a Collision-Resistant Name. | Lets a verifier accept only the right *kind* of credential |
+| `verified_claims` | OIDC Identity Assurance §5.1 | Container with two sub-elements: `verification` (provenance) and `claims` (the verified values). | Accountability, not stronger crypto |
+| `authority_hints` | OpenID Federation §3.1.2 | Entity Identifiers of an entity's Immediate Superiors. | The upward pointer trust-chain resolution follows |
 
 ## Acronyms
 
@@ -185,6 +212,12 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | FAPI | Financial-grade API | FAPI 1.0/2.0 |
 | BCP | Best Current Practice | RFC 9700 (BCP 240) |
 | SD-JWT | Selective Disclosure for JWTs | RFC 9901 |
+| SD-JWT+KB | An SD-JWT with a Key Binding JWT appended | RFC 9901 §4 |
+| KB-JWT | Key Binding JWT (`typ: kb+jwt`) | RFC 9901 §4.3 |
+| SD-JWT VC | SD-JWT-based Verifiable Digital Credentials | **active Internet-Draft** (‑17) |
+| IDA | (OpenID Connect for) Identity Assurance | OIDC Identity Assurance 1.0 |
+| VC / VP | Verifiable Credential / Verifiable Presentation | OID4VCI / OID4VP |
+| DCQL | Digital Credentials Query Language (`dcql_query`) | OID4VP 1.0 §6 |
 | OID4VCI / OID4VP | OpenID for VC Issuance / Verifiable Presentations | OpenID Final |
 | BOLA / BFLA / BOPLA | Broken Object / Function / Object-Property Level Authorization | OWASP API Top 10 (2023) |
 | RBAC / ABAC / ReBAC | Role- / Attribute- / Relationship-Based Access Control | Module 11 |

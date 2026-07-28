@@ -103,7 +103,8 @@ graph TD
 - **[GLOSSARY.md](GLOSSARY.md)** — every role, endpoint, parameter, claim, and acronym, with its defining spec
   and where it appears in the code.
 - **[PROGRESS.md](PROGRESS.md)** — a checklist with self-assessment gates.
-- **[scripts/](scripts/)** — `decode-jwt.mjs` (offline token decoder) and `curriculum.env.example`.
+- **[scripts/](scripts/)** — `decode-jwt.mjs` (offline token decoder), `sd-jwt.mjs` (offline SD-JWT
+  issuer/holder/verifier for Module 09b) and `curriculum.env.example`.
 
 ## A note on accuracy
 

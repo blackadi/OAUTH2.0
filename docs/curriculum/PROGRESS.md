@@ -29,7 +29,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 07 · OAuth 2.1 + Security BCP | Audit a deployment against RFC 9700 §2 from three sources and write findings with evidence, severity, and a defensible remediation order; state precisely what OAuth 2.1 does and does not do. |
 | [x] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user and describe token substitution concretely; run all 13 OIDC Core §3.1.3.7 steps on a real ID token; `nonce` vs. `state`; name the four logout specs and what each cannot reach. |
 | [x] | 09a · Interaction extensions | Name the four assumptions these extensions lift; explain what JARM adds over `state`/PAR/JAR and its three mandatory claims; pick poll/ping/push and defend it; write an RFC 9470 challenge and say what breaks without `acr_values`; judge RAR vs scopes. |
-| [ ] | 09b · Identity + credentials | Explain selective disclosure in SD-JWT; place OID4VCI/VP and federation in the graph. |
+| [x] | 09b · Identity + credentials | Compute an SD-JWT digest that matches RFC 9901's own test vector; explain why the salt is load-bearing; strip a KB-JWT and say which verifier accepts it and why; name the one unlinkability property SD-JWT cannot provide; place OID4VCI/VP and federation in the graph. |
 | [ ] | 10 · FAPI + grant management | State the FAPI 2.0 attacker model in your own words; explain why refresh-token rotation is forbidden. |
 | [ ] | 11 · API security beyond the token | Find a BOLA in a code snippet; explain why a valid token can't stop it; choose RBAC vs. ABAC vs. ReBAC. |
 | [ ] | 12 · Capstone | Design a high-assurance multi-tenant authZ architecture and defend it; then find the flaws in the vulnerable variant. |
@@ -80,8 +80,9 @@ against it before calling the capstone complete._
 - [x] **Module 07 — OAuth 2.1 + the Security BCP** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 08 — OIDC Core + Logout** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 09a — Interaction Extensions** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 09b — Identity + Credentials  ← **next**
-- [ ] Modules 10–12 — pending
+- [x] **Module 09b — Identity + Credentials** — README, lab, quiz, quiz-answers + `scripts/sd-jwt.mjs` written & committed
+- [ ] Module 10 — FAPI + Grant Management  ← **next**
+- [ ] Modules 11–12 — pending
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
 ### Awaiting a decision — gated source changes
@@ -111,10 +112,26 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
 
 ### Findings worth acting on outside the curriculum
 
-> Nine now. Four are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
+> Ten now. Four are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
 > logout/authorization path. None were fixed — all are server source, and the standing rule is to surface
 > rather than repair. Each is taught as a Tier-3 exercise in the module that found it.
 
+- **The OpenID Federation entity-configuration endpoint cannot work, and misreports why.**
+  `federation.service.ts:16` calls `authleteApi.federation.configuration({ serviceId })` with **no
+  `requestBody`**. The SDK types that field as optional (`requestBody?: FederationConfigurationApiRequestBody`
+  where the type is `{}`), so omitting it compiles and passes review — but Authlete requires a body. Both
+  `GET /.well-known/openid-federation` and `GET /api/federation/configuration` therefore return **400** with
+  `[A126203] The request body is missing or empty.` Verified two ways during the Module 09b build: the repo's
+  failure, and a **direct call to Authlete with `{}` returning HTTP 200 and the real diagnosis** —
+  `[A316201] Because a JWK Set for federation has not been set up, this service cannot generate entity
+  configuration.` So there are two stacked faults and the code one **hides** the configuration one. Two extra
+  defects in the same response: it is an unhandled SDK `ResultError` reaching the generic error handler, so a
+  federation endpoint answers `{"error":"Bad Request"}` rather than a typed error; and the body includes a
+  **`stack` field with absolute filesystem paths**, returned to an unauthenticated caller on a public
+  discovery endpoint. Fix is `requestBody: {}` plus action handling plus suppressing `stack`. **Third instance
+  of the same class** after Module 06 (Zod failure → `"Bad Request"`) and Module 08 (unset `JWKS_URI` →
+  `"Invalid logout token"`): *a server configuration error reported as a caller error.* For contrast,
+  `POST /api/federation/registration` in the same file is written correctly.
 - **`prompt=none` returns a 302 with an empty `Location` header.** `authorization.controller.ts:50-53` treats
   Authlete's `NO_INTERACTION` action as though `responseContent` held a redirect URL. It does not: verified by
   calling `/auth/authorization/authorization` directly, `NO_INTERACTION` comes back with
@@ -260,6 +277,70 @@ Interim cover: Module 07's quiz Tier 4 was written to reach back across 02–06 
 stands in for A. When writing them, note that Module 07 introduced the audit method and Module 08 the
 thirteen-step validation — both are natural exam material that did not exist when the earlier module quizzes
 were written.
+
+### Module 09b — done / verified / uncertain
+
+- **Done:** `README.md` — organised around **four unexamined assumptions** that every module 01–09a shared
+  (the issuer is reachable at time of use → OID4VCI/VP; you already have a relationship with it → Federation;
+  its word needs no account → Identity Assurance; claims travel all-or-nothing → SD-JWT), with the point made
+  up front that these are four *different kinds* of problem — cryptographic, governance, topology,
+  architecture — and are worth keeping apart. Contains: the **issuer/holder/verifier ↔ OAuth role mapping**
+  with the observation that resource owner and client *fuse* into the holder, which makes the holder a
+  plausible attacker and is why every §7.1 check exists; identity assurance framed as **provenance, not
+  cryptography** (two identically-signed tokens, wildly different assurance); federation with trust chains
+  drawn as **discovery walking up, policy flowing down**; SD-JWT **derived from four requirements** rather
+  than asserted, with the salt introduced as the answer to "claim value spaces are tiny"; key binding named as
+  the **fourth appearance of commit-then-prove**; the three §7.1 checks a naïve verifier omits; and the
+  unlinkability §10.1 says *cannot* be achieved. `lab.md` — eight exercises, six of which need no server.
+  `quiz.md` + `quiz-answers.md` (18 items across 4 tiers). Added seven roles, fifteen concepts, seven
+  claims/parameters and seven acronyms to GLOSSARY. **New lab asset: `scripts/sd-jwt.mjs`** (~350 lines, no
+  dependencies) — `keygen`/`digest`/`issue`/`inspect`/`present`/`verify`, where `verify` prints a numbered
+  PASS/FAIL trace following §7.1 and §7.3 step by step.
+- **Verified locally (every lab command executed):** the tool's digest **matches RFC 9901 §4.2.3's own
+  published test vector** (`X9yH0Ajrdm1Oij4tWso9UzzKJvPoDxwmuEcO3XAdRC0`), reproduced twice — once via the
+  script, once via `openssl dgst | basenc --base64url`. A six-claim credential issued with 2 decoys → `_sd`
+  holds 8 digests; `vct`/`iss`/`iat`/`cnf` stay in the clear. A presentation of **2 of 6** claims verified
+  with all §7.1 and §7.3/5 steps PASS, and the processed payload contains **no name, birthdate or email**.
+  Six attacks, all executed: **(1) KB stripping → REJECTED by the strict verifier and ACCEPTED by the
+  permissive one** — the module's headline, and §9.5's warning reproduced exactly; (2) cross-verifier replay →
+  caught by `aud`; (3) forged disclosure value → caught at **§7.1/5, not at the signature check**; (4) a
+  **whitespace-only re-serialization** (identical value) → rejected, demonstrating §4.2.3; (5) an
+  **hour-expired credential accepted** when `exp` was made selectively disclosable and withheld, then rejected
+  once `--require-claims exp` states the §9.7 defence; (6) digest reuse left as reasoning. Unlinkability
+  measured directly: two presentations disclosing **disjoint** claims share a **byte-identical issuer-signed
+  JWT** and identical `cnf.jwk`. **Verified against the live server:** five distinct VCI refusals —
+  `A364301`/`A416301`/`A402301` (NOT_FOUND → 404 on metadata/jwtissuer/jwks), `A366201` and `A383201`
+  (FORBIDDEN → 403 on offer/create and credential/issue) — plus local pre-Authlete validation on
+  `credential/batch` and `deferred/issue`; and the full federation diagnosis above. **Verified (primary
+  sources, this session):** RFC 9901 title/Standards Track/Nov 2025, §1.2 all seven terms quoted, §4 both
+  serialization formats and the empty-last-element rule, §4.1.1 the `sha-256` default, §4.1.2 `cnf`, §4.2.1/
+  §4.2.2/§4.2.3 (including the "not the bytes encoded by" sentence), §4.2.4.1 order-hiding, §4.2.4.2 the
+  three-dots key, §4.2.5 decoys, §4.3 all four REQUIRED claims + `typ`, §4.3.1 `sd_hash`, **all of §7.1's
+  numbered steps and §7.3's eight**, §9.3 salt, §9.5 KB stripping, §9.7 the five security-critical claims,
+  §10.1 all four unlinkability types — pulled from `rfc9901.txt` and quoted byte-exactly rather than via a
+  summariser. OpenID Federation 1.0 Final **17 Feb 2026** (read off the document header), §1.2 terms, §3.1.2
+  `authority_hints`, §9's well-known construction rule, the `entity-statement+jwt` type. OID4VCI 1.0 Final
+  **16 Sep 2025**, §2 definitions, the pre-authorized URN, §3.5 `tx_code` quoted. OID4VP 1.0 Final
+  **9 Jul 2025**, §2 definitions, §5.2 `nonce`. SD-JWT VC **‑17, 6 Jul 2026**, `vct` and
+  `application/dc+sd-jwt`. Identity Assurance **Final 1 Oct 2024**, errata set 1 revision **1 Jul 2026**.
+- **A bug found in my own tooling, and fixed before shipping:** the first `sd-jwt.mjs` checked `exp` on the
+  **raw** issuer-signed payload. §7.1/6 requires it on the **processed** payload, so a disclosed-and-expired
+  credential passed. Caught by testing the §9.7 case in both directions; fixed, and `--require-claims` added
+  so the lab can demonstrate the defence and not merely the attack.
+- **Uncertain / notes:** **`UNVERIFIED` — everything past the VCI refusals.** Verifiable credentials are
+  disabled on the service, so no lab step shows a real credential offer or issuance; the lab says so inline
+  and verifies only the surface, the auth model and the refusal semantics. **OID4VP is not run at all** — no
+  verifier implementation exists here; it is taught from the spec, and the KB-JWT half is exercised locally
+  instead. **Identity Assurance's detailed schema is deliberately not quoted**: the required/optional members
+  of `verification` and the full `evidence` type enumeration are normatively defined in a *separate referenced
+  schema document* that was not read, so the README marks that gap `UNVERIFIED` rather than asserting a list.
+  The `evidence` values named (`document`, `electronic_record`, `vouch`, `electronic_signature`) are labelled
+  illustrative. One low-severity observation recorded in the lab rather than as a finding, because
+  `AGENTS.md` already documents it: `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` are unset, and
+  `require-basic-auth.ts` returns *allow* when they are — so the "admin" VCI offer endpoints answered with no
+  credentials. **Fail-open**, by documented design; flagged as a Module 07 audit item. Also noted for
+  Stage 4: OpenID Federation 1.0's own reference list cites an **OpenID Federation 1.1** of the same date, so
+  the inventory row should be re-checked if any later module leans on federation.
 
 ### Module 09a — done / verified / uncertain
 
