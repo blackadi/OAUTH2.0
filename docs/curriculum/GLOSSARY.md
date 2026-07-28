@@ -107,6 +107,15 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Non-repudiation** | FAPI 2.0 Message Signing | Proving to a *third party* later who sent what. Distinct from authorization/authentication; costs real complexity. | Module 10 |
 | **Grant** | Grant Management (Draft) §5.6 | The persistent record of what a user authorized — distinct from the tokens minted against it. Revoking a token does not revoke the grant. | Module 10 |
 | **Grant revocation vs token revocation** | Grant Management §6.5 vs RFC 7009 | Grant revocation withdraws authority (MUST kill refresh tokens); RFC 7009 discards one credential and leaves consent standing. | Module 10 — Lab 6 |
+| **BOLA** | OWASP API1:2023 | Broken Object Level Authorization — the caller names an object they do not own. **Wrong row.** No token can prevent it. | Module 11 — Lab 2 |
+| **BOPLA** | OWASP API3:2023 | Broken Object Property Level Authorization — reading fields that should be hidden, or writing fields that should be read-only (mass assignment). **Wrong column.** | Module 11 |
+| **BFLA** | OWASP API5:2023 | Broken Function Level Authorization — reaching an endpoint or method the caller should not. **Wrong verb.** | Module 11 — Lab 1 |
+| **Fail-open / fail-closed** | *No spec term — design principle* | Whether a control permits or refuses when its inputs or configuration are missing. `require-basic-auth.ts:8` returns *allow* on absent config. | Module 11 |
+| **Enumeration oracle** | *(same reasoning as RFC 7662 §2.2)* | Returning `403` instead of `404` for someone else's object confirms it exists. | Module 11 |
+| **Owner-scoped query** | *No spec term — design pattern* | Putting the ownership constraint **into** the query rather than checking after the fetch, so the insecure version cannot be written. | Module 11 |
+| **RBAC / ABAC / ReBAC** | *Access-control literature* | Decide on the subject's **role** / on **attributes** of subject-resource-action-environment / on **relationships** in a graph. Pure RBAC cannot express "their own". | Module 11 |
+| **Type-level vs instance-level** | *(follows from RFC 6749 §3.3)* | Scopes say "may read accounts"; they cannot say "may read account 91847". The reason BOLA is an application problem. | Module 11 |
+| **Break-glass** | *No spec term — operational pattern* | A designed bypass of normal authorization (emergency override), safe only with synchronous fail-closed audit and expiry. | Module 11 — quiz Q17 |
 
 ## Endpoints
 

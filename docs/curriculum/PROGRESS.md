@@ -31,7 +31,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 09a · Interaction extensions | Name the four assumptions these extensions lift; explain what JARM adds over `state`/PAR/JAR and its three mandatory claims; pick poll/ping/push and defend it; write an RFC 9470 challenge and say what breaks without `acr_values`; judge RAR vs scopes. |
 | [x] | 09b · Identity + credentials | Compute an SD-JWT digest that matches RFC 9901's own test vector; explain why the salt is load-bearing; strip a KB-JWT and say which verifier accepts it and why; name the one unlinkability property SD-JWT cannot provide; place OID4VCI/VP and federation in the graph. |
 | [x] | 10 · FAPI + grant management | Name all six FAPI 2.0 attackers and four things the model puts out of scope; explain why refresh-token rotation is *forbidden*; show a deployment where every mechanism is supported and none required; run the grant lifecycle and say what a revocation does **not** revoke. |
-| [ ] | 11 · API security beyond the token | Find a BOLA in a code snippet; explain why a valid token can't stop it; choose RBAC vs. ABAC vs. ReBAC. |
+| [x] | 11 · API security beyond the token | Find a BOLA in a code snippet and say why a valid token cannot stop it; name the three OWASP 2023 authorization failures and what the attacker changes in each; choose RBAC/ABAC/ReBAC and defend it; say what a gateway cannot enforce; write a regression test with its control assertion. |
 | [ ] | 12 · Capstone | Design a high-assurance multi-tenant authZ architecture and defend it; then find the flaws in the vulnerable variant. |
 
 ## Assessment gates
@@ -82,8 +82,8 @@ against it before calling the capstone complete._
 - [x] **Module 09a — Interaction Extensions** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 09b — Identity + Credentials** — README, lab, quiz, quiz-answers + `scripts/sd-jwt.mjs` written & committed
 - [x] **Module 10 — FAPI + Grant Management** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 11 — API Security Beyond the Token  ← **next**
-- [ ] Module 12 — Capstone — pending
+- [x] **Module 11 — API Security Beyond the Token** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 12 — Capstone  ← **next, and the last of Stage 3**
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
 ### Awaiting a decision — gated source changes
@@ -113,9 +113,42 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
 
 ### Findings worth acting on outside the curriculum
 
-> Twelve now. Four are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
+> Fourteen now, and **the two added by Module 11 are the most serious of the build** — they are listed first.
+> Four of the rest are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
 > logout/authorization path. None were fixed — all are server source, and the standing rule is to surface
 > rather than repair. Each is taught as a Tier-3 exercise in the module that found it.
+
+- **🔴 Cross-user BOLA on `/api/gm/:grantId`, with a write primitive.** Verified live on an isolated
+  two-user instance (`PORT=3005 AUTH_USERS="alice:…;bob:…"`; nothing on :3000 or in Authlete's config was
+  changed, and the instance was killed afterwards). With **valid, correctly scoped, unexpired** tokens:
+  **bob's token read alice's grant → 200 with alice's contents**, alice's token read bob's grant → 200 with
+  *bob's* contents (they were deliberately given different scopes, which proves the object **is** resolved
+  correctly and only ownership is unchecked), and **bob's token `DELETE`d alice's grant → 204, after which
+  alice's grant returned 404.** Any holder of a `grant_management_revoke` token can enumerate grant IDs and
+  destroy every consent on the service. Scope enforcement itself works (a query-only token gets 401 on
+  `DELETE`), which is the point: **every OAuth control passed and the outcome is still catastrophic.**
+  *Attribution, stated to the confidence the evidence supports:* `grant-management.service.ts:10-26` forwards
+  only `{accessToken, gmAction, grantId}` and relays the answer; a **direct call to Authlete's `/gm` API with
+  bob's token and alice's grant ID returns `action: OK` / `[A277001]`**, so the check is not made upstream
+  either. No service- or client-level setting governing grant ownership exists on this deployment
+  (`grantManagementActionRequired`, `grantManagementEndpoint`, `supportedGrantManagementActions` are the only
+  grant switches). **Whether this is an Authlete defect or a missing configuration is `UNVERIFIED` — raise
+  with the vendor, do not assert.** What is not ambiguous is the expectation: Grant Management §5.2 says
+  *"the respective client must be authorized to use the particular grant id"*, and a grant is defined
+  throughout as belonging to a client **and** a resource owner.
+- **🔴 Unauthenticated read of a confidential client's secret.** `GET /api/client/get/<clientId>` with **no
+  credentials of any kind** returns the full client object including `clientSecret` in plaintext — the
+  credential that PKCE, PAR and DPoP exist to protect. Also unauthenticated: `GET /api/client/auth/list/<subject>`
+  (enumerate any subject's authorized clients), `GET /api/client/scopes/granted/<clientId>/<subject>`, and
+  `GET /api/token/list` (returned **65** access tokens on this service). Cause is **not** a missing check —
+  `requireBasicAuth("client_management")` is imported and called in every one of the sixteen controllers;
+  `require-basic-auth.ts:8` does `if (!mgmtClientId || !mgmtClientSecret) return true;`, i.e. **fail-open on
+  absent configuration**, and `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` are empty in `server/.env`. Verified that
+  setting both restores 401. `AGENTS.md` **does** document that unset MGMT vars leave management routes
+  unprotected, so this is a known dev default rather than a hidden bug — but the documentation says
+  "unprotected" where the behaviour is "hands a confidential client's secret to anonymous callers", and the
+  fail-open design is itself the defect (a missing security config should refuse to start). Taught as
+  Module 11's Lab 1.
 
 - **Both FAPI introspection endpoints return HTTP 200 with an error body and a stack trace.**
   `GET /api/fapi/config` **and** `GET /api/fapi/status` respond **200** with
@@ -304,6 +337,53 @@ Interim cover: Module 07's quiz Tier 4 was written to reach back across 02–06 
 stands in for A. When writing them, note that Module 07 introduced the audit method and Module 08 the
 thirteen-step validation — both are natural exam material that did not exist when the earlier module quizzes
 were written.
+
+### Module 11 — done / verified / uncertain
+
+- **Done:** `README.md` — the module's thesis is that Modules 00–10 answered *"can I trust this token?"* until
+  the answer was provable, and the question was never sufficient. Opens with a request that passes **every**
+  control in the curriculum — DPoP-bound, audience-restricted, correctly scoped — and asks whether account
+  `91847` belongs to the caller. Contains: the OWASP 2023 list with the **three** authorization failures
+  marked and the observation that API2, the one this curriculum spent eleven modules on, is *one item out of
+  ten and not the first*; **BOLA/BOPLA/BFLA distinguished by what the attacker changes** — "wrong row, wrong
+  column, wrong verb", with the fix location for each; a four-step argument for why a valid token **cannot**
+  prevent BOLA (issued before the request exists / scopes are type-level / ownership is application data /
+  therefore the check is yours), including why RAR only moves the goalposts; **owner-scoped queries over
+  ownership checks** — make the insecure version unrepresentable, tied back to FAPI 2.0 choosing PKCE over
+  `c_hash`; 404-not-403 as the same anti-oracle reasoning as RFC 7662; scopes/claims/RAR as three
+  granularities with the rule *scopes gate the endpoint, claims feed the policy, the data layer enforces the
+  object*; RBAC/ABAC/ReBAC keyed on "can your rule be expressed without reference to the specific object?",
+  with the observation that **pure RBAC has a BOLA by construction**; the gateway/service split as a
+  capability boundary rather than a preference; and short sections on key rotation and on certification being
+  *evidence about the protocol layer and silence about the application layer*. `lab.md` — six exercises, two
+  of them live exploits. `quiz.md` + `quiz-answers.md` (18 items across 4 tiers). Added ten concepts to
+  GLOSSARY and expanded the OWASP row in SPEC-INVENTORY to the full enumerated list.
+- **Verified against the live server (every lab command executed):** **BFLA** — unauthenticated
+  `GET /api/client/get/<id>` returns `clientSecret` in plaintext; `/api/client/auth/list/admin` enumerates a
+  subject's clients; `/api/token/list` reports **65** access tokens; cause traced to
+  `require-basic-auth.ts:8` fail-open, and confirmed that setting `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`
+  restores **401**. **BOLA** — full cross-user read *and* delete, on an isolated `PORT=3005` instance with two
+  demo users, as described in the findings section above; the two grants were given **different scopes** so
+  the output proves correct object resolution with absent ownership checking. **Attribution** established by
+  a direct Authlete `/gm` call returning `action: OK` `[A277001]`, plus a search of service and client
+  configuration for any ownership switch (none). Also verified: grant management is correctly restricted to
+  confidential clients (`[A285311]` on the public client) — a control that *does* work, and worth showing
+  next to two that do not. **Verified (primary source):** the complete OWASP API Security Top 10 **2023
+  edition** identifiers and titles, quoted from `owasp.org/API-Security/editions/2023/`.
+- **Environment discipline:** the two-user instance ran on `PORT=3005` with `AUTH_USERS` passed inline —
+  **no file was edited, no Authlete configuration was changed**, `server/.env` was untouched, and the process
+  was confirmed dead afterwards (`:3005` → connection refused, `:3000` → 200). Test grants were revoked and
+  all extracted credentials deleted from the scratchpad. The lab tells the learner to do the same.
+- **Uncertain / notes:** **the BOLA attribution is deliberately `UNVERIFIED`** — the behaviour is confirmed
+  exhaustively, but whether the missing ownership check is an Authlete defect or a configuration gap could not
+  be determined from the available surface, and the lab makes writing the finding *at that confidence* an
+  exercise (Tier-3 Q14 tests exactly this). A **cross-client** BOLA could not be tested: only one confidential
+  client exists and grant management is confidential-only, so the second principal had to be a second *user*
+  rather than a second client; cross-client remains untested and is called out as such. `docs/MONITORING.md`
+  is used for the detection exercise but Prometheus/Grafana were **not** started, so Exercise 5's answers
+  reason from the metric and audit-log definitions in code rather than from observed dashboards — labelled
+  accordingly. The three code-review snippets in Exercise 6 are written for the module, not drawn from this
+  repo.
 
 ### Module 10 — done / verified / uncertain
 

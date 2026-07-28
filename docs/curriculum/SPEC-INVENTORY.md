@@ -167,7 +167,7 @@ table and as a map from "what the spec says" to "what runs here."
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
-| OWASP API Security Top 10 | OWASP API Security Top 10 – 2023 | Community standard (current edition) | 2023 | Ranked API risk catalogue (BOLA, BFLA, BOPLA, SSRF, …) | Authorization defects a valid token can't stop | mapped to `docs/MONITORING.md`, audit-log/rate-limit middleware |
+| OWASP API Security Top 10 | OWASP API Security Top 10 – 2023 edition | Community standard (current edition; the 2019 edition differs — cite the year) | 2023 | Ranked API risk catalogue. **API1 Broken Object Level Authorization**, API2 Broken Authentication, **API3 Broken Object Property Level Authorization**, API4 Unrestricted Resource Consumption, **API5 Broken Function Level Authorization**, API6 Unrestricted Access to Sensitive Business Flows, API7 SSRF, API8 Security Misconfiguration, API9 Improper Inventory Management, API10 Unsafe Consumption of APIs | The authorization defects a valid token cannot stop — **three of the top five**, none addressed by OAuth | Verified live in Module 11 against `/api/gm/:grantId` (API1) and `/api/client/*` (API5+API8); detection side in `docs/MONITORING.md`, `audit-log.ts`, `rate-limit.ts` |
 
 ---
 
