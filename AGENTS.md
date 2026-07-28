@@ -34,10 +34,10 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (366 tests, 47 files)
+npm --prefix server run test              # unit + integration (374 tests, 48 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (328 tests, 45 files)
+npm --prefix server run test:unit         # unit tests only (336 tests, 46 files)
 npm --prefix server run test:integration  # integration tests only (38 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 45 files across 5 categories (328 tests):
+- **Unit tests**: 46 files across 5 categories (336 tests):
   - `tests/unit/services/` — 21 files (86 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par)
   - `tests/unit/controllers/` — 6 files (60 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device
   - `tests/unit/middleware/` — 6 files (58 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership
   - `tests/unit/utils/` — 4 files (22 tests), createLocalJWT/jwksClient/validate/validation
-  - `tests/unit/routes/` — 2 files (24 tests), metrics routes + openapi routes
+  - `tests/unit/routes/` — 3 files (32 tests), metrics routes + openapi routes + protected-resource-metadata
 - **Integration tests**: 1 file `tests/integration/routes.test.ts` (38 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 366 tests across 47 files, completes in ~2s
+- Run with `npm --prefix server run test` — 374 tests across 48 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -119,6 +119,7 @@ docker compose up -d prometheus grafana
 - **Brute-force protection**: 5 failed logins/IP → 60s ban. In-memory Map, cleared on success. See `src/middleware/rate-limit.ts`.
 - **Health endpoints**: `GET /api/health` (server liveness — status, uptime, timestamp), `GET /api/health/authlete` (Authlete connectivity check, `?extended=true` for DB), `GET /api/health/all` (aggregate: redis + authlete). The client SDA polls `/api/health` every 30s for a live server-status indicator in the header. See `src/services/health.service.ts`, `client/src/hooks/useServerStatus.ts`.
 - **Graceful shutdown**: `SIGTERM`/`SIGINT` handlers close Redis then HTTP server. See `src/server.ts`.
+- **Protected Resource Metadata (RFC 9728)**: `GET /.well-known/oauth-protected-resource` at **true root** (not under `/api`). Derives `resource`, `authorization_servers`, `scopes_supported` and `dpop_signing_alg_values_supported` from the live discovery document so they cannot drift; `resource` defaults to this deployment's UserInfo endpoint and is overridable with `PROTECTED_RESOURCE_IDENTIFIER`. Returns 500 rather than emitting a document without the sole REQUIRED member. See `src/routes/protected-resource-metadata.routes.ts`.
 - **OpenAPI spec**: `GET /api/openapi.json` — comprehensive 3.0.3 spec covering all endpoints. See `src/routes/openapi.routes.ts`.
 - **Persistent consent**: In-memory Map with 24h TTL (`src/services/consent-store.service.ts`). Scoped by `{clientId}:{subject}`. Auto-approves if stored scopes cover requested scopes; `prompt=consent` bypasses.
 - **Token management admin routes**: `/api/token/{list,create,delete/:id,update,revoke,reissue,createLocalToken}`. Protected by `requireBasicAuth` using `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`. See `src/routes/token.routes.ts` and `src/controllers/token.management.controller.ts`.

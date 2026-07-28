@@ -123,7 +123,30 @@ true** — `AGENTS.md:137` says 20, and `client/src/App.tsx` has exactly 20 `sec
 needed; the item is closed.
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
-### Awaiting a decision — gated source changes
+### Gated source changes — BOTH RESOLVED 2026-07-28
+
+**1. RFC 9728 Protected Resource Metadata — ✅ IMPLEMENTED.** Served at true root by
+`src/routes/protected-resource-metadata.routes.ts` + `protected-resource-metadata.controller.ts`. Derives
+`resource`, `authorization_servers`, `scopes_supported` and `dpop_signing_alg_values_supported` from the live
+discovery document so they cannot drift; `resource` defaults to the UserInfo endpoint and is overridable via
+`PROTECTED_RESOURCE_IDENTIFIER`. Returns **500 rather than emitting a document without the sole REQUIRED
+member**. Verified live: the path now answers `200 application/json` where it previously returned **200 with
+HTML** from the SPA catch-all — a discovering client saw success and got a web page. 8 new tests.
+Module 04's proposal section is now marked done; its detection exercise still reads as the before-picture.
+
+**2. mTLS / RFC 8705 — ❌ DECLINED, with reasons.** Not deferred. The full decision record lives at the end
+of [Module 05's README](modules/05-request-integrity-and-binding/README.md), with the original proposal kept
+in a collapsed block. Summary: **TLS is terminated before the request reaches this server in every deployment
+of this repo** — `server.ts` is a plain `app.listen`, `render.yaml` declares a platform-fronted `type: web`
+service, and the dev issuer is behind a tunnel — so a client certificate can never arrive. The SDK was
+*not* the obstacle (`clientCertificate` is supported on token, PAR and introspection requests alike, and the
+service already lists `TLS_CLIENT_AUTH`/`SELF_SIGNED_TLS_CLIENT_AUTH`); an earlier draft of the proposal
+implied otherwise and was wrong. That left a dev-only, flag-gated capability that could never run in
+production, exercises one module, and needs maintaining forever — which loses on cost/benefit given Module 10
+already teaches mTLS from the spec and the config surface, and DPoP demonstrates sender-constraining here for
+real. Revisit conditions are listed in the record.
+
+### Previously awaiting a decision — gated source changes
 
 **JARM is no longer one of them.** Module 09a established that the authorization server already builds and
 signs JARM responses: `response_mode=jwt` returns `[A012305] … the 'authorization_signed_response_alg' metadata
@@ -133,7 +156,7 @@ gap is **client-side consumption** — the dashboard SPA cannot parse or verify 
 optional for the curriculum since the labs verify JARM with a standalone script. SPEC-INVENTORY has been
 corrected in two places (the spec's title was also wrong).
 
-**Two proposals remain open. No code has been written for either.**
+> Superseded by the section above; kept for the reasoning that led to each. **Neither is open any more.**
 
 1. **RFC 9728 Protected Resource Metadata** (Module 04) — one additive route + controller + config value +
    unit test at true root, beside `oauthAsMetadataRoutes`. Small.

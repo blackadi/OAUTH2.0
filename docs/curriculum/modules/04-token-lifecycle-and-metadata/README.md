@@ -323,9 +323,11 @@ with `resource` and watch `aud` appear; trip both RFC 8707 validation rules; com
 OIDC-discovery documents; and prove that `/.well-known/oauth-protected-resource` does not exist *despite
 returning HTTP 200*.
 
-## Proposed source change — serve RFC 9728 (needs your approval)
+## Source change — serving RFC 9728 (done)
 
-This is the gated change flagged in the build plan. **No code has been written.**
+> **Status: implemented on 2026-07-28.** This was a gated proposal; it was approved and built. The lab's
+> detection exercise below still stands — run it against a deployment that has *not* done this, or read it
+> as the before-picture. On this deployment the endpoint now answers with JSON.
 
 **What:** add `server/src/routes/protected-resource-metadata.routes.ts` plus a small controller, mounted at
 true root in `app.ts` next to `oauthAsMetadataRoutes`, serving:

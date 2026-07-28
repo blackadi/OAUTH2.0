@@ -75,7 +75,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | RFC 7662 | OAuth 2.0 Token Introspection | Published RFC | Oct 2015 | RS asks AS "is this token active?" | Validating opaque/reference tokens | `introspection.routes.ts`, `introspection.service.ts` |
 | RFC 7009 | OAuth 2.0 Token Revocation | Published RFC | Aug 2013 | Client revokes an access/refresh token | Logout/compromise response | `revocation.routes.ts`, `revocation.service.ts` |
 | RFC 8414 | OAuth 2.0 Authorization Server Metadata | Published RFC | Jun 2018 | `/.well-known/oauth-authorization-server` | Client auto-config | `oauth-as-metadata.routes.ts` (root); see path quirk below |
-| RFC 9728 | OAuth 2.0 Protected Resource Metadata | Published RFC | Apr 2025 | `/.well-known/oauth-protected-resource` | RS advertises its AS(es)/scopes; MCP discovery | **Consumed** client-side (`client` `mcp.service.ts`); **not served** by this AS → gap addressed in Module 04 |
+| RFC 9728 | OAuth 2.0 Protected Resource Metadata | Published RFC | Apr 2025 | `/.well-known/oauth-protected-resource` | RS advertises its AS(es)/scopes; MCP discovery | **Served** at true root — `protected-resource-metadata.routes.ts` + controller (added 2026-07-28); also consumed client-side (`mcp.service.ts`) |
 | RFC 7591 | OAuth 2.0 Dynamic Client Registration Protocol | Published RFC | Jul 2015 | Programmatic client registration | Onboarding without console | `dcr.routes.ts` (`/api/client/dcr/register`), `dcr.service.ts` |
 | RFC 7592 | OAuth 2.0 Dynamic Client Registration Management Protocol | Published RFC | Jul 2015 | Read/update/delete a registration | Lifecycle of DCR clients | `dcr.routes.ts` (`get`/`update`/`delete`) |
 | RFC 9068 | JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens | Published RFC | Oct 2021 | Structured `at+jwt` access tokens | Interop for self-contained ATs | JWT ATs via Authlete |
@@ -188,8 +188,8 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | Capability | Spec | Reality here | Plan |
 |---|---|---|---|
 | JARM | JARM (OpenID Final, errata set 1) | **AS side: supported, unconfigured** (one client metadata field). Client side: absent — the SPA cannot consume a `response` JWT | **Configure** on the AS (no code); a client-side consumer remains a genuine gap |
-| mTLS / cert-bound tokens | RFC 8705 | Thin — registration flags only | **Implement** in Module 05/10 (gated) |
-| Protected Resource Metadata endpoint | RFC 9728 | Consumed client-side; not served | **Serve** it in Module 04 (small, gated) |
+| mTLS / cert-bound tokens | RFC 8705 | Thin — registration flags only | ❌ **Declined 2026-07-28** — TLS is terminated by the platform in every deployment of this repo, so a client certificate can never reach Node. Taught from the spec in Modules 05/10, labelled not-run-here. See the decision record in Module 05 |
+| Protected Resource Metadata endpoint | RFC 9728 | ✅ **Now served** at true root | Implemented 2026-07-28; Module 04's proposal is closed |
 | Dedicated resource server endpoint | RFC 6750 | None; use UserInfo + Introspection as RS stand-ins | Teach with existing endpoints |
 | SD-JWT | RFC 9901 | Absent from `server/` and `client/` — and does not need to be there; it is pure JOSE | **Taught locally** with `scripts/sd-jwt.mjs` (issue / present / verify + §7.1 trace). No source change proposed |
 | OID4VCI | OID4VCI 1.0 | Nine endpoints exist and delegate to Authlete, but **verifiable credentials are disabled on this service** — every call refuses (`A364301`, `A416301`, `A402301`, `A366201`, `A383201`) | Console change on the reader's own service; Module 09b verifies the surface and the refusals only |

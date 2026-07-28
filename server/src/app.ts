@@ -32,6 +32,7 @@ import metricsRoutes from "./routes/metrics.routes";
 import openapiRoutes from "./routes/openapi.routes";
 import fapiRoutes from "./routes/fapi.routes";
 import oauthAsMetadataRoutes from "./routes/oauth-as-metadata.routes";
+import protectedResourceMetadataRoutes from "./routes/protected-resource-metadata.routes";
 import jarRoutes from "./routes/jar.routes";
 import nativeSsoRoutes from "./routes/native-sso.routes";
 import routesList from "./routes/routes-list.routes";
@@ -167,6 +168,7 @@ export function createApp() {
   app.use(routerURL, metricsRoutes); // /api/metrics (consistency)
   app.use(routerURL, fapiRoutes);
   app.use("/", oauthAsMetadataRoutes); // .well-known/oauth-authorization-server at root (MCP/RFC 8414)
+  app.use("/", protectedResourceMetadataRoutes); // .well-known/oauth-protected-resource at root (RFC 9728)
   app.use(routerURL, jarRoutes);
   app.use(routerURL, nativeSsoRoutes);
   app.use(routerURL, openapiRoutes); // /api/openapi.json
