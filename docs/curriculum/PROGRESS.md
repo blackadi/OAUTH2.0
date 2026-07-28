@@ -27,7 +27,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 05 · Request integrity + binding | Explain what PAR, JAR, `iss`, mTLS, and DPoP each protect; reproduce the `ath`-vs-`sub` DPoP failure. |
 | [x] | 06 · Machine + delegated grants | Choose a grant for a daemon; explain why a client-credentials token has no `sub`; given a token-exchange response, say whether you got impersonation or delegation and what a correct response would have contained. |
 | [x] | 07 · OAuth 2.1 + Security BCP | Audit a deployment against RFC 9700 §2 from three sources and write findings with evidence, severity, and a defensible remediation order; state precisely what OAuth 2.1 does and does not do. |
-| [ ] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user; validate an ID token step by step; `nonce` vs. `state`. |
+| [x] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user and describe token substitution concretely; run all 13 OIDC Core §3.1.3.7 steps on a real ID token; `nonce` vs. `state`; name the four logout specs and what each cannot reach. |
 | [ ] | 09a · Interaction extensions | Explain what JARM adds over `state`; pick poll/ping/push for a CIBA scenario; force a step-up challenge. |
 | [ ] | 09b · Identity + credentials | Explain selective disclosure in SD-JWT; place OID4VCI/VP and federation in the graph. |
 | [ ] | 10 · FAPI + grant management | State the FAPI 2.0 attacker model in your own words; explain why refresh-token rotation is forbidden. |
@@ -78,9 +78,10 @@ against it before calling the capstone complete._
 - [x] **Module 05 — Request Integrity + Binding** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 06 — Machine + Delegated Grants** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 07 — OAuth 2.1 + the Security BCP** — README, lab, quiz, quiz-answers written & committed
-- [ ] Module 08 — OIDC Core + Logout  ← **next**
-- [ ] Modules 09a–12 — pending
-- [ ] Stage 4 — consistency pass
+- [x] **Module 08 — OIDC Core + Logout** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 09a — Interaction Extensions  ← **next**
+- [ ] Modules 09b–12 — pending
+- [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
 ### Awaiting a decision — gated source changes
 
@@ -101,10 +102,38 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
 
 ### Findings worth acting on outside the curriculum
 
-> Six now, four of them in one file. The token-exchange path (`token-exchange-response.handler.ts`, 89 lines)
-> accounts for findings 3–6 below and is the single highest-value thing on this list to fix. None were fixed —
-> all are server source, and the standing rule is to surface rather than repair. Each is taught as a Tier-3
-> exercise in the module that found it.
+> Nine now. Four are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
+> logout/authorization path. None were fixed — all are server source, and the standing rule is to surface
+> rather than repair. Each is taught as a Tier-3 exercise in the module that found it.
+
+- **`prompt=none` returns a 302 with an empty `Location` header.** `authorization.controller.ts:50-53` treats
+  Authlete's `NO_INTERACTION` action as though `responseContent` held a redirect URL. It does not: verified by
+  calling `/auth/authorization/authorization` directly, `NO_INTERACTION` comes back with
+  `responseContent: null` and a **ticket**, meaning *"decide without showing UI, then call issue or fail."* So
+  `res.redirect(null ?? "")` emits `Location: `. OIDC Core §3.1.2.6 requires one of `login_required`,
+  `consent_required`, `interaction_required`, `account_selection_required`. **Second half of the defect:** the
+  controller *does* contain `prompt === "none"` handling at line 96 — inside `case "INTERACTION"`, which a
+  `prompt=none` request never reaches, because the AS answers it with `NO_INTERACTION`. Dead code that reads
+  as a feature. Not exploitable; breaks every client that relies on silent renewal, in a way the client cannot
+  classify.
+- **The logout endpoint is an open redirect, and it survives production.**
+  `logout.service.ts` validates `post_logout_redirect_uri` with two `startsWith` prefix checks. Verified live:
+  `http://localhost:3000.evil.example.com/bye` and `http://localhost:3001@evil.example.com/` both get a **302
+  to the attacker's host**. The middle clause is gated on `NODE_ENV !== "production"`, but the
+  `allowedOrigins.some(o => uri.startsWith(o))` clause is not — so with `ALLOWED_ORIGINS=https://app.example.com`,
+  `https://app.example.com.evil.net/` still passes. **Do not file as dev-only.** RFC 9700 §2.1 forbids
+  exactly this. Note the contrast: the *authorization* endpoint gets exact matching right (400, no `Location`).
+  Fix is one line — exact comparison against a registered set.
+- **Back-channel logout receipt cannot work, and misreports why.** `JWKS_URI` is unset, so
+  `logout.controller.ts:45` throws and the `catch` returns `{"error":"invalid_request","error_description":
+  "Invalid logout token"}` — blaming the caller's input for a server configuration problem. Confirmed against
+  the server log (*"JWKS_URI must be configured to verify backchannel logout tokens"*). Two structural defects
+  beyond the config: (1) `jwt.verify(token, key, { algorithms })` passes no `issuer` or `audience`, so `iss`
+  and `aud` are never checked and only the `events` claim is validated — OIDC Back-Channel Logout also
+  requires rejecting a token carrying `nonce`; (2) it calls `req.session.destroy()`, but a back-channel logout
+  is a server-to-server POST with no browser cookie, so `req.session` belongs to nobody — acting on a logout
+  token needs a session store queryable by `sub`/`sid`. Fixing the config alone would turn a no-op into a
+  cross-RP forced-logout primitive.
 
 - **Token exchange is broken for any scoped subject token.** The SDK's `TokenResponse` schema types
   `subjectTokenInfo.scopes` as `string[]`; Authlete returns `[{"name":"profile","defaultEntry":false}]`. Zod
@@ -174,10 +203,16 @@ client already had both in its `grantTypes` — the per-client permission flag w
 
 **Still outstanding:**
 
-- Client `4277838306` has `idTokenSignAlg: HS256`, which a public client cannot use — requesting the `openid`
-  scope fails with `[A406301] The algorithm is symmetric (HS256), but the client type of the client … is not
-  'confidential'.` Module 03 sidesteps this by using `scope=profile`, but **Module 08 (OIDC) needs it set to
-  an asymmetric algorithm — `ES256`.**
+- **`idTokenSignAlg: HS256` on BOTH clients — still outstanding as of 2026-07-28.** The repo owner chose
+  "set both clients to ES256" when asked during the Module 08 build, but the change had not landed by the end
+  of that turn, so Module 08 shipped with its ES256/JWKS exercise (3d) marked `UNVERIFIED` and no transcript.
+  Two consequences while it stands: (1) the public client `4277838306` **cannot request `openid` at all** —
+  `[A406301] The algorithm is symmetric (HS256), but the client type of the client … is not 'confidential'.`
+  (verified again this session); (2) on the confidential client, HS256 means the client secret both verifies
+  **and forges** ID tokens — demonstrated live in Module 08 lab B6, where a token with `sub` changed to
+  `ceo@example.com` and re-signed with the client secret passed all thirteen validation steps. **Flipping both
+  clients to `ES256` unblocks lab 3d and public-client OIDC, and removes the forgery capability.** Module 09a
+  does not depend on it; Module 10 (FAPI) does.
 - `GET /api/fapi/config` still fails: the body is an SDK `ResponseValidationError` from `serviceGet`
   (`{"error":"Bad Request","message":"Response validation failed",…}`). Pre-existing and unrelated to the
   curriculum; it affects Module 10. Two notes: the earlier guess that `fapiModes` caused it is **disproven**
@@ -189,14 +224,70 @@ Nothing on the Authlete service was changed by the curriculum build; the repo ow
 *(Gated source changes — JARM, mTLS, RFC 9728 PRM — are still proposed inside Modules 05/09a/10 as planned;
 this is a configuration issue, not one of those.)*
 
-### Overdue: the cumulative exams
+### The cumulative exams — DECIDED: backfill in Stage 4
 
-The plan schedules **Cumulative Exam A after Module 03, Exam B after Module 07, Exam C after Module 11, and a
-final exam before the capstone**. None has been written — Stage 3 has been running strictly one module per
-turn, and the exams were never given a turn. **A and B are now overdue.** Module 07's quiz Tier 4 was written
-to reach back across 02–06 and stands in for B in the meantime; nothing stands in for A. Options: write them
-as they come due from Module 08 onward and backfill A and B in one pass, or fold all four into Stage 4. Needs
-a decision.
+**Decision (repo owner, 2026-07-28): all four exams are written in Stage 4, not as they come due.** Stage 3
+stays one-module-per-turn through Module 12.
+
+To write in Stage 4:
+
+- **Cumulative Exam A** (after Module 03) — foundations through PKCE
+- **Cumulative Exam B** (after Module 07) — full OAuth 2.0 + hardening + consolidation
+- **Cumulative Exam C** (after Module 11) — OIDC, extensions, FAPI, API security
+- **Final Exam** (before Module 12) — everything, with a self-grading rubric
+
+Interim cover: Module 07's quiz Tier 4 was written to reach back across 02–06 and stands in for B. Nothing
+stands in for A. When writing them, note that Module 07 introduced the audit method and Module 08 the
+thirteen-step validation — both are natural exam material that did not exist when the earlier module quizzes
+were written.
+
+### Module 08 — done / verified / uncertain
+
+- **Done:** `README.md` — opens on the one-line login bug (`loginAs(profile.sub)` from an access token) and
+  takes three paragraphs to say exactly why it is an authentication bypass rather than asserting "use an ID
+  token"; the access-token-vs-ID-token table with the two rows that generate most bugs; every REQUIRED and
+  conditional claim quoted from OIDC Core §2; **the thirteen §3.1.3.7 validation steps grouped into four
+  jobs** (envelope / issuer+audience defeats substitution / authenticity defeats forgery / currency defeats
+  replay / request-binding defeats injection) with commentary on the three that trip people — step 6's TLS
+  shortcut and its precondition, step 7 as *the* algorithm-confusion defence, step 8 as the reason HS256 does
+  not scale; a `nonce`-vs-`state` table settling the standing confusion (the key asymmetry: `nonce` is inside
+  the signature, `state` is not); `at_hash`/`c_hash`/`s_hash` as the same commit-then-prove pattern; the
+  response-type table with why hybrid exists and why FAPI 2.0 dropped it; `prompt`/`max_age` with the four
+  §3.1.2.6 errors; and **the four logout specs in one table** keyed on who gets told and whether a live
+  browser is needed. `lab.md` — six exercises; the learner **writes** a 13-step validator rather than using a
+  library. `quiz.md` + `quiz-answers.md` (19 items across 4 tiers). Added seven concepts, three claims and
+  three parameters to GLOSSARY.
+- **Verified against the live server (every lab command executed):** adding `openid` to `scope` turns a
+  5-key token response into a 6-key one. ID token decodes as `alg: HS256`, **no `kid`**, with
+  `iss/sub/aud/exp/iat/auth_time/nonce/acr/s_hash`; `aud` is an **array** (`idTokenAudType` unset, so not the
+  `"string"` form `AGENTS.md` recommends). **The validator was written and run: all ten applicable steps PASS**
+  on a live token, including HMAC-with-client-secret per step 8. Six forgeries: tampered `sub` with the
+  original signature → step 6 FAIL; **`alg:none` → step 7 FAIL *and* step 6 FAIL, in that order**; wrong `aud`
+  → step 3 FAIL twice; expired → step 9; `nonce` mismatch → step 11; and **`sub` changed to `ceo@example.com`
+  and re-signed with the client secret → ACCEPT, all checks passed** — the module's headline, a correct
+  validator losing to a symmetric-algorithm choice. Hybrid `response_type=code id_token` → both artefacts in
+  the **fragment** and **`c_hash` appears**. `nonce` echoed when sent, absent when not. `max_age=0` →
+  `auth_time == iat`. UserInfo returns the profile claims. `[A406301]` reproduced on the public client.
+  **Verified (primary sources, this session):** OIDC Core 1.0 *"incorporating errata set 2"* (15 Dec 2023) —
+  §2's five REQUIRED claims and the `auth_time`/`nonce`/`acr`/`amr`/`azp` conditions quoted; **all thirteen
+  §3.1.3.7 steps quoted**; §3.1.2.1 on `prompt=none`; §3.1.2.6's four error definitions; §3.1.3.6 `at_hash`;
+  §3.3.2.11 `c_hash`; §5.3.2's `sub` check. OIDC Discovery 1.0 errata set 2 — the
+  `id_token_signing_alg_values_supported` definition including *"The algorithm RS256 MUST be included."*
+- **Three new findings, all verified, none fixed** (see the findings section above for the full write-ups):
+  `prompt=none` → 302 with an **empty `Location`** (and the `prompt=none` handling is dead code in an
+  unreachable branch); the logout endpoint is an **open redirect** via `startsWith` prefix matching, which
+  **survives `NODE_ENV=production`**; and back-channel logout receipt cannot work (`JWKS_URI` unset) while
+  reporting a server config error as *"Invalid logout token"*, plus two structural defects in the handler.
+  Also a low-severity discovery-conformance gap: `id_token_signing_alg_values_supported` omits RS256.
+- **Uncertain / notes:** **`UNVERIFIED` — the ES256/JWKS validation path.** The repo owner chose to set both
+  clients to `ES256`; as of writing both are still `HS256`, so lab Exercise 3d gives the commands and the live
+  JWKS contents (one EC P-256 key, `kid: "1"`) but **shows no transcript**, and is marked `UNVERIFIED on this
+  deployment as of 2026-07-28` inline. Everything in 3a–3c is verified. Flipping the flag makes 3d a
+  two-minute exercise and also unblocks `openid` on the public client. **The lab trips the rate limiter** —
+  `loginLimiter` is 5/min and this lab runs the most flows of any; hit it during verification, and the failure
+  surfaces three steps downstream as an empty redirect then a confusing `403 no ticket in session`, so the lab
+  now warns about it explicitly and uses it as a diagnostic lesson. The ID token's 24-hour lifetime
+  (`idTokenDuration: 86400`) is flagged as a Module 07 report item rather than a Module 08 finding.
 
 ### Module 07 — done / verified / uncertain
 

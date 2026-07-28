@@ -67,6 +67,12 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Three-source triangulation** | *No spec term — audit method* | Advertised metadata vs stored configuration vs observed behaviour. Observed wins; divergence is itself a finding. | Module 07 |
 | **Reachability** | *No spec term — severity axis* | Who can actually drive this, with what access. Severity = normative strength × reachability. | Module 07 |
 | **Conformance theatre** | *No spec term — failure pattern* | Passing a checklist while remaining exploitable: supported≠required, one path≠all paths, correct parts≠safe whole. | Module 07 |
+| **ID token** | OIDC Core §2 | A signed statement, addressed to **one client**, that this OP authenticated this user, at this time, in this way, for this request. Always a JWT. | Module 08 |
+| **Authentication vs. authorization** | OIDC Core / RFC 6749 | *Who is this person?* vs *what may this software do?* An access token answers only the second. | Module 08 |
+| **Token substitution** | *No spec term — attack* | Any access token for the victim accepted as proof of login. Closed by the ID token's `aud` check (OIDC Core §3.1.3.7 step 3). | Module 08 |
+| **Algorithm confusion** | *(mitigated by OIDC Core §3.1.3.7 step 7)* | Reading `alg` from the token header to select a key — e.g. verifying HS256 with a published RSA public key. Pin `alg` from registration. | Modules 00, 08 |
+| **Silent renewal** | OIDC Core §3.1.2.1 (`prompt=none`) | Checking "is the user still signed in?" without a visible redirect. Must return one of four §3.1.2.6 errors on failure. | Module 08 |
+| **Logout token** | OIDC Back-Channel Logout 1.0 | A signed JWT POSTed OP→RP carrying the `events` claim; MUST identify the session by `sub`/`sid` and MUST NOT contain `nonce`. | Module 08 |
 
 ## Endpoints
 
@@ -119,6 +125,9 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `authorization_details` | RFC 9396 | Typed, fine-grained authorization (RAR). | Beyond coarse scopes |
 | `acr_values` / `max_age` | OIDC Core / RFC 9470 | Requested/required auth strength + freshness. | Step-up authentication |
 | `DPoP` (header) | RFC 9449 | Per-request proof-of-possession JWT. | Sender-constrains the token |
+| `prompt` | OIDC Core §3.1.2.1 | `none` / `login` / `consent` / `select_account`. | `none` MUST NOT show UI; drives silent renewal |
+| `max_age` | OIDC Core §3.1.2.1 | Maximum age, in seconds, of the authentication event. | Makes `auth_time` REQUIRED |
+| `id_token_hint` / `post_logout_redirect_uri` | OIDC RP-Initiated Logout 1.0 | Which session to end, and where to return. | The redirect URI needs **exact** matching |
 | `assertion` | RFC 7523 §2.1 | The JWT used **as the authorization grant**. | Whoever holds the signing key can name any `sub` unless the deployment restricts it |
 | `client_assertion` / `client_assertion_type` | RFC 7523 §2.2 | The JWT used **as client authentication**; composes with any grant. | `private_key_jwt` — the strongest common client auth |
 | `subject_token` / `subject_token_type` | RFC 8693 §2.1 | Who the exchanged token is *for*. Both REQUIRED. | Type is explicit so the AS never sniffs |
@@ -144,6 +153,9 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `scope` | RFC 9068 | Granted scopes in a JWT AT. | RS authorization input |
 | `act` | RFC 8693 §4.1 | The acting party in a delegation; nests to record a chain. | Absence on a service-issued token should fail closed |
 | `may_act` | RFC 8693 §4.4 | Placed in the *subject's* token: who may become the actor for them. | Pre-authorizes delegation without a bespoke policy table |
+| `at_hash` | OIDC Core §3.1.3.6 | Left-most half of the hash of the access token. | Required when `response_type` includes `token` |
+| `c_hash` | OIDC Core §3.3.2.11 | Left-most half of the hash of the authorization code. | What makes the hybrid flow safe |
+| `s_hash` | FAPI | Left-most half of the hash of `state`. | Integrity for `state`, which is otherwise unprotected |
 
 ## Acronyms
 
