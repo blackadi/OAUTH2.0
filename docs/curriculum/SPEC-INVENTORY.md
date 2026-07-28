@@ -21,6 +21,18 @@ table and as a map from "what the spec says" to "what runs here."
 
 ---
 
+## 0a. Supporting references (cited across modules)
+
+Not subjects in their own right, but cited by name in the modules — so they belong here rather than nowhere.
+**Added in the Stage 4 consistency pass**, which found them cited but uninventoried.
+
+| Identifier | Exact title | Status / type | Date | Why the curriculum cites it |
+|---|---|---|---|---|
+| RFC 2119 | Key words for use in RFCs to Indicate Requirement Levels | Published RFC (**BCP 14**) | Mar 1997 | MUST/SHOULD/MAY. Module 07's whole review method rests on reading these precisely |
+| RFC 8174 | Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words | Published RFC (**BCP 14**, updates 2119) | May 2017 | Only **uppercase** key words are normative — lowercase "should" is prose |
+| RFC 3986 | Uniform Resource Identifier (URI): Generic Syntax | Published RFC (**STD 66**) | Jan 2005 | The `unreserved` character set in RFC 7636's `code_verifier` ABNF (Module 03) |
+| RFC 7800 | Proof-of-Possession Key Semantics for JSON Web Tokens (JWTs) | Published RFC (Std Track) | Apr 2016 | Defines the **`cnf` claim** (§3.1) that DPoP (`jkt`), mTLS (`x5t#S256`) and SD-JWT key binding (`jwk`) all use — Modules 05, 09b, 10 |
+
 ## 0. Transport & encoding foundations (Module 00)
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |

@@ -85,7 +85,41 @@ against it before calling the capstone complete._
 - [x] **Module 11 — API Security Beyond the Token** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 12 — Capstone** — README (brief + rubric), lab (Aurora brief + Meridian vulnerable variant), quiz, quiz-answers written & committed
 - [x] **STAGE 3 COMPLETE** — all 14 modules written, verified and committed
-- [ ] Stage 4 — consistency pass **+ backfill all four exams**  ← **all that remains**
+- [x] **Stage 4a — consistency pass** — run, 2 real errors found and fixed (see below)
+- [ ] Stage 4b — backfill the four exams (A, B, C, Final)  ← **all that remains**
+
+### Stage 4a — consistency pass: what was checked and what was found
+
+Seven checks, run mechanically over all 60 curriculum markdown files rather than by reading.
+
+| Check | Result |
+|---|---|
+| **Internal links resolve** | ✅ 0 broken out of every relative link in 60 files |
+| **Referenced code paths exist** | ✅ 4 flagged, **all legitimate**: two learner output files that do not exist until the learner writes them (`my-audit.md`, `my-fapi-audit.md`), one path cited *deliberately as wrong* in a correction record (`client/src/services/pkce.ts`), and one file that the gated RFC 9728 proposal says would be created |
+| **Cited line numbers within file bounds** | ✅ 0 past EOF |
+| **Cited line numbers point at the right code** | ❌ **1 real error — fixed** (below) |
+| **Distinctive bolded terms present in GLOSSARY** | ✅ 62/62 found; GLOSSARY is 207 rows |
+| **No module depends on a later concept** | ✅ 169 forward references, all *labelled previews* (`→ Module NN`, "you'll meet this again in", "It **feeds** Module NN", "Onward") — the intended pattern. No lab step or argument requires an unexplained later mechanism |
+| **Every RFC cited appears in SPEC-INVENTORY** | ❌ **4 missing — fixed** (below). No inventory row is uncited |
+| **Cross-module factual claims** | ✅ all 8 ("Module 03 proved…", "Module 05 established…") checked against the verified records in this log; all accurate |
+
+**Error 1 — a fabricated transcript, now corrected.** Module 09b's lab showed a `grep -n` output for
+`federation.service.ts` that I wrote from expectation rather than from running the command: it claimed the
+`federation.configuration({ serviceId })` call is at **line 16**. It is at **line 14**; line 16 is `});`, and
+the real grep prints **two** lines (12 and 14). Fixed in the lab, and the `federation.service.ts:16` citation
+was corrected to `:14` in the findings section of this file. **This is the only invented output found in the
+whole curriculum**, and it is exactly the class of error Stage 4 exists to catch — every other transcript in
+every lab was pasted from a command that actually ran.
+
+**Error 2 — four cited RFCs were not in the inventory.** RFC 2119, RFC 8174, RFC 3986 and RFC 7800 were cited
+by name in modules while the inventory claimed to list "every specification this curriculum touches". All four
+were verified against rfc-editor.org (titles, BCP/STD numbers, dates) and added as a new **§0a Supporting
+references** section. RFC 7800 is the substantive one — it defines the `cnf` claim that DPoP (`jkt`), mTLS
+(`x5t#S256`) and SD-JWT key binding (`jwk`) all depend on, so Modules 05, 09b and 10 all rest on it.
+
+**Also resolved:** Stage 1's critique item 5 ("`AGENTS.md` says 21 sections but there are 20") is **no longer
+true** — `AGENTS.md:137` says 20, and `client/src/App.tsx` has exactly 20 `sectionComponents` entries. No edit
+needed; the item is closed.
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
 ### Awaiting a decision — gated source changes
@@ -173,7 +207,7 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   and here they are not, so a user who withdraws consent stays exposed for a day. Cheapest remediation is to
   shorten the lifetime, not to implement access-token revocation.
 - **The OpenID Federation entity-configuration endpoint cannot work, and misreports why.**
-  `federation.service.ts:16` calls `authleteApi.federation.configuration({ serviceId })` with **no
+  `federation.service.ts:14` calls `authleteApi.federation.configuration({ serviceId })` with **no
   `requestBody`**. The SDK types that field as optional (`requestBody?: FederationConfigurationApiRequestBody`
   where the type is `{}`), so omitting it compiles and passes review — but Authlete requires a body. Both
   `GET /.well-known/openid-federation` and `GET /api/federation/configuration` therefore return **400** with

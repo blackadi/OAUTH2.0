@@ -633,7 +633,8 @@ grep -n "RequestBody\|requestBody" \
 ```
 
 ```
-16:    const response = await this.authleteApi.federation.configuration({
+12:    log("FederationService.configuration: calling Authlete federation configuration API");
+14:    const response = await this.authleteApi.federation.configuration({
 8:export type FederationConfigurationApiRequestBody = {};
 15:  requestBody?: FederationConfigurationApiRequestBody | undefined;
 ```
@@ -651,7 +652,7 @@ evidence, severity with reachability, remediation.
 **Finding: the OpenID Federation entity-configuration endpoint cannot work, and misreports why.**
 
 *Evidence.* `GET /.well-known/openid-federation` and `GET /api/federation/configuration` both return HTTP 400
-with `[A126203] The request body is missing or empty`. `federation.service.ts:16` calls
+with `[A126203] The request body is missing or empty`. `federation.service.ts:14` calls
 `authleteApi.federation.configuration({ serviceId })` with no `requestBody`; the SDK types that field as
 optional. A direct call to Authlete with `{}` returns HTTP 200 and the real diagnosis, `[A316201] Because a
 JWK Set for federation has not been set up`.
