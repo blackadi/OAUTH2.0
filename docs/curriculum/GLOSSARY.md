@@ -98,6 +98,15 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Metadata policy** | OpenID Federation 1.0 §6.1 | Constraints a superior imposes on subordinates' metadata (`value`, `add`, `one_of`, `subset_of`) — a leaf cannot self-declare its way out. | Module 09b |
 | **Credential offer** | OID4VCI 1.0 §4.1 | What an issuer hands a wallet to start issuance; names the grants, optionally a pre-authorized code. | Module 09b |
 | **Fail-open auth** | *No spec term — failure pattern* | Authentication middleware that allows the request when its configuration is absent. Here: `require-basic-auth.ts` returns *allow* if `MGMT_CLIENT_*` are unset. | Module 09b — Lab 7 |
+| **Attacker model** | FAPI 2.0 Attacker Model §6–§7 | An enumerated set of attacker capabilities a profile claims to defend against. Makes a security claim falsifiable instead of aspirational. | Module 10 |
+| **Security goal** | FAPI 2.0 Attacker Model §5 | Authorization, authentication, session integrity — stated so they can be proven or disproven. | Module 10 |
+| **Session integrity** | FAPI 2.0 Attacker Model §5.4 | *"no attacker is able to force a user to be logged in under the identity of the attacker"* / to use the attacker's resources. The goal people forget. | Module 10 |
+| **Supported vs required** | *No spec term — audit distinction* | Every FAPI `shall` is about what the AS **rejects**. Advertising a mechanism defends nothing; an attacker picks the weakest permitted option. | Module 07, Module 10 |
+| **NOT EVIDENCED** | *No spec term — audit verdict* | Neither pass nor fail: the configuration cannot answer the question (e.g. a duration of `0` meaning "service default"). A false PASS is worse than a FAIL. | Module 10 — Lab 3 |
+| **Formal analysis** | FAPI 2.0 Security Profile / Attacker Model §9 | Machine-checked proof that a **specification** meets its goals under its model. §8.5 excludes implementation errors — it says nothing about your code. | Module 10 |
+| **Non-repudiation** | FAPI 2.0 Message Signing | Proving to a *third party* later who sent what. Distinct from authorization/authentication; costs real complexity. | Module 10 |
+| **Grant** | Grant Management (Draft) §5.6 | The persistent record of what a user authorized — distinct from the tokens minted against it. Revoking a token does not revoke the grant. | Module 10 |
+| **Grant revocation vs token revocation** | Grant Management §6.5 vs RFC 7009 | Grant revocation withdraws authority (MUST kill refresh tokens); RFC 7009 discards one credential and leaves consent standing. | Module 10 — Lab 6 |
 
 ## Endpoints
 
@@ -192,6 +201,8 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `vct` | SD-JWT VC (**draft**) §2.2.2.1 | Credential type identifier; a Collision-Resistant Name. | Lets a verifier accept only the right *kind* of credential |
 | `verified_claims` | OIDC Identity Assurance §5.1 | Container with two sub-elements: `verification` (provenance) and `claims` (the verified values). | Accountability, not stronger crypto |
 | `authority_hints` | OpenID Federation §3.1.2 | Entity Identifiers of an entity's Immediate Superiors. | The upward pointer trust-chain resolution follows |
+| `grant_id` | Grant Management (Draft) §5.2 | Identifies one grant for a given AS, client and resource owner. Returned in the token response. | Module 10 |
+| `grant_management_action` | Grant Management (Draft) §5.2 | `create` / `merge` / `replace`. `merge` and `replace` both invalidate existing refresh tokens. | Module 10 |
 
 ## Acronyms
 
@@ -210,6 +221,7 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | RAR | Rich Authorization Requests | RFC 9396 |
 | CIBA | Client-Initiated Backchannel Authentication | CIBA Core 1.0 |
 | FAPI | Financial-grade API | FAPI 1.0/2.0 |
+| A1 / A1a / A2 / A3a / A4 / A5 | The six FAPI 2.0 attackers (web / web-as-AS / network / read-auth-request / token-endpoint / read-resource-request) | FAPI 2.0 Attacker Model §7 |
 | BCP | Best Current Practice | RFC 9700 (BCP 240) |
 | SD-JWT | Selective Disclosure for JWTs | RFC 9901 |
 | SD-JWT+KB | An SD-JWT with a Key Binding JWT appended | RFC 9901 §4 |

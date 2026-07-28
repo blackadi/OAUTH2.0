@@ -156,12 +156,12 @@ table and as a map from "what the spec says" to "what runs here."
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
-| FAPI 1.0 Part 1 | Financial-grade API Security Profile 1.0 – Part 1: Baseline | OpenID Final | — | Baseline read-access hardening profile | Interop security floor | `docs/FAPI-TUTORIAL.md` |
-| FAPI 1.0 Part 2 | Financial-grade API Security Profile 1.0 – Part 2: Advanced | OpenID Final | — | Signed requests/responses, sender-constrained tokens | Write-access, high-value APIs | `docs/FAPI-TUTORIAL.md` |
-| FAPI 2.0 Security Profile | FAPI 2.0 Security Profile | OpenID Final | Feb 2025 | Simplified, formally-verified profile (PAR + PKCE + sender-constraining) | High-assurance baseline; forbids refresh rotation | FAPI 2.0/DPoP section; `docs/FAPI-TUTORIAL.md` |
-| FAPI 2.0 Attacker Model | FAPI 2.0 Attacker Model | OpenID Final | Feb 2025 | Explicit attacker capabilities the profile defends | Makes security claims testable | threat model (Module 10) |
-| FAPI 2.0 Message Signing | FAPI 2.0 Message Signing | OpenID Final | approved 2025-07-29 | Non-repudiation via JAR + JARM + signed introspection | Signed requests/responses when required | uses JAR + JARM + introspection |
-| Grant Management | Grant Management for OAuth 2.0 | OpenID **2nd Implementer's Draft** | 2023 | `grant_id`, query/revoke/replace/merge a grant | Managing long-lived consent | `grant-management.routes.ts`; `docs/GRANT-MANAGEMENT.md` |
+| FAPI 1.0 Part 1 | Financial-grade API Security Profile 1.0 - Part 1: Baseline | OpenID Final | **12 Mar 2021** | Baseline read-access hardening profile | Interop security floor | `docs/FAPI-TUTORIAL.md` |
+| FAPI 1.0 Part 2 | Financial-grade API Security Profile 1.0 - Part 2: Advanced | OpenID Final | **12 Mar 2021** | JAR + JARM + `s_hash` + MTLS; hybrid flow | Write-access, high-value APIs | `docs/FAPI-TUTORIAL.md` |
+| FAPI 2.0 Security Profile | FAPI 2.0 Security Profile | OpenID Final | **22 Feb 2025** | Mandatory PAR + PKCE S256 + sender-constraining + `iss`; **forbids** refresh-token rotation; `code` only | High-assurance baseline, derived from an attacker model rather than a threat list | FAPI 2.0/DPoP section; `docs/FAPI-TUTORIAL.md`. **Current URL: `openid.net/specs/fapi-security-profile-2_0.html`** |
+| FAPI 2.0 Attacker Model | FAPI 2.0 Attacker Model | OpenID Final | **22 Feb 2025** | Six attackers (A1, A1a, A2, A3a, A4, A5), three security goals, explicit exclusions | Makes the security claim falsifiable | threat model (Module 10). **⚠ `fapi-2_0-attacker-model.html` still serves a superseded Dec 2022 draft whose numbering differs (A5/A7 → A4/A5); the Final is at `fapi-attacker-model-2_0.html`** |
+| FAPI 2.0 Message Signing | FAPI 2.0 Message Signing | OpenID Final | **25 Sep 2025** | Non-repudiation via JAR + JARM + signed introspection | Provable "who sent what", when a dispute must be settled | uses JAR + JARM + introspection |
+| Grant Management | Grant Management for OAuth 2.0 **(Draft)** | **Active Internet-Draft** (`oauth-v2-grant-management-03`; intended status Standards Track, FAPI WG) | **9 May 2023** | `grant_id`, `grant_management_action` (`create`/`merge`/`replace`), query/revoke API, two scopes | Managing long-lived consent; concurrent grants | `grant-management.routes.ts`; `docs/GRANT-MANAGEMENT.md` — **verified working end to end** (Module 10) |
 
 ## 11. API security beyond the token (Module 11)
 
@@ -183,6 +183,14 @@ table and as a map from "what the spec says" to "what runs here."
 | OID4VCI | OID4VCI 1.0 | Nine endpoints exist and delegate to Authlete, but **verifiable credentials are disabled on this service** — every call refuses (`A364301`, `A416301`, `A402301`, `A366201`, `A383201`) | Console change on the reader's own service; Module 09b verifies the surface and the refusals only |
 | OpenID Federation entity configuration | OpenID Federation 1.0 §9 | Endpoint exists at the correct well-known path but is **broken** — the SDK call omits the request body | Diagnosed as Module 09b's Tier-3 finding; **not fixed** (server source) |
 | OID4VP | OID4VP 1.0 | No verifier implementation | Taught from the spec; the key-binding half is exercised locally via `sd-jwt.mjs` |
+
+**§10 corrections, 2026-07-28.** Three errors were found and fixed while writing Module 10: FAPI 2.0 Message
+Signing was dated "approved 2025-07-29" and is in fact **published 25 Sep 2025**; the FAPI 1.0 Parts had no
+dates and are both **12 Mar 2021**; and Grant Management was labelled an "OpenID 2nd Implementer's Draft",
+which **the document header does not support** — it identifies itself as Internet-Draft
+`oauth-v2-grant-management-03` and its own title ends in *"(Draft)"*. Also note the FAPI 2.0 URLs moved
+(`fapi-2_0-*` → `fapi-*-2_0`), and the old attacker-model URL still serves a superseded draft with **different
+attacker numbering** — see the row above.
 
 _Rows verified against primary sources on 2026-07-27, with §9b re-verified and corrected on **2026-07-28**
 (Identity Assurance date split from its errata-set revision; SD-JWT VC pinned to ‑17 with its media-type

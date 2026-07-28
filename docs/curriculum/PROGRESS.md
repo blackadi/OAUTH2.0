@@ -30,7 +30,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user and describe token substitution concretely; run all 13 OIDC Core §3.1.3.7 steps on a real ID token; `nonce` vs. `state`; name the four logout specs and what each cannot reach. |
 | [x] | 09a · Interaction extensions | Name the four assumptions these extensions lift; explain what JARM adds over `state`/PAR/JAR and its three mandatory claims; pick poll/ping/push and defend it; write an RFC 9470 challenge and say what breaks without `acr_values`; judge RAR vs scopes. |
 | [x] | 09b · Identity + credentials | Compute an SD-JWT digest that matches RFC 9901's own test vector; explain why the salt is load-bearing; strip a KB-JWT and say which verifier accepts it and why; name the one unlinkability property SD-JWT cannot provide; place OID4VCI/VP and federation in the graph. |
-| [ ] | 10 · FAPI + grant management | State the FAPI 2.0 attacker model in your own words; explain why refresh-token rotation is forbidden. |
+| [x] | 10 · FAPI + grant management | Name all six FAPI 2.0 attackers and four things the model puts out of scope; explain why refresh-token rotation is *forbidden*; show a deployment where every mechanism is supported and none required; run the grant lifecycle and say what a revocation does **not** revoke. |
 | [ ] | 11 · API security beyond the token | Find a BOLA in a code snippet; explain why a valid token can't stop it; choose RBAC vs. ABAC vs. ReBAC. |
 | [ ] | 12 · Capstone | Design a high-assurance multi-tenant authZ architecture and defend it; then find the flaws in the vulnerable variant. |
 
@@ -81,8 +81,9 @@ against it before calling the capstone complete._
 - [x] **Module 08 — OIDC Core + Logout** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 09a — Interaction Extensions** — README, lab, quiz, quiz-answers written & committed
 - [x] **Module 09b — Identity + Credentials** — README, lab, quiz, quiz-answers + `scripts/sd-jwt.mjs` written & committed
-- [ ] Module 10 — FAPI + Grant Management  ← **next**
-- [ ] Modules 11–12 — pending
+- [x] **Module 10 — FAPI + Grant Management** — README, lab, quiz, quiz-answers written & committed
+- [ ] Module 11 — API Security Beyond the Token  ← **next**
+- [ ] Module 12 — Capstone — pending
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 
 ### Awaiting a decision — gated source changes
@@ -112,10 +113,30 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
 
 ### Findings worth acting on outside the curriculum
 
-> Ten now. Four are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
+> Twelve now. Four are in one file (`token-exchange-response.handler.ts`, 89 lines) and three more are in the
 > logout/authorization path. None were fixed — all are server source, and the standing rule is to surface
 > rather than repair. Each is taught as a Tier-3 exercise in the module that found it.
 
+- **Both FAPI introspection endpoints return HTTP 200 with an error body and a stack trace.**
+  `GET /api/fapi/config` **and** `GET /api/fapi/status` respond **200** with
+  `{"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}` —
+  an SDK `ResponseValidationError` from `serviceGet`, surfaced verbatim. Three defects in one response, and
+  the status code is the worst of them: a monitor checking status codes reports these endpoints healthy
+  forever. The `stack` field leaks absolute filesystem paths on unauthenticated endpoints. And the practical
+  consequence is that **the deployment cannot report its own FAPI posture** — Module 10's lab had to read the
+  Authlete service configuration directly to establish anything. This supersedes the earlier PROGRESS note
+  that "only `/api/fapi/config`" was affected and that its status code "may be a second bug": both endpoints
+  are affected and the 200 is confirmed. **Fourth instance of "a server-side failure reported as a caller
+  error"** after Modules 06, 08 and 09b.
+- **Grant revocation leaves access tokens alive for 24 hours.** Verified end to end in Module 10: after
+  `DELETE /api/gm/<grant_id>` → **204**, the grant's refresh token is correctly gone
+  (`[A053305] The refresh token … does not exist.`) but its access token still introspects `active: true`
+  with a full 24 hours remaining. Grant Management §6.5 says the AS *"MUST revoke the grant and all refresh
+  tokens … it should revoke all access tokens"* — so **the MUST is satisfied and the should is not.** Not a
+  MUST violation; report it precisely. Its severity comes from the *interaction* with
+  `accessTokenDuration: 86400`: the `should` is only tolerable because access tokens are assumed short-lived,
+  and here they are not, so a user who withdraws consent stays exposed for a day. Cheapest remediation is to
+  shorten the lifetime, not to implement access-token revocation.
 - **The OpenID Federation entity-configuration endpoint cannot work, and misreports why.**
   `federation.service.ts:16` calls `authleteApi.federation.configuration({ serviceId })` with **no
   `requestBody`**. The SDK types that field as optional (`requestBody?: FederationConfigurationApiRequestBody`
@@ -215,7 +236,13 @@ setting — **not** `require_pushed_authorization_requests` — was the cause of
 | `client_secret_basic` refused | `[A295301] The client authentication method … is not allowed.` |
 | `password` grant refused | `[A295306] The grant type ('password') is not allowed.` |
 
-> **Re-enable `fapiModes` at Module 10**, where FAPI is the subject. Modules 03–09 assume it is off.
+> **`fapiModes` was NOT re-enabled for Module 10.** Confirmed absent again on 2026-07-28. Module 10 was
+> therefore written as an audit of a *supported-but-not-required* deployment rather than a demonstration of
+> FAPI enforcement — which is defensible (it is the commonest real posture) but means **no lab step in the
+> curriculum shows FAPI being enforced**. Setting `fapiModes = ["FAPI2_SECURITY"]` would flip most of the
+> Module 10 report's FAIL rows at once and is the highest-value single console change outstanding. Note it
+> would also re-break Modules 03–09's labs, so set it *after* working through those, or expect the three
+> symptoms in the table above to return.
 
 **Public client — RESOLVED 2026-07-27.** Client `4277838306` now reads `clientType: PUBLIC`,
 `tokenAuthMethod: NONE`, `parRequired: false`. The Module 03 labs run against it.
@@ -277,6 +304,67 @@ Interim cover: Module 07's quiz Tier 4 was written to reach back across 02–06 
 stands in for A. When writing them, note that Module 07 introduced the audit method and Module 08 the
 thirteen-step validation — both are natural exam material that did not exist when the earlier module quizzes
 were written.
+
+### Module 10 — done / verified / uncertain
+
+- **Done:** `README.md` — the module's thesis is that Module 07 taught auditing against a *checklist* and this
+  one asks the question a checklist cannot answer: **how do you know the list is complete?** FAPI 2.0 is
+  presented as the only spec in the curriculum that makes a **falsifiable** claim — attacker model, stated
+  goals, formal analysis — and therefore the only one that can be *wrong*. Contains: all three security goals
+  and all six attackers quoted; the observation that **A4 is defined and then declared irrelevant** because a
+  design decision eliminated it, which is what a mature threat model looks like; §8's exclusions with §8.5
+  ("implementation errors") called out as the section that separates a proof about a spec from a claim about
+  your code — every finding in this curriculum lives there; the **FAPI 1.0 → 2.0 table quoted verbatim** with
+  the argument that 2.0 is *smaller* because it was derived rather than accreted; the insight that dropping
+  the hybrid flow was a **failure-visibility** decision (*"nonce/signature check can be skipped by clients,
+  PKCE cannot"*), which generalises; the refresh-token-rotation prohibition unpacked in four steps, resolving
+  the tension Module 03 left open; Message Signing scoped to non-repudiation; and grant management with the
+  MUST/should asymmetry as the centrepiece. `lab.md` — seven exercises producing a conformance report.
+  `quiz.md` + `quiz-answers.md` (18 items across 4 tiers). Added ten concepts, two parameters and one acronym
+  row to GLOSSARY.
+- **Verified against the live server (every lab command executed):** **the anti-FAPI flow** — one
+  authorization-code flow with no PAR, no PKCE, `client_secret_basic`, yielding
+  `{"access_token":…,"token_type":"Bearer","expires_in":86400,…}`, i.e. four `shall` requirements breached and
+  a **24-hour bearer token** issued with no warning. `iss` **is** present (the deployment's one clean PASS).
+  **PAR `expires_in` = 600**, where §5.3.2.2 requires *less than* 600 — non-conformant by one second, and
+  corroborated by `pushedAuthReqDuration: 600` read from the service. `authorizationCodeDuration: 0` recorded
+  as **NOT EVIDENCED** (service default; not observable from configuration) rather than guessed either way.
+  Advertised metadata read as an attacker would: `require_pushed_authorization_requests: false`,
+  `code_challenge_methods_supported` includes `plain`, `token_endpoint_auth_methods_supported` includes
+  `none`, `response_types_supported` includes the implicit forms. **Grant management verified end to end** —
+  `grant_management_action=create` → a token response with a sixth member, `grant_id`; then query → **200**
+  with scopes and claims, no token → **401**, unknown grant → **404**, revoke → **204** empty, re-query →
+  **404**; scope enforcement confirmed with a `profile`-only token → 401. Then the revocation gap above.
+  Both FAPI endpoints confirmed returning **200** with a stack trace. **Verified (primary sources, this
+  session):** FAPI 2.0 Security Profile and Attacker Model both **Final, 22 Feb 2025**, read off the document
+  headers; the complete §5.3.2.1 and §5.3.2.2 `shall` lists, NOTE 1 on rotation, and the §5.5 comparison table
+  — all quoted from the HTML rather than a summariser. Attacker Model §5.2–5.4 goals, §6 scope exclusions,
+  §7.2–§7.7 all six attackers, §8.2–§8.6 limitations. FAPI 2.0 Message Signing **Final, 25 Sep 2025**. FAPI
+  1.0 Parts 1 and 2 **Final, 12 Mar 2021**. Grant Management **`oauth-v2-grant-management-03`, 9 May 2023**,
+  §5.2 parameters, §6.1 scopes, §6.5 revocation sentence and the token-vs-grant note.
+- **A citation trap caught mid-build, now taught in the lab:** `openid.net/specs/fapi-2_0-attacker-model.html`
+  still serves a **December 2022 Internet-Draft** in which the token-endpoint and resource-server attackers are
+  **A5 and A7**; in the Final (`fapi-attacker-model-2_0.html`) they are **A4 and A5**. I fetched the draft
+  first and would have published the wrong numbering. The FAPI 2.0 URLs moved generally (`fapi-2_0-*` →
+  `fapi-*-2_0`). Also noted as an editorial artefact in the Final itself: §8.2 still refers to "(A3a/A5/A7)",
+  the old numbering, while §7 defines A1/A1a/A2/A3a/A4/A5.
+- **Three SPEC-INVENTORY errors found and corrected:** Message Signing was dated "approved 2025-07-29" and is
+  **published 25 Sep 2025**; the FAPI 1.0 Parts had no dates and are both **12 Mar 2021**; and Grant Management
+  was labelled an **"OpenID 2nd Implementer's Draft"**, which the document header does not support — it is
+  Internet-Draft `oauth-v2-grant-management-03` and its own title ends in *"(Draft)"*. The module and
+  inventory now say so.
+- **Uncertain / notes:** **FAPI is entirely off on this service** (`fapiModes` and `supportedServiceProfiles`
+  both absent), so **no lab step shows FAPI enforcement** — the module is deliberately built as an audit of a
+  supported-but-not-required deployment, which is the commonest real posture, and says so up front. Turning
+  `fapiModes` on remains the single highest-value console change and would let a future pass verify the
+  enforcement side. **`private_key_jwt` still cannot be exercised** — the service advertises it but neither
+  client has a JWKS (same limitation Module 06 recorded). **mTLS is still not implemented**; the module
+  teaches it from the spec and the config surface, labelled not-run-here, and the gated proposal stands. The
+  `authorizationCodeDuration` row is the one requirement I could not evidence in either direction. The lab's
+  transcript is deployment-specific by design, as Module 07's was. Redaction: the service's
+  `grantManagementEndpoint`, `pushed_authorization_request_endpoint` and the confidential client's registered
+  `redirectUris` all contain a live tunnel hostname, and the flow produces a real `grant_id` — all redacted in
+  the committed lab.
 
 ### Module 09b — done / verified / uncertain
 
