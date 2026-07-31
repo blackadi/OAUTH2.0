@@ -212,7 +212,7 @@ function DeviceSection() {
       {activeOp === 'poll' && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Poll the token endpoint with the device_code to obtain an access token. RFC 8628 §6.1 recommends polling at the interval returned in Step 1 (default 5s). Auto-stops on <code>expired_token</code>, <code>access_denied</code>, or <code>invalid_grant</code>.
+            Poll the token endpoint with the device_code to obtain an access token. RFC 8628 §3.5 says to poll no faster than the <code>interval</code> returned in Step 1 (default 5s per §3.2). Auto-stops on <code>expired_token</code>, <code>access_denied</code>, or <code>invalid_grant</code>.
           </p>
           <Input label="Device Code" value={deviceCode} onChange={(e) => setDeviceCode(e.target.value)} placeholder="device_code from Step 1 (Authorization)" />
           <Input label="Client ID" value={pollClientId} onChange={(e) => setPollClientId(e.target.value)} placeholder="your_client_id" />
