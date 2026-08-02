@@ -49,7 +49,7 @@ curl -s "$API/health"   # → {"status":"ok",...}
 ### Leg 1 — the authorization request (front channel)
 
 ```bash
-AUTH_URL="$API/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REDIRECT_URI")&scope=openid%20profile&state=Zx9qP2rLk7"
+AUTH_URL="$API/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")&scope=openid%20profile&state=Zx9qP2rLk7"
 
 curl -s -i -c "$CJ" -b "$CJ" "$AUTH_URL" | head -n 1
 curl -s -i -c "$CJ" -b "$CJ" "$AUTH_URL" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}'
@@ -110,8 +110,8 @@ https://your-registered-callback/?state=Zx9qP2rLk7&code=EXAMPLE-authorization-co
 ### Leg 4 — the client checks `state`, then redeems the code (back channel)
 
 ```bash
-CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' "$FINAL")
-STATE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("state")||"")' "$FINAL")
+CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$FINAL")
+STATE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("state")||"")' -- "$FINAL")
 
 [ "$STATE" = "Zx9qP2rLk7" ] && echo "state OK" || echo "STATE MISMATCH — abort the flow"
 
@@ -265,7 +265,7 @@ already validated. Had it redirected this error, the AS would be an **open redir
 an attacker could send phishing links that genuinely originate from the authorization server's own domain.
 
 Try variations and confirm each is refused: a trailing character (`$REDIRECT_URI` + `x`), a different scheme,
-an extra query parameter. Exact string matching (RFC 9700 §4.1) means *exact*.
+an extra query parameter. Exact string matching (RFC 9700 §2.1) means *exact*.
 
 ### Break 4 — run the implicit grant and watch a token leak
 
@@ -276,7 +276,7 @@ does it end up, and who can see it?
 > **Turn both back off when you are done** — you are deliberately enabling a retired grant.
 
 ```bash
-IMP_URL="$API/authorization?response_type=token&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REDIRECT_URI")&scope=openid&state=implicitDemo"
+IMP_URL="$API/authorization?response_type=token&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")&scope=openid&state=implicitDemo"
 CJ2="$(mktemp)"
 LP=$(curl -s -i -c "$CJ2" -b "$CJ2" "$IMP_URL" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
 C3=$(curl -s -b "$CJ2" -c "$CJ2" "http://localhost:3000$LP" | grep -o 'name="_csrf" value="[^"]*"' | cut -d'"' -f4)

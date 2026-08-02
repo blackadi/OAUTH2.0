@@ -22,10 +22,10 @@ in [quiz-answers.md](quiz-answers.md).
 
 **Q4.** In CIBA, which delivery mode requires the client to expose a publicly reachable endpoint that receives
 the **tokens themselves**?
-- A) poll  B) ping  C) push  D) all three
+- A) poll  B) ping  C) all three  D) push
 
 **Q5.** In RFC 9396, which field of an `authorization_details` object is REQUIRED?
-- A) `locations`  B) `actions`  C) `type`  D) `identifier`
+- A) `type`  B) `actions`  C) `locations`  D) `identifier`
 
 ## Tier 2 — Applied reasoning (5)
 

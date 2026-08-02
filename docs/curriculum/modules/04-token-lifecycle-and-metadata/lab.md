@@ -20,7 +20,7 @@ You need `$API`, `$PUB_CLIENT_ID`, `$LAB_USER`, `$LAB_PASS`. Reuse the `run_flow
 
 ```bash
 VERIFIER=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')
-CHALLENGE=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' "$VERIFIER")
+CHALLENGE=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' -- "$VERIFIER")
 R=$(run_flow "&code_challenge=$CHALLENGE&code_challenge_method=S256"); CODE=$(getcode "$R")
 
 curl -s -X POST "$API/token" -H "Content-Type: application/x-www-form-urlencoded" \
@@ -157,7 +157,7 @@ Run a fresh flow, this time naming the API you intend to call.
 
 ```bash
 V2=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')
-C2=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' "$V2")
+C2=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' -- "$V2")
 RESENC=$(node -e 'process.stdout.write(encodeURIComponent("https://api.example.com/orders"))')
 
 R=$(run_flow "&code_challenge=$C2&code_challenge_method=S256&resource=$RESENC")
@@ -187,7 +187,7 @@ Module 01, finally mechanised.
 §2 requires the value to be an **absolute URI** with **no fragment**. Trip each:
 
 ```bash
-ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$PRU")
+ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$PRU")
 
 # (a) a fragment
 BAD=$(node -e 'process.stdout.write(encodeURIComponent("https://api.example.com/orders#frag"))')
@@ -248,36 +248,41 @@ the other under `/api`.
 
 ### Break it — an endpoint that returns 200 and does not exist
 
-**Predict:** RFC 9728 defines `/.well-known/oauth-protected-resource`. Ask for it. What status do you expect
-if the server does not implement it?
+**Predict:** ask for a `/.well-known/` path that certainly does not exist. What status do you expect? Then ask
+for one that does — RFC 9728's `/.well-known/oauth-protected-resource`, served here since 2026-07-28. Predict
+whether the **status code alone** will let you tell them apart.
 
 ```bash
-curl -s -o /dev/null -w 'PRM → %{http_code}\n' http://localhost:3000/.well-known/oauth-protected-resource
 curl -s -o /dev/null -w 'a path I just invented → %{http_code}\n' http://localhost:3000/.well-known/totally-made-up
+curl -s -o /dev/null -w 'PRM (really exists)   → %{http_code}\n' http://localhost:3000/.well-known/oauth-protected-resource
 ```
 
 ```
-PRM → 200
 a path I just invented → 200
+PRM (really exists)   → 200
 ```
 
-Both 200. Now look at what you actually received:
+**Both 200, and only one of them exists.** Now look at what you actually received:
 
 ```bash
+curl -s -i http://localhost:3000/.well-known/totally-made-up | grep -i '^content-type'
+curl -s http://localhost:3000/.well-known/totally-made-up | head -c 60; echo
+echo '---'
 curl -s -i http://localhost:3000/.well-known/oauth-protected-resource | grep -i '^content-type'
 curl -s http://localhost:3000/.well-known/oauth-protected-resource | head -c 60; echo
-grep -rn "oauth-protected-resource" server/src/ || echo "no route in server/src — confirmed absent"
 ```
 
 ```
 Content-Type: text/html; charset=utf-8
 <!DOCTYPE html>
-no route in server/src — confirmed absent
+---
+Content-Type: application/json; charset=utf-8
+{"resource":"…/api/userinfo","authorization_servers":["…
 ```
 
 **Explain the gap.** The SPA's catch-all handler serves `index.html` for any unmatched path, so *every*
-nonexistent URL returns 200 with HTML. The endpoint does not exist; the status code lied. Three habits follow,
-and they generalise well beyond this repo:
+nonexistent URL returns 200 with HTML. The status code told you nothing; the **content type** told you
+everything. Three habits follow, and they generalise well beyond this repo:
 
 1. Check the **content type** — a metadata endpoint returns `application/json`.
 2. **Parse the body.** If `JSON.parse` throws, you have a page, not an API.
@@ -294,7 +299,7 @@ seen it twice; that is deliberate.
 
 ```bash
 META='{"client_name":"curriculum-dcr-demo","redirect_uris":["http://localhost:3001/callback"],"grant_types":["authorization_code"],"response_types":["code"],"token_endpoint_auth_method":"none","application_type":"native"}'
-BODY=$(node -e 'process.stdout.write(JSON.stringify({json:process.argv[1]}))' "$META")
+BODY=$(node -e 'process.stdout.write(JSON.stringify({json:process.argv[1]}))' -- "$META")
 
 curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/client/dcr/register" \
   -H "Content-Type: application/json" -d "$BODY" -w '\nstatus=%{http_code}\n'
@@ -334,5 +339,7 @@ client so you do not leave test registrations lying around.
 - Bracketed error codes (`[A251307]`, `[A251308]`, `[A206201]`) are **Authlete vendor behavior**;
   `invalid_target` is spec-defined (RFC 8707 §2).
 - The `{"json": "…"}` DCR request wrapper is **this server's API shape**, not RFC 7591's wire format.
-- **RFC 9728 is genuinely not implemented here.** The lesson contains a proposal to add it; until then the
-  missing endpoint is used as a detection exercise rather than pretended away.
+- **RFC 9728 *is* implemented here** (since 2026-07-28) and returns real JSON. The detection exercise now uses
+  an invented path as its negative control. It used to use RFC 9728 itself — worth knowing, because *"this
+  endpoint does not exist"* is exactly the kind of claim that silently expires when someone ships the route.
+  Re-run the check rather than trusting the sentence.

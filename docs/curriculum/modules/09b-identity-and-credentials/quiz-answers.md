@@ -51,9 +51,16 @@ the header.
 
 ### Q5 — **B) concatenating `/.well-known/openid-federation` to the Entity Identifier**
 
-OpenID Federation 1.0 §9: "Its location is determined by concatenating the string
-`/.well-known/openid-federation` to the Entity Identifier". Note also that a trailing `/` on the Entity
-Identifier "MUST be removed before concatenating."
+OpenID Federation **1.0** §9: *"Its location is determined by concatenating the string
+`/.well-known/openid-federation` to the Entity Identifier"*. Note also that a trailing `/` on the Entity
+Identifier *"MUST be removed before concatenating."*
+
+**Version note.** The quotation above is 1.0's wording, kept verbatim because that is where it comes from.
+**OpenID Federation 1.1** (Final, 5 May 2026) is now the current version and words §9.1 differently — the
+configuration is "constructed by appending" the same well-known path. **The mechanism is identical; only the
+prose changed.** This is a small but real lesson in citation hygiene: when a spec revises, a quotation stays
+attached to the revision it was taken from, and you either re-quote from the new one or say which one you
+read.
 
 - **A** confuses federation with OIDC discovery. Different document, different purpose.
 - **C** inverts the direction: discovery starts at the leaf and walks *up* via `authority_hints`.

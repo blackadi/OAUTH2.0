@@ -204,7 +204,9 @@ RFC 6749 §4.3 permitted this only where "the resource owner has a trust relatio
 the device operating system or a highly privileged application," and required that "the client MUST discard
 the credentials once an access token has been obtained" — a rule no protocol can enforce. It is now forbidden:
 **RFC 9700 §2.4 states "The resource owner password credentials grant [RFC6749] MUST NOT be used."** You will
-send this exact request in the lab and watch a modern AS refuse it.
+send this exact request in the lab — and what you get back depends on how *your* service is configured, which
+is itself the lesson. Record the outcome and the date; Break 1 explains both cases, and Module 07 §3c takes
+apart what it means that the answer changed on this very deployment without a line of code moving.
 
 **(3) The delegated way.** Split across parties, so that no single arrow carries both the credential and the
 token:

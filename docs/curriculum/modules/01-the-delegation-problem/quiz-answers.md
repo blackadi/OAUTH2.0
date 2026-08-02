@@ -6,7 +6,7 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 
 ## Tier 1 — Recall
 
-**Q1 — B) §1.1.** RFC 6749 §1.1 is "Roles." §1.2 is "Protocol Flow" (where the *user agent* appears, but it is
+**Q1 — D) §1.1.** RFC 6749 §1.1 is "Roles." §1.2 is "Protocol Flow" (where the *user agent* appears, but it is
 not one of the four roles), §3.1 is the authorization endpoint, §4.1 is the authorization code grant.
 
 **Q2 — C) the resource server.** That is the §1.1 definition verbatim. The **authorization server** (A) is
@@ -83,7 +83,9 @@ context - session not found"), and never redirect to an unvalidated `next`.
 **Q13.** **Not a metadata bug.** `grant_types_supported` describes the *configuration surface* the
 authorization server exposes; the decision to permit a specific request is made per request by the AS's policy
 layer (here, Authlete — see the `[A295306]` vendor error code). Both statements can be true simultaneously:
-the service is capable of the password grant, and policy forbids it. **The right conclusions:** (1) treat
+the service is capable of the password grant, and policy forbids it. **(Whether policy *currently* forbids it
+here is configuration-dependent — on this deployment it no longer does; see Break 1 and Module 07 §3c. The
+reasoning below is unchanged either way, which is the point of the question.)** **The right conclusions:** (1) treat
 discovery as a hint for *building* a request, never as a guarantee that it will succeed — always test;
 (2) refusing ROPC is correct behavior per RFC 9700 §2.4, so the "bug" is the attempt, not the refusal; (3) if
 the deployment genuinely does not intend to offer the grant, the *metadata* should be tightened so it stops

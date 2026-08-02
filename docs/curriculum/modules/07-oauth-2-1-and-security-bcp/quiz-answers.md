@@ -42,8 +42,9 @@ Section 4.14."* Either satisfies it. The lab deployment satisfies it by rotation
 - **C** drops the alternative and would fail a deployment that is conformant via rotation.
 - **D** — lifetime is §2.3 territory and is a SHOULD, not this MUST.
 
-Worth carrying: Module 10 will show you FAPI 2.0 **forbidding** rotation, which is the option this deployment
-relies on. Not a contradiction — a stricter profile choosing the stronger branch of an either/or.
+Worth carrying: Module 10 will show you FAPI 2.0 saying an AS **shall not** rotate (bar extraordinary
+circumstances) — the opposite of the branch this deployment relies on. Not a contradiction: §2.2.2 is an
+either/or, and a stricter profile is choosing the other branch and then declining the one it no longer needs.
 
 ---
 

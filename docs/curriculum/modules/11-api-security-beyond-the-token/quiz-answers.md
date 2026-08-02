@@ -15,13 +15,13 @@ API8, **D** is API5.
 Object level, object *property* level, and function level. Three of the top five. **A** includes API2, which
 is authentication — the distinction the whole module rests on.
 
-### Q3 — **C) BOLA** — the attacker changed the **object identifier**. Wrong row.
+### Q3 — **D) BOLA** — the attacker changed the **object identifier**. Wrong row.
 
-### Q4 — **B) BOPLA** — the attacker changed neither object nor endpoint; they wrote a **field** they should
+### Q4 — **A) BOPLA** — the attacker changed neither object nor endpoint; they wrote a **field** they should
 not control. Wrong column. This is mass assignment, and note it needs no BOLA: the user escalates privilege
 on **their own** record.
 
-### Q5 — **C) 404**
+### Q5 — **D) 404**
 
 `403` confirms the object exists, turning the endpoint into an enumeration oracle. Same anti-oracle reasoning
 as RFC 7662 §2.2 in Module 04: do not let an error response distinguish "not yours" from "not there".
@@ -54,7 +54,7 @@ from the validated token.
 **A** is the trap: "the gateway is trusted" is a statement about intent, not about the request that actually
 arrives. **C** is a valid defence-in-depth measure but does not fix the bug.
 
-### Q8 — **C) ReBAC**
+### Q8 — **A) ReBAC**
 
 The rule is defined by **relationships** — ownership of a containing folder, and transitive sharing. RBAC
 cannot express "their own" at all; ABAC could encode one hop as an attribute but degenerates badly on

@@ -6,10 +6,10 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 
 ## Tier 1 — Recall
 
-**Q1 — B) RFC 7515.** JWS is RFC 7515. Distractors: 7519 is JWT (claims), 7517 is JWK (keys), 7516 is JWE
+**Q1 — D) RFC 7515.** JWS is RFC 7515. Distractors: 7519 is JWT (claims), 7517 is JWK (keys), 7516 is JWE
 (encryption). Easy to blur because they were published together (May 2015).
 
-**Q2 — B) `BBB` (the middle segment).** `header.payload.signature`. `AAA` is the header (`alg`/`kid`/`typ`);
+**Q2 — A) `BBB` (the middle segment).** `header.payload.signature`. `AAA` is the header (`alg`/`kid`/`typ`);
 `CCC` is the signature over the first two.
 
 **Q3 — C) a reversible text encoding.** base64url just remaps bytes to URL-safe characters. It provides **no**
@@ -62,8 +62,9 @@ made for *this* token and rejects/ignores the DPoP binding — decoding "looks f
 ≠ semantics. **Fix:** compute and include `ath` (the `decode-jwt.mjs --ath` flag shows the value); drop `sub`.
 *(This is documented in `AGENTS.md` and covered fully in Module 05.)*
 
-**Q13.** **Missing member:** the JOSE header must include **`jwk`** — the full **public key** in JWK form (RFC
-9449 §2.1). **Why `kid` is insufficient:** `kid` is only a *reference*; the server has never seen this
+**Q13.** **Missing member:** the JOSE header must include **`jwk`** — the full **public key** in JWK form
+(RFC 9449 **§4.2**, *"DPoP Proof JWT Syntax"* — note that RFC 9449 has no §2.1; §2 is "Objectives" and has no
+subsections). **Why `kid` is insufficient:** `kid` is only a *reference*; the server has never seen this
 ephemeral client-generated key, so it needs the actual public key inline to verify the proof's signature and
 compute the key thumbprint. **Fix:** add the `jwk` member to the proof header. *(Also in `AGENTS.md`; Module
 05.)*

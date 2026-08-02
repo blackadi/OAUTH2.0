@@ -6,7 +6,7 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 
 ## Tier 1 — Recall
 
-**Q1 — B) `active`.** Everything else in RFC 7662 §2.2 — `scope`, `client_id`, `username`, `token_type`,
+**Q1 — A) `active`.** Everything else in RFC 7662 §2.2 — `scope`, `client_id`, `username`, `token_type`,
 `exp`, `iat`, `nbf`, `sub`, `aud`, `iss`, `jti` — is OPTIONAL. This matters in practice: a resource server
 that *depends* on `aud` or `scope` being present is depending on optional fields, and must fail closed when
 they are absent rather than treating absence as "no restriction."
@@ -15,7 +15,7 @@ they are absent rather than treating absence as "no restriction."
 `at+jwt`. **A is the trap** — `typ: JWT` is the generic value and is exactly what makes token confusion
 possible, because an ID token carries it too.
 
-**Q3 — C) `nonce`.** The seven REQUIRED claims (§2.2) are `iss`, `exp`, `aud`, `sub`, `client_id`, `iat`,
+**Q3 — D) `nonce`.** The seven REQUIRED claims (§2.2) are `iss`, `exp`, `aud`, `sub`, `client_id`, `iat`,
 `jti`. `nonce` belongs to ID tokens (OIDC Core) — and reaching for it here is the tell that someone is
 conflating the two token types, which is precisely the confusion `typ: at+jwt` exists to prevent.
 

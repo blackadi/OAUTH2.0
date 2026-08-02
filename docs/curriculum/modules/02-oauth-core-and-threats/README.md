@@ -362,7 +362,8 @@ Two normative requirements from RFC 9700 to hold onto now, because they constrai
   PKCE [RFC7636] is RECOMMENDED"* (§2.1.1). Module 03.
 - On redirect URIs: *"When comparing client redirection URIs against pre-registered URIs, authorization
   servers MUST utilize exact string matching except for port numbers in localhost redirection URIs of native
-  apps."* (§4.1). No wildcards, no prefix matching, no "starts with our domain."
+  apps."* (**§2.1** — the requirement; §4.1.3 is where the same rule is argued out as a countermeasure to the
+  §4.1 attack). No wildcards, no prefix matching, no "starts with our domain."
 
 ### `state` — what it does and, more importantly, what it doesn't
 
@@ -392,7 +393,7 @@ no redirect at all.
 ## Threat notes — what breaks if you get this wrong
 
 - **Loose redirect-URI matching.** Prefix or wildcard matching turns the AS into a code-delivery service for
-  attacker-controlled URLs. Exact matching is mandatory (RFC 9700 §4.1); the only permitted flex is the port
+  attacker-controlled URLs. Exact matching is mandatory (RFC 9700 §2.1, argued in §4.1.3); the only permitted flex is the port
   on native-app loopback URIs (`loopbackRedirectionUriVariable` in `AGENTS.md`).
 - **Missing or unchecked `state`.** The client accepts an authorization response it never asked for
   (RFC 9700 §4.7). Generating `state` and forgetting to *compare* it is the more common bug.

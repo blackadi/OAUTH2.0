@@ -15,13 +15,13 @@
 - A) API1, API2, API5  B) API1, API3, API5  C) API2, API4, API8  D) API1, API7, API10
 
 **Q3.** An attacker changes `GET /orders/1001` to `GET /orders/1002`. This is:
-- A) BFLA  B) BOPLA  C) BOLA  D) SSRF
+- A) BFLA  B) BOPLA  C) SSRF  D) BOLA
 
 **Q4.** An attacker sends `PATCH /users/me` with `{"is_admin": true}` and the field is persisted. This is:
-- A) BOLA  B) BOPLA  C) BFLA  D) Unrestricted Resource Consumption
+- A) BOPLA  B) BOLA  C) BFLA  D) Unrestricted Resource Consumption
 
 **Q5.** When an object exists but belongs to another user, the recommended response status is:
-- A) 401  B) 403  C) 404  D) 400
+- A) 401  B) 403  C) 400  D) 404
 
 ## Tier 2 — Applied reasoning (5)
 
@@ -42,7 +42,7 @@ API gateway. What is wrong?
 
 **Q8.** Which authorization model can express "you may read a document if you own the folder containing it,
 or it was shared with you transitively"?
-- A) RBAC  B) ABAC  C) ReBAC  D) Scope-based
+- A) ReBAC  B) ABAC  C) RBAC  D) Scope-based
 
 **Q9.** Which of these can an API gateway enforce?
 - A) Object ownership  B) Response field filtering

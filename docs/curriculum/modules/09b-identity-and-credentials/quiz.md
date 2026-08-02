@@ -28,7 +28,7 @@ explanations in [quiz-answers.md](quiz-answers.md).
 - C) `jti`, `htm`, `htu`, `ath`
 - D) `iat`, `exp`, `cnf`, `sd_hash`
 
-**Q5.** Per OpenID Federation 1.0 §9, an Entity Configuration is located by:
+**Q5.** Per OpenID Federation §9, an Entity Configuration is located by:
 - A) resolving the `jwks_uri` in the entity's OIDC discovery document
 - B) concatenating `/.well-known/openid-federation` to the Entity Identifier
 - C) querying the Trust Anchor's subordinate listing endpoint

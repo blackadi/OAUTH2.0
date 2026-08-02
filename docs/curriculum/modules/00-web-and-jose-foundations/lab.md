@@ -44,9 +44,21 @@ Notice `authorization_endpoint` (front channel — meant to be visited in a brow
 `token_endpoint` (back channel — server-to-server). Same document, two very different trust models. The
 `jwks_uri` is where the **public keys** live.
 
-> **Path quirk (Authlete-app behavior, not a spec rule):** in *this* server, OIDC discovery is under the
-> **`/api`** prefix (`/api/.well-known/openid-configuration`), while the RFC 8414 OAuth metadata is at true
-> root (`/.well-known/oauth-authorization-server`). Compare:
+> **Path divergence — and it is a non-conformance, not a preference.** In *this* server, OIDC discovery is
+> under the **`/api`** prefix (`/api/.well-known/openid-configuration`), while the RFC 8414 OAuth metadata is
+> at true root (`/.well-known/oauth-authorization-server`).
+>
+> Both discovery specs derive the path **from the issuer**, and neither treats it as optional. **RFC 8414 §3**:
+> an AS "**MUST** make a JSON document containing metadata … available at a path formed by inserting a
+> well-known URI string into the authorization server's issuer identifier between the host component and the
+> path component." **OIDC Discovery §4.3** goes further — the `issuer` value returned "**MUST** be identical
+> to the Issuer URL that was used as the prefix to `/.well-known/openid-configuration` to retrieve the
+> configuration information." Check the `issuer` you printed above against the URL you fetched it from: on
+> this deployment they do not match, so a conforming client starting from the advertised issuer cannot find
+> this server at all.
+>
+> **Use `/api` anyway — every lab in this curriculum depends on it.** Holding "this is what I must do to make
+> the lab run" and "this is a finding I would write up" at the same time is the habit. Compare:
 > ```bash
 > curl -s http://localhost:3000/.well-known/oauth-authorization-server | head -c 120; echo
 > ```
@@ -160,6 +172,8 @@ forgery verifies. **Fix:** bind the accepted algorithm to the key type; never le
 ## What was real vs. simulated
 
 - The discovery, JWKS, and AS-metadata documents are **real**, served by the running server via Authlete.
-- The path quirk (`/api` prefix on OIDC discovery) is **this app's routing choice**, not a spec requirement.
+- The `/api` prefix on OIDC discovery is **this deployment's non-conformance** with RFC 8414 §3 and OIDC
+  Discovery §4.1/§4.3 — not a neutral routing choice. The labs use it because they must; a review would
+  record it.
 - The sample/forged tokens are **hand-built** so you never needed a live grant — you'll obtain and decode
   *real* issued tokens starting in Module 02.

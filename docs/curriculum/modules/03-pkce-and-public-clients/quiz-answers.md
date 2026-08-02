@@ -15,7 +15,7 @@ restriction (hex is a subset of the unreserved set, so it is legal, but the boun
 encoding, so it produces raw bytes that cannot travel in a URL. C invents a client secret, which public
 clients do not have and which would defeat the purpose. D is `plain` with extra steps.
 
-**Q3 — B) `plain`.** §4.3: it *"defaults to 'plain' if not present."* This is why you always send
+**Q3 — A) `plain`.** §4.3: it *"defaults to 'plain' if not present."* This is why you always send
 `code_challenge_method=S256` explicitly — the insecure option is the silent one.
 
 **Q4 — C) `invalid_grant`.** §4.6 requires *"an error response indicating `invalid_grant` as described in
@@ -44,7 +44,7 @@ cannot register the same target. **A is workable but weaker** (§7.1 — any app
 which is exactly Q16's scenario). C is forbidden by §8.12. D is wrong for mobile: loopback (§7.3) is the
 desktop/CLI answer.
 
-**Q9 — B.** RFC 9700 §2.2.2 permits exactly two treatments: sender-constrained, or rotated. **A, C, and D are
+**Q9 — D.** RFC 9700 §2.2.2 permits exactly two treatments: sender-constrained, or rotated. **A, C, and D are
 all variations of the same trap** — they improve *storage* or shorten *lifetime*, which are worth doing but
 are not either of the two required controls. The threat is a token that, once copied, can be spent by the
 copier; only binding it to a key or invalidating it on use addresses that.

@@ -54,7 +54,8 @@ By the end you can:
 2. Name what the attacker model **excludes**, and explain why an honest exclusion strengthens rather than
    weakens the claim.
 3. Explain why FAPI 2.0 replaced JAR with PAR, JARM with plain `code`, and `s_hash` with PKCE.
-4. Explain why refresh-token rotation is **forbidden**, resolving the tension Module 03 left open.
+4. Explain why FAPI 2.0 says AS *shall not* use refresh-token rotation "except in extraordinary
+   circumstances", resolving the tension Module 03 left open — and say what those circumstances are.
 5. Audit a deployment against §5.3.2 and distinguish "supports" from "requires" for every item.
 6. Run the grant lifecycle, and say precisely what a grant revocation is required to destroy.
 
@@ -216,7 +217,7 @@ Note the precision of that `request_uri` bound: **less than** 600. A deployment 
 non-conformant. You will measure that number in the lab, and the deployment you are measuring issues exactly
 600.
 
-### Why refresh-token rotation is forbidden
+### Why refresh-token rotation is ruled out
 
 Module 03 flagged this tension and deferred it. Here is the resolution, quoted from §5.3.2.1 NOTE 1:
 
@@ -233,6 +234,15 @@ Unpack the argument, because it is a model of how to reason about a control:
 3. So rotation now contributes **zero** security benefit and **non-zero** operational harm: a client that
    crashes between receiving and persisting a new refresh token is permanently locked out.
 4. A control with no benefit and real cost is not neutral. It is a **defect**.
+
+**And now the caveat the flat reading loses.** The normative text is *"shall not use refresh token rotation
+**except in extraordinary circumstances**"*, and the exception is real rather than decorative: it exists for
+things like infrastructure migration, and where it is invoked the profile expects the AS to give the client a
+**time-limited window to retry with the old refresh token** so the failure mode in step 3 does not reappear.
+So the accurate sentence is not "FAPI 2.0 bans rotation" but *"FAPI 2.0 rules out rotation as a matter of
+course, and requires you to justify and cushion it if you ever switch it on."* NOTE 1 does use the word
+*prohibits* — which is why the flat reading is tempting — but NOTE 1 is non-normative and the `shall not` it
+is explaining carries the carve-out. When those two disagree, the requirement wins.
 
 Note the phrase *"for security reasons."* Lockouts push operators toward long-lived access tokens and
 retry-everything clients, which are worse than the thing rotation was guarding against. **A security control
@@ -345,7 +355,7 @@ next authorization request will sail through with no prompt.
 | Mix-up via a malicious AS (A1a) | `iss` in the authorization response, **mandatory** | `issSuppressed`, or the client ignores `iss` |
 | Misconfigured token endpoint (A4) | Metadata from an authoritative source — **attacker eliminated** | Endpoints hand-configured per client |
 | Client-secret theft | MTLS or `private_key_jwt` only | `client_secret_basic` accepted |
-| Lockout from rotation failures | Rotation **forbidden** | Rotation enabled "because it is more secure" |
+| Lockout from rotation failures | Rotation ruled out (`shall not`, narrow exception) | Rotation enabled "because it is more secure" |
 | Consent withdrawn but access continues | Grant revocation kills refresh tokens (MUST) | Access tokens outlive the grant — 24 h here |
 | Anything in §8 | **Nothing.** Explicitly out of scope | You believed the proof covered your code |
 
@@ -371,7 +381,7 @@ verification eliminates *design* flaws; it has nothing to say about your open re
 
 **❌ Enabling refresh-token rotation in a FAPI 2.0 deployment "for defence in depth."**
 
-**✅ It is forbidden, and the reason is that it has no benefit here and real cost.** §5.3.2.1 NOTE 1. Defence
+**✅ It is ruled out (`shall not`, bar extraordinary circumstances), because it has no benefit here and real cost.** §5.3.2.1 + NOTE 1. Defence
 in depth means independent layers against a live threat, not repeating a control whose threat you already
 eliminated.
 

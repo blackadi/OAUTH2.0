@@ -6,7 +6,7 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 
 ## Tier 1 — Recall
 
-**Q1 — B) §4.1.** §3.1 is the authorization *endpoint*, §4.3 is ROPC, §6 is refreshing an access token.
+**Q1 — D) §4.1.** §3.1 is the authorization *endpoint*, §4.3 is ROPC, §6 is refreshing an access token.
 
 **Q2 — C) `state`.** RFC 6749 §10.12, "Cross-Site Request Forgery." **A is the trap:** `nonce` also binds
 something to a request, but it binds the **ID token** to the authentication request (OIDC Core) — a different

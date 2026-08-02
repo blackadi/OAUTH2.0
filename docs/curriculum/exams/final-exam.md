@@ -26,7 +26,8 @@ the pattern is *for* — the general property it buys.
 **F3 (8 pts).** Give the shortest correct answer to each, with the reason:
 (a) Why does an access token not authenticate a user?
 (b) Why can a resource server not prevent BOLA using the token?
-(c) Why does FAPI 2.0 forbid a control (rotation) that other profiles require?
+(c) Why does FAPI 2.0 say an AS *shall not* use a control (rotation) that RFC 9700 offers as one of two
+    permitted branches — and what exception does that requirement carry?
 (d) Why is `403` the wrong status for someone else's object?
 
 ## Section 2 — Diagnose it (25 points)

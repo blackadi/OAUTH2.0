@@ -188,7 +188,7 @@ distinction between vendor behaviour and repo behaviour is exactly what `AGENTS.
 straight, and you can settle it in one request:
 
 ```bash
-P="response_type=code&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REDIRECT_URI")&scope=openid&state=x&response_mode=form_post.jwt"
+P="response_type=code&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")&scope=openid&state=x&response_mode=form_post.jwt"
 curl -s -X POST -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" -H "Content-Type: application/json" \
   "$AUTHLETE_BASE_URL/api/$AUTHLETE_SERVICE_ID/auth/authorization" -d "{\"parameters\":\"$P\"}" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const d=JSON.parse(s);
@@ -261,7 +261,7 @@ EOF
 Drive the flow, pull the single `response` parameter out of the redirect, and run it through:
 
 ```bash
-CJ=$(mktemp); RU=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REDIRECT_URI")
+CJ=$(mktemp); RU=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")
 curl -s -c "$CJ" -o /dev/null \
   "$API/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$RU&scope=openid&state=jarm1&nonce=n1&response_mode=jwt"
 CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
@@ -272,7 +272,7 @@ case "$F" in *response=*) ;; *) CS2=$(curl -s -b "$CJ" -c "$CJ" "$API/session/co
    F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/consent" \
        -d "decision=approve" --data-urlencode "_csrf=$CS2") ;; esac
 rm -f "$CJ"
-JWT=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("response")||"")' "$F")
+JWT=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("response")||"")' -- "$F")
 
 ISSUER=$(curl -s "$API/.well-known/openid-configuration" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).issuer))') \
 CLIENT_ID="$CLIENT_ID" JWKS_URI="$API/.well-known/jwks.json" EXPECT_STATE=jarm1 \

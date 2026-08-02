@@ -50,7 +50,7 @@ cat > /tmp/flow.sh <<'EOS'
 #!/bin/bash
 # $1 client_id  $2 redirect_uri  $3 extra query params  $4 client_secret ("" for a public client)
 CJ=$(mktemp)
-RU=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$2")
+RU=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$2")
 curl -s -c "$CJ" -o /dev/null "$API/authorization?response_type=code&client_id=$1&redirect_uri=$RU&$3"
 CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
 F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/login" \
@@ -59,7 +59,7 @@ case "$F" in *code=*|*error=*) ;; *)
   CS2=$(curl -s -b "$CJ" -c "$CJ" "$API/session/consent" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
   F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/consent" \
        -d "decision=approve" --data-urlencode "_csrf=$CS2") ;; esac
-CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' "$F" 2>/dev/null)
+CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$F" 2>/dev/null)
 if [ -z "$CODE" ]; then echo "NO CODE. redirect was: $F"; rm -f "$CJ"; exit 1; fi
 if [ -n "$4" ]; then
   curl -s -X POST "$API/token" -u "$1:$4" -d "grant_type=authorization_code" \
@@ -329,7 +329,7 @@ Run the hybrid flow and look at what the front channel returns:
 
 ```bash
 CJ=$(mktemp)
-RU=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REDIRECT_URI")
+RU=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")
 curl -s -c "$CJ" -o /dev/null \
   "$API/authorization?response_type=code%20id_token&client_id=$CLIENT_ID&redirect_uri=$RU&scope=openid&state=h1&nonce=hn1"
 CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
@@ -566,7 +566,7 @@ AUTHLETE_BEARER_TOKEN=$(grep -m1 '^AUTHLETE_BEARER_TOKEN=' server/.env | cut -d=
 AUTHLETE_BASE_URL=$(grep -m1 '^AUTHLETE_BASE_URL=' server/.env | cut -d= -f2-)
 AUTHLETE_SERVICE_ID=$(grep -m1 '^AUTHLETE_SERVICE_ID=' server/.env | cut -d= -f2-)
 
-P="response_type=code&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REDIRECT_URI")&scope=openid&state=p1&prompt=none"
+P="response_type=code&client_id=$CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")&scope=openid&state=p1&prompt=none"
 curl -s -X POST -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" -H "Content-Type: application/json" \
   "$AUTHLETE_BASE_URL/api/$AUTHLETE_SERVICE_ID/auth/authorization" -d "{\"parameters\":\"$P\"}" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const d=JSON.parse(s);

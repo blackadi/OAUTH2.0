@@ -19,7 +19,7 @@ inline (Break 2 in the lab).
 swap. B (`cnf`) is the *container* both live inside, not the member. D (`x5c`) is a JOSE header for a
 certificate chain, not a confirmation method.
 
-**Q4 — B) including error responses.** §2: *"In authorization responses to the client, including error
+**Q4 — A) including error responses.** §2: *"In authorization responses to the client, including error
 responses, an authorization server supporting this specification MUST indicate its identity by including the
 iss parameter."* Errors matter because a mix-up can be staged around a failure just as easily as a success —
 and you verified this on a live error redirect in the lab.

@@ -30,7 +30,7 @@ checkboxes. Cumulative exams follow Modules 03, 07, and 11; a final exam precede
 | [x] | 08 · OIDC Core + logout | Explain why an access token doesn't authenticate a user and describe token substitution concretely; run all 13 OIDC Core §3.1.3.7 steps on a real ID token; `nonce` vs. `state`; name the four logout specs and what each cannot reach. |
 | [x] | 09a · Interaction extensions | Name the four assumptions these extensions lift; explain what JARM adds over `state`/PAR/JAR and its three mandatory claims; pick poll/ping/push and defend it; write an RFC 9470 challenge and say what breaks without `acr_values`; judge RAR vs scopes. |
 | [x] | 09b · Identity + credentials | Compute an SD-JWT digest that matches RFC 9901's own test vector; explain why the salt is load-bearing; strip a KB-JWT and say which verifier accepts it and why; name the one unlinkability property SD-JWT cannot provide; place OID4VCI/VP and federation in the graph. |
-| [x] | 10 · FAPI + grant management | Name all six FAPI 2.0 attackers and four things the model puts out of scope; explain why refresh-token rotation is *forbidden*; show a deployment where every mechanism is supported and none required; run the grant lifecycle and say what a revocation does **not** revoke. |
+| [x] | 10 · FAPI + grant management | Name all six FAPI 2.0 attackers and four things the model puts out of scope; explain why FAPI 2.0 says an AS *shall not* rotate refresh tokens, and name the exception; show a deployment where every mechanism is supported and none required; run the grant lifecycle and say what a revocation does **not** revoke. |
 | [x] | 11 · API security beyond the token | Find a BOLA in a code snippet and say why a valid token cannot stop it; name the three OWASP 2023 authorization failures and what the attacker changes in each; choose RBAC/ABAC/ReBAC and defend it; say what a gateway cannot enforce; write a regression test with its control assertion. |
 | [x] | 12 · Capstone | Design a high-assurance multi-tenant authZ architecture, defending nine decisions against a **named** attacker model with an honest limitations section; then find **25** planted defects in the vulnerable variant, sever them correctly, and defend a remediation order — scoring 85+ on the rubric. |
 
@@ -666,6 +666,10 @@ SPA's four Admin sections now return 401 until they are set — locally and in R
   credentials. **Fail-open**, by documented design; flagged as a Module 07 audit item. Also noted for
   Stage 4: OpenID Federation 1.0's own reference list cites an **OpenID Federation 1.1** of the same date, so
   the inventory row should be re-checked if any later module leans on federation.
+  > **Resolved 2026-08-02 — and the "same date" part of this note was wrong.** Federation **1.1** is Final,
+  > published **5 May 2026**; 1.0 is 17 Feb 2026. They are eleven weeks apart, not the same date. 1.1 is now
+  > the primary row in `SPEC-INVENTORY.md` and Module 09b cites it. The instinct to re-check was right; the
+  > fact recorded alongside it was not, which is why this log line is corrected in place rather than deleted.
 
 ### Module 09a — done / verified / uncertain
 

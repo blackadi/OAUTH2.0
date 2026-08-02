@@ -8,7 +8,7 @@ explanations in [quiz-answers.md](quiz-answers.md).
 ## Tier 1 — Recall (5)
 
 **Q1.** Which section of RFC 6749 defines the roles?
-- A) §1.2  B) §1.1  C) §3.1  D) §4.1
+- A) §1.2  B) §4.1  C) §3.1  D) §1.1
 
 **Q2.** "The server hosting the protected resources, capable of accepting and responding to protected resource
 requests using access tokens" is the definition of:

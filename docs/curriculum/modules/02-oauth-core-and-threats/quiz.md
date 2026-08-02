@@ -8,7 +8,7 @@ explanations in [quiz-answers.md](quiz-answers.md).
 ## Tier 1 — Recall (5)
 
 **Q1.** Which section of RFC 6749 defines the Authorization Code Grant?
-- A) §3.1  B) §4.1  C) §4.3  D) §6
+- A) §3.1  B) §6  C) §4.3  D) §4.1
 
 **Q2.** Which parameter exists to bind an authorization response to the browser session that started the
 request?

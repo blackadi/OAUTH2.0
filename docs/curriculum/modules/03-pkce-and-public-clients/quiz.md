@@ -20,7 +20,7 @@ explanations in [quiz-answers.md](quiz-answers.md).
 - D) `code_challenge = BASE64URL-ENCODE(code_verifier)`
 
 **Q3.** If `code_challenge_method` is omitted from the authorization request, RFC 7636 §4.3 says it:
-- A) defaults to `S256`  B) defaults to `plain`  C) is an error  D) is chosen by the authorization server
+- A) defaults to `plain`  B) defaults to `S256`  C) is an error  D) is chosen by the authorization server
 
 **Q4.** When the `code_verifier` does not match the stored `code_challenge`, RFC 7636 §4.6 requires the AS to
 return:
@@ -58,9 +58,9 @@ authorization code for a public client. Which control prevents them from redeemi
 
 **Q9.** Your public mobile client receives a refresh token. Per RFC 9700 §2.2.2, which is acceptable?
 - A) Store it in the keychain and use it indefinitely
-- B) Either sender-constrain it (DPoP/mTLS) or rotate it on every use
+- B) Give it a 90-day lifetime and no other control
 - C) Encrypt it at rest with a key derived from the user's PIN
-- D) Give it a 90-day lifetime and no other control
+- D) Either sender-constrain it (DPoP/mTLS) or rotate it on every use
 
 **Q10.** A developer says: "`plain` is fine — the authorization request is HTTPS, so nobody can read the
 `code_challenge` anyway." Why is this wrong?

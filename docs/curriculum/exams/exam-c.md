@@ -58,7 +58,8 @@ deployment can do about verifier-to-verifier correlation.
 capability in one line. Then name **three** things the model puts out of scope, and explain why an explicit
 exclusions list makes the security claim **stronger**.
 
-**C12 (5 pts).** Why does FAPI 2.0 **forbid** refresh-token rotation? Give the argument in steps.
+**C12 (5 pts).** Why does FAPI 2.0 say an AS *shall not* use refresh-token rotation? Give the argument in
+steps — and state the exception the requirement carries.
 
 **C13 (6 pts).** Name the three OWASP API Security Top 10 (2023) items that are authorization failures, give
 each one's identifier, and state what the attacker changes in the request for each.

@@ -153,9 +153,16 @@ it launders a weak process through official-looking structure.
 
 ## OpenID Federation — trust that scales past bilateral
 
-**Verified against the primary source.** *OpenID Federation 1.0*, **OpenID Final**, published
-**17 February 2026**. (Note the spec's own references already point to an *OpenID Federation 1.1* of the same
-date — check which one an ecosystem targets before citing.)
+**Verified against the primary source.** *OpenID Federation **1.1***, **OpenID Final**, published
+**5 May 2026** — this is the current version and what you should cite. *OpenID Federation 1.0* (Final,
+**17 February 2026**) is its predecessor; 1.1 consolidates the protocol-independent half of it. The section
+numbering used below is unchanged between the two — §9 is *"Obtaining Federation Entity Configuration
+Information"* in both.
+
+> **Two versions, eleven weeks apart, both Final.** Confirm which one an ecosystem targets before citing —
+> and note the trap this module fell into: an earlier draft of this page said 1.1 was *"of the same date"* as
+> 1.0. It is not. When two revisions of a spec land close together, check the date on **each**, not on the
+> one you happen to have open.
 
 Everything so far assumed you configured the other party by hand. That works to maybe a few dozen
 relationships. A national research federation has thousands of identity providers and services, joining and
@@ -409,7 +416,7 @@ Module 09a.
 | Spec | Question it answers | Status |
 |---|---|---|
 | OIDC Identity Assurance 1.0 | *How do you know that claim is true, and can you show your work?* | OpenID Final (1 Oct 2024; errata set 1, 1 Jul 2026) |
-| OpenID Federation 1.0 | *How do I trust a party I have never registered with?* | OpenID Final (17 Feb 2026) |
+| OpenID Federation **1.1** | *How do I trust a party I have never registered with?* | OpenID Final (5 May 2026; supersedes 1.0 of 17 Feb 2026) |
 | RFC 9901 (SD-JWT) | *How do I show two claims out of six without breaking the signature?* | Published RFC (Nov 2025) |
 | SD-JWT VC | *What kind of credential is this?* | **Active Internet-Draft** (‑17, 6 Jul 2026) |
 | OID4VCI 1.0 | *How does the credential get into the wallet?* | OpenID Final (16 Sep 2025) |
@@ -575,7 +582,7 @@ authorization decision — which is a different problem, and one a perfect signa
 - **[`docs/API.md`](../../../API.md)** — the VCI endpoint surface as this repo exposes it.
 - **The dashboard's Verifiable Credentials and OIDC Federation sections** (`:3001`) — cross-check your `curl`
   output against the UI, as in every previous module.
-- *Optional:* OpenID Federation 1.0 §3 and §9 if you will ever operate inside a federation.
+- *Optional:* OpenID Federation **1.1** §3 and §9 if you will ever operate inside a federation.
 
 ---
 

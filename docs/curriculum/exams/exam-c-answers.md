@@ -197,6 +197,13 @@ worthless. Stating the boundary makes the *inside* provable and tells a reviewer
    prohibition is *"for security reasons"*, because lockouts push operators toward long-lived tokens and
    aggressive retry, both worse than the original threat.
 
+**The exception, required for full marks.** §5.3.2.1 reads *"shall not use refresh token rotation **except in
+extraordinary circumstances**"* — an answer that presents this as an absolute ban is incomplete. The
+exception covers cases such as infrastructure migration, and where it is used the profile expects a
+**time-limited retry window with the old refresh token**, precisely so the lockout in step 3 does not recur.
+Award the marks for the four-step argument; deduct one if the candidate asserts a flat prohibition, since
+NOTE 1's word *"prohibits"* is non-normative and the `shall not` it explains carries the carve-out.
+
 ### C13 (6) → *Module 11*
 
 | ID | Title | Attacker changes |

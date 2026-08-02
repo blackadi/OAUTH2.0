@@ -152,7 +152,7 @@ and the divergence is itself recorded.
 ### 2a — Exact redirect-URI matching (MUST)
 
 ```bash
-enc () { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$1"; }
+enc () { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$1"; }
 
 for RU in "$REDIRECT_URI" "${REDIRECT_URI}x" "http://evil.example.com/cb"; do
   printf '%-46s ' "$RU"
@@ -199,7 +199,7 @@ case "$F" in *code=*) : ;; *) CS2=$(curl -s -b "$CJ" -c "$CJ" "$API/session/cons
        | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
      F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/consent" \
        -d "decision=approve" --data-urlencode "_csrf=$CS2") ;; esac
-CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' "$F")
+CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$F")
 
 curl -s -X POST "$API/token" -d "grant_type=authorization_code" --data-urlencode "code=$CODE" \
   --data-urlencode "redirect_uri=$PRU" -d "client_id=$PUB_CLIENT_ID"

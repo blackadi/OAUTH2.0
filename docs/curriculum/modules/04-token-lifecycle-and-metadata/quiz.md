@@ -8,13 +8,13 @@ explanations in [quiz-answers.md](quiz-answers.md).
 ## Tier 1 — Recall (5)
 
 **Q1.** The only REQUIRED member of an RFC 7662 introspection response is:
-- A) `sub`  B) `active`  C) `scope`  D) `exp`
+- A) `active`  B) `sub`  C) `scope`  D) `exp`
 
 **Q2.** RFC 9068 requires a JWT access token's `typ` header to be:
 - A) `JWT`  B) `jwt+at`  C) `at+jwt`  D) `application/jwt`
 
 **Q3.** Which of these is **not** a REQUIRED claim in an RFC 9068 JWT access token?
-- A) `client_id`  B) `jti`  C) `nonce`  D) `aud`
+- A) `client_id`  B) `jti`  C) `aud`  D) `nonce`
 
 **Q4.** RFC 8707 §2 says the `resource` parameter's value:
 - A) may be a relative path scoped to the issuer

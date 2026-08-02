@@ -151,7 +151,7 @@ this is the condensed version.
 
 ```bash
 CJ=$(mktemp)
-RU_ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REDIRECT_URI")
+RU_ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")
 
 # Leg 1 — authorization request
 curl -s -c "$CJ" -o /dev/null \
@@ -172,7 +172,7 @@ case "$FINAL" in
 esac
 
 # Leg 4 — redeem
-CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' "$FINAL")
+CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$FINAL")
 USER_AT=$(curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
   -d "grant_type=authorization_code" --data-urlencode "code=$CODE" \
   --data-urlencode "redirect_uri=$REDIRECT_URI" \

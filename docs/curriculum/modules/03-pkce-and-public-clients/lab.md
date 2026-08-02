@@ -44,7 +44,7 @@ Reusable helper — paste this once; every exercise below calls it:
 ```bash
 run_flow() {                       # run_flow "<extra query params>" ; echo the final redirect URL
   local EX="$1" J; J="$(mktemp)"
-  local ENC; ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$PRU")
+  local ENC; ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$PRU")
   local AU="$API/authorization?response_type=code&client_id=$PUB_CLIENT_ID&redirect_uri=$ENC&scope=profile&state=P1$EX"
   local L1; L1=$(curl -s -i -c "$J" -b "$J" "$AU" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
   case "$L1" in http*) echo "$L1"; return;; esac
@@ -57,7 +57,7 @@ run_flow() {                       # run_flow "<extra query params>" ; echo the 
   curl -s -i -b "$J" -c "$J" -X POST "$API/session/consent" -d "decision=approve" --data-urlencode "_csrf=$C2" \
       | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}'
 }
-getcode() { node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' "$1"; }
+getcode() { node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$1"; }
 ```
 
 ---
@@ -66,7 +66,7 @@ getcode() { node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.sea
 
 ```bash
 VERIFIER=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')
-CHALLENGE=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' "$VERIFIER")
+CHALLENGE=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' -- "$VERIFIER")
 
 echo "verifier  ${#VERIFIER} chars: $VERIFIER"
 echo "challenge ${#CHALLENGE} chars: $CHALLENGE"
@@ -88,7 +88,7 @@ node -e '
 const c=require("crypto"), v=process.argv[1];
 console.log("BASE64URL(SHA256(ASCII(verifier))) =", c.createHash("sha256").update(v,"ascii").digest("base64url"));
 console.log("matches CHALLENGE:", c.createHash("sha256").update(v,"ascii").digest("base64url")===process.argv[2]);
-' "$VERIFIER" "$CHALLENGE"
+' -- "$VERIFIER" "$CHALLENGE"
 # → matches CHALLENGE: true
 ```
 
@@ -135,7 +135,7 @@ Get a fresh code (Exercise 2's is spent), then play the attacker: you saw the ca
 
 ```bash
 V2=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')
-C2=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' "$V2")
+C2=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' -- "$V2")
 R=$(run_flow "&code_challenge=$C2&code_challenge_method=S256"); CODE=$(getcode "$R")
 
 curl -s -X POST "$API/token" -H "Content-Type: application/x-www-form-urlencoded" \
@@ -261,7 +261,7 @@ which is precisely why Break 3 worked.
 # Use the refresh_token from Exercise 2 (re-run it if you no longer have one).
 curl -s -X POST "$API/token" -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=refresh_token" -d "refresh_token=$RT" -d "client_id=$PUB_CLIENT_ID" \
-  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);console.log("new refresh_token differs from the old one:", j.refresh_token!==process.argv[1])})' "$RT"
+  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);console.log("new refresh_token differs from the old one:", j.refresh_token!==process.argv[1])})' -- "$RT"
 ```
 
 ```

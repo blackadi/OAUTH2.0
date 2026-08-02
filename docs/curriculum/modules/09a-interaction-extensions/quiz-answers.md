@@ -48,7 +48,7 @@ authentication requirements of the protected resource."*
 
 ---
 
-**Q4 — C) push.**
+**Q4 — D) push.**
 
 In push mode the AS POSTs the **tokens** to the client's notification endpoint. Ping also needs a reachable
 endpoint but receives only a "ready" signal; poll needs nothing reachable.
@@ -59,7 +59,7 @@ it to that standard, which is why poll is the sane default.
 
 ---
 
-**Q5 — C) `type`.**
+**Q5 — A) `type`.**
 
 *"An identifier for the authorization details type as a string. The value of the `type` field determines the
 allowable contents of the object that contains it. … This field is REQUIRED."*

@@ -185,13 +185,23 @@ to ask, so the answer gets hardcoded. A resource server *"MAY use the WWW-Authen
 field… to return a URL to its protected resource metadata to the client,"* which makes discovery work from a
 bare 401.
 
-> **Gap in this repo — RFC 9728 is not served.** The server publishes AS metadata at root and OIDC discovery
-> under `/api`, but there is no `/.well-known/oauth-protected-resource` route. Worse, requesting it returns
-> **HTTP 200** — the SPA's catch-all serves an HTML page. In the lab you will learn to detect that, which is a
-> transferable skill: *never conclude an endpoint exists from a status code alone.* A proposal to add the
-> route is at the end of this module.
+> **Served here since 2026-07-28.** `GET /.well-known/oauth-protected-resource` at true root returns a real
+> RFC 9728 document (`Content-Type: application/json`), built from the live discovery document so its
+> `authorization_servers` and `scopes_supported` cannot drift. See
+> `server/src/routes/protected-resource-metadata.routes.ts`.
+>
+> This module originally recorded it as a gap and used it to teach a detection skill — *never conclude an
+> endpoint exists from a status code alone*, because the SPA's catch-all answers **HTTP 200 with HTML** for
+> any unmatched path. **That skill is still the point, and the lab still teaches it** — using a path that is
+> genuinely absent. Keep the habit; the example moved.
 
 ### Dynamic Client Registration — RFC 7591 / RFC 7592 (July 2015)
+
+> **These two RFCs do not have the same status, and it matters.** RFC 7591 (registration) is **Standards
+> Track**. RFC 7592 (the management lifecycle) is **Experimental** — its own header says *"not an Internet
+> Standards Track specification."* That is the reason an authorization server may implement `register` and
+> not `get`/`update`/`delete`, and why the registration access token is the least portable artefact in the
+> DCR story. In a review, cite them separately and do not assume a server that does one does the other.
 
 RFC 7591 is registration; RFC 7592 is the management lifecycle. A client POSTs metadata and receives a
 `client_id`, optionally a `client_secret`, a **`registration_access_token`**, and a
@@ -235,7 +245,12 @@ metadata documents a given consumer needs. That reasoning is here.
   **`server/src/routes/discovery.routes.ts`** — OIDC discovery under **`/api`**. Two different paths, and
   copy-pasting the wrong one is a classic time sink.
 - **`server/src/routes/dcr.routes.ts`** / **`dcr.service.ts`** — the four DCR operations.
-- **No route serves RFC 9728.** Confirm it yourself with `grep -rn "oauth-protected-resource" server/src/`.
+- **`server/src/routes/protected-resource-metadata.routes.ts`** + its controller — RFC 9728 at **true root**,
+  mounted in `app.ts` beside `oauthAsMetadataRoutes`. Confirm with
+  `grep -rn "oauth-protected-resource" server/src/` (three hits). Read the controller: it derives `resource`,
+  `authorization_servers`, `scopes_supported` and `dpop_signing_alg_values_supported` from the live discovery
+  document rather than from static config, and returns **500 rather than a document missing the sole REQUIRED
+  member** — a small, worth-copying example of failing closed on a metadata endpoint.
 - **Dashboard:** **Token Operations** (introspect/revoke), **Discovery**, **Dynamic Client Registration**.
 
 ## Wire-level walkthrough
@@ -325,9 +340,9 @@ returning HTTP 200*.
 
 ## Source change — serving RFC 9728 (done)
 
-> **Status: implemented on 2026-07-28.** This was a gated proposal; it was approved and built. The lab's
-> detection exercise below still stands — run it against a deployment that has *not* done this, or read it
-> as the before-picture. On this deployment the endpoint now answers with JSON.
+> **Status: implemented on 2026-07-28**, and the rest of this module has been updated to match. This was a
+> gated proposal; it was approved and built. Kept here as a worked example of scoping a source change: what
+> to add, where to mount it, what it must fail closed on, and how it was verified.
 
 **What:** add `server/src/routes/protected-resource-metadata.routes.ts` plus a small controller, mounted at
 true root in `app.ts` next to `oauthAsMetadataRoutes`, serving:

@@ -17,8 +17,8 @@ explanations in [quiz-answers.md](quiz-answers.md).
 - A) `jkt`  B) `cnf`  C) `x5t#S256`  D) `x5c`
 
 **Q4.** RFC 9207 requires the authorization server to include `iss`:
-- A) only in successful authorization responses
-- B) in authorization responses **including error responses**
+- A) in authorization responses **including error responses**
+- B) only in successful authorization responses
 - C) only when the client requests it
 - D) only in the token response
 

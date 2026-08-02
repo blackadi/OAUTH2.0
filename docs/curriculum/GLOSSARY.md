@@ -57,7 +57,7 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Revocation lag** | *(consequence of RFC 9068 vs RFC 7662)* | The window in which a revoked JWT is still accepted — equal to its remaining lifetime. | Module 04 |
 | **Audience restriction** | RFC 8707 §2 → `aud` | Binding a token to the API it was requested for. | Module 04 |
 | **Token confusion** | *(mitigated by RFC 9068 §2.1 `typ`)* | An RS accepting an ID token (or other JWT) as an access token. | Modules 04, 08 |
-| **Registration access token** | RFC 7592 | Credential authorizing read/update/delete of **one** client registration. | `dcr.routes.ts` |
+| **Registration access token** | RFC 7592 (**Experimental**) | Credential authorizing read/update/delete of **one** client registration. Note 7592's status: unlike RFC 7591, it is not Standards Track, which is why server support is uneven. | `dcr.routes.ts` |
 | **Request object** | RFC 9101 | Authorization parameters inside a signed JWS; the object's parameters win over query parameters (§5). | `jar.routes.ts` |
 | **Mix-up attack** | RFC 9700 §4.4 | Client is confused about *which* AS answered, and sends the code to the wrong one. | Defended by `iss` (RFC 9207) |
 | **DPoP proof** | RFC 9449 §4.2 | Per-request JWS (`typ: dpop+jwt`) with `jwk` header and `jti`/`htm`/`htu`/`iat` claims. | `client/src/services/dpop.service.ts` |
@@ -133,7 +133,7 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | AS metadata | RFC 8414 | `/.well-known/oauth-authorization-server` (root here). | `oauth-as-metadata.routes.ts` |
 | OP discovery | OIDC Discovery 1.0 | `/.well-known/openid-configuration` (**under `/api`** here). | `discovery.routes.ts` |
 | Protected Resource Metadata | RFC 9728 | `/.well-known/oauth-protected-resource`. | consumed client-side; **not served** (gap, Module 04) |
-| Registration endpoint | RFC 7591/7592 | DCR register/read/update/delete. | `dcr.routes.ts` |
+| Registration endpoint | RFC 7591 (Std Track) / RFC 7592 (**Experimental**) | DCR register/read/update/delete. | `dcr.routes.ts` |
 | End-session endpoint | OIDC RP-Initiated Logout 1.0 | RP-triggered logout. | logout routes; `LogoutSection.tsx` |
 
 ## Grant types

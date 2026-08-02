@@ -37,7 +37,7 @@ being broken.
 | 7 | **24-hour offline-validated tokens with a nightly blocklist sync** — a revocation lag of up to ~24 hours, and in the worst case ~48. Directly violates brief constraint 1. | 04 | **Critical** — this is the regulator-facing failure. |
 | 8 | **No audience restriction; one token for all three tiers.** A token leaked from the Tier 3 drug directory opens patient records. RFC 8707 exists for exactly this. | 04 | **High** |
 | 9 | **90-day refresh tokens issued to a public SPA**, neither rotated-and-bound in a way that helps nor sender-constrained. RFC 9700 §2.2.2 requires refresh tokens for public clients to be sender-constrained **or** use rotation. | 03 | **High** |
-| 10 | **Refresh-token rotation retained** while claiming FAPI 2.0, which forbids it (§5.3.2.1). Also see #14 — the stated reason is self-contradictory. | 10 | **Low** severity, **high** diagnostic value: it shows the team applies controls by reputation rather than by threat. |
+| 10 | **Refresh-token rotation retained** while claiming FAPI 2.0, whose §5.3.2.1 says an AS *shall not* use it except in extraordinary circumstances — and none are claimed here. Also see #14 — the stated reason is self-contradictory. | 10 | **Low** severity, **high** diagnostic value: it shows the team applies controls by reputation rather than by threat. |
 | 11 | **Bearer tokens; "TLS is enough."** FAPI 2.0 requires sender-constrained tokens. TLS protects the wire and nothing else: attacker **A5** reads tokens from resource-server proxy logs after termination, which is precisely why sender-constraining exists. | 05, 10 | **Critical** — and note DPoP is already implemented, so the fix is configuration. |
 
 ## §5 ID tokens and login
@@ -159,10 +159,10 @@ does require *only* confidential clients — which Meridian also violates.
 [RFC6749] MUST NOT be used."* Not SHOULD NOT, and there is no first-party exemption — **C** is the excuse
 Meridian actually makes.
 
-**Q3 — B) exact string matching.** RFC 9700 §4.1. Everything else on the list is a way of being approximately
+**Q3 — D) exact string matching.** RFC 9700 §4.1. Everything else on the list is a way of being approximately
 right, which is the failure mode.
 
-**Q4 — B.** With a symmetric algorithm the verification key and the signing key are the same value, so every
+**Q4 — A.** With a symmetric algorithm the verification key and the signing key are the same value, so every
 holder of the client secret can mint tokens as well as check them. Module 08's lab demonstrated this live:
 `sub` changed to another user, re-signed with the client secret, and all thirteen validation steps passed.
 

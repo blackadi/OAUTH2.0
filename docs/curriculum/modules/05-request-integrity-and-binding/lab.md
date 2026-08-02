@@ -47,11 +47,11 @@ EOF
 
 ```bash
 V=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')
-CH=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' "$V")
-PARAMS="response_type=code&client_id=$PUB_CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$PRU")&scope=profile&state=PAR1&code_challenge=$CH&code_challenge_method=S256"
+CH=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' -- "$V")
+PARAMS="response_type=code&client_id=$PUB_CLIENT_ID&redirect_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$PRU")&scope=profile&state=PAR1&code_challenge=$CH&code_challenge_method=S256"
 
 curl -s -X POST "$API/par" -H "Content-Type: application/json" \
-  -d "$(node -e 'process.stdout.write(JSON.stringify({parameters:process.argv[1],clientId:process.argv[2]}))' "$PARAMS" "$PUB_CLIENT_ID")" \
+  -d "$(node -e 'process.stdout.write(JSON.stringify({parameters:process.argv[1],clientId:process.argv[2]}))' -- "$PARAMS" "$PUB_CLIENT_ID")" \
   -w '\nstatus=%{http_code}\n' | head -c 400
 ```
 
@@ -67,11 +67,11 @@ status=201
 
 ```bash
 RQU=$(curl -s -X POST "$API/par" -H "Content-Type: application/json" \
-  -d "$(node -e 'process.stdout.write(JSON.stringify({parameters:process.argv[1],clientId:process.argv[2]}))' "$PARAMS" "$PUB_CLIENT_ID")" \
+  -d "$(node -e 'process.stdout.write(JSON.stringify({parameters:process.argv[1],clientId:process.argv[2]}))' -- "$PARAMS" "$PUB_CLIENT_ID")" \
   | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).requestUri))')
 
 CJ=$(mktemp)
-AUTH_URL="$API/authorization?client_id=$PUB_CLIENT_ID&request_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$RQU")"
+AUTH_URL="$API/authorization?client_id=$PUB_CLIENT_ID&request_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$RQU")"
 echo "$AUTH_URL"
 ```
 
@@ -106,10 +106,10 @@ const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");
 const h=b({alg:"none",typ:"oauth-authz-req+jwt"});
 const p=b({iss:process.argv[1],aud:"https://your-issuer",response_type:"code",client_id:process.argv[1],
            redirect_uri:"http://localhost:3001/callback",scope:"profile",state:"JAR1"});
-process.stdout.write(h+"."+p+".");' "$PUB_CLIENT_ID")
+process.stdout.write(h+"."+p+".");' -- "$PUB_CLIENT_ID")
 
 curl -s -X POST "$API/jar/process" -H "Content-Type: application/json" \
-  -d "$(node -e 'process.stdout.write(JSON.stringify({request:process.argv[1],clientId:process.argv[2]}))' "$UNSIGNED" "$PUB_CLIENT_ID")" \
+  -d "$(node -e 'process.stdout.write(JSON.stringify({request:process.argv[1],clientId:process.argv[2]}))' -- "$UNSIGNED" "$PUB_CLIENT_ID")" \
   | head -c 220; echo
 ```
 
@@ -137,7 +137,7 @@ echo "advertised?"
 curl -s "$API/.well-known/openid-configuration" \
  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log("  authorization_response_iss_parameter_supported =",JSON.parse(d).authorization_response_iss_parameter_supported))'
 
-ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$PRU")
+ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$PRU")
 echo "on an ERROR response:"
 curl -s "$API/authorization?response_type=code&client_id=$PUB_CLIENT_ID&redirect_uri=$ENC&scope=profile&state=E1&resource=%2Fnot-absolute" \
  | grep -o 'iss=[^&"]*'

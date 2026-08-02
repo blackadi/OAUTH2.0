@@ -8,10 +8,10 @@ it. Answers and explanations in [quiz-answers.md](quiz-answers.md).
 ## Tier 1 — Recall (4)
 
 **Q1.** Which RFC defines the **JSON Web Signature (JWS)**?
-- A) RFC 7519  B) RFC 7515  C) RFC 7517  D) RFC 7516
+- A) RFC 7519  B) RFC 7516  C) RFC 7517  D) RFC 7515
 
 **Q2.** In the compact serialization `AAA.BBB.CCC`, which segment carries the **claims**?
-- A) `AAA`  B) `BBB`  C) `CCC`  D) all three
+- A) `BBB`  B) `AAA`  C) `CCC`  D) all three
 
 **Q3.** base64url (RFC 4648 §5) is best described as:
 - A) an encryption scheme  B) a signature algorithm  C) a reversible text encoding  D) a hash function
@@ -77,7 +77,7 @@ reject or ignore the binding, and what is the one-line fix?
 
 **Q13.** (JOSE-structure reading — DPoP preview.) A DPoP proof's JOSE header contains only `{"alg":"ES256",
 "kid":"k1","typ":"dpop+jwt"}`. The server responds: *"The DPoP header did not include a public key in JWK
-format."* RFC 9449 §2.1 requires a specific header member. Which member is missing, and why is `kid` alone
+format."* RFC 9449 §4.2 requires a specific header member. Which member is missing, and why is `kid` alone
 insufficient?
 
 ## Tier 4 — Adversarial and design (3)

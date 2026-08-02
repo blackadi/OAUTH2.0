@@ -48,7 +48,10 @@ at request time.
 
 **(c)** Because rotation's benefit is **theft detection**, and with confidential clients plus
 sender-constrained tokens that threat is already eliminated. Zero benefit, real cost (lockouts). A control
-with no benefit and real cost is a defect, not a neutral extra.
+with no benefit and real cost is a defect, not a neutral extra. **The exception (required for full marks):**
+§5.3.2.1 says *shall not … "except in extraordinary circumstances"* — e.g. infrastructure migration — and
+where it is invoked the profile expects a time-limited retry window with the old refresh token. An answer
+asserting an absolute ban is incomplete.
 
 **(d)** `403` confirms the object **exists**, turning error handling into an enumeration oracle. `404`
 collapses "not yours" and "not there" into one answer — the same anti-oracle reasoning as RFC 7662 §2.2.

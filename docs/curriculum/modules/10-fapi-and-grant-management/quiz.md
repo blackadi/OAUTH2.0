@@ -55,7 +55,8 @@ explanations in [quiz-answers.md](quiz-answers.md).
 - C) PAR requests will be rejected
 - D) The AS cannot return `iss`
 
-**Q9.** FAPI 2.0 forbids refresh-token rotation. The reason is best stated as:
+**Q9.** FAPI 2.0 says an AS *shall not* use refresh-token rotation except in extraordinary circumstances.
+The reason is best stated as:
 - A) Rotation is cryptographically weak
 - B) With confidential clients and sender-constrained tokens the threat rotation detects is already
   eliminated, so it contributes no benefit while causing lockouts when a client fails to store the new token

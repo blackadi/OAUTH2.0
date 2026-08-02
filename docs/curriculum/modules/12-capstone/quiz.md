@@ -23,11 +23,11 @@ FAPI 2.0 requirement does that reasoning misread?
 
 **Q3.** Meridian registers `https://*.meridian-health.com/callback`. RFC 9700 §4.1 requires redirect URIs to be
 compared:
-- A) by domain suffix  B) by exact string matching  C) case-insensitively  D) after normalisation
+- A) by domain suffix  B) after normalisation  C) case-insensitively  D) by exact string matching
 
 **Q4.** Meridian's ID tokens are HS256-signed with the client secret. The direct consequence is:
-- A) They cannot be validated offline
-- B) Any party holding the client secret can **forge** an ID token for any user
+- A) Any party holding the client secret can **forge** an ID token for any user
+- B) They cannot be validated offline
 - C) They are limited to 1-hour lifetimes
 - D) They cannot carry a `nonce`
 
