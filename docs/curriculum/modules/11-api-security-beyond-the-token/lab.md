@@ -140,15 +140,15 @@ RUE=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],s
 mkgrant() {   # $1=user $2=pass $3=url-encoded scope  → prints the token response
   local J; J=$(mktemp)
   curl -s -c $J -o /dev/null "$API5/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$RUE&scope=$3&state=x&grant_management_action=create"
-  local C1; C1=$(curl -s -b $J -c $J "$API5/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+  local C1; C1=$(curl -s -b $J -c $J "$API5/session/login" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
   local L2; L2=$(curl -s -b $J -c $J -o /dev/null -w '%{redirect_url}' -d "username=$1&password=$2&_csrf=$C1" "$API5/session/login")
   local CB
   if echo "$L2" | grep -q consent; then
-    local C2; C2=$(curl -s -b $J -c $J "$API5/session/consent" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+    local C2; C2=$(curl -s -b $J -c $J "$API5/session/consent" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
     CB=$(curl -s -b $J -c $J -o /dev/null -w '%{redirect_url}' -d "decision=approve&_csrf=$C2" "$API5/session/consent")
   else CB="$L2"; fi
   curl -s -u "$CLIENT_ID:$CLIENT_SECRET" \
-    -d "grant_type=authorization_code&code=$(echo "$CB" | grep -oP 'code=\K[^&]+')&redirect_uri=$RUE" "$API5/token"
+    -d "grant_type=authorization_code&code=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$CB")&redirect_uri=$RUE" "$API5/token"
   rm -f $J
 }
 

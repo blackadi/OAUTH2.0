@@ -192,11 +192,11 @@ PRU="http://localhost:3001/callback"     # a redirect URI registered on your PUB
 CJ=$(mktemp)
 curl -s -c "$CJ" -o /dev/null \
   "$API/authorization?response_type=code&client_id=$PUB_CLIENT_ID&redirect_uri=$(enc "$PRU")&scope=profile&state=nopkce"
-CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
 F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/login" \
      -d "username=$LAB_USER" -d "password=$LAB_PASS" --data-urlencode "_csrf=$CSRF")
 case "$F" in *code=*) : ;; *) CS2=$(curl -s -b "$CJ" -c "$CJ" "$API/session/consent" \
-       | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+       | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
      F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/consent" \
        -d "decision=approve" --data-urlencode "_csrf=$CS2") ;; esac
 CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$F")
@@ -244,11 +244,11 @@ This is where the report gets uncomfortable.
 CJ=$(mktemp)
 curl -s -c "$CJ" -o /dev/null \
   "$API/authorization?response_type=token&client_id=$CLIENT_ID&redirect_uri=$(enc "$REDIRECT_URI")&scope=profile&state=imp"
-CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
 F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/login" \
      -d "username=$LAB_USER" -d "password=$LAB_PASS" --data-urlencode "_csrf=$CSRF")
 case "$F" in *access_token=*|*code=*) : ;; *) CS2=$(curl -s -b "$CJ" -c "$CJ" "$API/session/consent" \
-       | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+       | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
      F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/consent" \
        -d "decision=approve" --data-urlencode "_csrf=$CS2") ;; esac
 echo "$F" | sed -E 's/access_token=[^&]*/access_token=REDACTED/'

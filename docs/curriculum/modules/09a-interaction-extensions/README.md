@@ -74,6 +74,37 @@ The bank, for this one.
 - **Native SSO is one visit to the front desk for a group.** Several apps from the same vendor on your phone
   share one authentication instead of each sending you round the loop again.
 
+## Specification pass (exact terminology) + the bridge
+
+| Plain-language element | Formal concept | Defining reference |
+|---|---|---|
+| The bank's reply on sealed letterhead | **JARM** — the whole authorization response as one signed JWT | JARM (OpenID Final, errata set 1) |
+| Delivered as one item instead of four | `response=<JWT>` in place of `code`/`state`/`iss` | JARM §2.3 |
+| The letterhead naming the bank | `iss` — *"the issuer URL of the authorization server that created the response"* | JARM §2.1 |
+| "Addressed to you" | `aud` — *"the client_id of the client the response is intended for"* | JARM §2.1 |
+| A stamp saying when it becomes void | `exp` — *"a maximum JWT lifetime of 10 minutes is RECOMMENDED"* | JARM §2.1 |
+| Which of four envelopes it arrives in | `response_mode`: `jwt`, `query.jwt`, `fragment.jwt`, `form_post.jwt` | JARM §2.3 (§2.3.1–2.3.4) |
+| Agreeing to seal replies at all | `authorization_signed_response_alg` (client metadata) | JARM §3 |
+| The bank ringing Alice's own phone | **CIBA** — decoupled authentication | CIBA Core 1.0 |
+| The agent's terminal vs. Alice's phone | **Consumption device** vs. **authentication device** | CIBA Core 1.0 (terminology) |
+| Naming who to call | `login_hint` | CIBA Core 1.0 §7.1 |
+| A code the agent reads aloud for Alice to match | `binding_message` | CIBA Core 1.0 §7.1 |
+| A secret only Alice knows, so strangers cannot make her phone ring | `user_code` | CIBA Core 1.0 §7.1 |
+| The terminal's ticket to keep asking | `auth_req_id`, polled at the token endpoint | CIBA Core 1.0 §7.3, §10.1 |
+| The cashier saying *"not with that"* | `insufficient_user_authentication` | RFC 9470 §3 |
+| **The cashier saying what *would* be enough** | `acr_values` and/or `max_age` in the challenge | RFC 9470 §3 — the half people omit |
+| Producing stronger ID and coming back | A new authorization request carrying `acr_values`; fresh `acr`/`auth_time` | OIDC Core §3.1.2.1; Module 08's claims |
+| An itemised instruction, not a blanket power | **RAR** — `authorization_details` | RFC 9396 §2 |
+| Which kind of instruction this is | `type` — the only REQUIRED field; it selects the schema | RFC 9396 §2 |
+| The standard boxes on the form | `locations`, `actions`, `datatypes`, `identifier`, `privileges` | RFC 9396 §2.2 |
+| The bank refusing a malformed instruction | `invalid_authorization_details` | RFC 9396 §5 |
+| One visit to the desk for a group | **Native SSO** — `device_secret` | Native SSO 1.0, **2nd Implementer's Draft** |
+
+Two rows are worth pausing on. **`iss` inside the JARM signature** is the same claim as Module 05's `iss`
+query parameter and a categorically stronger thing: tampering goes from *detectable* to *impossible*. And the
+row in bold — `acr_values` in the challenge — is the difference between RFC 9470 and a plain 403; omit it and
+you have implemented the error code without the mechanism.
+
 ## Learning objectives
 
 After this module you can:
@@ -88,6 +119,10 @@ After this module you can:
 5. Write an `authorization_details` object with the RFC 9396 common fields, and say when RAR beats scopes and
    when it is over-engineering.
 6. Place all five extensions on the "which assumption does this lift?" table without notes.
+7. **Place an extension you were never taught** — take an unfamiliar specification's abstract and say which
+   assumption it lifts, which modules it presupposes, what breaks without it, what its status is, and where
+   it sits relative to the mechanisms you know. That is quiz **Q20**, and it is the transferable form of
+   objective 6.
 
 ## JARM — signing the response
 
@@ -142,6 +177,41 @@ matters; the other two add JWE on top, which also removes the code from browser 
 > side** it is a configuration gap. A *client* consuming JARM does need code — parse the `response`
 > parameter, verify the signature against the AS's JWKS, check `iss`/`aud`/`exp`, then read `code` and `state`
 > from the payload — and the dashboard SPA does not have it.
+
+### On the wire
+
+The only new wire format in this module. Compare it against Module 02's redirect, which is the same
+information unprotected.
+
+```http
+# Module 02's authorization response — four parameters, none of them signed.
+HTTP/1.1 302 Found
+Location: http://localhost:3001/callback?code=8k2Jd…&state=Zx9qP2rLk7&iss=https%3A%2F%2Fas.example.com
+
+# The same response with response_mode=jwt. One parameter.
+HTTP/1.1 302 Found
+Location: http://localhost:3001/callback?response=eyJhbGciOiJFUzI1NiIsImtpZCI6IjEifQ.eyJpc3MiOi…
+```
+
+```json
+// …and the payload of that JWT, once the client has VERIFIED the signature against the AS's JWKS:
+{
+  "iss":   "https://as.example.com",   // MUST — mix-up becomes impossible, not merely detectable
+  "aud":   "1234567890",               // MUST — a response minted for another client is inert here
+  "exp":   1785156382,                 // MUST — ≤10 min RECOMMENDED; replay is now bounded
+  "code":  "8k2Jd…",                   // the parameters you used to read from the query string
+  "state": "Zx9qP2rLk7"
+}
+```
+
+**What just happened?** Nothing was hidden — the JWT is still in a URL the browser can read, and an attacker
+still sees the code. What changed is that the code now arrives **inside a structure that names its author,
+its intended recipient, and its expiry**, none of which can be altered. `state` is still your job: JARM stops
+it being *tampered with*, and does not do its job of binding the response to this browser session.
+
+And the failure mode worth predicting before Exercise 2: a client that reads that payload with a base64
+decode and never checks the signature is **worse off than one not using JARM at all** — same protections as
+before, plus a new assurance claim in the architecture document that nothing earns.
 
 FAPI 2.0 Message Signing (Module 10) requires JAR **and** JARM together, precisely so that both halves of the
 exchange are non-repudiable.

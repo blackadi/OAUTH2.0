@@ -489,11 +489,11 @@ SPA's four Admin sections now return 401 until they are set — locally and in R
   Meridian document is fictional. Its code snippets are illustrative and are **not** drawn from this repo,
   though several defects deliberately mirror real ones found during the build (the fail-open and BOLA themes
   from Module 11, the userinfo-login bug from Module 08) so a learner who did the labs has seen the shapes
-  before. The **four exams are still unwritten** (Stage 4), so the capstone README states plainly that they
-  are not a prerequisite and points at Module 07's Tier 4 as the interim stand-in for Exam B — this is the
-  one place the curriculum's advertised structure and its actual contents currently differ, and it is
-  flagged to the learner rather than hidden. The rubric's score bands are a judgement call and are labelled
-  as such.
+  before. The **four exams were backfilled in Stage 4b** and now exist under `exams/`; the capstone README
+  requires the Final as a prerequisite, since the capstone is open-book by construction and the Final is
+  where three of the five promised capabilities get their only closed-book assessment. *(Until Pass B this
+  section and two module READMEs still described the exams as unwritten — corrected 2026-08-02.)* The
+  rubric's score bands are a judgement call and are labelled as such.
 
 ### Module 11 — done / verified / uncertain
 

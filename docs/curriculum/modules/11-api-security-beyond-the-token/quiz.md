@@ -40,13 +40,17 @@ API gateway. What is wrong?
 - C) Tenant isolation should use separate databases
 - D) `X-` prefixed headers are deprecated
 
-**Q8.** Which authorization model can express "you may read a document if you own the folder containing it,
-or it was shared with you transitively"?
-- A) ReBAC  B) ABAC  C) RBAC  D) Scope-based
+**Q8.** A design review proposes this rule for a claims-processing system: *"An adjuster may read a claim if
+they are assigned to it, if they manage someone assigned to it, or if it was escalated to their team."* The
+team wants to implement it with RBAC roles (`adjuster`, `manager`) plus a `team_id` claim in the token.
+State whether that will work, name the model the rule actually requires, and say **where** the decision has
+to be made — at the gateway, in the service, or in the data layer.
 
-**Q9.** Which of these can an API gateway enforce?
-- A) Object ownership  B) Response field filtering
-- C) Scope-per-route and rate limits  D) Tenant isolation at row level
+**Q9.** You are writing the section of a platform runbook headed *"what the gateway does not do."* Your
+gateway validates tokens, enforces scope per route, and rate-limits. A service team reads the runbook and
+asks: *"so if a request reaches my handler, what has already been decided, and what have I still got to
+do?"* Answer them in two lists, and name the one thing on your second list that no gateway could ever move
+onto the first.
 
 **Q10.** An attacker uses a legitimate account to scrape every profile they are permitted to view, slowly,
 over a month. Which OWASP item is this, and why do per-request authorization checks miss it?

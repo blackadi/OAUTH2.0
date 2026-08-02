@@ -446,3 +446,121 @@ unconfigured extensions are "findings" alongside a live PKCE bypass learns to di
 Credit for noting that "no code required" is the single most actionable sentence you can put in front of a team
 — and for noting that it cuts the other way too: a control that is one field from being *off* is one field from
 being off.
+
+---
+
+**Q20 — placing an extension you were never taught.**
+
+There is no "correct" answer here in the sense the earlier items have one. What is being marked is whether
+you reached for the **frames** rather than for recall — the same four questions Module 09a asked of JARM,
+CIBA, RFC 9470 and RAR, applied cold. Grade yourself on the reasoning; the content below is one competent
+reading, not the only one.
+
+**1. The assumption CIMD lifts.** *Every module so far assumed the client and the authorization server have
+**exchanged identifiers in advance**.* Something — a human in a console (Modules 01–08) or a registration
+request (Module 04's DCR) — created a `client_id` and stored metadata against it before any flow could
+start. CIMD removes the storing: the `client_id` **is** the location of its own metadata, so the AS learns
+who a client is at the moment it first meets one.
+
+Structurally it most resembles **PAR** (Module 05), and saying so is worth credit: both replace an inline
+payload with a **reference the other party dereferences**. PAR pushes parameters to the AS and hands the
+browser a handle; CIMD hands the AS a URL and lets it fetch the metadata. The difference is direction and
+lifetime — PAR's handle is single-use, short-lived and AS-issued; CIMD's is a long-lived, client-controlled,
+cacheable public document. A weaker but defensible answer is **DCR**, on the grounds that both establish a
+client without a human; §5 is where that comparison gets sharp.
+
+**2. What each presupposes.**
+
+- **CIMD** needs RFC 7591's metadata vocabulary (Module 04), redirect-URI validation (Module 02 — because
+  the URIs an AS validates against now come from a document the *client* hosts), and Module 00's point that
+  fetching a document over TLS authenticates the host and nothing else. It **directly extends Module 04**:
+  it is a third answer to "how does a client come to exist", after console registration and DCR.
+- **MCP** needs the code flow with PKCE (02, 03), RFC 8707 `resource` and RFC 9728 protected resource
+  metadata (both Module 04), and OAuth 2.1's status (Module 07). It **directly extends Module 04** too — it
+  is very largely a *profile*, in Module 10's sense: it invents almost nothing and instead makes a set of
+  existing mechanisms mandatory. Recognising that it is a profile rather than a mechanism is the single most
+  transferable thing in this item.
+
+**3. What breaks without each.**
+
+- **Without CIMD**, an ecosystem with a large and open-ended client population needs either a human per
+  client or a registration endpoint per AS — and the client ends up holding N different `client_id`s for N
+  authorization servers, with no way to prove they are the same party. It is the O(n²) problem Module 09b
+  names for federation, arriving one layer down.
+- **Without MCP's profile**, every agent and every tool provider negotiates its own subset. Because the
+  mechanisms are all optional in the base specs, the intersection two implementations agree on tends toward
+  the weakest — and Module 10 already told you what "supported but not required" is worth. The failure is
+  not that nothing works; it is that everything works, badly, in incompatible ways.
+
+**4. Status, and how to cite.** CIMD is an **active IETF Internet-Draft** (`-01`, 2 March 2026, expiring
+3 September 2026) — not a published RFC. MCP's authorization specification is a **versioned vendor-neutral
+specification** rather than an IETF or OpenID document, dated **2025-11-25**; it is not on a standards track
+at all, which is a *third* status category beyond the ones Module 07 listed.
+
+So: cite the revision and the date consulted, never write "CIMD requires…" as though binding, and expect the
+text to move. **Three compounding reasons for caution here**, and naming any two is full marks:
+
+- MCP normatively references **OAuth 2.1**, itself a draft — so a claim about MCP conformance rests on two
+  moving documents.
+- MCP references **CIMD `-00`** while the current CIMD revision is **`-01`**. A profile can pin an older
+  revision of what it profiles, and if you cite "CIMD" without a revision you may be describing a document
+  neither party implements.
+- An expiry date of 3 September 2026 is not a formality. A draft that lapses has no status whatever.
+
+**5. CIMD versus DCR and `private_key_jwt`.**
+
+- **An alternative to DCR: yes.** Both answer *"how does a client the AS has never seen become usable?"* and
+  you would not deploy both for the same client population.
+- **An alternative to `private_key_jwt`: no**, and getting this right is most of the item's value. Client
+  *identification* and client *authentication* are orthogonal — exactly RFC 7523's §2.1/§2.2 distinction
+  from Module 06. CIMD says which client this is; it does not prove the caller is that client. A CIMD client
+  can and should still authenticate, and its `jwks_uri` is how.
+- **What DCR has that CIMD does not:** the AS holds an immutable record it captured at registration, plus a
+  `registration_access_token` scoped to that one client. Metadata cannot change under the AS's feet, and
+  registration can be *gated* — RFC 7591's initial access token.
+- **What CIMD has that DCR does not:** no registration state to store, revoke or reconcile, and one stable
+  identifier that is the same at every AS. The client's identity is portable.
+
+**The suspicious thing about the brief, and what to read.** Full credit requires naming at least one of
+these unprompted:
+
+- **The AS dereferences an attacker-influenceable URL.** A `client_id` is supplied by whoever starts a flow,
+  so an AS implementing CIMD makes an outbound request to a location the requester chose. That is
+  **server-side request forgery as a designed behaviour**. Compare Module 06's `jku` bug — *"asking the
+  forger to grade their own work"* — which is the same shape one layer down.
+  *This is not a stretch: both source documents name it.* CIMD has a **"Server Side Request Forgery (SSRF)
+  Attacks"** section in its security considerations, and MCP's authorization spec has a subsection headed
+  **"Authorization Server Abuse Protection"** which says in terms that *"a malicious client could use this
+  to trigger the authorization server to make requests to arbitrary URLs, such as requests to private
+  administration endpoints the authorization server has access to."*
+- **The metadata is served over TLS with no signature.** TLS authenticates the host. Whoever controls that
+  host — or its DNS, or its CDN — controls the client's registered metadata, including its redirect URIs,
+  which are a security control (Module 02) now living in a file the client can edit at any moment.
+- **Caching, in both directions.** The brief says the AS caches, and says nothing about for how long or when
+  it revalidates. *(The specification does address this — "SHOULD cache metadata respecting HTTP cache
+  headers" — which is the point: a brief that omits a control is not evidence the control is missing. Saying
+  "I cannot tell from this whether caching is bounded" is the correct answer; asserting it is unbounded is a
+  false positive of exactly the kind Module 12's rubric penalises.)*
+
+**A fourth, for full marks, which almost nobody gets from the brief alone.** CIMD cannot stop **`localhost`
+redirect-URI impersonation**: an attacker names a *legitimate* client's metadata URL as their `client_id`,
+binds any local port, and supplies that as `redirect_uri`. The AS fetches the real client's document, the
+user sees the real client's name on the consent screen, and the code lands with the attacker. The
+specification acknowledges this directly and can only recommend warnings and prominent display of the
+redirect host. Notice what that means structurally: **CIMD authenticates the *document*, never the caller** —
+which is the same conclusion §5 reached from a different direction.
+
+**What to read before recommending either:** the drafts themselves at a named revision, and specifically
+CIMD's security-considerations section on fetch restrictions, caching and revocation. Then Module 07's
+question — *what is the attacker model, and what is out of scope?* An answer that says "I would need to read
+the security considerations before advising" is worth more than a confident recommendation, and is the
+honest end state for an extension you met ten minutes ago.
+
+> **Why this item exists.** The curriculum's stated goal includes *"place an unfamiliar OAuth extension
+> correctly in the dependency graph."* Every other item here tests an extension you were taught. This is the
+> only one that does not, and it is deliberately the last question in the module.
+>
+> Both documents are real and both are implemented in this repo — `client/src/components/mcp/McpSection.tsx`,
+> `client/src/services/mcp.service.ts`, and the `clientIdMetadataDocumentSupported` service flag. **Read the
+> code only after you have answered.** The dashboard's MCP section runs a five-step flow end to end, which
+> makes a good check on how much of the above you got from the frames alone.

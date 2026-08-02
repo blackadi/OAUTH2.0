@@ -173,11 +173,31 @@ The whole benefit is in row 2. Everything else is cost.
 | `implicit` (`response_type=token`) | RFC 6749 §4.2 | Yes | public | **Retired** — RFC 9700 §2.1.2 says clients SHOULD NOT use it; removed in OAuth 2.1 | Never in new work |
 | `password` (ROPC) | RFC 6749 §4.3 | Yes | either | **Forbidden** — RFC 9700 §2.4: "MUST NOT be used" | Never |
 
-A note on how the two dead grants died, because the reasoning generalizes. **Implicit** existed because
-browsers could not make cross-origin back-channel calls when OAuth 2.0 was written; CORS fixed that, and once
-a browser-based app *can* do the code exchange, publishing the token in a URL has no upside. **ROPC** existed
-as a migration path off password sharing; it never stopped being password sharing (Module 01), and it is
-structurally incompatible with MFA, federation, and step-up.
+A note on how the two dead grants died, because the reasoning generalizes.
+
+**Implicit** existed for a reason that no longer holds, and the reason is worth knowing because it is the
+thing you will have to explain when you migrate someone off it.
+
+> **CORS, briefly, because the rest of this paragraph depends on it.** Browsers enforce the **same-origin
+> policy**: script running on `https://app.example.com` may not read the response to a request it makes to
+> `https://as.example.com`, because those are different origins. **Cross-Origin Resource Sharing** (CORS) is
+> the opt-in that lets the *server* relax this — it answers with an `Access-Control-Allow-Origin` header
+> naming who may read the response, and for anything beyond a simple `GET` the browser first sends a
+> **preflight** `OPTIONS` request to ask. No header, no read: the request may still reach the server, but the
+> script never sees the answer. CORS is a *browser* control, so it constrains scripts and not `curl` — which
+> is why you have been able to call the token endpoint by hand for this entire lab and an SPA could not have,
+> in 2012.
+
+When OAuth 2.0 was written, CORS was not deployed, so a browser-based app **could not read the response** to
+a token-endpoint call — the back-channel leg was simply unavailable to it. Implicit was the workaround:
+deliver the token where the browser can already see it, in the redirect. CORS closed that gap. Once an SPA
+*can* do the code exchange, publishing the token in a URL has no upside, and the cost — history, `Referer`,
+no client authentication, no binding — is all that remains. **This is the shape to remember: the grant was
+not a mistake, it was a correct answer to a constraint that expired.** Ask, of any control you inherit, what
+it was working around and whether that is still true.
+
+**ROPC** existed as a migration path off password sharing; it never stopped being password sharing
+(Module 01), and it is structurally incompatible with MFA, federation, and step-up.
 
 ### The device grant in one paragraph
 

@@ -36,6 +36,65 @@ topology problem, and 1 is an architecture problem. Keep them apart and each is 
 
 ---
 
+## Plain-language pass (no spec vocabulary)
+
+A sealed dossier, because this module's constructions are the most abstract in the curriculum and it helps
+to have something physical to hold.
+
+- **A government office prepares a dossier about you** and seals it with its own wax. Inside are six facts —
+  your name, your date of birth, your nationality, and so on. *This is the credential the issuer signs.*
+- Each fact is in **its own opaque envelope**, and what the office seals is not the facts but a **list of the
+  envelopes' fingerprints**. Remove an envelope and the seal is still intact, because the seal never covered
+  the contents — only the list. *That is why a signature can survive a claim being withheld.*
+- Every envelope has **a handful of random confetti dropped in before sealing**, so two envelopes containing
+  the word "yes" have different fingerprints. Without the confetti anyone could seal their own "yes",
+  compare fingerprints, and learn what you were hiding — there are only so many things a fact can say.
+  *That is the salt, and it is not decoration; the scheme does not work without it.*
+- **The office also puts a few fingerprints on the list with no envelope behind them.** A checker cannot tell
+  how many facts the dossier really holds. *Decoy digests.*
+- **You carry the dossier.** Nobody phones the office. At the door you hand over the sealed list plus **only
+  the envelopes you choose** — the bar gets "over 18" and nothing else.
+- Because you hold it, you are also the obvious forger, so the office **wrote your signet's fingerprint onto
+  the sealed list at the time it prepared the dossier** — possibly years ago. At the door you sign a fresh
+  note naming *this doorman, this moment, and exactly these envelopes*. A dossier lifted from your pocket is
+  useless without your signet. *Key binding.*
+- And the thing you cannot fix: **the office's wax impression is identical on every visit.** Two doormen who
+  compare notes know it was the same dossier, even if one saw only your age and the other only your
+  nationality. Showing different facts does not make you two people.
+
+## Specification pass (exact terminology) + the bridge
+
+| Plain-language element | Formal concept | Defining reference |
+|---|---|---|
+| The office that prepares and seals the dossier | **Issuer** — *"An entity that creates SD-JWTs"*; offline thereafter | RFC 9901 §1.2 |
+| You, carrying it | **Holder** — resource owner and client fused, and therefore a plausible attacker | RFC 9901 §1.2 |
+| The doorman | **Verifier** — validates a signature from a party it may never contact | RFC 9901 §1.2 |
+| An opaque envelope holding one fact | **Disclosure** — base64url of `[salt, claim name, claim value]` | RFC 9901 §1.2, §4.2.1 |
+| The confetti | **Salt** — *"a new salt MUST be chosen for each claim"*, ≥128 bits | RFC 9901 §9.3 |
+| An envelope's fingerprint | The **digest**, over *"the US-ASCII bytes of the base64url-encoded value"* | RFC 9901 §4.2.3 |
+| The sealed list of fingerprints | `_sd`, order shuffled; algorithm named by `_sd_alg` | RFC 9901 §4.2.4.1, §4.1.1 |
+| Fingerprints with no envelope | **Decoy digests** | RFC 9901 §4.2.5 |
+| Handing over some envelopes, not all | **Selective disclosure**; tilde-separated presentation | RFC 9901 §4 |
+| Your signet's fingerprint, written on at issuance | `cnf` — the holder's public key | RFC 9901 §4.1.2 (using RFC 7800) |
+| The fresh note you sign at the door | **KB-JWT**, `typ: kb+jwt` | RFC 9901 §4.3 |
+| "this doorman, this moment, exactly these envelopes" | `aud`, `nonce`, `sd_hash` | RFC 9901 §4.3, §4.3.1 |
+| Refusing an envelope that is not on the list | *"If any Disclosure was not referenced by digest value … MUST be rejected"* | RFC 9901 §7.1/5 |
+| Deciding to demand a note **before** looking at what arrived | *"MUST NOT be based on whether or not a Key Binding JWT is provided"* | RFC 9901 §7.3/1 |
+| The identical wax impression across visits | **Verifier/verifier linkability** — mitigated only by batch issuance | RFC 9901 §10.1 |
+| A doorman who can be leaned on to show the office | **Issuer/verifier unlinkability** — *"cannot be achieved"* | RFC 9901 §10.1 |
+| Notes on *how* a fact was established, and by whom | `verified_claims` — provenance, not cryptography | OIDC Identity Assurance §5.1 |
+| Trusting an office you never registered with, via a chain of vouchers | **Trust chain** to a **trust anchor** | OpenID Federation 1.1 §1.2 |
+
+> Several references above point into **RFC 9901 §7.1 and §7.3** — the verifier's numbered processing steps,
+> which this module reaches in *"The three checks people skip."* They are given here so the checks arrive
+> already attached to something concrete.
+
+Two rows have no clean physical analogue, and the mismatch is worth noticing rather than smoothing over.
+**`sd_hash`** covers the envelopes you selected *for this visit*, so the note you sign is not reusable at the
+next door even with the same dossier — paper has no equivalent. And the last two rows of the linkability
+pair are a **property of the seal itself**, not of what you disclose, which is exactly why disclosing less
+does not buy anonymity.
+
 ## Learning objectives
 
 By the end you can:
@@ -279,7 +338,7 @@ with a detail worth memorising: *"In the case that there is no Key Binding JWT, 
 empty string and the last separating tilde character MUST NOT be omitted."* The two formats *"can be
 distinguished by the final `~` character."*
 
-### Key binding — commit-then-prove, for the fourth time
+### Key binding — commit-then-prove, for the fifth time
 
 Without key binding, an SD-JWT is a bearer credential, with everything Module 04 taught you that implies.
 §9.5 states the consequence plainly:
@@ -297,10 +356,17 @@ time the holder signs a **KB-JWT**. Its header MUST use `typ: kb+jwt`, and §4.3
 | `nonce` | "Ensures the freshness of the signature or its binding to the given transaction" |
 | `sd_hash` | binds the proof to **exactly these disclosures** |
 
-Recognise the shape. Module 03: commit to a secret in the front channel, prove it at the token endpoint.
-Module 05: commit to a key at the token endpoint, prove it per request with DPoP. Here: the issuer commits
-to a key at issuance, the holder proves it per presentation. **Fourth occurrence of the same pattern in this
-curriculum.** If you can see it here without being told, the pattern has landed.
+Recognise the shape. Module 02: split the secret across two channels — a code in the browser, redeemable only
+with client authentication. Module 03: commit to a verifier in the front channel, prove it at the token
+endpoint. Module 05: commit to a key at the token endpoint, prove it per request with DPoP. Module 08: commit
+to a hash inside the ID token, prove it by holding the matching artefact. Here: the issuer commits to a key at
+issuance — possibly years earlier — and the holder proves it per presentation. **Fifth and last occurrence of
+the same pattern in this curriculum.** If you can see it here without being told, the pattern has landed.
+
+The five are worth holding as a set, because the *distance* between commitment and proof grows each time:
+same request (02), same flow (03), same session (05), same response (08), and finally an arbitrary interval
+measured in years (09b). That last one is why key binding needs `nonce` and `aud` — with the issuer offline
+and the commitment stale, freshness has to come from the verifier.
 
 `sd_hash` deserves a second look. §4.3.1 requires it to be computed over the issuer-signed JWT plus *"zero or
 more Disclosures selected for presentation to the Verifier, each followed by a tilde character."* So the
@@ -550,7 +616,7 @@ The lab does not pretend otherwise. Where something cannot be observed, it says 
 graph TD
     M00["00 · Web + JOSE<br/><i>JWS, decode ≠ verify</i>"] --> M08
     M08["08 · OIDC Core<br/><i>claims, 13-step validation</i>"] --> M09b["09b · Identity + credentials<br/><b>you are here</b>"]
-    M03["03 · PKCE<br/><i>commit-then-prove</i>"] -.->|"same pattern, 4th time"| M09b
+    M03["03 · PKCE<br/><i>commit-then-prove</i>"] -.->|"same pattern, 5th time"| M09b
     M05["05 · DPoP<br/><i>proof of possession</i>"] -.->|"cnf, key binding"| M09b
     M09b --> M11["11 · API security<br/><i>authorization decisions</i>"]
 ```

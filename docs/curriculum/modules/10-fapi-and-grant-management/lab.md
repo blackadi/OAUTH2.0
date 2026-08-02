@@ -33,11 +33,11 @@ flow() {
   RUE=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$REDIRECT_URI")
   curl -s -c "$J" -o /dev/null \
     "$API/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$RUE&state=lab10&$1"
-  local C1; C1=$(curl -s -b "$J" -c "$J" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+  local C1; C1=$(curl -s -b "$J" -c "$J" "$API/session/login" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
   local L2; L2=$(curl -s -b "$J" -c "$J" -o /dev/null -w '%{redirect_url}' \
     -d "username=$LAB_USER&password=$LAB_PASS&_csrf=$C1" "$API/session/login")
   if echo "$L2" | grep -q consent; then
-    local C2; C2=$(curl -s -b "$J" -c "$J" "$API/session/consent" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+    local C2; C2=$(curl -s -b "$J" -c "$J" "$API/session/consent" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
     curl -s -b "$J" -c "$J" -o /dev/null -w '%{redirect_url}' -d "decision=approve&_csrf=$C2" "$API/session/consent"
   else
     printf '%s' "$L2"      # stored consent (24 h) short-circuits the consent page
@@ -104,7 +104,7 @@ The headline. One flow, deliberately constructed to breach as much of §5.3.2 as
 ```bash
 CB=$(flow "scope=profile")
 echo "$CB" | sed 's|.*?||' | tr '&' '\n' | sed -E 's/^(code|iss)=.*/\1=<redacted>/'
-CODE=$(echo "$CB" | grep -oP 'code=\K[^&]+')
+CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$CB")
 
 RUE=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$REDIRECT_URI")
 curl -s -u "$CLIENT_ID:$CLIENT_SECRET" \
@@ -269,7 +269,7 @@ that queries a grant is an ordinary access token that happens to carry `grant_ma
 
 ```bash
 CB=$(flow "scope=profile%20grant_management_query%20grant_management_revoke&grant_management_action=create")
-CODE=$(echo "$CB" | grep -oP 'code=\K[^&]+')
+CODE=$(node -e 'const u=new URL(process.argv[1]);process.stdout.write(u.searchParams.get("code")||"")' -- "$CB")
 RUE=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$REDIRECT_URI")
 curl -s -u "$CLIENT_ID:$CLIENT_SECRET" \
   -d "grant_type=authorization_code&code=$CODE&redirect_uri=$RUE" "$API/token" -o /tmp/gm.json

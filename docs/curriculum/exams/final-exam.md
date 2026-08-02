@@ -19,9 +19,10 @@ reasoning.
 **why it exists**. You must convey: the problem it solves, why the obvious solution is wrong, and the single
 structural idea that makes the whole thing work. No jargon you do not define.
 
-**F2 (9 pts).** This curriculum names one pattern four times: **commit to a secret on one channel, prove it on
-another**. Identify all four occurrences, say what is committed and what is proved in each, and explain what
-the pattern is *for* — the general property it buys.
+**F2 (9 pts).** This curriculum names one pattern five times: **commit to a secret on one channel, prove it on
+another**. Identify all five occurrences, say what is committed and what is proved in each, and explain what
+the pattern is *for* — the general property it buys. Then state what grows across the five, and why the last
+one needs two claims the others do not.
 
 **F3 (8 pts).** Give the shortest correct answer to each, with the reason:
 (a) Why does an access token not authenticate a user?

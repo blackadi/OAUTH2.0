@@ -47,8 +47,9 @@ channel. An attacker who sees the authorization request learns the hash — from
 recovered — and an attacker who steals the code has nothing to present.
 
 Notice this is the same pattern as Module 02's code-vs-token split, applied one level deeper: **split a secret
-across two channels so that compromising the observable one is not enough.** You will see it a third time in
-Module 05, where the *token* gets the same treatment via DPoP.
+across two channels so that compromising the observable one is not enough.** This is its second appearance of
+five; you will see it a third time in Module 05, where the *token* gets the same treatment via DPoP, then in
+Modules 08 and 09b.
 
 One more thing this module has to do: kill the idea that `state` is "basically the same." `state` is sent in
 the clear on the front channel, so it fails requirement 2 outright. It defends the client against accepting a
@@ -211,6 +212,53 @@ throughout, and once a token is bound to a key, rotation adds churn without addi
 fallback for deployments that *cannot* sender-constrain. The rule to carry: **a public client's refresh token
 needs one of the two — never neither.** On the service backing this repo `refreshTokenKept` is currently
 `false`, so rotation is on; you will observe it in the lab.
+
+### The limit of all of this: XSS
+
+Everything above protects a token or a code **in transit**. None of it survives an attacker running script
+inside your own origin, and that limit is load-bearing for the rest of the curriculum, so it needs stating
+once, properly.
+
+> **Cross-site scripting (XSS)** is any defect that lets an attacker execute JavaScript in *your* origin —
+> a comment field rendered as HTML, a URL parameter reflected into the page, a compromised dependency in your
+> bundle, a malicious browser extension with access to the tab. The browser cannot tell that script apart
+> from yours: **same origin, same permissions**. It reads `localStorage`, `sessionStorage`, and any variable
+> in memory; it makes requests carrying your cookies; it rewrites the DOM.
+
+Now apply that to PKCE. The verifier lives in the client's process between the two legs — in this repo,
+`sessionStorage` (`FapiSection.tsx:134`). An attacker with script in your origin **reads it**, and they do
+not even need to: they can start a *fresh* authorization flow, generate their own verifier, and complete it
+silently against the AS session the user already has. To the authorization server that is the legitimate
+client doing legitimate things, because in every checkable sense it is.
+
+So: **PKCE closes a protocol gap; it does nothing about a compromised client.** The same will be true of
+DPoP (Module 05) and of every other mechanism in this curriculum. There is no OAuth extension that survives
+script execution in your own origin — which is why the honest form of every browser recommendation ends
+"…and eliminate XSS", and why the next section exists.
+
+### Keeping tokens out of the browser: the backend-for-frontend
+
+If no browser-side mechanism survives XSS, one response is to stop putting tokens in the browser.
+
+> A **backend-for-frontend (BFF)** is a small server component owned by the same team as the SPA, deployed
+> at the same origin. It performs the authorization-code flow **server-side, as a confidential client**, and
+> keeps the access and refresh tokens. The browser never receives a token at all — it gets an ordinary
+> `HttpOnly`, `Secure`, `SameSite` session cookie, and the BFF attaches the real token when it proxies calls
+> onward. It is not an OAuth mechanism and no RFC defines it; it is a deployment pattern.
+
+What it buys, in exactly the terms of the section above: under XSS the attacker can still **make requests as
+the victim while the session lives**, because the cookie rides along automatically. What they can no longer
+do is **steal a long-lived credential and use it from their own machine, later, elsewhere**. The blast radius
+collapses from "exfiltrate a refresh token, retain access for its lifetime" to "abuse an active session that
+one logout ends."
+
+What it costs: a stateful server component to build, deploy and secure; CSRF handling that a token-in-header
+design did not need; an extra hop; and the BFF itself becomes a high-value target holding many users' refresh
+tokens. It is the right default for a **first-party** SPA against a **first-party** API, and often the wrong
+answer for a third-party integration with no natural home for the server half.
+
+You will argue this trade-off properly in Tier 4 (Q17), and it returns in Module 05's DPoP discussion and in
+the capstone.
 
 ## Assigned reading
 

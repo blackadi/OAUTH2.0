@@ -27,10 +27,14 @@ Two things change:
    number of planted defects. If you find eight of twenty-five and grade yourself "pretty good", the rubric
    will disagree with you, in writing.
 
-> **On the exams.** The learning path schedules cumulative exams after Modules 03, 07 and 11 and a final exam
-> before this one. **Those are not written yet** — they are Stage 4 work (see
-> [PROGRESS.md](../../PROGRESS.md)). Do the capstone now; the exams will slot in behind it as extra practice,
-> not as a prerequisite. Module 07's Tier 4 was written to stand in for Exam B in the meantime.
+> **Sit the [Final Exam](../../exams/final-exam.md) before you start this.** It is a prerequisite, not extra
+> practice. The capstone assumes you can do what the Final tests, and the Final is where three of the five
+> promised capabilities get their only **closed-book** assessment — this module is open-book by construction,
+> since the brief and the Meridian document are both in front of you.
+>
+> If you have not sat [Exams A, B and C](../../exams/) at their scheduled points (after Modules 03, 07 and
+> 11), do them first. They test what a single module's quiz structurally cannot: combining mechanisms when
+> nobody tells you which module the answer is in.
 
 ---
 
@@ -143,17 +147,22 @@ curriculum.
 
 The [curriculum README](../../README.md) says a finisher can, without reference material:
 
-| Definition of done | Where the capstone tests it |
+Two of these the capstone tests directly. The rest are tested **elsewhere**, and this table now says where —
+because an earlier version of it claimed coverage the capstone does not have, which is exactly the kind of
+false assurance Part B is about.
+
+| Definition of done | Where it is actually tested |
 |---|---|
-| Draw the code+PKCE flow at wire level, naming every parameter | Part A decisions 1 and 4; quiz Tier 1 |
-| Explain why an access token does not authenticate a user | Meridian has this defect; Part B |
-| Choose grants, client auth and binding for an arbitrary architecture and defend each against a **named** attacker model | Part A, decisions 1–3, and the attacker-model criterion |
-| Place an unfamiliar extension in the dependency graph | quiz Tier 2 |
-| Find the authorization flaw in a code review | Part B; several defects are in code |
-| Pass Tier 4 of every quiz | quiz Tier 4 here is the last one |
+| Draw the code+PKCE flow at wire level, naming every parameter | **[Exam A](../../exams/exam-a.md) A1 and A2**, closed book, from memory. Not here — the capstone asks for *design* decisions (Part A, 1 and 4), which is a different skill |
+| Explain why an access token does not authenticate a user | **Here** — Meridian §5 has the defect (Part B), and quiz Q11 |
+| Choose grants, client auth and binding for an arbitrary architecture and defend each against a **named** attacker model | **Here** — Part A decisions 1–3 and the attacker-model criterion; also [Final](../../exams/final-exam.md) F8–F10 |
+| Place an unfamiliar extension in the dependency graph | **[Module 09a quiz Q20](../09a-interaction-extensions/quiz.md)**, which hands you a specification the curriculum never taught. Not tested here |
+| Find the authorization flaw in a code review | **Here** — Part B; several defects are in code. Also Module 11 lab Ex 6, and Final F4/F6/F7 |
+| Pass Tier 4 of every quiz | This module's Tier 4 is the last one |
 
 If you can do all six, you are done — and the more useful outcome is that you now know which of the six you
-are weakest at.
+are weakest at. If you have not sat Exam A or done Module 09a's Q20, two of the six are untested rather than
+passed.
 
 ---
 

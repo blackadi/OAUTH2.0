@@ -60,8 +60,9 @@ Three things to notice in that decoded array, because each is a rule:
 Now do it the hard way, with no help from the script, to prove the script is not doing anything magic:
 
 ```bash
-printf '%s' 'WyJfMjZiYzRMVC1hYzZxMktJNmNCVzVlcyIsICJmYW1pbHlfbmFtZSIsICJNw7ZiaXVzIl0' \
-  | openssl dgst -sha256 -binary | basenc --base64url | tr -d '='
+node -e 'const c=require("crypto");process.stdout.write(
+  c.createHash("sha256").update(process.argv[1],"ascii").digest("base64url"))' \
+  -- 'WyJfMjZiYzRMVC1hYzZxMktJNmNCVzVlcyIsICJmYW1pbHlfbmFtZSIsICJNw7ZiaXVzIl0'
 ```
 
 ```

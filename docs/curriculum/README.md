@@ -21,7 +21,9 @@ that teaches you the whole factory, in the order a working system was actually b
 Without reference material, a finisher can: draw the authorization-code flow with PKCE at wire level and name
 every parameter's purpose; explain why an access token does **not** authenticate a user; choose grants,
 client-authentication methods, and token-binding mechanisms for an arbitrary architecture and defend each
-against a *named* attacker model; place an unfamiliar OAuth extension correctly in the dependency graph; find
+against a *named* attacker model; place an unfamiliar OAuth extension correctly in the dependency graph
+(drilled in [Module 09a Q20](modules/09a-interaction-extensions/quiz.md), which hands you a specification
+this curriculum never teaches); find
 the authorization flaw in a code review; and pass the adversarial (Tier 4) questions in every quiz.
 
 ## The learning path
@@ -75,8 +77,10 @@ graph TD
 
 ## How to use this
 
-1. **Set up the lab once.** Follow the root `README.md` "Getting Started" to run the server (`:3000`) and
-   dashboard (`:3001`). Then set up the curriculum env:
+1. **Set up the lab once.** You need `curl`, **`node` v18+**, and **`python3`** (labs 09b, 10 and 11 use it
+   for JSON); everything else the labs call is POSIX, so they run unmodified on macOS, BSD and Linux. Follow
+   the root `README.md` "Getting Started" to run the server (`:3000`) and dashboard (`:3001`). Then set up
+   the curriculum env:
    ```bash
    cd docs/curriculum/scripts
    cp curriculum.env.example curriculum.env   # fill in your client IDs/secrets

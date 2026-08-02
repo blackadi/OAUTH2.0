@@ -158,7 +158,7 @@ curl -s -c "$CJ" -o /dev/null \
   "$API/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$RU_ENC&scope=profile&state=m06lab"
 
 # Leg 2 — log in
-CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
 FINAL=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/login" \
   -d "username=$LAB_USER" -d "password=$LAB_PASS" --data-urlencode "_csrf=$CSRF")
 
@@ -166,7 +166,7 @@ FINAL=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$AP
 case "$FINAL" in
   *code=*) : ;;                       # stored consent already covered it; we have the code
   *) CSRF2=$(curl -s -b "$CJ" -c "$CJ" "$API/session/consent" \
-       | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+       | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
      FINAL=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/consent" \
        -d "decision=approve" --data-urlencode "_csrf=$CSRF2") ;;
 esac
@@ -776,7 +776,7 @@ Six defects in one module, and not one of them announced itself:
 | `iss` unresolved against any trust store | Nothing to compare against, so nothing fails |
 | `actor_token` / `resource` / `audience` / `requested_token_type` discarded | Handler builds its request from four fields |
 | `issued_token_type` missing | Nobody validates a response against the RFC |
-| A live credential in `sub` | `||` substituted rather than failing closed |
+| A live credential in `sub` | `\|\|` substituted rather than failing closed |
 
 **The habit:** verify the token you received, not the request you sent. Module 07 assembles every attack from
 Modules 02–06 into RFC 9700's catalogue and asks which of them a best-current-practice document published in

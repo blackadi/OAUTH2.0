@@ -84,6 +84,33 @@ The hotel again, and now we care who you are.
   the gym — each of which admitted you on their own slip and still believes you are a guest. Four
   specifications, because there are four different parties who each need telling.
 
+## Specification pass (exact terminology) + the bridge
+
+Each analogy element mapped to its formal counterpart, with the clause that defines it.
+
+| Plain-language element | Formal concept | Defining reference |
+|---|---|---|
+| The key card, with no name on it | **Access token** — a capability, not an identity | RFC 6749 §1.4; presented per RFC 6750 §2.1 |
+| The signed registration slip | **ID token** — a statement *about an authentication event* | OIDC Core §2 |
+| "The desk verified this guest's passport" | `sub` + the fact of authentication | OIDC Core §2 |
+| "…at 14:32 today" | `auth_time` | OIDC Core §2; REQUIRED once `max_age` is sent |
+| "…by photo ID" | `acr` / `amr` — how strongly, and by what method | OIDC Core §2; enforced in Module 09a |
+| "…prepared for the concierge desk specifically" | `aud` = `client_id` | OIDC Core §3.1.3.7 **step 3** — the audience check |
+| Checking the hotel's seal | Signature verification, with `alg` **pinned from registration** | §3.1.3.7 **steps 6–8** |
+| Your reference number on the enquiry | `nonce` | OIDC Core §3.1.2.1; checked at **step 11** |
+| A slip addressed to the spa, refused at the concierge | **Token substitution**, defeated | §3.1.3.7 step 3 |
+| Handing the key card back | **RP-Initiated Logout** — `end_session_endpoint` | RP-Initiated Logout 1.0 |
+| Telling the spa, the restaurant and the gym | **Back-Channel Logout** — a signed logout token per RP | Back-Channel Logout 1.0 |
+| Which of your two rooms to close | `sid` — one session, versus `sub` for the person | Back-Channel Logout 1.0 |
+
+The row to sit with is **`aud`**. Every other row describes something the slip *says*; that one describes
+who it was *written for*, and it is the only one that stops a real, correctly-signed slip from the same real
+hotel logging the wrong person in.
+
+> The step numbers in the right-hand column refer to OIDC Core §3.1.3.7's **thirteen validation steps**,
+> which this module works through in full further down. You do not need them yet — they are here so that when
+> you reach the list, every step already has an analogy element attached to it.
+
 ## Learning objectives
 
 After this module you can:
@@ -246,6 +273,13 @@ The pattern is the same one Module 05 named: when a value must travel through an
 hash somewhere signed. `c_hash` is precisely what makes the hybrid flow safe, which is why the hybrid flow
 exists at all.
 
+**Fourth occurrence of commit-then-prove in this curriculum**, and the one that looks least like the others.
+Module 02 split the secret across two channels (code, then client authentication); Module 03 committed to a
+verifier and proved it at the token endpoint; Module 05 committed to a key and proved it per request. Here
+the ID token commits to a hash of an artefact that travelled separately, and *possession of the matching
+artefact* is the proof — checked by the client rather than the server. Same shape, different party doing the
+checking.
+
 ## Flows, and what hybrid is for
 
 | `response_type` | What comes back through the browser | ID token validated how | Use it? |
@@ -306,7 +340,14 @@ places.
 modern browser privacy defaults, and because its logout token has validation rules people skip. A logout
 token is a JWT that MUST carry an `events` claim containing
 `http://schemas.openid.net/event/backchannel-logout`, MUST identify the session by `sub` and/or `sid`, and
-**MUST NOT** contain a `nonce`. And like any inbound signed token, it must be verified against *the sending
+**MUST NOT** contain a `nonce`.
+
+> **`sid` — the claim this depends on.** `sub` names the *person*; **`sid` names one of their *sessions*** at
+> the OP. A user signed in on a laptop and a phone has one `sub` and two `sid`s. That distinction is the
+> whole reason both are permitted: a logout token carrying only `sub` means *"end everything for this user"*,
+> while one carrying `sid` means *"end this one."* Which you get is the OP's choice, so an RP must handle
+> both — and must therefore be able to look a session up **by either**, which is the requirement the next two
+> paragraphs are about. And like any inbound signed token, it must be verified against *the sending
 OP's* keys — with `iss`, `aud`, `exp` and `iat` all checked — before anything is destroyed.
 
 Two structural problems with back-channel logout that no specification can solve for you:
@@ -317,6 +358,80 @@ Two structural problems with back-channel logout that no specification can solve
   Exercise 6 shows what happens when that is missed.
 - **Front-channel state survives.** The RP's server-side session is gone; the SPA in the user's tab still
   holds its tokens in `sessionStorage` and does not know. Back-channel logout does not reach it.
+
+## Wire-level walkthrough
+
+Module 02's flow, with the OIDC additions marked. **One extra scope value and one extra token** — that really
+is the whole difference on the wire, and seeing it is what stops OIDC feeling like a second protocol.
+
+```http
+# 1. FRONT CHANNEL. Identical to Module 02 except for two parameters.
+GET /api/authorization?response_type=code
+    &client_id=1234567890
+    &redirect_uri=http%3A%2F%2Flocalhost%3A3001%2Fcallback
+    &scope=openid%20profile                       # ← "openid" is what makes this OIDC
+    &state=Zx9qP2rLk7
+    &nonce=n-0S6_WzA2Mj                           # ← bound into the ID token, checked at step 11
+    &code_challenge=…&code_challenge_method=S256 HTTP/1.1
+# Visible+editable at the user agent. `nonce` is safe here: an attacker who changes it changes
+# the value the AS will echo, and the client compares against what IT stored. Tampering is detected,
+# not enabled.
+
+# 2-3. The user authenticates and consents on the AS's own pages (Module 01's credential boundary).
+
+# 4. FRONT CHANNEL. Still just a code. No token, no ID token — this is `code`, not hybrid.
+HTTP/1.1 302 Found
+Location: http://localhost:3001/callback?code=8k2Jd…&state=Zx9qP2rLk7&iss=https%3A%2F%2Fas.example.com
+
+# 5. The client checks `state` (Module 02) — then, and only then, redeems.
+
+# 6. BACK CHANNEL.
+POST /api/token HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <client_id:client_secret>
+
+grant_type=authorization_code&code=8k2Jd…&redirect_uri=…&client_id=…&code_verifier=…
+
+# 7. The token response — and here is the whole of OIDC's addition to the wire.
+HTTP/1.1 200 OK
+{"access_token":"…", "token_type":"Bearer", "expires_in":86400,
+ "scope":"openid profile", "refresh_token":"…",
+ "id_token":"eyJhbGciOiJFUzI1NiIsImtpZCI6IjEifQ.eyJpc3MiOi…"}      # ← the second token
+```
+
+**The ID token, decoded**, with the validation step that checks each claim. This is the artefact the client
+opens; everything else in the response it treats as an opaque string.
+
+```json
+{
+  "iss": "https://as.example.com",     // step 2  — MUST equal the expected issuer, exactly
+  "aud": ["1234567890"],               // step 3  — MUST contain our client_id. Defeats substitution
+  "sub": "admin",                      //         — used, not validated. Key records on (iss, sub)
+  "exp": 1785242182,                   // step 9  — now < exp
+  "iat": 1785155782,                   // step 10 — reject if too old for YOUR policy; the spec sets no bound
+  "auth_time": 1785155781,             // step 13 — required once max_age is sent
+  "nonce": "n-0S6_WzA2Mj",             // step 11 — MUST equal what we sent at leg 1. Defeats injection
+  "acr": "pwd",                        // step 12 — verify if you requested one (Module 09a)
+  "s_hash": "bOhtX8F73IMjSPeVAvOhqA"   //         — FAPI: binds the otherwise-unprotected `state`
+}
+```
+
+with the header carrying the algorithm you **pinned from registration**, never read from the token:
+
+```json
+{ "alg": "ES256", "kid": "1" }         // step 7 — expected alg comes from config; step 6 verifies the signature
+```
+
+**What just happened?** Compare leg 1 and leg 7 with Module 02's. One scope value went out; one token came
+back. Everything else — PKCE, `state`, the code, client authentication, the channels — is unchanged, which
+is precisely why OIDC is called a *layer* rather than a protocol. The security work is not in obtaining the
+ID token; it is in the thirteen checks you perform on it after leg 7, and every one of those maps to a line
+in the block above.
+
+Two things worth noticing in that JSON, because both are this deployment rather than the spec: **`aud` is an
+array**, so a validator written `claims.aud === clientId` fails here and passes elsewhere; and **`exp - iat`
+is 86400**, a day, for a token whose job is to record a moment. Neither is wrong; both are the kind of
+detail that only shows up when you look at the artefact.
 
 ## Threat model for this module
 

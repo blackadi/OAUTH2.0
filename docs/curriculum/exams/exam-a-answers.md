@@ -201,8 +201,9 @@ suspicion into a finding.
 ### A14 (6) `[lab]` → *Module 03*
 
 ```bash
-printf '%s' 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk' \
-  | openssl dgst -sha256 -binary | basenc --base64url | tr -d '='
+node -e 'const c=require("crypto");process.stdout.write(
+  c.createHash("sha256").update(process.argv[1],"ascii").digest("base64url"))' \
+  -- 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'
 ```
 ```
 E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM

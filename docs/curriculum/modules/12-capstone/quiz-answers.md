@@ -166,8 +166,22 @@ right, which is the failure mode.
 holder of the client secret can mint tokens as well as check them. Module 08's lab demonstrated this live:
 `sub` changed to another user, re-signed with the client secret, and all thirteen validation steps passed.
 
+- **B** is the interesting wrong answer, and it is **false in a way worth understanding**: an HS256 ID token
+  *can* be validated offline — that is the whole appeal — provided you hold the secret. What you cannot do is
+  let anyone validate it *without also empowering them to forge it*. Reaching for B means you have spotted
+  that something about distribution is wrong and mislabelled it as an availability problem rather than a
+  trust-model one.
+- **C** invents a constraint. Nothing in OIDC Core ties `alg` to lifetime.
+- **D** is wrong twice: `nonce` is an ordinary claim, and Meridian's tokens do carry one.
+
 **Q5 — B.** Grant Management §6.5: *"token revocation is not required to cause the revocation of the
 underlying grant."* The consent record survives, so the next authorization request completes silently.
+
+- **A** is the belief the defect depends on — if the two were the same operation, wiring the button to
+  RFC 7009 would be correct, and no reviewer would look twice.
+- **C** — RFC 7009 revocation is synchronous and its 200 is meaningful; asynchrony is not the issue.
+- **D** inverts the asymmetry. Grant revocation MUST kill refresh tokens *and* removes the grant; it is
+  broader than token revocation, not narrower.
 
 ## Tier 2
 
@@ -191,11 +205,27 @@ precisely the delegation case `act` exists for.
 **Q9 — B.** RFC 9470 defines `acr_values` and `max_age` in the challenge so the client learns what would
 satisfy the requirement. Omitting them leaves the client able to detect failure and unable to remedy it.
 
+- **A** confuses authentication with authorization. `scope` is the wrong axis entirely — more scope does not
+  make an authentication event stronger, and `insufficient_scope` (RFC 6750) is the *other* error, for the
+  other problem.
+- **C** — the scheme in `WWW-Authenticate` reflects how the token is presented, not what the challenge asks
+  for. Meridian's tokens are bearer tokens (defect #11); changing the scheme here would fix nothing.
+- **D** — `Retry-After` says *when* to try again. The client's problem is not timing; it is that retrying
+  the identical request produces the identical `acr` and the identical 401, forever.
+
 **Q10 — B.** This is the reviewer's instinct worth building: **attack the weakest permitted path, not the
 most interesting one.** Meridian's partner path is genuinely strong; the SPA and mobile paths are implicit
 flow, password grant and optional PKCE. An attacker never engages the strong control. It is also why
 "we use `private_key_jwt`" appears in the document as a justification for weakening PKCE (#6) — the team is
 reasoning about their best path rather than their worst.
+
+- **A** is the expensive route: forging a partner assertion needs a partner's private key, and the partner
+  path is the one part of this platform built correctly. Choosing it means you have graded the architecture
+  rather than attacked it.
+- **C** is not an attack, it is a wish.
+- **D** would work and is far more effort than reading an access token out of a URL fragment. An attacker
+  spends the least they can; a reviewer who ranks by *what would be impressive* rather than *what is
+  cheapest* mis-prioritises the whole remediation list.
 
 ## Tier 3
 

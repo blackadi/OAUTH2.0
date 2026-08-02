@@ -21,20 +21,30 @@ Not a model answer — a checklist. Award marks for what is present:
 **Deduct** if the answer describes the *flow* (redirects, codes, tokens) before the *problem*. That is the
 most common failure and it is why so much OAuth documentation is unreadable: mechanism before motivation.
 
-### F2 (9) — the pattern, four times → *Modules 03, 05, 08, 09b*
+### F2 (9) — the pattern, five times → *Modules 02, 03, 05, 08, 09b*
 
-| # | Occurrence | Committed | Proved |
-|---|---|---|---|
-| 1 | **PKCE** (Module 03) | `code_challenge` = SHA-256(verifier), at the authorization endpoint, front channel | `code_verifier`, at the token endpoint, back channel |
-| 2 | **DPoP** (Module 05) | Public key thumbprint `cnf.jkt`, recorded by the AS at token issuance | A per-request signed proof (`htm`/`htu`/`ath`/`jti`) |
-| 3 | **`at_hash` / `c_hash` / `s_hash`** (Module 08) | A hash of the access token / code / `state`, inside the signed ID token | Possession of the matching artifact, checked by the client |
-| 4 | **SD-JWT key binding** (Module 09b) | Holder public key in `cnf`, signed by the issuer at issuance — possibly years earlier | A KB-JWT at presentation (`aud`/`nonce`/`sd_hash`) |
+| # | Occurrence | Committed | Proved | Gap |
+|---|---|---|---|---|
+| 1 | **Code vs. token** (Module 02) | An authorization code in the browser — worthless alone | Client authentication at the token endpoint | Same request |
+| 2 | **PKCE** (Module 03) | `code_challenge` = SHA-256(verifier), at the authorization endpoint, front channel | `code_verifier`, at the token endpoint, back channel | Same flow |
+| 3 | **DPoP** (Module 05) | Public key thumbprint `cnf.jkt`, recorded by the AS at token issuance | A per-request signed proof (`htm`/`htu`/`ath`/`jti`) | Same session |
+| 4 | **`at_hash` / `c_hash` / `s_hash`** (Module 08) | A hash of the access token / code / `state`, inside the signed ID token | Possession of the matching artifact, checked by the **client** | Same response |
+| 5 | **SD-JWT key binding** (Module 09b) | Holder public key in `cnf`, signed by the issuer at issuance | A KB-JWT at presentation (`aud`/`nonce`/`sd_hash`) | **Years** |
 
-**1.5 per occurrence (6), plus 3 for the general property:** it converts a **bearer** artifact into one that
+**1.2 per occurrence (6), plus 3 for the general property:** it converts a **bearer** artifact into one that
 requires a **secret the bearer must still hold** — so possessing the intercepted value is not enough. It
 splits a credential across two channels (or two moments), such that an attacker must compromise both.
 
-Accept mTLS certificate binding as an alternative to (2). Full marks require the *why*, not just the list.
+**What grows (part of the 3):** the interval between commitment and proof — same request, same flow, same
+session, same response, then an arbitrary period. **Why the last needs `nonce` and `aud`:** the issuer is
+offline at presentation time and the commitment may be years old, so freshness and audience cannot come from
+the committing party. The verifier has to supply both per presentation. In the first four the committing
+party is still in the conversation and can do it itself.
+
+Accept mTLS certificate binding as an alternative to (3). Accept an answer that omits (1) or (4) and names
+the other four **if** the candidate says why they excluded it — (1) is a split across channels rather than a
+cryptographic commitment, and (4) is checked by the client rather than the issuer, so both are defensible
+edge cases. Full marks require the *why*, not just the list.
 
 ### F3 (8) — 2 each
 

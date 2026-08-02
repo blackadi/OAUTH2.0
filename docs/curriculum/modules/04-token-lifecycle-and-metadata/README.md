@@ -335,8 +335,8 @@ and *how fast revocation propagates* — it does not reduce the authorization wo
 See **[lab.md](lab.md)**. You will introspect a live token through both endpoints and compare what each
 returns; revoke it and watch `active` flip; probe the two anti-oracle behaviours; audience-restrict a token
 with `resource` and watch `aud` appear; trip both RFC 8707 validation rules; compare the AS-metadata and
-OIDC-discovery documents; and prove that `/.well-known/oauth-protected-resource` does not exist *despite
-returning HTTP 200*.
+OIDC-discovery documents; and prove that a `/.well-known/` path you invented **does not exist despite
+returning HTTP 200**, using three signals that are not the status code.
 
 ## Source change — serving RFC 9728 (done)
 
@@ -357,7 +357,9 @@ true root in `app.ts` next to `oauthAsMetadataRoutes`, serving:
 ```
 
 **Why:** RFC 9728 became a published RFC in April 2025 and is how a client discovers which AS protects an API.
-The client side already consumes PRM for MCP (`client/src/services/mcp.service.ts`), so the repo teaches a
+The client side already consumes PRM for the Model Context Protocol's OAuth profile
+(`client/src/services/mcp.service.ts` — MCP is not taught in this curriculum; it is the unfamiliar extension
+you are handed in [Module 09a's Q20](../09a-interaction-extensions/quiz.md)), so the repo teaches a
 document it cannot serve. It is also the smallest possible fix for the 200-OK-HTML trap: a real route makes
 the endpoint honest.
 
@@ -365,9 +367,9 @@ the endpoint honest.
 endpoint; additive only. The main decision is what `resource` should be for this deployment, since this server
 is primarily an AS and only stands in for an RS via UserInfo and introspection.
 
-**If you decline:** the lab stays as written — it teaches PRM conceptually and uses the missing endpoint as
-the detection exercise, which is genuinely useful. Nothing else in the curriculum depends on it until
-Module 09a's MCP material.
+**The decision taken:** approved and built. The lab's detection exercise now uses an invented path as its
+negative control, which teaches the same skill against a target that cannot silently stop being absent — a
+better exercise, arrived at by accident. Nothing else in the curriculum depends on PRM being served.
 
 ## Threat notes — what breaks if you get this wrong
 

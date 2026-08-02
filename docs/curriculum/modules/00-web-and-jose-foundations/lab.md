@@ -16,7 +16,17 @@ npm --prefix server run dev     # in one terminal; leave it running
   `SESSION_SECRET` in `server/.env` or it will not start (this is a fail-fast config check, not an OAuth
   requirement). No client credentials are needed for this module.
 - **Authlete flags:** none required for Module 00.
-- **Tools:** `curl`, `node` (for the local decoder), and the dashboard at `:3001` for visual cross-check.
+- **Tools — the complete list for the whole curriculum, so you can install once:**
+
+  | Tool | Used for | Notes |
+  |---|---|---|
+  | `curl` | every request in every lab | preinstalled on macOS and most Linux |
+  | `node` | JSON handling, JOSE, and the offline decoders — the default tool in labs 00–09a | v18+ (`crypto.randomUUID`, `base64url`, global `fetch`) |
+  | `python3` | JSON handling in labs **09b, 10 and 11** only | preinstalled on macOS and most Linux |
+  | the dashboard `:3001` | visual cross-check | optional but used in most labs |
+
+  Everything else is POSIX (`grep`, `sed`, `awk`, `cut`, `mktemp`). **No lab requires GNU-only tools** —
+  if a command fails on macOS or BSD, that is a bug in the lab, not in your machine.
 
 Run all commands from the **repo root** so the script path resolves. Confirm the server is up:
 

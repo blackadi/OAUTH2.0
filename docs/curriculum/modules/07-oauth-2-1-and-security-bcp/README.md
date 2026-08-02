@@ -363,8 +363,11 @@ most useful thing that can happen to a reviewer.
 
 Then **[quiz.md](quiz.md)** — 18 items. Tier 4 is the gate.
 
-> **Cumulative Exam B is due after this module** and has not been written yet — see the Build Log in
-> `PROGRESS.md`. The Module 07 quiz's Tier 4 covers the same ground in the meantime.
+> **Sit [Cumulative Exam B](../../exams/exam-b.md) now.** It covers Modules 00–07, weighted to 04–07: 15
+> items, 100 points, two hours, **closed book**. This module's Tier 4 overlaps it on the audit method, but the
+> exam is the only place the rest of it is tested without notes — and the curriculum's promise is *"without
+> reference material."* One item (B5's FAPI half) reaches forward to Module 10 and says so inline; skip that
+> half if you have not read it yet.
 
 ---
 

@@ -140,21 +140,28 @@ clear on the front channel — which is the precise reason `state` cannot substi
 | Component | Grant | Client type | Client auth | Most dangerous attack |
 |---|---|---|---|---|
 | Browser SPA | `authorization_code` + PKCE (S256) | public | none | Code interception / XSS-driven token theft from browser storage (RFC 9700 §4.5, §4.17) |
-| iOS app | `authorization_code` + PKCE (S256), system browser (`ASWebAuthenticationSession`) — **never** an embedded webview | public | none (or attestation-based, Module 06) | Redirect hijack by a malicious app claiming the same custom URL scheme → code interception; use HTTPS universal links |
+| iOS app | `authorization_code` + PKCE (S256), system browser (`ASWebAuthenticationSession`) — **never** an embedded webview | public | none. *(Platform **app attestation** — App Attest, Play Integrity — can give the AS evidence that a genuine build is calling, but it is a platform service rather than an OAuth client-authentication method, and this curriculum does not cover it.)* | Redirect hijack by a malicious app claiming the same custom URL scheme → code interception; use HTTPS universal links |
 | Nightly reporting job | `client_credentials` | confidential | `private_key_jwt` or mTLS in preference to a shared secret | Credential theft from the host/CI → silent, long-lived, machine-speed data exfiltration |
 | Smart-TV app | device grant (RFC 8628) | public | none | `user_code` social engineering — the user authorizes an attacker's device because there is no origin or redirect to inspect |
 
 **Weakest link under an attacker with code execution on the end user's device:** the **SPA**. Justification:
 PKCE protects the *code* in transit, but it does nothing once the attacker is executing inside the same origin.
-XSS or a malicious extension reads the access token (and any refresh token) straight out of memory or storage
+**cross-site scripting (XSS — an attacker running script in your own origin; Module 03 defines it)** or a
+malicious extension reads the access token (and any refresh token) straight out of memory or storage
 and can also silently drive a fresh authorization flow through an existing AS session, defeating PKCE
 entirely because the attacker *is* the legitimate client instance. The iOS app is meaningfully better because
 the OS enforces process and keychain isolation and the system browser keeps the AS session out of the app's
 reach; the TV app holds little and is bounded by short-lived codes; the batch job is not on the user's device
 at all. The mitigations for the SPA are therefore not more front-channel parameters but **sender-constrained
-tokens (DPoP, Module 05), short lifetimes, refresh-token rotation policy, and a backend-for-frontend that
-keeps tokens out of the browser entirely** — with a hard prerequisite of eliminating XSS, since no OAuth
-mechanism survives script execution in your own origin.
+tokens (DPoP, Module 05), short lifetimes, refresh-token rotation policy, and a *backend-for-frontend* — a
+server component that runs the flow as a confidential client and keeps tokens out of the browser entirely
+(Module 03)** — with a hard prerequisite of eliminating XSS, since no OAuth mechanism survives script
+execution in your own origin.
+
+> **Marking note.** At this point you have not met DPoP, backend-for-frontends, or XSS as named concepts —
+> Modules 03 and 05 introduce them. Full marks require the four-column table and the weakest-link argument;
+> naming those specific mitigations is credit, not a requirement. They are named here so you recognise them
+> when they arrive.
 
 **Q18 — model answer.**
 

@@ -90,6 +90,31 @@ Three ways to sign something on someone else's behalf.
 
 The second is almost always what you wanted. The first is what you get by default when nobody insists.
 
+## Specification pass (exact terminology) + the bridge
+
+| Plain-language element | Formal concept | Defining reference |
+|---|---|---|
+| The company cheque | **Client credentials grant** — the client is the principal | RFC 6749 §4.4 |
+| Only a company that locks its chequebook gets one | *"MUST only be used by confidential clients"* | RFC 6749 §4.4 |
+| No name on the payee line for whom it acts | **No `sub`** on the issued token — nobody delegated this | Follows from §4.4; verified in Lab 1b |
+| The notarised letter | **Assertion used as an authorization grant** | RFC 7521 §2.1 / RFC 7523 §2.1 (`assertion`) |
+| Trusting the notary, not checking the face | *"the authorization server acts as a **relying party**"* | RFC 7521 §3 |
+| The notary's stamp | `iss` — whose trust is being invoked | RFC 7523 §3 (MUST) |
+| The person named in the letter | `sub` — the identity asserted | RFC 7523 §3 (MUST) |
+| "To be presented at this bank only" | `aud` — *"MUST reject any assertion that does not contain its own identity"* | RFC 7521 §5.2 |
+| **Which people this notary may vouch for** | **No standard mechanism** — deployment policy | *Absent from RFC 7521/7523; this is the gap* |
+| Showing the notary's own credentials at the door | **Assertion used as client authentication** = `private_key_jwt` | RFC 7523 §2.2 (`client_assertion`) |
+| Power of attorney | **Token exchange** | RFC 8693 |
+| The solicitor signs *"Alice"* | **Impersonation** — *"indistinguishable from B"* | RFC 8693 §1.1 |
+| The solicitor signs *"J. Smith, attorney for Alice"* | **Delegation** — recorded in `act` | RFC 8693 §1.1, §4.1 |
+| Naming the attorney on the instruction | `actor_token` — its **presence** is the request for delegation | RFC 8693 §2.1 |
+| The bank stating what it actually issued | `issued_token_type` — **REQUIRED** | RFC 8693 §2.2.1 |
+| A permission slip lodged in advance | `may_act` — who may become the actor for this subject | RFC 8693 §4.4 |
+
+Two rows have no reference, and that is the finding rather than an omission. **"Which people this notary may
+vouch for"** is the control the whole assertion grant rests on, and no specification defines it — which is
+why Lab Exercise 3 takes three commands.
+
 ## Learning objectives
 
 After this module you can:
@@ -291,6 +316,69 @@ introspect for.
 This is not hypothetical. It is what this repo does, and you will confirm it in Lab Exercise 6. Four request
 parameters are accepted and silently discarded. Hold that thought until the lab; predict the outcome before
 you run it.
+
+## Wire-level walkthrough
+
+Token exchange is the one mechanism in this module you have not seen as HTTP, and the gap between what you
+send and what comes back **is** the module. Predict the response before reading it.
+
+```http
+# What a correct delegation request looks like. Every parameter here is doing a job.
+POST /api/token HTTP/1.1
+Host: as.example.com
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <client_id:client_secret>          # the ACTOR authenticates as itself
+
+grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange
+&subject_token=<the user's access token>                # REQUIRED — who this is FOR
+&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token   # REQUIRED — no sniffing
+&actor_token=<the service's own token>                  # OPTIONAL — presence = "delegation, please"
+&actor_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token
+&resource=https%3A%2F%2Fledger.internal                 # RFC 8707 — audience-restrict the new token
+&scope=ledger%3Atransfer                                # narrow it: less authority than the subject token
+```
+
+```http
+# What RFC 8693 §2.2.1 requires back.
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{ "access_token":      "…",
+  "token_type":        "Bearer",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",   ← REQUIRED. Say what you issued
+  "expires_in":        120,
+  "scope":             "ledger:transfer" }
+```
+
+```json
+// …and what the new token must contain for the exchange to have meant anything (via introspection):
+{ "active": true,
+  "sub": "alice",                          // carried over from the subject token
+  "act": { "sub": "orders-service" },      // ← the actor. THIS is what delegation produces
+  "aud": ["https://ledger.internal"],      // ← `resource` was honoured
+  "scope": "ledger:transfer" }
+```
+
+**Read those three blocks as a contract.** One optional request parameter (`actor_token`) obliges one claim
+in the result (`act`). One request parameter (`resource`) obliges one claim (`aud`). One response parameter
+(`issued_token_type`) is unconditionally required so the client is never guessing. Delete `actor_token` and
+the correct response is the same minus `act` — that is impersonation, requested and delivered.
+
+**Now the failure this module is about.** An AS that accepts `actor_token`, discards it, and returns:
+
+```json
+{ "access_token": "…", "token_type": "Bearer", "expires_in": 86400, "scope": "" }
+```
+
+has answered a question you did not ask. HTTP 200. No error. `issued_token_type` absent, so you cannot tell
+what you got; `act` absent, so the ledger cannot tell a service from a user; `aud` absent, so the token works
+everywhere. **Three of the four things that made the request meaningful are gone, and nothing in the response
+says so.** You will confirm this exact response in Lab Exercise 6 — including the part where the discarded
+`resource` produces a token with no `aud`, on a server where the same parameter works perfectly on the
+authorization-code path.
+
+The habit: **diff the token you received against the request you sent.** Module 05 taught you to distrust the
+request; this teaches you to distrust the success response.
 
 ## Threat model for this module
 

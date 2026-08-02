@@ -54,6 +54,11 @@ to" means for your data.
 
 ---
 
+> **No analogy here either**, and for the same reason as Module 10: there is nothing to make concrete.
+> `GET /accounts/91848` **is** the plain-language version. Every metaphor available — a hotel key that opens
+> the wrong room, a filing cabinet with no locks — is further from the attack than the request above, and the
+> whole point of this module is that the attack is *already* as simple as it looks.
+
 ## Learning objectives
 
 By the end you can:
@@ -242,6 +247,46 @@ know what your objects are. Module 10 §8.5 already made this point about formal
 **Certification is evidence about your protocol layer and silence about your application layer.**
 
 ---
+
+## Spec delta — 2019 → 2023, and what drove it
+
+The identifiers carry a year because the list moved, and citing the wrong one dates you. Here is what
+actually changed.
+
+> **What is verified here, and what is mine.** The two lists and the mapping between them are checked
+> against `owasp.org/API-Security/editions/2019/` and `/2023/` (consulted 2026-08-02) — every title below is
+> verbatim. The **merge in row 3 is OWASP's own statement**: the 2023 page for API3 says it *"combines
+> API3:2019 Excessive Data Exposure and API6:2019 - Mass Assignment."* The **"what drove the change" column
+> is otherwise my reading**, not the project's. Treat the left two columns as citable and the right one as
+> commentary — a distinction worth making in your own reports, too.
+
+| 2019 | 2023 | What drove the change |
+|---|---|---|
+| API1 Broken Object Level Authorization | **API1** — unchanged, still first | Nothing dislodged it. It remained the most reported and most damaging class across the four years between editions |
+| API2 Broken User Authentication | **API2 Broken Authentication** | Renamed: "user" was misleading once machine-to-machine and service identities became the majority of API traffic |
+| API3 Excessive Data Exposure **+** API6 Mass Assignment | **API3 Broken Object Property Level Authorization** | **The most instructive merge, and the one change OWASP states outright.** Reading fields you should not see and writing fields you should not set were listed as two problems; they are one — *authorization at the property level*, failing in the read and write directions. Splitting them hid the shared fix (explicit schemas both ways) |
+| API4 Lack of Resources & Rate Limiting | **API4 Unrestricted Resource Consumption** | Broadened past rate limits to the thing that actually costs you: CPU, memory, storage, and third-party spend per request |
+| API5 Broken Function Level Authorization | **API5** — unchanged | |
+| *(new)* | **API6 Unrestricted Access to Sensitive Business Flows** | **The genuinely new entry.** Recognises attacks where every individual request is authorized and the *aggregate* is the abuse — scalping, scraping, mass account creation. No per-request authorization check can see it |
+| API7 Security Misconfiguration | **API7 Server Side Request Forgery** | SSRF promoted to its own entry as APIs increasingly fetch attacker-supplied URLs; misconfiguration moved to API8 |
+| API8 Injection | *(dropped from the list)* | Not solved — reclassified. Injection is a general application-security problem rather than an API-specific one, and it is covered by the main OWASP Top 10 |
+| API9 Improper Assets Management | **API9 Improper Inventory Management** | Renamed to say what it means: undocumented, forgotten and unretired endpoints |
+| API10 Insufficient Logging & Monitoring | **API10 Unsafe Consumption of APIs** | **The most interesting substitution.** Logging left the list; *being a client of someone else's API* joined it. The observation is that teams apply less scrutiny to data they consume from a third party than to data from their users — and third-party responses are attacker-influenceable too |
+
+**Three things to take from the diff**, all of which generalise past OWASP:
+
+1. **The merge (API3) is a lesson about taxonomy.** Two entries became one because they shared a *fix*.
+   A threat catalogue is only useful if its categories map onto remediations; when two rows always get
+   patched together, they were one row.
+2. **The addition (API6) is a lesson about scope.** It is the only entry that cannot be evaluated on a single
+   request, which is why it is the only one your authorization layer cannot enforce and `docs/MONITORING.md`
+   is assigned reading.
+3. **The removal (Injection) is a lesson about boundaries.** It left not because it stopped happening but
+   because it was never *API-specific*. A list that grows to cover everything stops directing attention.
+
+Note what did **not** move: **API1 is still first, and the three authorization failures are still three of the
+top five.** Four years of industry effort, and the untouched conclusion is that authorization is where APIs
+break.
 
 ## Threat model for this module
 

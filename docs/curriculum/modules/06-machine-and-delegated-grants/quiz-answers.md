@@ -99,8 +99,8 @@ assertion grant or a token exchange produces a `sub` without either, because no 
 this AS. You saw both shapes in the lab: Exercise 2's authorization-code token had `sub` + `auth_time` +
 `acr`; Exercise 3c's assertion-grant token had `sub` alone.
 
-This matters well beyond trivia. Module 05's step-up mechanism (RFC 9470) and Module 08's ID token validation
-both key on `auth_time` and `acr`. A token that has a subject but no authentication evidence cannot satisfy a
+This matters well beyond trivia. Module 08's ID token validation and Module 09a's step-up mechanism
+(RFC 9470) both key on `auth_time` and `acr`. A token that has a subject but no authentication evidence cannot satisfy a
 step-up requirement, and should not be treated as if a user is present.
 
 - **A** — an expired token introspects `active: false`. You would not be reading claims.

@@ -46,6 +46,12 @@ answers precisely has told you exactly where to look.
 
 ---
 
+> **No analogy in this module, deliberately.** Every module from 00 to 09a opened with a plain-language
+> pass — a hotel, a bank, a notary — because a mechanism is easier to hold once you have something concrete
+> to hang it on. This module has no mechanism. An **attacker model is already the plain-language version**:
+> six people, described by what they can do. Wrapping it in a metaphor would add a layer to see through
+> rather than remove one. Module 11 makes the same choice for the same reason.
+
 ## Learning objectives
 
 By the end you can:

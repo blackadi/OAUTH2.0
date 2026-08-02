@@ -70,8 +70,9 @@ excellent credential-phishing primitive, because the page is on the AS's trusted
 `action="/api/session/login"`); the client learns the outcome only via the redirect + code exchange.
 
 **Q12.** **Defect:** the handler authenticates in a vacuum — it never checks that a pending authorization
-request exists. **Affected concept:** binding authentication to a specific authorization request (the `ticket`
-/ `req.session.authorization` context). **What it allows:** (a) any party can drive the AS's login page and
+request exists. **Affected concept:** binding authentication to a specific authorization request — on this server, the
+pending-request context in `req.session.authorization`, keyed by an Authlete **ticket** (a vendor handle for
+an in-flight authorization; see `GLOSSARY.md`). **What it allows:** (a) any party can drive the AS's login page and
 determine whether a username/password pair is valid, turning the endpoint into a credential-validation oracle
 for password spraying; (b) the open `next` redirect lets an attacker steer the post-login navigation, so a
 client can bounce the user somewhere of its choosing with an authenticated session in hand; (c) a session

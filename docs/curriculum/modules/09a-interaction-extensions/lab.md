@@ -264,11 +264,11 @@ Drive the flow, pull the single `response` parameter out of the redirect, and ru
 CJ=$(mktemp); RU=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")
 curl -s -c "$CJ" -o /dev/null \
   "$API/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$RU&scope=openid&state=jarm1&nonce=n1&response_mode=jwt"
-CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+CSRF=$(curl -s -b "$CJ" -c "$CJ" "$API/session/login" | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
 F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/login" \
      -d "username=$LAB_USER" -d "password=$LAB_PASS" --data-urlencode "_csrf=$CSRF")
 case "$F" in *response=*) ;; *) CS2=$(curl -s -b "$CJ" -c "$CJ" "$API/session/consent" \
-     | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
+     | grep -o 'name="_csrf" value="[^"]*"' | head -1 | cut -d'"' -f4)
    F=$(curl -s -b "$CJ" -c "$CJ" -o /dev/null -w '%{redirect_url}' -X POST "$API/session/consent" \
        -d "decision=approve" --data-urlencode "_csrf=$CS2") ;; esac
 rm -f "$CJ"

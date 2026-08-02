@@ -23,6 +23,7 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Confidential client** | RFC 6749 §2.1 | A client that can hold a secret. | `CLIENT_ID`/`CLIENT_SECRET` in labs |
 | **User agent** | RFC 6749 §1.2 (protocol flow) — *not* one of the four §1.1 roles | The browser that relays front-channel redirects. Untrusted and unavoidable. | your browser; `curl` following redirects |
 | **Policy engine** | *No spec role — deployment architecture* | The component the AS delegates every OAuth decision to. | Authlete Cloud; `services/authlete.service.ts` |
+| **Ticket** | *No spec term — **Authlete vendor concept*** | An opaque handle Authlete returns for a pending authorization or CIBA request. The AS holds it across the login/consent steps and presents it back to issue or fail the request. It is why authentication on this server is bound to a specific request rather than free-standing. | `req.session.authorization`; `session.controller.ts` — Modules 01, 08, 09a |
 | **Assertion Issuer** | RFC 7521 §3 | The entity that creates and signs an assertion. Its key is the trust anchor for every token minted from it. | Module 06 — here, the calling client itself |
 | **Relying Party** *(assertion sense)* | RFC 7521 §3 | The party that consumes an assertion and relies on it. *"the authorization server acts as a relying party."* Distinct from the OIDC RP above. | Module 06 |
 | **Actor** | RFC 8693 §4.1 | The party doing the acting in a delegation, named in `act`. | Module 06 |
@@ -43,6 +44,10 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | **Access token** | RFC 6749 §1.4, presented per RFC 6750 §2.1 | A scoped, expiring, revocable capability — **not** an identity assertion. | `Authorization: Bearer`; Module 08 for why it ≠ authN |
 | **Front channel / back channel** | RFC 6749 §1.2 + §3.1/§3.2 | Via the browser (visible + editable) vs. direct server-to-server. | Module 00; every later threat |
 | **Confused deputy** | *(security literature; instances throughout RFC 9700)* | A privileged party tricked into misusing its authority for someone else. | Mix-up, audience confusion — Modules 01, 05 |
+| **CSRF** (Cross-Site Request Forgery) | *(web-platform attack class; `state` addresses it per RFC 6749 §10.12)* | Causing a victim's browser to issue a request the user did not intend, using credentials the browser attaches automatically. Defended by an unguessable token the attacker cannot read. | `state` on the redirect (Module 02); the `_csrf` form field on this server's login/consent pages (`middleware/csrf.ts`) — Module 01 |
+| **XSS** (Cross-Site Scripting) | *(web-platform attack class; not an OAuth term)* | Any defect letting an attacker run JavaScript in **your** origin. Same origin, same permissions: it reads `localStorage`/`sessionStorage` and memory, and can drive a fresh authorization flow as the legitimate client. **No OAuth mechanism survives it.** | Module 03 — the limit of PKCE, DPoP and everything after |
+| **CORS** (Cross-Origin Resource Sharing) | *(W3C/WHATWG; browser control, not an OAuth spec)* | The server's opt-in that lets cross-origin script *read* a response, via `Access-Control-Allow-Origin` and an `OPTIONS` preflight. Constrains browsers, not `curl`. | Module 02 — why the implicit grant existed, and why it no longer needs to |
+| **Backend-for-frontend (BFF)** | *No spec — deployment pattern* | A same-origin server component that runs the code flow as a **confidential** client and keeps the tokens, giving the browser only an `HttpOnly` session cookie. Bounds XSS damage to an active session rather than a stolen credential. | Module 03; a live option in the capstone |
 | **Credential boundary** | *(design principle; follows from RFC 6749 §1.1)* | The rule that the credential is typed only on the AS's own origin. | `views/login.ejs:18` |
 | **Authorization code** | RFC 6749 §4.1.2 | Short-lived, single-use reference returned on the front channel; redeemable only with client authentication. | `/api/authorization` → `/api/token` |
 | **Code interception** | RFC 9700 §4.5 (Authorization Code Injection) | Stealing a code from the front channel and redeeming it. Fatal for public clients without PKCE. | Module 03 |
@@ -132,7 +137,7 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | Backchannel authentication endpoint | CIBA Core 1.0 | Starts decoupled auth; returns `auth_req_id`. | `ciba.routes.ts` |
 | AS metadata | RFC 8414 | `/.well-known/oauth-authorization-server` (root here). | `oauth-as-metadata.routes.ts` |
 | OP discovery | OIDC Discovery 1.0 | `/.well-known/openid-configuration` (**under `/api`** here). | `discovery.routes.ts` |
-| Protected Resource Metadata | RFC 9728 | `/.well-known/oauth-protected-resource`. | consumed client-side; **not served** (gap, Module 04) |
+| Protected Resource Metadata | RFC 9728 | `/.well-known/oauth-protected-resource`. | **Served** at true root since 2026-07-28 (`protected-resource-metadata.routes.ts`); also consumed client-side (Module 04) |
 | Registration endpoint | RFC 7591 (Std Track) / RFC 7592 (**Experimental**) | DCR register/read/update/delete. | `dcr.routes.ts` |
 | End-session endpoint | OIDC RP-Initiated Logout 1.0 | RP-triggered logout. | logout routes; `LogoutSection.tsx` |
 
@@ -167,6 +172,7 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `resource` | RFC 8707 | Target audience for the token. | Audience restriction |
 | `authorization_details` | RFC 9396 | Typed, fine-grained authorization (RAR). | Beyond coarse scopes |
 | `acr_values` / `max_age` | OIDC Core / RFC 9470 | Requested/required auth strength + freshness. | Step-up authentication |
+| `claims` *(request parameter)* | OIDC Core §5.5 | JSON naming individual claims to be returned in the ID token or from UserInfo, each optionally `"essential": true`. Distinct from the `claims` **member** inside `verified_claims` (Module 09b). | An essential `acr` is a *requirement* the AS must fail rather than downgrade — Modules 05 (PAR protects it), 09a (defined) |
 | `DPoP` (header) | RFC 9449 | Per-request proof-of-possession JWT. | Sender-constrains the token |
 | `prompt` | OIDC Core §3.1.2.1 | `none` / `login` / `consent` / `select_account`. | `none` MUST NOT show UI; drives silent renewal |
 | `max_age` | OIDC Core §3.1.2.1 | Maximum age, in seconds, of the authentication event. | Makes `auth_time` REQUIRED |
@@ -194,6 +200,7 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | `nonce` | OIDC Core | Echo of request `nonce`. | RP must match to its stored value |
 | `acr` / `amr` | OIDC Core | Auth context class / methods. | Step-up decisions (RFC 9470) |
 | `auth_time` | OIDC Core | When the user authenticated. | `max_age` enforcement |
+| `sid` | OIDC Back-Channel Logout 1.0 / Session Management 1.0 | **Session identifier** — names *one* of a subject's sessions at the OP, where `sub` names the person. A logout token MUST carry `sub` and/or `sid`; `sid` is what lets an RP end a single session instead of all of them. | Requires a session store queryable by `sid` — Module 08 |
 | `azp` | OIDC Core | Authorized party. | For multi-audience ID tokens |
 | `cnf` (`jkt`, `x5t#S256`) | RFC 9449 / RFC 8705 | Confirmation — bound key/cert. | Sender-constrained token check |
 | `ath` | RFC 9449 §4.3 | Hash of the access token, in a DPoP proof. | **`ath`, not `sub`** — common mistake |
@@ -242,7 +249,10 @@ it is defined here. Modules add their own terms as they go; this file is the uni
 | OID4VCI / OID4VP | OpenID for VC Issuance / Verifiable Presentations | OpenID Final |
 | BOLA / BFLA / BOPLA | Broken Object / Function / Object-Property Level Authorization | OWASP API Top 10 (2023) |
 | RBAC / ABAC / ReBAC | Role- / Attribute- / Relationship-Based Access Control | Module 11 |
-| CIMD | Client ID Metadata Document | active Internet-Draft (`AGENTS.md`) |
+| CIMD | Client ID Metadata Document | active Internet-Draft (`AGENTS.md`) — the unfamiliar extension in Module 09a Q20 |
+| XSS / CSRF / CORS | Cross-Site Scripting / Cross-Site Request Forgery / Cross-Origin Resource Sharing | Web-platform, not OAuth — Modules 03, 01/02, 02 |
+| BFF | Backend-for-Frontend | *No spec* — deployment pattern, Module 03 |
+| MCP | Model Context Protocol | Profiles OAuth 2.1 for AI tool access — Module 09a Q20 |
 
 ---
 

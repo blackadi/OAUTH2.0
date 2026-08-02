@@ -218,7 +218,7 @@ GET /api/authorization?response_type=code&client_id=...&redirect_uri=...&scope=o
 # 3b. User → AS, on the AS's own page. The credential is typed HERE and nowhere else.
 POST /api/session/login HTTP/1.1
 Host: as.example.com
-username=admin&password=password&_csrf=...
+username=admin&password=password&_csrf=...      # see the note below on _csrf
 
 # 3c. User → AS. Consent narrows the grant to specific scopes.
 POST /api/session/consent HTTP/1.1
@@ -235,6 +235,15 @@ grant_type=authorization_code&code=SplxlOBeZQ...&redirect_uri=...
 GET /api/userinfo HTTP/1.1
 Authorization: Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6ImF0K2p3dCJ9...
 ```
+
+> **What `_csrf` is, since it appears in every browser leg from here on.** These two POSTs are ordinary HTML
+> form submissions, so the browser attaches the session cookie **automatically** — including when the form
+> was submitted from a page an attacker controls. That is **cross-site request forgery (CSRF)**: the victim's
+> browser makes a request they did not intend, with their credentials. The defence is a value the attacker
+> cannot read: the AS puts a random token in a hidden field when it renders the page and checks it on
+> submission, and the same-origin policy stops attacker script reading it. `_csrf` is that field on this
+> server (`middleware/csrf.ts`), and the labs extract it before every form POST for exactly this reason. The
+> **`state` parameter** you meet in Module 02 is the same idea applied to the redirect rather than to a form.
 
 ### What each party learns
 

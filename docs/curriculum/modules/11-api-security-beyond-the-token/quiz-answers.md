@@ -54,17 +54,55 @@ from the validated token.
 **A** is the trap: "the gateway is trusted" is a statement about intent, not about the request that actually
 arrives. **C** is a valid defence-in-depth measure but does not fix the bug.
 
-### Q8 — **A) ReBAC**
+### Q8 — the proposal will not work; the rule is **ReBAC**; the decision belongs in the **data layer**
 
-The rule is defined by **relationships** — ownership of a containing folder, and transitive sharing. RBAC
-cannot express "their own" at all; ABAC could encode one hop as an attribute but degenerates badly on
-transitive closure. This is precisely the case ReBAC exists for.
+**It will not work.** Two of the three clauses are relationships between *this adjuster* and *this claim* —
+"assigned to it" and "escalated to their team" — and one is a relationship between two *people*, "manages
+someone assigned to it." A role says what kind of user you are; none of these is a property of the user.
+`team_id` gets you closest on the third clause and still fails, because it tells you the adjuster's team and
+not whether *this* claim was escalated to it.
 
-### Q9 — **C) scope-per-route and rate limits**
+**The model is ReBAC.** The give-away is the second clause: "manages someone assigned to it" is a **two-hop
+traversal** (adjuster → report → assignment), and hop count is what separates ReBAC from ABAC. ABAC can
+encode a single relationship as an attribute — you could denormalise `assigned_adjuster_id` onto the claim
+and compare — but each new hop needs another denormalised field, and transitive or recursive rules
+("manages, at any depth") cannot be expressed as attributes at all.
 
-A gateway sees the token and the request; it does not have your data. **A** and **D** require knowing who owns
-a row; **B** requires knowing which fields are sensitive. The split: **the gateway does the token and the
-verb; the service does the row and the column.**
+**Where it is decided: the data layer**, as a query constraint, not a check. The gateway cannot — it does
+not have the assignment graph. A check in the service handler would work and is the version that gets
+forgotten, so express it as the query itself: a helper returning *claims visible to this adjuster* that the
+next endpoint copies along with its constraint.
+
+**What a partial answer looks like:** naming ReBAC and stopping. The model is the easy half; **the placement
+is the half that determines whether you get a BOLA**, and Module 11's whole argument is that a correct model
+enforced in the wrong tier buys nothing. Credit for noting that the `adjuster` / `manager` roles are still
+useful — they gate *which endpoints exist* (BFLA), which is a real job, just not this one.
+
+### Q9 — two lists, and the one thing that cannot move
+
+**Already decided when the request reaches your handler:**
+- The token is authentic (signature, `iss`, `exp`) and, if bound, the presenter holds the key.
+- The token's audience includes this platform.
+- The caller's scope permits *this route and method* — so BFLA is handled.
+- The caller is within their rate and quota budget.
+
+**Still yours:**
+- **Does this subject own, or have a relationship to, the object named in the request?** (BOLA)
+- **Which fields may this caller see, and which may they write?** (BOPLA — output projection and input
+  allow-list.)
+- Business rules the token knows nothing about: state machines, limits, segregation of duties.
+- Anything about the *aggregate* — one legitimate request at a time, ten thousand of them the attack (API6).
+
+**The one that can never move to the first list: object ownership.** Not "has not moved yet" — *cannot*.
+The gateway does not have your database, and the decision requires it: the token was issued before the
+request existed, so the AS could not have named the object, and scopes are type-level by construction. Every
+other item on the second list is at least *conceivably* centralisable with enough shared schema; this one
+is closed by the argument in the lesson.
+
+**Marking note.** The reason this is asked as a runbook entry rather than a multiple-choice item is that the
+failure mode is social, not technical: a gateway that handles "auth" persuades every service team that auth
+is handled. An answer that produces the two lists but does not say *what the second list is for* has
+reproduced the problem.
 
 ### Q10 — **B) API6 — every individual request is authorized; the aggregate is the attack**
 

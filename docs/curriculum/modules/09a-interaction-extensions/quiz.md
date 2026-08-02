@@ -1,7 +1,11 @@
 # Module 09a — Quiz
 
-19 items across four tiers. Don't advance to Module 09b until you can pass **Tier 4**. Answers and explanations
+20 items across four tiers. Don't advance to Module 09b until you can pass **Tier 4**. Answers and explanations
 in [quiz-answers.md](quiz-answers.md).
+
+> **Q20 is different from every other item in the curriculum.** It hands you an extension you were never
+> taught and asks you to place it. That is one of the five things the [curriculum README](../../README.md)
+> promises you will be able to do, and this is where it is tested.
 
 ---
 
@@ -117,3 +121,50 @@ server code. Argue what that implies for how you audit an authorization server �
 matrix built from discovery metadata is inadequate, what you would collect instead, and how you would present
 "permitted but not configured" differently from "supported but not required" to an engineering team that has to
 act on your report.
+
+**Q20 — place an extension you have not been taught.**
+
+Everything in this curriculum so far has told you where a mechanism sits. This item does not. Below is a
+factual brief on two documents that appear nowhere in Modules 00–09a. **Nothing else is provided, and you
+should not look them up** — the point is to place an unfamiliar extension using only the frames you already
+have.
+
+> **Brief.** *(Verified against the primary sources on 2026-08-02. Revisions and dates are given because
+> Module 07 says a draft citation without them is not a citation — and because part 4 asks about it.)*
+>
+> **(A) OAuth Client ID Metadata Document (CIMD)** — `draft-ietf-oauth-client-id-metadata-document-01`,
+> **2 March 2026**, IETF OAuth working group, intended status Standards Track, expires 3 September 2026.
+> It permits a client to use an **HTTPS URL as its `client_id`** — the URL must use the `https` scheme and
+> contain a path component. When an authorization server encounters such a `client_id` it **dereferences the
+> URL** and retrieves a JSON document of client metadata in the shape RFC 7591 defines; the document MUST
+> include at least `client_id`, `client_name` and `redirect_uris`, and its `client_id` MUST match the URL
+> exactly. There is no registration request and no registration response. Authorization servers advertise
+> support with `client_id_metadata_document_supported` in their RFC 8414 metadata, and cache the document
+> respecting HTTP cache headers.
+>
+> **(B) The Model Context Protocol (MCP) authorization specification** — revision **2025-11-25**, governing
+> how AI agents reach third-party tools and data. Authorization is **OPTIONAL** for MCP implementations; when
+> supported, an MCP server acts as an **OAuth 2.1 resource server** and an MCP client as an **OAuth 2.1
+> client**. It requires authorization servers to implement OAuth 2.1; requires MCP servers to implement
+> **RFC 9728 protected resource metadata** and clients to use it for authorization-server discovery; requires
+> clients to implement **RFC 8707 `resource`** and send it *"in both authorization requests and token
+> requests"*, **regardless of whether the authorization server supports it**; and requires **PKCE with
+> `S256`**. On client identity it gives a priority order — pre-registration first, then **CIMD (SHOULD)**,
+> then **RFC 7591 dynamic registration (MAY**, retained *"for backwards compatibility"***)**.
+
+Answer all five:
+
+1. **Which unexamined assumption does CIMD lift?** State it in the form Module 09a used for its own four —
+   *"every module so far assumed X."* Then say which extension in this module it most resembles structurally,
+   and why it is nonetheless doing a different job.
+2. **Which earlier modules does each presuppose?** For CIMD and for MCP separately, name the specific
+   material a reader must already have, and the one module whose content each *directly extends*.
+3. **What breaks without each?** Give the concrete failure — not "it is less convenient."
+4. **What is each one's status**, in the vocabulary Module 07 taught, and what follows for how you would cite
+   them in a review?
+5. **Place CIMD relative to DCR (Module 04) and to `private_key_jwt` (Module 06).** Is it an alternative to
+   one, to both, or to neither? Defend the answer, and name the security property DCR has that CIMD does not
+   — and the one CIMD has that DCR does not.
+
+Then the harder half: **name the thing about this brief that should have made you suspicious**, and say what
+you would need to read before recommending either.

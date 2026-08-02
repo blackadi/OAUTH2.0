@@ -50,8 +50,9 @@ The fix is **sender-constraining**: bind the token to a key the legitimate holde
 of possession on every use. **DPoP** (RFC 9449) does it at the application layer with a per-request signed
 JWT, which works for public clients and browsers. **mTLS** (RFC 8705) does it at the transport layer with a
 client certificate, which is stronger and standard in high-assurance ecosystems but needs PKI. Notice the
-pattern: this is PKCE's commit-then-prove idea again, moved from the code to the token — third time in this
-curriculum, which is why it is worth naming as a pattern rather than memorising three mechanisms.
+pattern: this is PKCE's commit-then-prove idea again, moved from the code to the token — third of five
+appearances in this curriculum, which is why it is worth naming as a pattern rather than memorising five
+mechanisms.
 
 ## Learning objectives
 
@@ -124,7 +125,9 @@ It is single-use, and §4 says why: *"Since parts of the authorization request c
 'request_uri' value once."* You will confirm this deployment enforces it.
 
 What PAR buys you, concretely: the browser never sees `scope`, `redirect_uri`, `code_challenge`,
-`resource`, or `claims`, so none of them can be read or downgraded in transit. It also authenticates the
+`resource`, or `claims` — the last being the OIDC Core §5.5 request parameter that names individual claims
+the client wants, optionally marking one `"essential": true`; Module 09a puts it to work for step-up
+authentication — so none of them can be read or downgraded in transit. It also authenticates the
 client *before* the user is ever prompted, which means a bogus client cannot even render a consent screen.
 
 ### JAR — RFC 9101 (Standards Track, August 2021)
@@ -407,8 +410,9 @@ clients, which means test coverage across both paths. My recommendation is to tr
 work rather than a curriculum side effect — and if you would rather not, Module 10 can teach mTLS against the
 spec and the Authlete configuration surface, clearly labelled as not-run-here.
 
-**Also outstanding from Module 04:** the RFC 9728 protected-resource-metadata route, still awaiting a
-decision.
+**Also outstanding from Module 04 at the time this was written:** the RFC 9728 protected-resource-metadata
+route. *(It was subsequently approved and built — see Module 04. This paragraph is left as the proposal
+originally read.)*
 
 </details>
 
