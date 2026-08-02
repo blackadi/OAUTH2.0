@@ -1450,6 +1450,31 @@ for f in $(find . -name '*.md' -not -name 'AUDIT-*'); do \
   n=$(grep -c '^```' "$f"); [ $((n % 2)) -ne 0 ] && echo "ODD: $f"; done
 ```
 
+### The toolchain rewrite, verified against the live server
+
+R5 replaced 21 commands across the labs and one exam key. Because a rewritten command that *looks* right and
+silently returns nothing is worse than the GNU-only command it replaced, all three substitution forms were
+executed against the running server on **2026-08-02**:
+
+| Substitution | Sites | How it was verified | Result |
+|---|---|---|---|
+| `grep -oP 'name="_csrf" value="\K[^"]+'` → `grep -o … \| cut -d'"' -f4` | 16 | Both forms run against the **live login page** and their output compared | **Byte-identical** — 64-char token, same value |
+| `echo "$CB" \| grep -oP 'code=\K[^&]+'` → `node -e … searchParams.get("code")` | 3 | Module 10's `flow()` driver **extracted verbatim from `lab.md`** and run end to end; the extracted code then redeemed at the token endpoint | 43-char code extracted from a real callback; **access token issued** |
+| `openssl dgst … \| basenc --base64url` → `node -e … digest("base64url")` | 2 | Compared against **`scripts/sd-jwt.mjs digest`** and against **RFC 9901 §4.2.3's published vector** | **All three agree** |
+
+The middle row is the one that mattered: it exercises both rewritten forms inside a real multi-leg flow with
+a cookie jar, which is the only place the CSRF extraction can fail in a way isolated testing would miss. The
+driver was extracted from the lab file with `sed` rather than retyped, so what ran is exactly what a learner
+will run.
+
+**Cost and cleanup:** roughly six Authlete calls — well inside the ~15-call window `AGENTS.md` warns about,
+and nowhere near `test:e2e`, which was not run. Both access tokens minted during the test were revoked, with
+`active: false` confirmed by introspection afterwards, as the labs themselves instruct.
+
+**Still not executed:** the labs' Authlete-console-dependent exercises (Module 09a's four enablement steps,
+Module 09b's VCI and federation endpoints), which need service configuration this test did not change. Those
+remain `UNVERIFIED` in the labs, which is how they were already labelled.
+
 **What this remediation did not do:** re-audit. §3's per-module findings describe the material as it was
 read, and the fixes above were written against those findings rather than against a fresh cold read. A third
 pass over the changed sections — particularly Module 09b's new analogy and Module 09a's Q20, both of which
