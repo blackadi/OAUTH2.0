@@ -23,8 +23,12 @@ PRU="http://localhost:3001/callback"     # must be registered on $PUB_CLIENT_ID
 **The public client must be configured like this** — check it:
 
 ```bash
-curl -s "$API/client/get/$PUB_CLIENT_ID" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const c=(j=>j.client||j)(JSON.parse(d));console.log(JSON.stringify({clientType:c.clientType,tokenAuthMethod:c.tokenAuthMethod,parRequired:c.parRequired,pkceRequired:c.pkceRequired,redirectUris:c.redirectUris},null,1))})'
+curl -sf -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" "$API/client/get/$PUB_CLIENT_ID" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const c=(j=>j.client||j)(JSON.parse(d));console.log(JSON.stringify({clientType:c.clientType,tokenAuthMethod:c.tokenAuthMethod,parRequired:c.parRequired,pkceRequired:c.pkceRequired,redirectUris:c.redirectUris},null,1))})'
 ```
+
+> This endpoint is admin-only, hence the `-u`. Without it you get a 401 whose body has none of these fields,
+> and the `JSON.stringify` below silently prints `{}` because every value is `undefined`. The `-f` makes curl
+> fail loudly instead. You will attack this endpoint properly in Module 11.
 
 | Field | Required value | If it is wrong |
 |---|---|---|

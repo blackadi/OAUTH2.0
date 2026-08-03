@@ -2,14 +2,28 @@
 
 > **What you will do:** retrieve a confidential client's secret with no credentials at all; then run a
 > cross-user **BOLA** in which one user reads and then **destroys** another user's grant, using a perfectly
-> valid, correctly scoped token; then prove which layer owns each defect and design the fix.
+> valid, correctly scoped token; then prove which layer owns each defect, read the fix that shipped, and
+> argue with it.
 
-**These are real vulnerabilities in the server you have been running for eleven modules.** They were found
-during this module's build and deliberately left unfixed, because finding them yourself is the exercise.
+**These were real vulnerabilities in the server you have been running for eleven modules.** They were found
+during this module's build, and both are now **fixed** — in commit `0229daa`. That changes how you run the
+lab but not what you take from it. Each of the first two exercises has you **re-introduce the original defect
+in your own working tree**, exploit it for real, then restore the file and read the patch that closed it.
 
-> **Scope discipline.** Everything here runs against *your own* local server. Nothing in this lab is
-> transferable to a system you do not operate, and the point is defensive: you are learning to find these in
-> code review.
+Two things make this worth more than the original exercise, not less. Putting a defect back by hand forces you
+to say exactly which line caused it — a precision that "find the bug" does not require. And you end up with a
+real fix to hold the lab's own model answer against. In Exercise 4 the two disagree, and you have to decide
+who is right.
+
+> **Scope discipline.** Everything here runs against *your own* local server, and there are exactly two source
+> edits below — one line added in Exercise 1, two lines removed in Exercise 2 — each reverted with a single
+> `git checkout`. Nothing in this lab is transferable to a system you do not operate, and the point is
+> defensive: you are learning to find these in code review.
+>
+> **Check you are clean before you start, and again when you finish:**
+> ```bash
+> git status --short server/          # must print nothing
+> ```
 
 ---
 
@@ -20,31 +34,72 @@ set -a; source docs/curriculum/scripts/curriculum.env; set +a
 curl -s -o /dev/null -w "%{http_code}\n" "$API/health"     # expect 200
 ```
 
-Before running anything, read **`server/src/routes/client.routes.ts`** — all 41 lines — and write down what
-you expect `GET /api/client/get/<a client id>` to do without credentials. Then read
-**`server/src/middleware/require-basic-auth.ts`**, lines 4–8. Revise your prediction.
+Before running anything, read **`server/src/routes/client.routes.ts`** — all 40 lines — and write down what
+you expect `GET /api/client/get/<a client id>` to do without credentials. Note that nothing in that file
+mentions authentication at all. Then read **`server/src/middleware/require-basic-auth.ts`**, lines 5–14, and
+revise your prediction. That comment is worth reading twice: it exists *because* of the defect you are about
+to re-create.
 
 ---
 
-## Exercise 1 — BFLA: the management API that asks for nothing
+## Exercise 1 — BFLA: the management API that asked for nothing
 
 **API5:2023 — Broken Function Level Authorization**, enabled by **API8 — Security Misconfiguration**.
 
-No token. No Basic auth. No header of any kind:
+Start with what the server does today. No token, no Basic auth, no header of any kind:
 
 ```bash
-curl -s "$API/client/get/$CLIENT_ID" | python3 -c "
+curl -s -w '\nstatus=%{http_code}\n' "$API/client/get/$CLIENT_ID"
+```
+
+```json
+{"error":"invalid_client","error_description":"Client authentication required"}
+status=401
+```
+
+That is the fix working. To understand what it is worth, put the bug back.
+
+### 1a — Re-introduce the defect
+
+The original guard returned `true` — *allow* — when its own configuration was missing. Re-create exactly that,
+one added line:
+
+```bash
+perl -0pi -e 's/(if \(!mgmtClientId \|\| !mgmtClientSecret\) \{\n)/$1      return true;   \/\/ LAB: original fail-open behaviour\n/' \
+  server/src/middleware/require-basic-auth.ts
+
+git diff server/src/middleware/require-basic-auth.ts     # confirm: exactly one line added
+```
+
+Now run a second server with no management credentials. Setting them to the **empty string** is deliberate:
+`dotenv` never overwrites a variable already present in the environment, so this defeats the real values in
+`server/.env` without touching the file.
+
+```bash
+# separate terminal — nothing on :3000 is touched
+MGMT_CLIENT_ID= MGMT_CLIENT_SECRET= PORT=3006 npm --prefix server run dev
+```
+
+```bash
+export VULN=http://localhost:3006/api
+curl -s -o /dev/null -w '%{http_code}\n' "$VULN/health"          # expect 200
+```
+
+### 1b — Exploit it
+
+```bash
+curl -s "$VULN/client/get/$CLIENT_ID" | python3 -c "
 import sys,json; d=json.load(sys.stdin)
 print('clientName  :', d.get('clientName'))
 print('clientType  :', d.get('clientType'))
-print('clientSecret:', (d.get('clientSecret') or '')[:8] + '…  <-- REDACTED, but the API returned it in full')
+print('clientSecret:', (d.get('clientSecret') or '')[:8] + '…  <-- TRUNCATED HERE ONLY; the API returned it in full')
 print('redirectUris:', d.get('redirectUris'))"
 ```
 
 ```
 clientName  : test
 clientType  : CONFIDENTIAL
-clientSecret: EXAMPLE-client-secret-REDACTED  <-- the API returned the real one, in full
+clientSecret: EXAMPLE-…  <-- TRUNCATED HERE ONLY; the API returned it in full
 redirectUris: ['https://<your-host>/']
 ```
 
@@ -53,17 +108,17 @@ that is worth. With that secret and the client ID, an attacker authenticates *as
 endpoint — the exact credential that eleven modules of PKCE, PAR and DPoP exist to protect. Every protocol
 control in this curriculum is bypassed, not broken.
 
-Keep going:
+Keep going — same server, still no credentials:
 
 ```bash
 # Enumerate any subject's authorized clients
-curl -s "$API/client/auth/list/$LAB_USER" | python3 -c "
+curl -s "$VULN/client/auth/list/$LAB_USER" | python3 -c "
 import sys,json; d=json.load(sys.stdin)
 print('subject:', d.get('subject'), '| clients:', d.get('totalCount'))
 for c in d.get('clients', []): print('   ', c.get('clientId'), '-', c.get('clientName'))"
 
 # List every access token the service has issued
-curl -s "$API/token/list" | python3 -c "
+curl -s "$VULN/token/list" | python3 -c "
 import sys,json; d=json.load(sys.stdin)
 print('total access tokens on this service:', d.get('totalCount'))"
 ```
@@ -75,11 +130,14 @@ subject: admin | clients: 2
 total access tokens on this service: 65
 ```
 
-Now find the cause. It is **not** a missing check:
+> Do not add `-w '%{http_code}'` to those two commands. `-w` writes to stdout, so the status code lands inside
+> the JSON and `json.load` raises. Use a separate `curl` call when you want the status.
+
+Now name the cause precisely. It is **not** a missing check:
 
 ```bash
 grep -n "checkAuth" server/src/controllers/client.management.controller.ts | head -3
-sed -n '4,8p' server/src/middleware/require-basic-auth.ts
+sed -n '57,59p' server/src/middleware/require-basic-auth.ts
 ```
 
 ```
@@ -88,45 +146,87 @@ sed -n '4,8p' server/src/middleware/require-basic-auth.ts
 28:      if (!checkAuth(req, res)) return;
 ```
 ```js
-export function requireBasicAuth(realm: string) {
-  return (req: Request, res: Response): boolean => {
-    const mgmtClientId = process.env.MGMT_CLIENT_ID;
-    const mgmtClientSecret = process.env.MGMT_CLIENT_SECRET;
-    if (!mgmtClientId || !mgmtClientSecret) return true;
+    if (!mgmtClientId || !mgmtClientSecret) {
+      return true;   // LAB: original fail-open behaviour
 ```
 
-**The check exists, is correctly written, and is wired into every one of the sixteen controllers.** It
-returns `true` — *allow* — when its configuration is absent. One unset environment variable disables
-authentication across the entire management surface.
+**The check exists, is correctly written, and is wired into every one of the sixteen controllers.** It returns
+*allow* when its configuration is absent. One unset environment variable disables authentication across the
+entire management surface — and note that `:3000`, with the same code, is unaffected, because its credentials
+are set. The defect is invisible in any environment that happens to be configured.
 
 Three things to take from this, and the third is the important one:
 
-1. **This is documented.** `AGENTS.md` says: *"`requireBasicAuth` checks `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`;
-   if unset, all management routes are unprotected."* So it is a known dev-convenience default, not a hidden
-   bug — and your report must say so rather than crying zero-day.
-2. **The documentation understates the blast radius.** "Unprotected" and "hands a confidential client's
-   secret to anonymous callers" are the same sentence describing very different risks. When you write this
-   up, describe the *consequence*, not the mechanism.
-3. **Fail-open is the actual defect.** A missing security config should refuse to start, not silently permit
-   everything. The failure has no symptom: nothing logs, nothing 500s, the tests pass, and the endpoint looks
-   like it is working — because it is.
+1. **This was a documented dev convenience, not a hidden zero-day.** `AGENTS.md` described the behaviour at
+   the time. A report that opens with "undocumented critical vulnerability" is wrong on the facts and will be
+   dismissed on those grounds — say what the docs claimed, then say why it was not enough.
+2. **The documentation understated the blast radius.** "Management routes are unprotected" and "hands a
+   confidential client's secret to anonymous callers" are the same sentence describing very different risks.
+   When you write this up, describe the *consequence*, not the mechanism.
+3. **Fail-open is the actual defect.** A missing security config should refuse to serve, not silently permit
+   everything. And note the reason it survived: the failure has no symptom. Nothing logs, nothing 500s, the
+   tests pass, and the endpoint looks like it is working — because it is.
 
-**Fix it locally now**, then re-run the first command:
+### 1c — Restore, then read the fix
 
 ```bash
-MGMT_CLIENT_ID=admin MGMT_CLIENT_SECRET=secret npm --prefix server run dev   # separate terminal
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:3000/api/client/get/$CLIENT_ID"   # expect 401
+git checkout -- server/src/middleware/require-basic-auth.ts
+git status --short server/           # must print nothing
 ```
+
+`ts-node-dev --respawn` reloads the `:3006` server by itself. Re-run the exploit against it — the credentials
+there are still unset:
+
+```bash
+curl -s -w '\nstatus=%{http_code}\n' "$VULN/client/get/$CLIENT_ID"
+```
+
+```json
+{"error":"invalid_client","error_description":"Client authentication required"}
+status=401
+```
+
+Now read the patch — `require-basic-auth.ts` lines 26–41 and 55–64 — and find the three things it does beyond
+flipping that return value. Each one answers a specific weakness in the original:
+
+| What the fix adds | Which problem it answers |
+|---|---|
+| `deny()` sends the identical message for "no credentials" and "misconfigured" | telling an anonymous caller that admin auth is broken is free reconnaissance |
+| `log.error("Management credentials are not configured…")` on every rejection | the original had **no symptom**; now the operator has one |
+| `warnIfManagementCredentialsMissing()`, called once from `server.ts` | the symptom arrives at startup, not after the first attack |
+
+Check the second one for yourself — that line is in the `:3006` terminal, once per rejected request. **This is
+the whole answer to point 3: failing closed is necessary but not sufficient.** A fail-closed check with no
+diagnostics turns a silent breach into a silent outage, and you will be debugging it at 3am with no clue.
+
+Stop the `:3006` server now (Ctrl-C in its terminal).
 
 ---
 
 ## Exercise 2 — BOLA: destroying another user's grant
 
 **API1:2023 — Broken Object Level Authorization.** This is the module's headline, and unlike Exercise 1 there
-is no missing credential: every request below carries a **valid, correctly scoped, unexpired** access token.
+is no missing credential anywhere: every request below carries a **valid, correctly scoped, unexpired** access
+token.
 
-You need two users. Rather than editing anything, run a **second, isolated server instance** with its own
-demo users — `AUTH_USERS` is the mechanism `AGENTS.md` documents for exactly this:
+Confirm the current behaviour first — read `server/src/routes/grant-management.routes.ts`, all 22 lines. The
+fix is one middleware, named for exactly what it does, with a comment saying why the upstream API cannot do it.
+Then take it off:
+
+```bash
+perl -0pi -e 's/^\s*requireGrantOwnership\("grant_management_(?:query|revoke)"\),\n//gm' \
+  server/src/routes/grant-management.routes.ts
+
+git diff server/src/routes/grant-management.routes.ts     # confirm: exactly two lines removed
+```
+
+The routes now go straight to their controllers, which is what the file looked like when the BOLA was found.
+Nothing else breaks — `grant-management.service.ts` has its own `extractBearerToken`, so the middleware is the
+only thing you removed. (The now-unused import is fine; `--transpile-only` does not care, and you are about to
+revert it.)
+
+You also need two users. Run a **second, isolated server instance** with its own demo users — `AUTH_USERS` is
+the mechanism `AGENTS.md` documents for exactly this:
 
 ```bash
 # separate terminal — nothing on :3000 is touched
@@ -219,6 +319,47 @@ endpoint requires. Scope enforcement is real here — try Bob's `grant_managemen
 `DELETE` and you get 401. **The protocol layer is flawless and the outcome is catastrophic.** That sentence
 is the entire module.
 
+### Restore, then verify the fix
+
+Alice's grant is gone, but Bob's (`$GB`) survives and Alice's token (`$TA`) is still valid — which is all you
+need, and costs no new Authlete calls:
+
+```bash
+git checkout -- server/src/routes/grant-management.routes.ts
+git status --short server/           # must print nothing
+```
+
+Wait for the `:3005` terminal to finish respawning, then run the same cross-user read that returned 200 a
+moment ago, plus a control:
+
+```bash
+echo "-- BOLA read, post-fix: ALICE's token, BOB's grant --"
+curl -s -H "Authorization: Bearer $TA" "$API5/gm/$GB" -w '  [%{http_code}]\n'
+echo "-- CONTROL: bob reads his own grant --"
+curl -s -H "Authorization: Bearer $TB" "$API5/gm/$GB" -w '  [%{http_code}]\n' | head -c 90; echo
+```
+
+```
+-- BOLA read, post-fix: ALICE's token, BOB's grant --
+{"error":"access_denied","error_description":"The access token is not associated with the requested grant"}   [403]
+-- CONTROL: bob reads his own grant --
+{"scopes":[{"scope":"address grant_management_query grant_management_revoke"}]  [403 → 200]
+```
+
+The control matters as much as the denial: a "fix" that returns 403 to everyone passes the first assertion and
+has broken the feature. You will see this exact pair again in Exercise 4, where it is the deliverable.
+
+Now read `server/src/middleware/require-grant-ownership.ts` and find how it decides. It introspects the bearer
+token **before** the grant-management call and requires the grant the token was itself issued under to equal
+the grant in the URL. Two consequences worth noticing before Exercise 3:
+
+- It has to introspect on every request, because Authlete's `/gm` response carries no owner field — the
+  decision is impossible to make afterwards. That is a real cost the fix pays, and Exercise 3 explains why it
+  had no choice.
+- A **client-credentials token has no grant at all**, so it is denied too. That makes this deliberately
+  stricter than the spec, which entitles a client to manage grants it owns. Decide whether you would have
+  shipped that trade-off.
+
 ---
 
 ## Exercise 3 — Whose bug is it?
@@ -233,18 +374,28 @@ sed -n '10,26p' server/src/services/grant-management.service.ts
 
 ```js
   async query(req: Request, grantId: string): Promise<GMResponse> {
+    const log = req.logger || logger;
     const accessToken = extractBearerToken(req);
+
+    log("GrantManagement: query grant", { grantId });
+
     const response = await this.authleteApi.grantManagement.processRequest({
       serviceId,
-      gMRequest: { accessToken, gmAction: "QUERY", grantId },
+      gMRequest: {
+        accessToken,
+        gmAction: "QUERY",
+        grantId,
+      },
     });
+
     return response;
   }
 ```
 
-The server forwards the access token and the grant ID and relays the answer. It performs no ownership check —
-but note it also *has* no cheap way to: it would have to introspect the token for a subject and ask Authlete
-who owns the grant. So ask the upstream directly:
+The service forwards the access token and the grant ID and relays the answer. It performs no ownership check —
+and note it has no *cheap* way to: it would have to introspect the token for a subject and ask Authlete who
+owns the grant. Keep that cost in mind; it is why the fix you read in Exercise 2 sits in middleware and spends
+an extra round trip per request. So ask the upstream directly:
 
 ```bash
 set -a; . ./server/.env; set +a          # AUTHLETE_BEARER_TOKEN — never paste it anywhere
@@ -261,8 +412,11 @@ action    : OK
 resultCode: A277001
 ```
 
-**The upstream API itself returns `OK`** for Bob's token against Alice's grant. So the repo is relaying a
-decision faithfully; the ownership check is not being made anywhere in the chain.
+**The upstream API itself returns `OK`** for Bob's token against Alice's grant. Note that this call bypasses
+your server entirely, so the result is the same whether or not `requireGrantOwnership` is in place — the repo
+was relaying a decision faithfully, and the ownership check was not being made anywhere in the chain. This is
+also the evidence that the fix had to go where it went: no amount of care in the service layer can recover an
+ownership decision from a response that does not contain one.
 
 Now be careful about what you conclude, because this is where reports overreach. Search for a setting that
 would enable it:
@@ -286,6 +440,11 @@ So the honest finding is:
 > found. **Whether this is an upstream defect or a missing configuration is `UNVERIFIED`** and should be
 > raised with the vendor rather than asserted.
 
+That is the finding as filed, and every clause of it is still true. The repo's `requireGrantOwnership` is a
+**compensating control**, not a resolution: it stops the attack at this deployment's edge and leaves the
+upstream question exactly where it was. Say so when you write up a fix like this — a reader who thinks the
+root cause is closed will not ask the vendor, and the next service built on the same API inherits the bug.
+
 Compare that with what you could have written — *"critical vulnerability in Authlete"* — and note the
 difference. You verified the behaviour exhaustively and stated the attribution to exactly the confidence your
 evidence supports. That is the difference between a report that gets acted on and one that gets argued with.
@@ -298,7 +457,9 @@ throughout as belonging to a client **and a resource owner**.
 
 ## Exercise 4 — Where does the fix go?
 
-Write the fix for the BOLA, then compare. Think about it as the lesson's four-step argument, not as a patch.
+Write the fix for the BOLA **before** opening either answer below. You have already read the one that shipped,
+so this is not a blank page — the exercise is to work out where you agree with it. Think about it as the
+lesson's four-step argument, not as a patch.
 
 <details>
 <summary>My answer</summary>
@@ -332,6 +493,36 @@ assert  alice's token GET alice's grant → 200        # control: the fix didn't
 Note the control assertion. A BOLA "fix" that denies everything passes the first two and is useless.
 </details>
 
+<details>
+<summary>Where the shipped fix disagrees with that answer — and who is right</summary>
+
+Read the two side by side. `requireGrantOwnership` matches steps 1 and 2 and then **returns 403, not the 404
+argued for above.** One of them is wrong. Work out which before reading on.
+
+The case for 404 is the one made above: 403 confirms the grant exists, so the endpoint becomes an existence
+oracle, and grant IDs are the only secret standing between an attacker and the attack.
+
+The case for 403 is what the code actually banks on:
+
+- **The oracle is weaker than it looks.** The middleware returns the *same* 403 for "grant exists but is not
+  yours" and "your token has no grant at all" (the client-credentials case). It never distinguishes a
+  non-existent grant ID from a live one you do not own, so the reply leaks less than a bare 403 usually does.
+- **404 lies to the legitimate caller too.** A client that has genuinely lost its own grant and one that
+  fumbled an ID get identical answers, and the operator loses the ability to tell a bug from an attack.
+- **The log carries what 404 would have hidden.** `log.error("Grant ownership denied", …)` records
+  `requestedGrantId`, `subject`, `clientId` and whether the token was grant-bound. The information is kept
+  where a defender can use it instead of being destroyed for everyone.
+
+**Neither is unconditionally right, and that is the point.** 404 buys secrecy of identifiers; 403 buys
+diagnosability. Which you want depends on whether the identifier is guessable — and grant IDs on this service
+are high-entropy, which is the argument the shipped code is implicitly making. What is *not* defensible is
+choosing either one without noticing there was a choice.
+
+Now go back to your own answer and check something harder: did you specify what happens to a token with **no**
+grant? If you did not, your fix has an unhandled case, and it is the one that a machine-to-machine client hits
+on its first request.
+</details>
+
 ---
 
 ## Exercise 5 — Would you have noticed?
@@ -357,10 +548,16 @@ rule, you would enforce it instead of alerting on it. **This is why BOLA must be
 template**, not the URL — good for cardinality, and it means the metric shows the enumeration even though
 every ID is distinct. Alert on 404-rate-per-route, not on absolute counts.
 
-**(3) Barely.** The audit log records path, IP, user-agent, and `clientId` from Basic auth — which is absent
-here, so the entry looks like ordinary traffic. A 200 on `/api/client/get/:clientId` is indistinguishable
-from a legitimate admin action. **The absence of an authenticated principal in a log entry for an admin route
-is itself the signal**, and nothing currently alerts on it.
+**(3) Barely — and answer this for the *vulnerable* build, which is the version the question is about.** The
+audit log records path, IP, user-agent, and `clientId` from Basic auth — absent here, so the entry looks like
+ordinary traffic. A 200 on `/api/client/get/:clientId` is indistinguishable from a legitimate admin action.
+**The absence of an authenticated principal in a log entry for an admin route is itself the signal**, and
+nothing alerted on it.
+
+Post-fix the request cannot succeed, and `log.error("Management credentials are not configured…")` fires on
+every rejection — so the signal now exists. Ask the follow-up anyway: **who is alerted?** It is a `log.error`
+in a rotating file with no Prometheus counter and no route to a pager. A signal nobody is paged on is
+documentation, not detection.
 
 **(4) No.** Under every rate limit, spread across a week, all 200s. This is API6 in miniature: each request
 is individually legitimate and the aggregate is the breach. Catching it needs per-principal baselining, which
@@ -445,27 +642,43 @@ and header-stripping bugs are common.
 
 - [ ] Read a **confidential client's secret** with no credentials, and can state what it is worth
 - [ ] Enumerated a subject's authorized clients and counted the service's access tokens unauthenticated
-- [ ] Located `require-basic-auth.ts:8` and can explain why **fail-open** is the defect
-- [ ] Confirmed the fix: with `MGMT_*` set, the same request returns **401**
+- [ ] Can point at the one line that caused it and explain why **fail-open** is the defect
+- [ ] Confirmed fail-*closed*: with `MGMT_*` still unset, the restored code returns **401** — and found the
+      `log.error` that gives the operator a symptom the original had none of
 - [ ] Ran a cross-user BOLA **read** — and used *differently scoped* grants to prove the object resolves
 - [ ] Ran a cross-user BOLA **write** — one user destroyed another's grant (204, then 404)
-- [ ] Established the upstream returns `action: OK`, and wrote the attribution as **UNVERIFIED**
+- [ ] Confirmed the restored middleware returns **403** cross-user **and 200 on the control**
+- [ ] Established the upstream returns `action: OK`, and wrote the attribution as **UNVERIFIED** — and can say
+      why the repo's fix is a *compensating control* rather than a resolution
 - [ ] Wrote the fix *and* its regression test, including the control assertion
+- [ ] Took a position on **403 vs 404** for the denial, and named what each one costs
 - [ ] Answered which of the four attacks the telemetry would catch (and why two of them cannot be)
 - [ ] Classified all three review snippets, including why **C** is the dangerous one
+- [ ] **`git status --short server/` prints nothing** — both temporary edits reverted
 
 ---
 
 ## Clean up
 
 ```bash
-# stop the :3005 instance (Ctrl-C in its terminal), then:
+# stop the :3005 and :3006 instances (Ctrl-C in their terminals), then:
 rm -f /tmp/alice.json /tmp/bob.json
+
+# the important one — both temporary edits must be gone
+git status --short server/           # must print nothing
+git diff --stat server/              # must print nothing
 ```
 
-The grants live on your Authlete service; revoke any that survive with
-`DELETE $API/gm/<grant_id>` using a `grant_management_revoke` token. Bob's, ironically, can revoke all of
-them.
+If either prints anything, revert it now:
+
+```bash
+git checkout -- server/src/middleware/require-basic-auth.ts \
+                server/src/routes/grant-management.routes.ts
+```
+
+The grants live on your Authlete service; revoke any that survive with `DELETE $API/gm/<grant_id>` using that
+grant's own `grant_management_revoke` token. Note that this is now the *only* way to do it — with
+`requireGrantOwnership` restored, Bob's token can no longer revoke anyone else's, which was the entire point.
 
 ---
 
@@ -474,10 +687,15 @@ them.
 1. **The protocol layer can be flawless and the outcome catastrophic.** Exercise 2's every request was
    perfectly authenticated. Design reviews that stop at the token stop before the vulnerability.
 2. **Fail-open is a design decision, and almost always the wrong one.** Exercise 1 was one `return true`.
+   Failing closed is half the fix; the other half is emitting a symptom, or you have traded a silent breach
+   for a silent outage.
 3. **State attributions to the confidence your evidence supports.** "The upstream returns OK; whether that is
-   a defect or a missing setting is unverified" is a stronger sentence than a confident accusation.
+   a defect or a missing setting is unverified" is a stronger sentence than a confident accusation. And label
+   a compensating control as one — otherwise nobody chases the root cause.
 4. **Make the insecure version unrepresentable.** Owner-scoped queries beat ownership checks, for the same
    reason FAPI 2.0 chose PKCE over `c_hash`.
+5. **A shipped fix is an argument, not an answer.** The 403-vs-404 disagreement in Exercise 4 has no universal
+   winner, and the failure mode is not picking wrong — it is not noticing that a decision was being made.
 
 **[→ Module 12 — Capstone](../12-capstone/README.md)** is next: design a high-assurance multi-tenant
 authorization architecture and defend it, then find the flaws in a deliberately vulnerable variant. You now

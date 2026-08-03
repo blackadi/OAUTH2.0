@@ -22,7 +22,7 @@ You need `$API`, `$CLIENT_ID`, `$CLIENT_SECRET`, `$REDIRECT_URI`, `$LAB_USER`, `
 > **`$REDIRECT_URI` must be *exactly* one of the URIs registered on `$CLIENT_ID`.** Exact string matching is
 > mandatory (RFC 9700 §4.1) and you will prove it in Break 3. Check what is registered:
 > ```bash
-> curl -s "$API/client/get/$CLIENT_ID" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const c=(j=>j.client||j)(JSON.parse(d));console.log("redirectUris:",c.redirectUris,"\ngrantTypes:",c.grantTypes,"\ntokenAuthMethod:",c.tokenAuthMethod)})'
+> curl -sf -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" "$API/client/get/$CLIENT_ID" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const c=(j=>j.client||j)(JSON.parse(d));console.log("redirectUris:",c.redirectUris,"\ngrantTypes:",c.grantTypes,"\ntokenAuthMethod:",c.tokenAuthMethod)})'
 > ```
 
 **Authlete service configuration this lab needs:**

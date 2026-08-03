@@ -331,6 +331,10 @@ return db.accounts.findById(req.params.id);          // any account, for anyone
 
 **✅ `404`.** `403` confirms existence and turns the endpoint into an enumeration oracle.
 
+That is the default, and it is the answer to give when the identifier is guessable. This repo's own fix chose
+`403` instead, on a specific argument about high-entropy grant IDs and defender diagnostics — see lab
+Exercise 4, and decide whether you buy it.
+
 ---
 
 **❌ Trusting `X-User-Id` or `tenant_id` from a header, body, or query parameter**
@@ -346,8 +350,10 @@ for a user, propagate the token or exchange it (Module 06) — do not invent a h
 if (!process.env.MGMT_CLIENT_ID || !process.env.MGMT_CLIENT_SECRET) return true;   // allow
 ```
 
-**✅ Fail closed.** An unset variable should refuse service, loudly, at startup. You will find this exact
-pattern in this repo during the lab, and you will see what it exposes.
+**✅ Fail closed.** An unset variable should refuse service, loudly, at startup — *loudly* being half the
+requirement, since a fail-closed check with no diagnostics trades a silent breach for a silent outage. This
+exact pattern was in this repo. The lab has you put it back, exploit it, and then read the patch that removed
+it.
 
 ---
 
@@ -368,17 +374,22 @@ by asking for a single endpoint that returns an object by ID.
 
 ## What actually runs in this repo
 
-The lab is unusually direct because this repo has real object-level endpoints:
+The lab is unusually direct because this repo has real object-level endpoints, and because two genuine
+vulnerabilities were found in it while this module was being built. **Both are now fixed** — in commit
+`0229daa` — so the lab has you re-introduce each defect with a one-line, `git`-revertible edit, exploit it for
+real, and then read the patch that closed it.
 
-| Surface | What you will find |
-|---|---|
-| `/api/gm/:grantId` | Requires a valid, correctly scoped token — and **does not check who owns the grant** |
-| `/api/client/*` (16 routes) | Auth middleware exists and is correctly wired, and **fails open** when unconfigured |
-| `/api/token/list` | Same; lists every access token on the service |
-| `/api/hsk/*`, `/api/vci/offer/*` | Same middleware, same behaviour |
-| `docs/MONITORING.md`, `audit-log.ts`, `rate-limit.ts` | The detection half — Prometheus metrics and a 90-day audit log |
+| Surface | The defect that was there | What is there now |
+|---|---|---|
+| `/api/gm/:grantId` | Valid, correctly scoped token accepted — with **no check of who owns the grant** | `requireGrantOwnership` introspects the token and requires the grant to match; **403** otherwise |
+| `/api/client/*` (16 routes) | Auth middleware correctly wired, but **failed open** when unconfigured | Fails closed, with an error log per rejection and a startup warning |
+| `/api/token/list` | Same; listed every access token on the service | Same fix — the middleware is shared |
+| `/api/hsk/*`, `/api/vci/offer/*` | Same middleware, same behaviour | Same fix |
+| `docs/MONITORING.md`, `audit-log.ts`, `rate-limit.ts` | — | The detection half — Prometheus metrics and a 90-day audit log |
 
-You will exploit two of these against a live server, then determine which layer owns each defect.
+You will exploit both against a live server, determine which layer owns each defect, and then argue with the
+fix — the shipped denial for the BOLA is a **403**, and the model answer in this module says it should be a
+**404**. Lab Exercise 4 makes you settle it.
 
 ---
 
