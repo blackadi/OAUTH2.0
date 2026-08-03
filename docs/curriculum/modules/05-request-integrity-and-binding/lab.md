@@ -207,7 +207,7 @@ if you deleted it — which is precisely why it gets forgotten.
 ## Exercise 4 — Build a DPoP proof and bind a token
 
 ```bash
-node -e '
+node --input-type=module -e '
 const M = await import("/tmp/dpop.mjs");
 const {privateKey, publicKey} = M.makeKey();
 const p = M.proof({privateKey, publicKey, htm:"POST", htu:"'"$API"'/token"});
@@ -348,15 +348,21 @@ RFC 9449 §7.1: a DPoP-bound token *"is sent using the Authorization request hea
 authentication scheme of DPoP"* — and §7 requires the accompanying proof to carry `ath`. Do exactly that:
 
 ```bash
-node -e '
+node --input-type=module -e '
 const M = await import("/tmp/dpop.mjs"); const crypto = await import("node:crypto");
-const d = JSON.parse(require("fs").readFileSync("/tmp/dpopkey.json","utf8"));
+const fs = await import("node:fs");
+const d = JSON.parse(fs.readFileSync("/tmp/dpopkey.json","utf8"));
 const privateKey = crypto.createPrivateKey(d.priv), publicKey = crypto.createPublicKey(d.pub);
 const url = "'"$API"'/userinfo";
 const p = M.proof({privateKey, publicKey, htm:"GET", htu:url, ath: M.ath(d.at)});
 console.log("run:\n  curl -s -i -H \"Authorization: DPoP " + d.at + "\" -H \"DPoP: " + p + "\" " + url);
 ' --input-type=module
 ```
+
+> `--input-type=module` makes this an ES module, so **`require` is not defined** — hence `await import("node:fs")`.
+> The flag is repeated ahead of `-e` on purpose: Node decides whether the source is ambiguous *before* applying
+> a trailing flag, so a snippet mixing `require` with top-level `await` fails with `ERR_AMBIGUOUS_MODULE_SYNTAX`
+> rather than a clear error.
 
 Run the printed command. **Predict** first: the token is valid, the proof is correct, `ath` is present, and
 the scheme is the one the RFC mandates.
