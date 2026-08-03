@@ -14,8 +14,43 @@ cd docs/curriculum/scripts && set -a && source curriculum.env && set +a && cd -
 PRU="http://localhost:3001/callback"
 ```
 
-You need `$API`, `$PUB_CLIENT_ID`, `$LAB_USER`, `$LAB_PASS`, and the `run_flow`/`getcode` helpers from
+You need `$API`, `$PUB_CLIENT_ID`, `$LAB_USER`, `$LAB_PASS`, and the `getcode` helper from
 [Module 03's lab](../03-pkce-and-public-clients/lab.md#setup).
+
+> **`parRequired` must still be `false` on `$PUB_CLIENT_ID`** — the value Module 03's setup table asks for.
+> Exercise 1 pushes a request *by choice*; Exercises 3 and 4 send plain authorization requests, and with
+> `parRequired: true` the AS rejects those before anything interesting happens:
+>
+> ```json
+> {"error":"invalid_request","error_description":"[A008305] The 'request_uri' parameter must be given because the 'require_pushed_authorization_requests' client metadata is true."}
+> ```
+>
+> Exercise 3 then finds no `iss` (the response is a 400 body, not a redirect) and Exercise 4's flow script
+> dies with `TypeError: Invalid URL` on an empty `Location`. If you see either, flip `parRequired` back to
+> `false` in the Authlete console. **Making PAR mandatory is a per-client decision** — you will read the
+> argument for turning it on in the lesson, and FAPI 2.0 requires it. Turn it on after this module, not
+> during.
+
+**Paste this helper** — Exercise 1 uses it. Module 03's `run_flow` builds its own authorization URL from
+`response_type`/`redirect_uri`/`scope`, which is exactly what PAR moves off the URL, so it cannot drive a
+`request_uri`. This is the same login-then-consent sequence, but it drives a URL **you** supply:
+
+```bash
+run_flow_url() {                   # run_flow_url "<full authorization URL>" ; echoes the final redirect URL
+  local AU="$1" J; J="$(mktemp)"
+  local L1; L1=$(curl -s -i -c "$J" -b "$J" "$AU" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+  case "$L1" in http*) echo "$L1"; return;; esac                    # already an error redirect — hand it back
+  [ -z "$L1" ] && { echo "!! authorization request failed:"; curl -s "$AU" | head -c 300; return 1; }
+  local C1; C1=$(curl -s -b "$J" -c "$J" "http://localhost:3000$L1" | grep -o 'name="_csrf" value="[^"]*"' | cut -d'"' -f4)
+  local L2; L2=$(curl -s -i -b "$J" -c "$J" -X POST "$API/session/login" \
+      -d "username=$LAB_USER" -d "password=$LAB_PASS" --data-urlencode "_csrf=$C1" \
+      | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+  case "$L2" in http*) echo "$L2"; return;; esac                    # consent was already stored — skip it
+  local C2; C2=$(curl -s -b "$J" -c "$J" "$API/session/consent" | grep -o 'name="_csrf" value="[^"]*"' | cut -d'"' -f4)
+  curl -s -i -b "$J" -c "$J" -X POST "$API/session/consent" -d "decision=approve" --data-urlencode "_csrf=$C2" \
+      | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}'
+}
+```
 
 **Save the DPoP helper** — Exercises 4–6 all use it:
 
@@ -70,7 +105,6 @@ RQU=$(curl -s -X POST "$API/par" -H "Content-Type: application/json" \
   -d "$(node -e 'process.stdout.write(JSON.stringify({parameters:process.argv[1],clientId:process.argv[2]}))' -- "$PARAMS" "$PUB_CLIENT_ID")" \
   | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).requestUri))')
 
-CJ=$(mktemp)
 AUTH_URL="$API/authorization?client_id=$PUB_CLIENT_ID&request_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$RQU")"
 echo "$AUTH_URL"
 ```
@@ -79,7 +113,22 @@ echo "$AUTH_URL"
 already. There is nothing in this URL for a browser extension to read or rewrite. Compare with the
 authorization URL in Module 02.
 
-Complete the flow with the `run_flow` pattern (login + consent), then:
+Now complete the flow. `run_flow_url` logs in and approves consent for you, then echoes the final redirect:
+
+```bash
+REDIRECT=$(run_flow_url "$AUTH_URL")
+echo "$REDIRECT"
+echo "code: $(getcode "$REDIRECT")"
+```
+
+```
+http://localhost:3001/callback?state=PAR1&code=VSYhIiN8LJ5El2psk7wtTEz…&iss=https%3A%2F%2F…
+code: VSYhIiN8LJ5El2psk7wtTEz…
+```
+
+A normal authorization code came back — the flow is identical from here on. **`state=PAR1` is on the callback
+even though you never put it in the URL**: it came out of the pushed request, which is the whole point. And
+`iss` is already there; you will come back to it in Exercise 3.
 
 ### Break it — reuse the `request_uri`
 
