@@ -149,13 +149,20 @@ opaque, bound to its client, single-use, and expires in 600 seconds.
 
 ## Exercise 2 — Watch the AS refuse an unsigned request object (JAR)
 
+The request object's `aud` must be **this service's issuer identifier**, so read it from the discovery
+document rather than hardcoding it:
+
 ```bash
+ISS=$(curl -s "$API/.well-known/openid-configuration" \
+ | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).issuer))')
+echo "aud will be: $ISS"
+
 UNSIGNED=$(node -e '
 const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");
 const h=b({alg:"none",typ:"oauth-authz-req+jwt"});
-const p=b({iss:process.argv[1],aud:"https://your-issuer",response_type:"code",client_id:process.argv[1],
+const p=b({iss:process.argv[1],aud:process.argv[2],response_type:"code",client_id:process.argv[1],
            redirect_uri:"http://localhost:3001/callback",scope:"profile",state:"JAR1"});
-process.stdout.write(h+"."+p+".");' -- "$PUB_CLIENT_ID")
+process.stdout.write(h+"."+p+".");' -- "$PUB_CLIENT_ID" "$ISS")
 
 curl -s -X POST "$API/jar/process" -H "Content-Type: application/json" \
   -d "$(node -e 'process.stdout.write(JSON.stringify({request:process.argv[1],clientId:process.argv[2]}))' -- "$UNSIGNED" "$PUB_CLIENT_ID")" \
@@ -165,6 +172,14 @@ curl -s -X POST "$API/jar/process" -H "Content-Type: application/json" \
 ```json
 {"resultCode":"A008311","resultMessage":"[A008311] The service is configured to conform to JAR (JWT Secured Authorization Request), so request objects must be always signed.","action":"BAD_REQUEST", …}
 ```
+
+> **If you get `[A006359]` instead** — *"The value of the 'aud' claim … does not match the issuer identifier of
+> this service"* — your `aud` is wrong, and you never reached the check this exercise is about. That is worth
+> noticing rather than skipping past: **the AS validates `aud` before it validates that the object is signed.**
+> An unsigned object addressed to the wrong audience is rejected for the audience, so a single error code tells
+> you only about the *first* thing that failed. When you are debugging a request object, fix errors in the order
+> the server finds them and re-test after each one — assuming the last error is the only error is how people
+> conclude a feature is broken when they have three problems stacked up.
 
 **Explain the gap.** This is RFC 9101 §10.1 enforced: the request object *"MUST be either signed using JWS…
 or signed and then encrypted."* An `alg:none` request object is Module 00's forgery, wearing a request
