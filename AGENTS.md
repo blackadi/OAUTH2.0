@@ -34,11 +34,11 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (428 tests, 49 files)
+npm --prefix server run test              # unit + integration (434 tests, 49 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (384 tests, 48 files)
-npm --prefix server run test:integration  # integration tests only (44 tests)
+npm --prefix server run test:unit         # unit tests only (387 tests, 48 files)
+npm --prefix server run test:integration  # integration tests only (47 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (100 tests, requires real Authlete creds)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 48 files across 5 categories (384 tests):
+- **Unit tests**: 48 files across 5 categories (387 tests):
   - `tests/unit/services/` — 24 files (115 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo)
   - `tests/unit/controllers/` — 9 files (113 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci
   - `tests/unit/middleware/` — 6 files (55 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership
-  - `tests/unit/utils/` — 5 files (84 tests), createLocalJWT/jwksClient/validate/validation/dpop
+  - `tests/unit/utils/` — 5 files (87 tests), createLocalJWT/jwksClient/validate/validation/dpop
   - `tests/unit/routes/` — 4 files (17 tests), fapi + metrics + openapi + protected-resource-metadata routes
-- **Integration tests**: 1 file `tests/integration/routes.test.ts` (44 tests) — full Express stack with mocked SDK
+- **Integration tests**: 1 file `tests/integration/routes.test.ts` (47 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 428 tests across 49 files, completes in ~2s
+- Run with `npm --prefix server run test` — 434 tests across 49 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -253,6 +253,8 @@ The token controller (`src/controllers/token.controller.ts`) handles every Authl
 
 ## Quirks & gotchas
 
+- **`validateAuthorizationParams` (`src/utils/validate.ts`) checks `client_id` and nothing else — deliberately.** `client_id` is the only parameter required in every request shape: plain (RFC 6749 §4.1.1), PAR (RFC 9126), and JAR (RFC 9101 §5, *"REQUIRED … MUST match the request or request_uri Request Object's client_id"*). Everything else is shape-dependent and belongs to Authlete. Do **not** reintroduce a per-shape allowlist: the previous version demanded `response_type` + `redirect_uri` unless `request_uri` was present, which (a) refused the canonical JAR shape (`client_id` + `request`, everything else inside the signed object) with `Missing required parameter: response_type` before Authlete saw it, (b) required `redirect_uri` even though RFC 6749 §3.1.2.3 makes it optional when exactly one full URI is registered, and (c) answered `400 {json}` where RFC 6749 §4.1.2.1 wants an error redirect. Sibling validators `validateTokenParams` (`grant_type`) and `validateIntrospectionParams` (`token`) are correct as-is — those parameters *are* unconditionally required (RFC 6749 §4, RFC 7662 §2.1) — so the same bug class does not apply to them.
+- **Authlete's authorization-error channel splits on `response_type`** (verified 2026-08-04). With `response_type` present and some other parameter invalid → `302` to the redirection URI carrying `error`, `state` and `iss`, per RFC 6749 §4.1.2.1 and RFC 9207. With `response_type` **absent** → `400 [A009301]` as a body, because without it the AS cannot determine the response mode and so cannot shape a redirect. Vendor behavior, not configurable here; do not "fix" the local validator to paper over it.
 - `server/tsconfig.json` uses `module: "node16"` + `moduleResolution: "node16"` — dynamic imports need `.js` extension
 - Build copies `public/` and `src/views/` into `dist/` via `postbuild` script (`rm -rf dist/views dist/public && cp -r src/views dist/views && cp -r public dist/public`). The destructive copy prevents nested `dist/views/views/` on subsequent rebuilds. If you rename/move these directories, update the script.
 - All Authlete API calls go through the SDK client in `src/services/authlete.service.ts` — do not add raw `fetch()` calls

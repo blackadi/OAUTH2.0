@@ -89,6 +89,56 @@ against it before calling the capstone complete._
 - [x] **Stage 4b — the four exams written** (A, B, C, Final) under `exams/`, each with an answer key
 - [x] **STAGE 4 COMPLETE — the curriculum is finished.**
 - [x] **2026-08-04 — Module 05's Tier-3 finding fixed in the server; Exercise 5 rewritten** (below)
+- [x] **2026-08-04 — signed JAR unblocked; Module 05 Exercise 2 rewritten around it** (below)
+
+### 2026-08-04 — the authorization endpoint rejected the canonical JAR shape; Exercise 2 now runs it
+
+**Why this matters to a future session:** Module 05 Exercise 2 used to stop at the `alg:none` rejection and note
+that "the signed-JAR path is not exercised". It now registers a client signing key and runs the signed path end
+to end, including the RFC 9101 §6.3 precedence proof. That claim in "What was real vs. simulated" is gone.
+
+**What was wrong.** `validateAuthorizationParams` (`server/src/utils/validate.ts`) had a branch for `request_uri`
+(PAR) and none for `request` (JAR), so the canonical RFC 9101 §5 shape was refused locally:
+
+```
+GET /api/authorization?client_id=<id>&request=<signed jwt>
+{"error":"invalid_request","error_description":"Missing required parameter: response_type"}
+```
+
+Isolated exactly: **identical signed object**, the only difference being duplicate outer `response_type` and
+`redirect_uri` added to satisfy the validator — with them, an authorization code came back. Two more defects sat
+in the same eight lines: `redirect_uri` was demanded unconditionally though RFC 6749 §3.1.2.3 makes it optional
+when one full URI is registered, and answering with JSON short-circuits RFC 6749 §4.1.2.1's error redirect.
+
+**The fix** is a deletion, not an addition: the validator now checks `client_id` only — the one parameter
+required in every shape. A per-shape allowlist has to grow with every new shape and had already missed one. See
+**AGENTS.md → Quirks & gotchas**.
+
+**Verified live** with ephemeral clients created and deleted through the management API (**DCR is disabled on
+this service — `[A206201] Service (3693555522) does not support dynamic client registration.`** — so
+`/client/dcr/register` is not an option; use `POST /api/client/create` + `DELETE /api/client/delete/:id`):
+
+| Check | Result |
+|---|---|
+| canonical JAR shape, `client_id` + `request` only | **authorization code**, `state` from inside the object |
+| exchange that code | `access_token`, `scope="profile"` from the object |
+| no `redirect_uri` anywhere, one registered | **code issued** — was refused before |
+| `alg:none`, JWKS registered, `requestSignAlg` unset | `[A008311]` (unchanged — this is why the exercise says not to pin it) |
+| no `client_id` | still `400` locally, Authlete never called |
+| plain full-parameter request | unchanged (regression) |
+| **missing `response_type`** | **`400 [A009301]` body, NOT an error redirect** |
+
+**The last row is an honest miss.** The plan predicted the fix would make that case conformant with RFC 6749
+§4.1.2.1. It does not: Authlete answers with a body, not a redirect. What the change *did* achieve there is
+removing a duplicate, inconsistent local error channel — the error now comes from the one authoritative
+validator with a real vendor code. Authlete's channel splits on `response_type`: present → `302` with `error` +
+`state` + `iss`; absent → `400` body, since without it the response mode is unknown. Recorded in AGENTS.md.
+
+**Curriculum note.** Exercise 2's biggest trap is **service JWKS vs client JWKS** — uploading keys to the
+service (published at `/api/.well-known/jwks.json`, the AS's *own* signing keys) does nothing for JAR, which
+needs the *client's* public key on the client record. Opposite directions. Confirmed at rewrite time that both
+lab clients had `jwks: null`. Every Exercise 2 transcript was captured from real runs and every snippet was then
+executed verbatim to confirm it is copy-pasteable.
 
 ### 2026-08-04 — the UserInfo DPoP defect was fixed, and Module 05 Exercise 5 rewritten around the fix
 

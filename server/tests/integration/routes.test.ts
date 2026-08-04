@@ -57,9 +57,47 @@ describe("Integration: all API routes", () => {
   })
 
   describe("GET /api/authorization", () => {
+    const interaction = {
+      action: "INTERACTION", ticket: "t-1", client: { clientId: 123 }, scopes: [],
+      idTokenClaims: undefined, authorizationDetails: undefined, resultMessage: "",
+    }
+
     it("redirects to login on INTERACTION", async () => {
-      mockApi.authorization.processRequest.mockResolvedValue({ action: "INTERACTION", ticket: "t-1", client: { clientId: 123 }, scopes: [], idTokenClaims: undefined, authorizationDetails: undefined, resultMessage: "" })
+      mockApi.authorization.processRequest.mockResolvedValue(interaction)
       await request(app).get("/api/authorization?response_type=code&client_id=123&redirect_uri=http://localhost:3000/callback&scope=openid").expect(302)
+    })
+
+    // RFC 9101 §5: only `client_id` accompanies a Request Object on the URL — `response_type`,
+    // `redirect_uri` and the rest live inside the signed JWT. Local pre-validation used to demand
+    // them anyway and answered 400 before Authlete was called at all.
+    it("forwards the canonical JAR shape instead of rejecting it", async () => {
+      mockApi.authorization.processRequest.mockResolvedValue(interaction)
+      const jwt = "eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiIxMjMifQ.sig"
+
+      await request(app)
+        .get(`/api/authorization?client_id=123&request=${encodeURIComponent(jwt)}`)
+        .expect(302)
+
+      const sent = mockApi.authorization.processRequest.mock.calls[0][0].authorizationRequest
+      expect(sent.parameters).toContain("client_id=123")
+      expect(sent.parameters).toContain("request=")
+      expect(decodeURIComponent(sent.parameters)).toContain(jwt)
+    })
+
+    it("forwards a request with no redirect_uri (RFC 6749 §3.1.2.3)", async () => {
+      mockApi.authorization.processRequest.mockResolvedValue(interaction)
+      await request(app).get("/api/authorization?response_type=code&client_id=123&scope=openid").expect(302)
+      expect(mockApi.authorization.processRequest).toHaveBeenCalled()
+    })
+
+    it("still rejects locally when client_id is absent, without calling Authlete", async () => {
+      const res = await request(app)
+        .get("/api/authorization?response_type=code&redirect_uri=http://localhost:3000/callback")
+        .expect(400)
+
+      expect(res.body.error).toBe("invalid_request")
+      expect(res.body.error_description).toContain("client_id")
+      expect(mockApi.authorization.processRequest).not.toHaveBeenCalled()
     })
   })
 

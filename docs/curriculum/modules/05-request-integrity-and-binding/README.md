@@ -262,7 +262,13 @@ compares DPoP with mTLS as a design decision. That is what is here.
   parsing: `extractAccessToken()` (both schemes, case-insensitively), `dpopHttpTarget()` (`htu` without the
   query, `targetUri` with it) and `authChallenge()`. Read `extractAccessToken` against RFC 6750 §2 and
   RFC 9449 §7.1 — the lab asks you to justify three of its decisions.
-- **`server/src/routes/jar.routes.ts`** → `POST /api/jar/process`.
+- **`server/src/routes/jar.routes.ts`** → `POST /api/jar/process`. Note `jar.service.ts` does no key handling at
+  all — it forwards `client_id` + `request` to Authlete, which verifies the signature against the **client's**
+  registered JWKS. All of JAR's cryptography lives upstream.
+- **`server/src/utils/validate.ts`** — `validateAuthorizationParams` checks `client_id` and nothing else, which
+  is what lets the canonical RFC 9101 §5 shape (`client_id` + `request`, everything else inside the signature)
+  reach Authlete at all. Until **2026-08-04** it demanded `response_type` and `redirect_uri` on the query string
+  and refused that shape locally. Read the comment there for why a per-shape allowlist was the wrong structure.
 - **`server/src/services/userinfo.service.ts`** — the resource-server side. Note the two fail-closed checks
   (DPoP scheme without a proof; `Bearer` carrying a proof) and the comment explaining why the request body is
   allowlisted rather than spread. This file was this module's Tier-3 finding until **2026-08-04**; the fix and

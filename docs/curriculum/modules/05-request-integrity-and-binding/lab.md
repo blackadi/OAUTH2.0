@@ -1,11 +1,11 @@
 # Module 05 — Lab: Hide the request, sign the proof, break the binding
 
 **The short version:** you will push an authorization request to the back channel and prove the handle is
-single-use; watch the AS refuse an unsigned request object; find `iss` in every response; then build a DPoP
-proof by hand, obtain a `token_type: DPoP` token, **compute its key thumbprint yourself and match it against
-`cnf.jkt`**, and break the proof four ways. You finish by spending that token at a protected resource and then
-failing to downgrade it — presenting it as a `Bearer` token, which RFC 9449 §7.2 says the resource **MUST**
-refuse.
+single-use; **sign a request object with your own key and watch the URL lose an argument with it**; find `iss`
+in every response; then build a DPoP proof by hand, obtain a `token_type: DPoP` token, **compute its key
+thumbprint yourself and match it against `cnf.jkt`**, and break the proof four ways. You finish by spending that
+token at a protected resource and then failing to downgrade it — presenting it as a `Bearer` token, which
+RFC 9449 §7.2 says the resource **MUST** refuse.
 
 ## Setup
 
@@ -150,31 +150,75 @@ from the browser could re-run the same pre-authorized request — reintroducing 
 problem PAR exists to remove. Note also that a *stolen* handle is far less useful than a stolen URL: it is
 opaque, bound to its client, single-use, and expires in 600 seconds.
 
-## Exercise 2 — Watch the AS refuse an unsigned request object (JAR)
+## Exercise 2 — Sign a request object, then break it four ways (JAR)
 
-The request object's `aud` must be **this service's issuer identifier**, so read it from the discovery
-document rather than hardcoding it:
+PAR moved the request off the URL. JAR does something different: it lets the client **prove it authored** the
+request. You will refuse an unsigned object, register a client signing key, get a signed one accepted, and then
+break it four ways — each with a different error code.
+
+**Use the confidential client here** (`$CLIENT_ID`), not `$PUB_CLIENT_ID`. A public client with a registered
+signing key is a contradiction: having nowhere safe to keep a private key is the whole definition of public.
+
+The request object's `aud` must be **this service's issuer identifier**, so read it from the discovery document
+rather than hardcoding it:
 
 ```bash
 ISS=$(curl -s "$API/.well-known/openid-configuration" \
  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).issuer))')
 echo "aud will be: $ISS"
-
-UNSIGNED=$(node -e '
-const b=o=>Buffer.from(JSON.stringify(o)).toString("base64url");
-const h=b({alg:"none",typ:"oauth-authz-req+jwt"});
-const p=b({iss:process.argv[1],aud:process.argv[2],response_type:"code",client_id:process.argv[1],
-           redirect_uri:"http://localhost:3001/callback",scope:"profile",state:"JAR1"});
-process.stdout.write(h+"."+p+".");' -- "$PUB_CLIENT_ID" "$ISS")
-
-curl -s -X POST "$API/jar/process" -H "Content-Type: application/json" \
-  -d "$(node -e 'process.stdout.write(JSON.stringify({request:process.argv[1],clientId:process.argv[2]}))' -- "$UNSIGNED" "$PUB_CLIENT_ID")" \
-  | head -c 220; echo
 ```
 
-```json
-{"resultCode":"A008311","resultMessage":"[A008311] The service is configured to conform to JAR (JWT Secured Authorization Request), so request objects must be always signed.","action":"BAD_REQUEST", …}
+**Save the JAR helper** — every step below uses it:
+
+```bash
+cat > /tmp/jar.mjs <<'EOF'
+import crypto from "node:crypto"; import fs from "node:fs";
+const b64u = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+export const loadKey = () => crypto.createPrivateKey(fs.readFileSync("/tmp/jar-client-private.pem"));
+// A signed request object. `over` overrides any claim; alg:"none" drops the signature entirely.
+export function requestObject({ clientId, iss, over = {}, alg = "ES256", key }) {
+  const claims = {
+    iss: clientId, aud: iss, response_type: "code", client_id: clientId,
+    redirect_uri: "http://localhost:3001/callback", scope: "profile", state: "JAR2",
+    nbf: Math.floor(Date.now()/1000), exp: Math.floor(Date.now()/1000) + 50, ...over,
+  };
+  if (alg === "none") return `${b64u({ alg:"none", typ:"oauth-authz-req+jwt" })}.${b64u(claims)}.`;
+  const input = `${b64u({ alg, typ:"oauth-authz-req+jwt", kid:"client-jar-1" })}.${b64u(claims)}`;
+  const sig = crypto.sign("sha256", Buffer.from(input), { key: key ?? loadKey(), dsaEncoding: "ieee-p1363" });
+  return `${input}.${sig.toString("base64url")}`;
+}
+export const throwawayKey = () => crypto.generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
+EOF
+
+jar() {   # jar '<js expression building the object>'  -> posts it to /api/jar/process
+  node --input-type=module -e '
+  const J = await import("/tmp/jar.mjs");
+  const fs = await import("node:fs");
+  const jwt = '"$1"';
+  fs.writeFileSync("/tmp/jar-body.json", JSON.stringify({request: jwt, clientId: process.env.CID}));
+  ' --input-type=module
+  curl -s -X POST "$API/jar/process" -H "Content-Type: application/json" --data-binary @/tmp/jar-body.json \
+    | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);
+        console.log("action:",j.action);console.log(j.resultMessage);
+        if(j.scopes)console.log("scopes:",JSON.stringify(j.scopes.map(s=>s.name||s)),"ticket:",!!j.ticket);})'
+}
+export CID="$CLIENT_ID"
 ```
+
+### Step 1 — an unsigned object is refused
+
+```bash
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", alg: "none"})'
+```
+
+```
+action: BAD_REQUEST
+[A008311] The service is configured to conform to JAR (JWT Secured Authorization Request), so request objects must be always signed.
+```
+
+**Explain the gap.** This is RFC 9101 §10.1 enforced: the request object *"MUST be either signed using JWS…
+or signed and then encrypted."* An `alg:none` request object is Module 00's forgery, wearing a request
+object's clothes — if it were accepted, anyone could author an authorization request as any client.
 
 > **If you get `[A006359]` instead** — *"The value of the 'aud' claim … does not match the issuer identifier of
 > this service"* — your `aud` is wrong, and you never reached the check this exercise is about. That is worth
@@ -184,15 +228,179 @@ curl -s -X POST "$API/jar/process" -H "Content-Type: application/json" \
 > the server finds them and re-test after each one — assuming the last error is the only error is how people
 > conclude a feature is broken when they have three problems stacked up.
 
-**Explain the gap.** This is RFC 9101 §10.1 enforced: the request object *"MUST be either signed using JWS…
-or signed and then encrypted."* An `alg:none` request object is Module 00's forgery, wearing a request
-object's clothes — if it were accepted, anyone could author an authorization request as any client.
+### Step 2 — the trap: which JWKS?
 
-> **Going further requires a client signing key.** A *signed* request object must be verifiable against a key
-> the AS holds for that client (a registered `jwks` or `jwks_uri`). The lab's public client has none, so the
-> signed path is not exercised here. That is a **client configuration** limitation, not a JAR limitation —
-> register a JWKS on a client and the same endpoint will accept a properly signed object. You will meet client
-> signing keys again in Module 06 (`private_key_jwt`).
+A signed object must be verifiable against a key the AS holds **for that client**. Try it before registering
+anything, and read the error carefully:
+
+```bash
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", key: J.throwawayKey()})'
+```
+
+```
+[A005332] The request object passed by 'request' parameter is signed using a private key, but neither
+'jwks_uri' nor 'jwks' to get its associated public key is registered.
+```
+
+**"Registered" means on the client — and this is where people lose an afternoon.** There are two entirely
+separate JWKS slots in an Authlete service, pointing in opposite directions:
+
+| | **Service** JWKS | **Client** JWKS |
+|---|---|---|
+| Whose keys | the authorization server's | the client's |
+| The AS holds | private **and** public | public only |
+| Published at | `jwks_uri` → `/api/.well-known/jwks.json` | nowhere; it is client metadata |
+| Used to | **sign** ID tokens, JWT access tokens, JARM | **verify** request objects (JAR), `private_key_jwt` |
+| Direction | AS → client | client → AS |
+
+Look at what your service publishes:
+
+```bash
+curl -s "$API/.well-known/jwks.json" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).keys.map(k=>({kty:k.kty,crv:k.crv,alg:k.alg,use:k.use,kid:k.kid,hasPrivate:!!k.d}))))'
+```
+
+Those are the **AS's** keys. You cannot sign a request object with them — you do not have the private half, and
+you should not. Putting a JWKS there does nothing for JAR.
+
+### Step 3 — generate a client key and register it
+
+Generate it **locally**. A private key should not be produced by, or pass through, a third-party website:
+
+```bash
+node -e '
+const crypto = require("crypto");
+const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
+const pub = publicKey.export({ format: "jwk" });
+require("fs").writeFileSync("/tmp/jar-client-private.pem", privateKey.export({type:"pkcs8",format:"pem"}));
+console.log(JSON.stringify({ keys: [ { ...pub, kid: "client-jar-1", use: "sig", alg: "ES256" } ] }, null, 2));
+console.log("\ncontains private d:", !!pub.d, "  <- must be false");
+'
+```
+
+Paste that JSON into the Authlete console under your **client** (`$CLIENT_ID`) → **JWK Set Content**. Two
+warnings:
+
+- **Check `d` is absent** before pasting. A JWK with a `d` member is a private key, and pasting one into a
+  client record leaks it. The command prints the check for you.
+- **Leave *Request Object Signature Algorithm* unset.** If you pin it to `ES256`, Step 1's `alg:none` starts
+  failing with `[A005336]` — a *client-level* algorithm mismatch — instead of `[A008311]`, the *service-level*
+  "JAR requires signing" check. Both are correct rejections of the same object; pinning simply moves which
+  guard fires first. That is Step 1's lesson about error ordering, showing up again in your own config.
+
+### Step 4 — a properly signed object is accepted
+
+```bash
+V=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')
+CH=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' -- "$V")
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", over: {code_challenge: "'"$CH"'", code_challenge_method: "S256"}})'
+```
+
+```
+action: INTERACTION
+[A004001] Authlete has successfully issued a ticket to the service (API Key = …) for the authorization request from the client (ID = …). [response_type=code, openid=false]
+scopes: ["profile"] ticket: true
+```
+
+**`INTERACTION` means accepted** — the AS verified your signature, unpacked the object, and is ready to ask the
+user to log in. Note `scopes: ["profile"]`: that came out of the **signed** JWT. Nothing on any URL said
+`profile`.
+
+### Break it — four ways to get a request object wrong
+
+Each produces a different code, which is the point: the response tells you which check failed.
+
+```bash
+# Break 1 — signed with a key the AS has never seen
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", key: J.throwawayKey()})'
+```
+
+```
+[A005328] The signature of the request object passed by 'request' parameter was not verified.
+```
+
+The object is perfectly well-formed and genuinely signed — with the wrong key. Compare with `[A005332]` in
+Step 2: *no key registered* and *wrong key* are different failures, and the codes distinguish them.
+
+```bash
+# Break 2 — addressed to a different audience
+jar 'J.requestObject({clientId: process.env.CID, iss: "https://wrong.example.com"})'
+```
+
+```
+[A006359] The value of the 'aud' claim in the request object passed by the 'request' parameter does not match the issuer identifier of this service.
+```
+
+`aud` is what stops an object minted for one AS being replayed at another — the request-object analogue of
+`htu` on a DPoP proof.
+
+```bash
+# Break 3 — already expired
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", over: {nbf: Math.floor(Date.now()/1000)-600, exp: Math.floor(Date.now()/1000)-300}})'
+```
+
+```
+[A006339] The request object passed by the 'request' parameter has already expired: now=1785860069, exp=1785859769, skew=0
+```
+
+Note `skew=0`. This service allows no clock tolerance, and `AGENTS.md` records `nbfOptional: false` — a request
+object must carry `nbf` and live no longer than 60 seconds. A signed object is a bearer artifact until it
+expires, so the window is deliberately tiny.
+
+```bash
+# Break 4 — get it right
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", over: {code_challenge: "'"$CH"'", code_challenge_method: "S256"}})'
+```
+
+```
+action: INTERACTION
+```
+
+### Step 5 — the payoff: the object outranks the URL
+
+Now use it as a real client would. RFC 9101 §5 puts only `client_id` and `request` on the URL — everything else
+lives inside the signature:
+
+```bash
+RO=$(node --input-type=module -e '
+const J = await import("/tmp/jar.mjs");
+process.stdout.write(J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'",
+  over: {code_challenge: "'"$CH"'", code_challenge_method: "S256"}}));
+' --input-type=module)
+
+REDIRECT=$(run_flow_url "$API/authorization?client_id=$CID&request=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$RO")")
+echo "$REDIRECT"
+```
+
+```
+http://localhost:3001/callback?state=JAR2&code=HOi4vZ8kebqQbfFCu2ESnUcaKbrfgt…&iss=https%3A%2F%2F…
+```
+
+**Two parameters on the URL, and a full authorization code back.** Now the important part — **predict** what
+happens if the URL contradicts the object:
+
+```bash
+REDIRECT2=$(run_flow_url "$API/authorization?client_id=$CID&scope=openid&state=URL_WINS&request=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$RO")")
+echo "$REDIRECT2"
+```
+
+```
+http://localhost:3001/callback?state=JAR2&code=…&iss=…
+```
+
+**`state=JAR2`, not `URL_WINS`.** Exchange that code and the token's scope is `profile`, not `openid`. RFC 9101
+§6.3: *"The authorization server MUST only use the parameters in the Request Object, even if the same parameter
+is provided in the query parameter."* The URL is not merged, not preferred, not consulted — it is **ignored**.
+
+**Explain the gap.** This is what JAR buys that PAR does not. PAR hides the request; JAR makes it
+*tamper-evident*. An attacker who can rewrite the query string can add `scope=openid`, swap `redirect_uri`, or
+strip `code_challenge` — and against a JAR request every one of those edits is discarded, because they are not
+covered by the signature. An AS that *merged* query parameters into a request object would hand that power
+straight back, which is why §6.3 is a MUST and why `traditionalRequestObjectProcessingApplied: false` matters
+in the service config.
+
+> **This step was impossible until 2026-08-04.** `validateAuthorizationParams` demanded `response_type` and
+> `redirect_uri` on the query string, so the canonical JAR shape was rejected with
+> `Missing required parameter: response_type` before Authlete ever saw it. See "What was real vs. simulated".
 
 ## Exercise 3 — Find `iss` everywhere
 
@@ -604,6 +812,14 @@ it. That is Q14 in the quiz.
       compared with a plain authorization request.
 - [ ] The `request_uri` is single-use, and you can cite the RFC 9126 section and say why.
 - [ ] An `alg:none` request object is rejected, and you can explain what would be forgeable if it were not.
+- [ ] You can state the difference between the **service** JWKS and a **client** JWKS in one sentence each, and
+      say which one JAR needs and in which direction it is used.
+- [ ] **You registered a client signing key and had a signed request object accepted**, and can name the four
+      distinct error codes the four breaks produce and which check each one represents.
+- [ ] You can explain why `[A005332]` and `[A005328]` are different failures.
+- [ ] **You put `scope` and `state` on the URL that contradicted the signed object, and the object won.** You can
+      cite RFC 9101 §6.3 and say what an attacker gains against an AS that merges query parameters instead.
+- [ ] You can state what JAR gives you that PAR does not, and vice versa.
 - [ ] You found `iss` on both success and error responses, and can state what the *client* must do with it.
 - [ ] You built a DPoP proof by hand and can name the three required header parameters and four required
       claims, and what each defends against.
@@ -625,9 +841,23 @@ it. That is Q14 in the quiz.
 
 - Everything above is **real**: a genuine `request_uri`, a genuine DPoP-bound token, a genuine thumbprint
   match, and genuine rejections.
-- **The signed-JAR path is not exercised** — the lab's public client has no registered signing key, so only
-  the `alg:none` rejection is demonstrated. Labelled in Exercise 2; it is a client-configuration limit, not a
-  spec or server limit.
+- **The signed-JAR path is now fully exercised** (changed 2026-08-04). It previously was not: the lab's clients
+  had no registered signing key, so only the `alg:none` rejection was shown. Exercise 2 now has you register one
+  and run the signed path, including the RFC 9101 §6.3 precedence proof. Two things had to change for that:
+  - **A client JWKS must be registered** — a configuration step the exercise walks through. Confirmed before the
+    rewrite that neither lab client had one (`jwks: null`, `jwksUri: null`).
+  - **`server/src/utils/validate.ts` was fixed.** `validateAuthorizationParams` demanded `response_type` and
+    `redirect_uri` on the query string, so the canonical RFC 9101 §5 shape — `client_id` + `request`, everything
+    else inside the signature — was refused with `Missing required parameter: response_type` before Authlete saw
+    it. It now checks only `client_id`, the one parameter required in every request shape. Recorded in
+    `PROGRESS.md`.
+- **One conformance gap was *not* closed by that fix, and is Authlete's behaviour rather than this server's.**
+  RFC 6749 §4.1.2.1 wants failures reported by redirecting to the redirection URI with an `error` parameter
+  whenever `client_id` and `redirect_uri` are themselves valid. Verified: with `response_type` **present** and
+  some other parameter invalid, you do get that redirect (Exercise 3 relies on it). With `response_type`
+  **absent**, Authlete answers `400 [A009301]` as a body instead. Defensible — without `response_type` the AS
+  cannot determine the response mode, so it cannot know how to shape a redirect — but it is a body, not a
+  redirect, and this repo does not control it.
 - **mTLS is not implemented in this repo.** RFC 8705 is taught in the lesson and nothing here claims to run
   it. A proposal to implement it is at the end of the lesson.
 - **Exercise 5 used to reproduce a real server bug** — UserInfo could not accept the `DPoP` scheme at all. It was
@@ -637,10 +867,15 @@ it. That is Q14 in the quiz.
 - **Exercise 5 uses the confidential client, not the public one.** `openid` scope forces an ID token and this
   service signs those with HS256, which Authlete refuses for a public client. That is a *service configuration*
   limit on this deployment, not a spec rule.
-- Bracketed codes (`[A008303]`, `[A008311]`, `[A254301]`, `[A254303]`, `[A089304]`, `[A089311]`, `[A089312]`,
-  `[A406301]`) are **Authlete vendor behavior**. The `error` values themselves — `invalid_request_uri`
-  (RFC 9126), `invalid_dpop_proof` (RFC 9449), `invalid_token` and `insufficient_scope` (RFC 6750 §3.1),
-  `invalid_request` (RFC 6750 §3.1) — are spec-defined. The two rejections with **no** bracketed code come from
-  this server rather than Authlete.
+- Bracketed codes (`[A008303]`, `[A008311]`, `[A254301]`, `[A254303]`, `[A005328]`, `[A005332]`, `[A005336]`,
+  `[A006339]`, `[A006359]`, `[A009301]`, `[A089304]`, `[A089311]`, `[A089312]`, `[A406301]`) are **Authlete
+  vendor behavior**. The `error` values themselves — `invalid_request_uri` (RFC 9126), `invalid_dpop_proof`
+  (RFC 9449), `invalid_token` and `insufficient_scope` (RFC 6750 §3.1), `invalid_request` (RFC 6750 §3.1) — are
+  spec-defined. Rejections with **no** bracketed code come from this server rather than Authlete, which is how
+  you tell the two layers apart from the response alone.
+- **Exercise 2 uses the confidential client** (`$CLIENT_ID`) because a signing key requires somewhere safe to
+  keep the private half. Its transcripts were captured against a client configured exactly as the exercise
+  asks — CONFIDENTIAL, one redirect URI, client JWKS registered, `requestSignAlg` unset — and every snippet was
+  run verbatim to confirm it is copy-pasteable.
 - The `htu` the server compares against is derived from its own `Host` header, so it omits the port on this
   deployment. That is deployment behaviour and would differ behind a proxy.
