@@ -75,16 +75,28 @@ collapses "not yours" and "not there" into one answer — the same anti-oracle r
 **Diagnosis (3):** the UserInfo endpoint strips only the literal prefix `"Bearer "` from the `Authorization`
 header. RFC 9449 §7.1 **requires** the `DPoP` scheme for DPoP-bound tokens, so `Authorization: DPoP <token>`
 passes the whole string `"DPoP <token>"` to the validator, which correctly reports no such token. The token
-endpoint issues tokens the resource endpoint cannot accept. *(This is a real defect in this repo,
-`userinfo.service.ts:21`.)*
+endpoint issues tokens the resource endpoint cannot accept. *(This was a real defect in this repo,
+`userinfo.service.ts:21`, **fixed 2026-08-04**. The question stands as written — diagnose it from the symptom;
+you can no longer reproduce it against the running server. Module 05's lab now demonstrates the fixed behaviour
+and the §7.2 rejection instead.)*
 
 **Fix (1):** strip either scheme, case-insensitively.
+
+**Full marks for spotting what the one-line fix leaves behind (bonus).** The real repair was larger, because the
+same function had three more defects — the worst being that it spread the request body into the upstream call,
+letting a client supply the `htu` its own proof was validated against. A proof minted for another endpoint then
+verified fine. **A candidate who says "and I would check what else that function trusts from the request" has
+the instinct the question is really testing:** the reported symptom is rarely the whole defect.
 
 **The inverse (3):** a resource server that accepts **`Bearer`** for a **DPoP-bound** token — i.e. ignores the
 scheme and never checks the proof. **That one is far more dangerous.** F4's version *fails closed*: it is an
 availability bug, loud, and someone files a ticket on day one. The inverse *fails open* and is silent: the
 binding still appears in the token's `cnf`, every dashboard says "DPoP enabled", and a stolen token works
 anywhere. **A security control that is silently not applied is worse than one that is visibly broken.**
+
+RFC 9449 §7.2 names this exactly — a protected resource *"MUST reject a DPoP-bound access token received as a
+bearer token"* — and Module 05's lab now has the learner run it: `Authorization: Bearer <bound token>` →
+`401 [A089311] Expected a DPoP header but none was provided.`
 
 ### F5 (6) → *Module 07*
 

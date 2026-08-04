@@ -542,7 +542,7 @@ already logged (**A-008** ROPC, **A-014** RFC 9728). **The sweep found no new de
 | 3 | **Both** `/api/fapi/config` and `/api/fapi/status` return 200 with an error body and a `stack` field | 10, PROGRESS | ✅ both **200** with `{"error":"Bad Request","message":"Response validation failed","stack":…}` |
 | 4 | `JWKS_URI` unset ⇒ back-channel logout receipt fails as `"Invalid logout token"` | 08 | ✅ `JWKS_URI` absent from `server/.env`; endpoint → **400** with that exact message |
 | 5 | Logout endpoint is an open redirect (prefix `startsWith` checks) | 08, PROGRESS | ✅ **both** vectors reproduce: `localhost:3000.evil.example.com` and `localhost:3001@evil.example.com` each get **302 to the attacker's host** |
-| 6 | UserInfo cannot accept the `DPoP` scheme → `[A088302]` | 05 | ✅ `Authorization: DPoP <token>` → **401** `[A088302] The access token does not exist.` |
+| 6 | UserInfo cannot accept the `DPoP` scheme → `[A088302]` | 05 | ✅ reproduced at audit time: `Authorization: DPoP <token>` → **401** `[A088302] The access token does not exist.` — **FIXED 2026-08-04**; now **200** with claims. Three further defects in the same function were found and fixed with it, including a proof-replay bypass. See `PROGRESS.md`. |
 | 7 | `prompt=none` returns a 302 with an **empty** `Location` header | 08 | ✅ `HTTP/1.1 302 Found`, `Location: []` — exactly as described |
 | 8 | `response_mode=jwt` → `[A012305]` (`authorization_signed_response_alg` not set) | 09a | ✅ exact code |
 | 9 | Any `acr_values` → `[A021303]` (service supports no ACR value) | 09a | ✅ exact code |

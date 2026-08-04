@@ -88,6 +88,50 @@ against it before calling the capstone complete._
 - [x] **Stage 4a — consistency pass** — run, 2 real errors found and fixed (see below)
 - [x] **Stage 4b — the four exams written** (A, B, C, Final) under `exams/`, each with an answer key
 - [x] **STAGE 4 COMPLETE — the curriculum is finished.**
+- [x] **2026-08-04 — Module 05's Tier-3 finding fixed in the server; Exercise 5 rewritten** (below)
+
+### 2026-08-04 — the UserInfo DPoP defect was fixed, and Module 05 Exercise 5 rewritten around the fix
+
+**Why this matters to a future session:** Module 05 Exercise 5 used to teach a *live* server bug. It no longer
+reproduces. The exercise now demonstrates the working path plus two conformant breaks. If you are reading an
+older transcript that shows `[A088302] The access token does not exist.` from `Authorization: DPoP <token>`,
+that output is historical.
+
+**What was fixed.** Four defects in `userinfo.service.ts`, detailed in the findings section below. The reported
+one was the scheme parse; the serious one was a **DPoP proof-replay bypass** — the request body was spread into
+the Authlete request, so a client could supply the `htu` its own proof would be validated against. Verified
+exploit: a proof minted for `/api/par` returned `200` at `/api/userinfo`.
+
+**Verified live before and after** (~30 Authlete calls total across two probe runs, well under the rate limit),
+using the confidential client — note that `openid` scope on the *public* client still fails with `[A406301]`
+because this service signs ID tokens with HS256. 14 post-fix assertions, all passing:
+
+| Presentation | Result |
+|---|---|
+| `DPoP <bound>` + valid proof | **200** + claims ← the fix |
+| `dpop <bound>` + valid proof | 200 (RFC 9110 §11.1 case-insensitive) |
+| `Bearer <bound>`, no proof | 401 `[A089311]` — Authlete enforces RFC 9449 §7.2 |
+| `Bearer <bound>` + proof | 400 `invalid_request` — rejected locally |
+| `DPoP <bound>`, no proof | 401 `invalid_dpop_proof` — rejected locally, no Authlete call |
+| body-smuggled `dpop`/`htu` for `/par` | 401 — **was 200 before the fix** |
+| `GET /userinfo?x=1` + valid proof | 200 — `htu` no longer carries the query |
+| `Basic …` / no header | 401, `WWW-Authenticate: Bearer, DPoP`, no error code (RFC 6750 §3.1) |
+| `Bearer <unbound>` | 200 (regression check) |
+| form body `access_token` | 200 — **was 500 before the fix** |
+| header **and** body token | 400 `invalid_request` (RFC 6750 §2) |
+| `DPoP <unbound>` + unrelated proof | **200** — no `cnf`, so nothing to bind; documented, not "fixed" |
+
+**Two plan assumptions turned out to be wrong, and the code is better for it.** (a) I expected to have to
+hand-build a `DPoP` `WWW-Authenticate` challenge with `algs` sourced from discovery. Authlete already emits
+`DPoP error="…",algs="RS256 … EdDSA"` itself, so that work was dropped — no discovery call, no cache, and
+Authlete's `responseContent` is still forwarded verbatim. (b) I expected §7.2 might need local enforcement,
+since `UserinfoResponse` carries no `cnf`. Authlete enforces it; the compliance is delegated by design.
+
+**One trap worth knowing.** Editing three files in quick succession left `ts-node-dev` with two module
+instances of `utils/dpop.ts` loaded, so `err instanceof TokenPresentationError` silently returned false and
+every local rejection fell through to the global error handler — no `WWW-Authenticate` header (breaking
+RFC 6750 §3's MUST) and a leaked stack trace. A clean restart fixed it, and the code now uses
+`isTokenPresentationError()`, a discriminant-based guard, so the failure cannot recur.
 
 ### Stage 4a — consistency pass: what was checked and what was found
 
@@ -305,13 +349,33 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   field whose entire contract is "safe to copy into logs." (Checked and *not* over-claimed: this repo's audit
   logger takes `user` from the session, not from a token subject, so that particular log is unaffected.)
   Correct behavior is to fail closed.
-- **UserInfo cannot accept a DPoP-bound token.** `server/src/services/userinfo.service.ts:21` does
+- **~~UserInfo cannot accept a DPoP-bound token.~~ FIXED 2026-08-04.** `userinfo.service.ts:21` did
   `authHeader.replace("Bearer ", "")`, so `Authorization: DPoP <token>` — the scheme RFC 9449 §7.1 **requires**
-  for DPoP-bound tokens — passes the literal string `"DPoP <token>"` to Authlete, which answers `[A088302] The
-  access token does not exist.` Verified end to end during the Module 05 build: the token endpoint issues a
-  `token_type: DPoP` token with a valid `cnf.jkt`, and the resource endpoint then cannot accept it. One-line
-  fix (strip either scheme, case-insensitively). Taught as Module 05's Tier-3 finding; not fixed, because it is
-  server source.
+  for DPoP-bound tokens — passed the literal string `"DPoP <token>"` to Authlete, which answered `[A088302] The
+  access token does not exist.` The token endpoint issued a `token_type: DPoP` token with a valid `cnf.jkt` and
+  the resource endpoint could not accept it.
+
+  Investigating it turned up **three further defects in the same 14-line block**, two of them worse than the
+  reported one:
+  1. **A DPoP proof-replay bypass (the serious one).** `req.body` was spread wholesale into the Authlete
+     request, so a POST client could supply its own `dpop`, `htm` and `htu`. Since Authlete validates the
+     proof's `htu` against *the value the server sends*, a client choosing that value defeats the RFC 9449
+     §4.3 binding check outright. **Verified exploit:** a proof minted for `/api/par` (with a matching
+     body-supplied `htu`) returned `200` and full claims at `/api/userinfo`. `introspection.service.ts:19-22`
+     already blocked this and said so in a comment; userinfo never got the same treatment.
+  2. **`htu` included the query string.** RFC 9449 §4.2 defines `htu` as the target URI *without* query and
+     fragment, and the Authlete SDK offers a separate `targetUri` for the full URI. Any request carrying a
+     query string failed proof validation even when the client was correct.
+  3. **RFC 6750 §2.2 form-body presentation returned `500`.** `access_token` in a form body left
+     `UserinfoRequest.token` undefined, producing an unhandled Zod error instead of a `401`.
+
+  Also fixed, because the server fix left them non-conformant: `client/src/services/token.service.ts`
+  (`userInfoWithDpop` sent `Authorization: Bearer` with a proof attached — the §7.2 downgrade shape) and
+  `docs/FAPI-TUTORIAL.md` (documented that combination as correct).
+
+  All parsing now lives in `server/src/utils/dpop.ts`. See **AGENTS.md → DPoP & Client Auth** for the full
+  behavioural contract. Module 05 Exercise 5 was rewritten around the fix — it now spends the bound token
+  successfully and breaks it two conformant ways instead of reproducing a defect.
 - **The introspection endpoint is unauthenticated.** `POST /api/introspection/standard` (and
   `/api/introspection`) answer fully with no client credentials and no bearer token. RFC 7662 §2.1: *"To
   prevent token scanning attacks, the endpoint MUST also require some form of authorization to access this

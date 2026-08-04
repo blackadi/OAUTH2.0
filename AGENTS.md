@@ -34,11 +34,11 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (374 tests, 48 files)
+npm --prefix server run test              # unit + integration (428 tests, 49 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (336 tests, 46 files)
-npm --prefix server run test:integration  # integration tests only (38 tests)
+npm --prefix server run test:unit         # unit tests only (384 tests, 48 files)
+npm --prefix server run test:integration  # integration tests only (44 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (100 tests, requires real Authlete creds)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 46 files across 5 categories (336 tests):
-  - `tests/unit/services/` — 21 files (86 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par)
-  - `tests/unit/controllers/` — 6 files (60 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device
-  - `tests/unit/middleware/` — 6 files (58 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership
-  - `tests/unit/utils/` — 4 files (22 tests), createLocalJWT/jwksClient/validate/validation
-  - `tests/unit/routes/` — 3 files (32 tests), metrics routes + openapi routes + protected-resource-metadata
-- **Integration tests**: 1 file `tests/integration/routes.test.ts` (38 tests) — full Express stack with mocked SDK
+- **Unit tests**: 48 files across 5 categories (384 tests):
+  - `tests/unit/services/` — 24 files (115 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo)
+  - `tests/unit/controllers/` — 9 files (113 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci
+  - `tests/unit/middleware/` — 6 files (55 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership
+  - `tests/unit/utils/` — 5 files (84 tests), createLocalJWT/jwksClient/validate/validation/dpop
+  - `tests/unit/routes/` — 4 files (17 tests), fapi + metrics + openapi + protected-resource-metadata routes
+- **Integration tests**: 1 file `tests/integration/routes.test.ts` (44 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 374 tests across 48 files, completes in ~2s
+- Run with `npm --prefix server run test` — 428 tests across 49 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -220,6 +220,35 @@ The token controller (`src/controllers/token.controller.ts`) handles every Authl
 - **Client auth for DCR confidential clients**: Authlete defaults DCR-created confidential clients to `CLIENT_SECRET_POST` even when the service's `supportedTokenAuthMethods` lists only `CLIENT_SECRET_BASIC`. Token exchange requests must send `client_id` and `client_secret` in the URL-encoded body, not as `Authorization: Basic`. Using Basic auth produces `"The client authentication method is 'client_secret_post' but the request does not include a client secret."`. The SPA callback must persist `client_secret` to `sessionStorage` before the auth redirect. See `client/src/pages/CallbackPage.tsx:72-90`, `client/src/components/auth/AuthFlowsSection.tsx:112`.
 - **PAR `client_secret` in parameters**: For `CLIENT_SECRET_POST` clients, `client_secret` must be merged into the `parameters` string, not sent as a separate JSON field. Authlete's PAR API only recognizes client credentials inside the `parameters` string for `CLIENT_SECRET_POST`. See `server/src/services/par.service.ts:29-34`.
 - **DPoP nonce flow**: Nonces are OPTIONAL (controlled by `dpopNonceRequired`). First request without nonce → 401 `use_dpop_nonce` error + `DPoP-Nonce` header. Client retries with nonce. Expired nonce → 401 `invalid_dpop_proof` + new nonce. Token/PAR endpoints can return nonce on success; protected resource endpoints return it only on error per RFC 9449. See `docs/FAPI-TUTORIAL.md`.
+- **Presenting an access token at a protected resource (RFC 6750 §2, RFC 9449 §7)**: `UserInfo` is this repo's
+  only protected resource, and all token-presentation parsing lives in `server/src/utils/dpop.ts` —
+  `extractAccessToken()`, `dpopHttpTarget()`, `authChallenge()`, `isTokenPresentationError()`. Use these rather
+  than re-deriving a token from the `Authorization` header.
+  - **Both schemes, case-insensitively.** `Bearer` (RFC 6750 §2.1) and `DPoP` (RFC 9449 §7.1); RFC 9110 §11.1
+    makes auth-scheme case-insensitive. An unrecognised scheme yields "no token presented", never a token.
+  - **`DPoP` is mandatory for a bound token.** RFC 9449 §7.1 — a DPoP-bound token *"is sent using the
+    `Authorization` request header field… with an authentication scheme of `DPoP`"*. There is no alternative.
+  - **§7.2 downgrade is enforced by Authlete, verified 2026-08-04.** `Bearer <dpop-bound-token>` with no proof
+    → Authlete `401 [A089311] Expected a DPoP header but none was provided.`, and its challenge already
+    carries the `DPoP` scheme plus an accurate `algs` list. Do **not** hand-write a DPoP challenge on paths
+    where Authlete answers; forward `responseContent` verbatim. `UserinfoResponse` exposes no `cnf`, so the
+    server cannot detect the downgrade locally — this compliance is delegated by design.
+  - **`Bearer` + a `DPoP` header → 400 `invalid_request`, rejected locally.** Honouring the proof would make
+    `Bearer` a working route for bound tokens (the §7.2 downgrade); silently dropping it would report "no DPoP
+    header provided" to a client that plainly sent one.
+  - **`DPoP` scheme + no proof header → 401 `invalid_dpop_proof`, rejected locally**, before any Authlete call.
+  - **Server-determined fields never come from the body.** `token`, `dpop`, `htm`, `htu`, `targetUri` and
+    `clientCertificate` are set from HTTP context only — the same rule `introspection.service.ts` follows.
+    Spreading `req.body` into the Authlete request let a client choose the `htu` its own proof was validated
+    against, making a proof captured at another endpoint replayable (verified: a proof minted for `/api/par`
+    returned `200` at `/api/userinfo`). Only `access_token` is read from a form body, per RFC 6750 §2.2.
+  - **`htu` excludes the query and fragment** (RFC 9449 §4.2); the full request URI goes in `targetUri`. The
+    Authlete SDK documents exactly this split. Sending the query string as `htu` broke any request with one.
+  - **No query-parameter tokens.** RFC 6750 §2.3 is not implemented: RFC 9700 §4.3.2 (BCP 240) says *"Clients
+    MUST NOT pass access tokens in a URI query parameter"*.
+  - **A `DPoP` scheme on an *unbound* token succeeds** (verified) — the token has no `cnf`, so there is no
+    binding to check and the proof is decorative. Proof-of-possession comes from `cnf.jkt` on the token, not
+    from the scheme the caller chose. Never treat "the request used DPoP" as evidence of sender-constraint.
 - **RFC 9470 Step-Up Authentication**: The server binds `acr` and `auth_time` to JWT access tokens during authorization. On login, `session.controller.ts` records the satisfied ACR ("pwd" for password) and `authTime` (epoch seconds), then checks Authlete's `acrs`/`acrEssential`/`maxAge` requirements. If ACR doesn't match and `acrEssential` is true, the authorization fails with `ACR_NOT_SATISFIED`. If `maxAge` is exceeded, fails with `EXCEEDS_MAX_AGE`. The `stepUp` object in session (`{ acr, authTime }`) is passed to Authlete's `/auth/authorization/issue` API via `authorization.service.ts`. The introspection controller (`introspection.controller.ts:47`) parses Authlete's `WWW-Authenticate` header for `insufficient_user_authentication` and returns structured JSON with `acr_values`/`max_age` for the client to re-authorize. The client UI includes a **Step-Up Auth** section (`StepUpSection.tsx`) that tests the full flow. See `docs/STEP-UP-AUTH-TUTORIAL.md`.
 
 ## Quirks & gotchas

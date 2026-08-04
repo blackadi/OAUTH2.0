@@ -3,8 +3,9 @@
 **The short version:** you will push an authorization request to the back channel and prove the handle is
 single-use; watch the AS refuse an unsigned request object; find `iss` in every response; then build a DPoP
 proof by hand, obtain a `token_type: DPoP` token, **compute its key thumbprint yourself and match it against
-`cnf.jkt`**, and break the proof four ways. You finish by discovering that this server cannot accept the
-DPoP-bound token it just issued.
+`cnf.jkt`**, and break the proof four ways. You finish by spending that token at a protected resource and then
+failing to downgrade it — presenting it as a `Bearer` token, which RFC 9449 §7.2 says the resource **MUST**
+refuse.
 
 ## Setup
 
@@ -15,7 +16,9 @@ PRU="http://localhost:3001/callback"
 ```
 
 You need `$API`, `$PUB_CLIENT_ID`, `$LAB_USER`, `$LAB_PASS`, and the `getcode` helper from
-[Module 03's lab](../03-pkce-and-public-clients/lab.md#setup).
+[Module 03's lab](../03-pkce-and-public-clients/lab.md#setup). **Exercise 5 also needs the confidential client**
+(`$CLIENT_ID` / `$CLIENT_SECRET`) — `curriculum.env` already provides both, and the exercise explains why the
+public client cannot be used there.
 
 > **`parRequired` must still be `false` on `$PUB_CLIENT_ID`** — the value Module 03's setup table asks for.
 > Exercise 1 pushes a request *by choice*; Exercises 3 and 4 send plain authorization requests, and with
@@ -357,10 +360,11 @@ token_type: DPoP
 
 Four attempts, one difference each. That is the whole debugging matrix for DPoP proofs.
 
-## Exercise 5 — Try to spend the bound token, and find the bug
+## Exercise 5 — Spend the bound token, then try to downgrade it
 
-RFC 9449 §7.1: a DPoP-bound token *"is sent using the Authorization request header field… with an
-authentication scheme of DPoP"* — and §7 requires the accompanying proof to carry `ath`. Do exactly that:
+You have a token whose `cnf.jkt` you verified yourself. Now spend it. RFC 9449 §7.1: a DPoP-bound token
+*"is sent using the Authorization request header field… with an authentication scheme of DPoP"* — and the
+accompanying proof must carry `ath`. Do exactly that:
 
 ```bash
 node --input-type=module -e '
@@ -379,37 +383,220 @@ console.log("run:\n  curl -s -i -H \"Authorization: DPoP " + d.at + "\" -H \"DPo
 > a trailing flag, so a snippet mixing `require` with top-level `await` fails with `ERR_AMBIGUOUS_MODULE_SYNTAX`
 > rather than a clear error.
 
-Run the printed command. **Predict** first: the token is valid, the proof is correct, `ath` is present, and
-the scheme is the one the RFC mandates.
+Run the printed command. **Predict** first: the token is valid, the proof is correct, `ath` is present, and the
+scheme is the one the RFC mandates.
+
+```
+HTTP/1.1 403 Forbidden
+WWW-Authenticate: DPoP error="insufficient_scope",error_description="[A089304] The userinfo endpoint requires
+'openid' scope, but the access token does not cover the scope.",error_uri="…",algs="RS256 … ES256 … EdDSA"
+```
+
+**Not what you predicted, and not a failure of anything you built.** Your proof was fine. UserInfo is an OIDC
+endpoint (OpenID Connect Core §5.3) and Exercise 4 asked for `scope=profile`, with no `openid`. **This is the
+Exercise 2 lesson again**: the AS validated the *scope* before it validated the *binding*, so this one error code
+tells you only about the first thing that failed. Had you concluded from it that DPoP was broken, you would have
+been debugging the wrong layer. Notice the challenge is already `DPoP` scheme with an `algs` list, even here.
+
+So get a token UserInfo will actually honour. **This needs the confidential client** (`$CLIENT_ID` /
+`$CLIENT_SECRET`): `openid` forces an ID token, this service signs ID tokens with HS256, and Authlete refuses a
+symmetric algorithm for a public client — `[A406301] The algorithm is symmetric (HS256), but the client type of
+the client … is not 'confidential'`. Same flow as Exercise 4, two changes: `scope=openid profile`, and client
+authentication on the token call.
+
+```bash
+cat > /tmp/dpopflow-oidc.mjs <<'EOF'
+import crypto from "node:crypto"; import fs from "node:fs";
+import { execSync } from "node:child_process";
+const M = await import("/tmp/dpop.mjs");
+const API = process.env.API, CID = process.env.CLIENT_ID, SEC = process.env.CLIENT_SECRET, PRU = process.env.PRU;
+const sh = c => execSync(c, {encoding:"utf8"});
+const loc = o => { const m = o.split("\n").find(l => /^location:/i.test(l.trim())); return m ? m.split(/:\s/)[1].trim() : ""; };
+const jar = sh("mktemp").trim();
+const v  = crypto.randomBytes(32).toString("base64url");
+const ch = crypto.createHash("sha256").update(v).digest("base64url");
+const au = `${API}/authorization?response_type=code&client_id=${CID}&redirect_uri=${encodeURIComponent(PRU)}`
+         + `&scope=${encodeURIComponent("openid profile")}&state=D2&code_challenge=${ch}&code_challenge_method=S256`;
+let l = loc(sh(`curl -s -i -c ${jar} -b ${jar} "${au}"`));
+const c1 = (sh(`curl -s -b ${jar} -c ${jar} "http://localhost:3000${l}"`).match(/name="_csrf" value="([^"]*)"/)||[])[1];
+let l2 = loc(sh(`curl -s -i -b ${jar} -c ${jar} -X POST "${API}/session/login" -d "username=${process.env.LAB_USER}" -d "password=${process.env.LAB_PASS}" --data-urlencode "_csrf=${c1}"`));
+if (!/^http/.test(l2)) { const c2=(sh(`curl -s -b ${jar} -c ${jar} "${API}/session/consent"`).match(/name="_csrf" value="([^"]*)"/)||[])[1];
+  l2 = loc(sh(`curl -s -i -b ${jar} -c ${jar} -X POST "${API}/session/consent" -d "decision=approve" --data-urlencode "_csrf=${c2}"`)); }
+const code = new URL(l2).searchParams.get("code");
+const {privateKey, publicKey} = M.makeKey();
+const dpop = M.proof({privateKey, publicKey, htm:"POST", htu:`${API}/token`});
+const tok = JSON.parse(sh(`curl -s -X POST "${API}/token" -H "Content-Type: application/x-www-form-urlencoded" -H "DPoP: ${dpop}" -u "${CID}:${SEC}" -d "grant_type=authorization_code" -d "code=${code}" --data-urlencode "redirect_uri=${PRU}" -d "code_verifier=${v}"`));
+console.log("token_type:", tok.token_type, "| scope:", tok.scope, "| error:", tok.error || "none");
+fs.writeFileSync("/tmp/dpopkey-oidc.json", JSON.stringify({at:tok.access_token, priv:privateKey.export({type:"pkcs8",format:"pem"}), pub:publicKey.export({type:"spki",format:"pem"})}));
+EOF
+API="$API" CLIENT_ID="$CLIENT_ID" CLIENT_SECRET="$CLIENT_SECRET" PRU="$PRU" LAB_USER="$LAB_USER" LAB_PASS="$LAB_PASS" node /tmp/dpopflow-oidc.mjs
+```
+
+```
+token_type: DPoP | scope: openid profile | error: none
+```
+
+Now spend *that* one — same command as above with `/tmp/dpopkey-oidc.json` in place of `/tmp/dpopkey.json`:
+
+```bash
+node --input-type=module -e '
+const M = await import("/tmp/dpop.mjs"); const crypto = await import("node:crypto");
+const fs = await import("node:fs");
+const d = JSON.parse(fs.readFileSync("/tmp/dpopkey-oidc.json","utf8"));
+const privateKey = crypto.createPrivateKey(d.priv), publicKey = crypto.createPublicKey(d.pub);
+const url = "'"$API"'/userinfo";
+const p = M.proof({privateKey, publicKey, htm:"GET", htu:url, ath: M.ath(d.at)});
+console.log("run:\n  curl -s -i -H \"Authorization: DPoP " + d.at + "\" -H \"DPoP: " + p + "\" " + url);
+' --input-type=module
+```
+
+```
+HTTP/1.1 200 OK
+{"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","nickname":"admin",
+ "preferred_username":"admin","zoneinfo":"UTC","locale":"en-US","updated_at":1785835361}
+```
+
+**You just spent a sender-constrained token.** Five things had to line up, and it is worth naming them before you
+break them one at a time: the token exists and has not expired; it covers `openid`; the scheme is `DPoP`; a proof
+accompanied it; and the proof's key hashes to the `cnf.jkt` you matched in Exercise 4. Each failure below
+produces a **different** error code — that is what makes DPoP debuggable at all.
+
+Keep the token handy:
+
+```bash
+AT=$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("/tmp/dpopkey-oidc.json","utf8")).at)')
+```
+
+### Break 5 — present the bound token as a Bearer token
+
+This is the one that matters. **Predict first:** the token is unchanged and still valid; the only difference is
+the scheme name.
+
+```bash
+curl -s -i -H "Authorization: Bearer $AT" "$API/userinfo" | grep -iE "^HTTP|^www-auth"
+```
 
 ```
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: Bearer error="invalid_token",error_description="[A088302] The access token does not exist."
+WWW-Authenticate: DPoP error="invalid_token",error_description="[A089311] Expected a DPoP header but none was
+provided.",error_uri="https://docs.authlete.com/#A089311",algs="RS256 RS384 … ES256 … EdDSA"
 ```
 
-**"The access token does not exist"** — for a token you obtained ninety seconds ago and just introspected
-successfully. Find out why:
+**Explain the gap.** RFC 9449 §7.2 is explicit: a protected resource *"MUST reject a DPoP-bound access token
+received as a bearer token."* The authorization server sees `cnf.jkt` on the token, finds no proof, and refuses.
+Read the challenge closely — it comes back with the **`DPoP` scheme** and an `algs` list, which is the server
+telling a confused client exactly what it should have sent (§7.1 makes that challenge a MAY, and `algs` a SHOULD
+once you emit one).
+
+**Now say why this rejection is the whole point.** If it returned `200`, sender-constraining would be
+decorative: an attacker who stole the token would simply drop the `DPoP` header and carry on. The binding is
+only worth something if presenting the token *without* proving key possession fails. That is why §7.2 is a MUST
+and not a SHOULD.
+
+### Break 6 — right scheme, no proof
 
 ```bash
-sed -n '19,22p' server/src/services/userinfo.service.ts
+curl -s -i -H "Authorization: DPoP $AT" "$API/userinfo" | grep -iE "^HTTP|^www-auth"
 ```
 
-```ts
-if (req.headers["authorization"]) {
-  const authHeader = req.headers["authorization"] || "";
-  reqBody.token = authHeader.replace("Bearer ", "");
+```
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: DPoP error="invalid_dpop_proof",error_description="The DPoP authentication scheme was used but
+no DPoP proof was provided in the DPoP header field."
 ```
 
-**Explain the gap.** The code strips only the literal `"Bearer "` prefix. Given `Authorization: DPoP <token>`
-nothing matches, so the string sent to the authorization server is `"DPoP <token>"` — which is, correctly, not
-a token that exists. **This is a real bug in the server**, not a lab artifact: RFC 9449 §7.1 requires the
-`DPoP` scheme for DPoP-bound tokens, so this endpoint cannot accept a DPoP-bound token at all. The one-line
-fix is to strip either scheme case-insensitively.
+**Explain the gap.** Note the error changed: `invalid_token` in Break 5, `invalid_dpop_proof` here. §7.1 requires
+the resource server to *"check that a DPoP proof was also received in the DPoP header field"*, and the DPoP
+scheme with no proof can never satisfy that — so **this one never reaches the authorization server at all.** It
+is refused locally, which is why the message has no bracketed Authlete code. Two 401s, two different causes, two
+different error codes: that distinction is what lets you debug DPoP from the response alone.
 
-Write it up as a finding — severity, exploit path or impact, fix — and then answer the more interesting
-question: **what is the analogous bug that would be dangerous rather than merely broken?** (An RS that accepts
-`Bearer` for a DPoP-bound token and never checks `cnf` — it silently discards the binding you paid for, and
-nothing fails, so nobody notices. That is Q14 in the quiz.)
+### Break 7 — the thief's own key
+
+This is the attack DPoP exists to stop. The token is genuine and untouched; the proof is freshly minted, with the
+correct `htm`, `htu` and `ath`, and a valid signature. Everything is right except *whose key signed it*.
+
+```bash
+WK=$(node --input-type=module -e '
+const M = await import("/tmp/dpop.mjs"); const fs = await import("node:fs");
+const d = JSON.parse(fs.readFileSync("/tmp/dpopkey-oidc.json","utf8"));
+const k = M.makeKey();                                   // a key the AS has never seen
+process.stdout.write(M.proof({privateKey:k.privateKey, publicKey:k.publicKey,
+  htm:"GET", htu:"'"$API"'/userinfo", ath: M.ath(d.at)}));
+' --input-type=module)
+curl -s -i -H "Authorization: DPoP $AT" -H "DPoP: $WK" "$API/userinfo" | grep -iE "^HTTP|^www-auth"
+```
+
+```
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: DPoP error="invalid_dpop_proof",error_description="[A089312] Thumbprint of the provided DPoP key
+does not match the expected DPoP thumbprint.",error_uri="…",algs="RS256 … EdDSA"
+```
+
+**Explain the gap.** A valid token and a cryptographically valid proof, and it still fails — because they do not
+belong to each other. `[A089312]` is the `cnf.jkt` comparison from Exercise 4 running on the server side: the AS
+thumbprints the `jwk` in your proof header and compares it against the value recorded on the token. **Stealing
+the token is no longer sufficient**; you need the private key, and that never left the legitimate client. That
+sentence is the entire value proposition of DPoP, and you have now watched it hold.
+
+### Break 8 — Bearer scheme with a proof attached
+
+```bash
+curl -s -i -H "Authorization: Bearer $AT" -H "DPoP: anything" "$API/userinfo" | grep -iE "^HTTP|^www-auth"
+```
+
+```
+HTTP/1.1 400 Bad Request
+WWW-Authenticate: Bearer, DPoP error="invalid_request",error_description="A DPoP proof was provided with the
+Bearer authentication scheme. RFC 9449 Section 7.1 requires the DPoP scheme when presenting a DPoP proof."
+```
+
+**Explain the gap.** An ambiguous presentation, refused before it reaches the AS — note the proof was the literal
+string `anything` and it never got parsed. If the server honoured a proof under the `Bearer` scheme, `Bearer`
+would become a working route for bound tokens: exactly the downgrade §7.2 closes. Note also that this challenge
+lists **both** schemes, because at this point the server does not know which one you meant.
+
+**Four breaks, four distinct error codes.** Write the table out from memory — `insufficient_scope`,
+`invalid_token`, `invalid_dpop_proof` twice but from different causes, `invalid_request` — and say which layer
+produced each. Two came from Authlete (bracketed codes), two from this server (no bracketed code). That
+distinction is the whole debugging matrix for DPoP at a resource endpoint.
+
+### The finding that used to live here
+
+Until 2026-08-04 this exercise reproduced a **real bug in this server**: `userinfo.service.ts` stripped only the
+literal `"Bearer "` prefix, so `Authorization: DPoP <token>` forwarded the string `"DPoP <token>"` and came back
+`[A088302] The access token does not exist.` A DPoP-bound token could not be spent at this deployment's resource
+endpoint at all — the token endpoint issued something the resource endpoint could not accept.
+
+It is fixed. Read the fix and account for each piece against the spec:
+
+```bash
+sed -n '/export function extractAccessToken/,/^}/p' server/src/utils/dpop.ts
+```
+
+Three questions to answer from that code:
+
+1. Why does an **unrecognised** scheme return "no token presented" rather than passing the header value through?
+   (What did the old `.replace()` hand to the authorization server when it saw `Authorization: Basic …`?)
+2. Why is `access_token` read only from a **form-encoded** body, and why is the URI query parameter of
+   RFC 6750 §2.3 absent entirely? (RFC 9700 §4.3.2.)
+3. `dpopHttpTarget()` returns **two** values. Why does `htu` drop the query string while `targetUri` keeps it?
+   (RFC 9449 §4.2 — and what breaks if you send `GET /api/userinfo?schema=openid` with the query in `htu`?)
+
+**The more interesting question, which the fix also answers.** The bug above *failed closed*: loud, immediate,
+a ticket on day one. What is the inverse — the version that would be dangerous rather than merely broken?
+
+A resource server that accepts `Bearer` for a DPoP-bound token and never checks `cnf`. It **fails open**, and
+silently: `cnf.jkt` is still on the token, every dashboard still says "DPoP enabled", and a stolen token works
+anywhere. Nothing errors, so nobody looks. **A security control that is silently not applied is worse than one
+that is visibly broken.** Break 5 is that inverse, refused — you just ran the proof that this deployment closes
+it. That is Q14 in the quiz.
+
+> **And one thing DPoP does *not* give you.** Present an ordinary, **unbound** token under the `DPoP` scheme with
+> any well-formed proof and you get `200`. Nothing is wrong: the token carries no `cnf`, so there is no binding
+> to check and the proof is decorative. The security property lives on **the token's `cnf.jkt`**, not on the
+> scheme the caller chose. "The request used DPoP" is not evidence of sender-constraint — only an issued-bound
+> token is.
 
 ## Verification — you're done when
 
@@ -422,8 +609,17 @@ nothing fails, so nobody notices. That is Q14 in the quiz.)
       claims, and what each defends against.
 - [ ] **You computed a JWK thumbprint that matched `cnf.jkt`**, and can explain what that binding means.
 - [ ] You reproduced all three `AGENTS.md` DPoP bugs and can map each error message to its cause.
-- [ ] You can explain why `Authorization: DPoP <token>` fails at this server's UserInfo endpoint, and what the
-      more dangerous inverse bug would be.
+- [ ] **You spent the bound token** at UserInfo under the `DPoP` scheme and got claims back.
+- [ ] You can name the five conditions that had to hold for that `200`, and the distinct error each one produces
+      when it fails.
+- [ ] **You presented the same token as `Bearer` and watched it be refused**, and can cite RFC 9449 §7.2 and say
+      why that MUST is the thing that makes sender-constraining worth anything.
+- [ ] You can explain why a proof signed with a different key fails with `[A089312]`, and connect that to the
+      thumbprint you computed by hand in Exercise 4.
+- [ ] You can state which of the four rejections came from Authlete and which from this server, and how you can
+      tell from the response alone.
+- [ ] You can describe the inverse bug — an RS that accepts `Bearer` for a bound token and never checks `cnf` —
+      and say why it is more dangerous than a loud failure.
 
 ## What was real vs. simulated
 
@@ -434,10 +630,17 @@ nothing fails, so nobody notices. That is Q14 in the quiz.)
   spec or server limit.
 - **mTLS is not implemented in this repo.** RFC 8705 is taught in the lesson and nothing here claims to run
   it. A proposal to implement it is at the end of the lesson.
-- **The UserInfo DPoP failure is a real server bug**, verified and reported in `PROGRESS.md`, not a
-  deliberately planted exercise. The lab uses it as one because it is the most instructive thing in the file.
-- Bracketed codes (`[A008303]`, `[A008311]`, `[A254301]`, `[A254303]`, `[A088302]`) are **Authlete vendor
-  behavior**. The `error` values themselves — `invalid_request_uri` (RFC 9126), `invalid_dpop_proof`
-  (RFC 9449), `invalid_token` (RFC 6750 §3.1) — are spec-defined.
+- **Exercise 5 used to reproduce a real server bug** — UserInfo could not accept the `DPoP` scheme at all. It was
+  **fixed on 2026-08-04** (with three further defects found in the same function, one of them a proof-replay
+  bypass); see `PROGRESS.md`. The exercise now demonstrates the working path and four conformant rejections
+  instead. Every transcript above was re-captured against the fixed server.
+- **Exercise 5 uses the confidential client, not the public one.** `openid` scope forces an ID token and this
+  service signs those with HS256, which Authlete refuses for a public client. That is a *service configuration*
+  limit on this deployment, not a spec rule.
+- Bracketed codes (`[A008303]`, `[A008311]`, `[A254301]`, `[A254303]`, `[A089304]`, `[A089311]`, `[A089312]`,
+  `[A406301]`) are **Authlete vendor behavior**. The `error` values themselves — `invalid_request_uri`
+  (RFC 9126), `invalid_dpop_proof` (RFC 9449), `invalid_token` and `insufficient_scope` (RFC 6750 §3.1),
+  `invalid_request` (RFC 6750 §3.1) — are spec-defined. The two rejections with **no** bracketed code come from
+  this server rather than Authlete.
 - The `htu` the server compares against is derived from its own `Host` header, so it omits the port on this
   deployment. That is deployment behaviour and would differ behind a proxy.

@@ -301,7 +301,7 @@ sequenceDiagram
     Authlete->>AS: 13. DPoP-bound access token
     AS->>Client: 14. access_token (token_type: DPoP)
 
-    Client->>AS: 15. POST /userinfo<br/>(Authorization: Bearer + DPoP proof with ath)
+    Client->>AS: 15. POST /userinfo<br/>(Authorization: DPoP + DPoP proof with ath)
     AS->>Authlete: 16. userinfo.process()
     Authlete->>AS: 17. Userinfo response
     AS->>Client: 18. User claims
@@ -446,9 +446,15 @@ const userinfoProof = await createProof(
 
 ```http
 POST /api/userinfo HTTP/1.1
-Authorization: Bearer <accessToken>
+Authorization: DPoP <accessToken>
 DPoP: <userinfoProof>
 ```
+
+**The scheme is `DPoP`, not `Bearer`.** RFC 9449 §7.1 says a DPoP-bound access token *"is sent using the
+`Authorization` request header field… with an authentication scheme of `DPoP`"*, and §7.2 requires a protected
+resource to **reject a DPoP-bound access token received as a bearer token**. Send `Bearer` here and this server
+answers `400 invalid_request`; strip the proof as well and Authlete answers
+`401 [A089311] Expected a DPoP header but none was provided.`
 
 Since the token was issued with `token_type: "DPoP"`, Authlete requires a valid DPoP proof for every API call using this token. The proof's `ath` claim binds it to the specific access token.
 
@@ -518,35 +524,79 @@ Both keys are generated client-side using `crypto.subtle`. Private keys never le
 
 These demos prove that DPoP sender-constrained tokens actually prevent token theft.
 
+Every response below was captured against this server. The `WWW-Authenticate` header carries the reason, so
+run these with `-v` (or `-i`) — the body alone will not tell you what went wrong.
+
 ### Demo 1: Stolen Token Without a DPoP Proof
 
+A thief who copied the token out of a log has the token and nothing else. Both schemes fail, for two
+different reasons:
+
 ```bash
-curl -v -X POST http://localhost:3000/api/userinfo \
+# The obvious attempt: present it as a bearer token
+curl -i -X POST http://localhost:3000/api/userinfo \
   -H "Authorization: Bearer <YOUR_DPOP_TOKEN>"
 ```
 
-**Expected:** `401` — Authlete detects the token was issued with `token_type: DPoP` and requires a valid DPoP proof.
+**Expected:** `401` with
+`DPoP error="invalid_token",error_description="[A089311] Expected a DPoP header but none was provided."`
+
+This is RFC 9449 §7.2 doing its job: Authlete sees `cnf.jkt` on the token, finds no proof, and refuses. Note
+the challenge comes back with the `DPoP` scheme and an `algs` list — Authlete tells the caller what it should
+have sent.
+
+```bash
+# The informed attempt: correct scheme, still no key
+curl -i -X POST http://localhost:3000/api/userinfo \
+  -H "Authorization: DPoP <YOUR_DPOP_TOKEN>"
+```
+
+**Expected:** `401` with
+`DPoP error="invalid_dpop_proof",error_description="The DPoP authentication scheme was used but no DPoP proof was provided in the DPoP header field."`
+
+This one never reaches Authlete. The DPoP scheme with no proof cannot satisfy §7.1 under any circumstances, so
+the server rejects it locally.
 
 ### Demo 2: Stolen Token with a Different DPoP Key
 
+The thief now generates their own key pair and mints a perfectly well-formed proof with it — correct `htm`,
+correct `htu`, correct `ath`, valid signature. Everything except the key.
+
 ```bash
-# The thief's proof uses a different key than the one bound to the token
-curl -v -X POST http://localhost:3000/api/userinfo \
-  -H "Authorization: Bearer <YOUR_DPOP_TOKEN>" \
+curl -i -X POST http://localhost:3000/api/userinfo \
+  -H "Authorization: DPoP <YOUR_DPOP_TOKEN>" \
   -H "DPoP: <THIEF_DPOP_PROOF>"
 ```
 
-**Expected:** `401 invalid_dpop_proof` — Authlete validates that the public key in the DPoP proof's `jwk` header matches the key bound to the token.
+**Expected:** `401` with
+`DPoP error="invalid_dpop_proof",error_description="[A089312] Thumbprint of the provided DPoP key does not match the expected DPoP thumbprint."`
 
-### Demo 3: Bearer Token Used with DPoP Header
+**This is the whole point of DPoP.** The token is genuine and the proof is cryptographically valid; they just
+do not belong to each other. Stealing the token is no longer enough — you need the private key, and that never
+left the legitimate client.
+
+Forget the `ath` claim instead of the key, and you get a different rejection:
+`[A089313] There was an error processing the DPoP header: JWT missing required claims: [ath].`
+
+### Demo 3: Bearer Scheme with a DPoP Header
 
 ```bash
-curl -v -X POST http://localhost:3000/api/userinfo \
-  -H "Authorization: Bearer <BEARER_TOKEN>" \
+curl -i -X POST http://localhost:3000/api/userinfo \
+  -H "Authorization: Bearer <ANY_TOKEN>" \
   -H "DPoP: <SOME_DPOP_PROOF>"
 ```
 
-**Expected:** `401` — "Not a DPoP bearer token."
+**Expected:** `400` with
+`Bearer, DPoP error="invalid_request",error_description="A DPoP proof was provided with the Bearer authentication scheme. RFC 9449 Section 7.1 requires the DPoP scheme when presenting a DPoP proof."`
+
+An ambiguous presentation, refused. If the server honoured the proof here, the `Bearer` scheme would become a
+working route for bound tokens — the downgrade §7.2 exists to prevent.
+
+> **One thing DPoP does not do.** Present an ordinary, *unbound* token under the `DPoP` scheme with any
+> well-formed proof and you get `200`. Nothing is wrong: the token carries no `cnf`, so there is no binding to
+> check and the proof is decorative. The security property lives on **the token's `cnf.jkt`**, not on the
+> scheme the caller chose. If you want proof-of-possession enforced, the token has to have been issued
+> sender-constrained in the first place — checking that a request "used DPoP" tells you nothing.
 
 ### What DPoP Prevents
 

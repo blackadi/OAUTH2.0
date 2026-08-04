@@ -164,19 +164,37 @@ const spec: Record<string, unknown> = {
     "/userinfo": {
       get: {
         summary: "UserInfo endpoint",
-        description: "Returns claims about the authenticated end-user. Requires a valid Bearer token.",
-        security: [{ bearerAuth: [] }],
+        description:
+          "Returns claims about the authenticated end-user. Accepts either the Bearer scheme (RFC 6750 §2.1) " +
+          "or the DPoP scheme (RFC 9449 §7.1); the scheme name is case-insensitive. A token issued with " +
+          "token_type: DPoP MUST use the DPoP scheme and be accompanied by a proof — presenting it as Bearer " +
+          "is rejected per RFC 9449 §7.2. Requires the openid scope.",
+        security: [{ bearerAuth: [] }, { dpopAuth: [] }],
         responses: {
           "200": {
             description: "User claims",
             content: { "application/json": { schema: { type: "object" } } },
           },
-          "401": { description: "Unauthorized" },
+          "400": {
+            description:
+              "invalid_request — a DPoP proof was sent with the Bearer scheme, or the token was sent by " +
+              "more than one method (RFC 6750 §2)",
+          },
+          "401": {
+            description:
+              "No credentials, an unsupported scheme, invalid_token, or invalid_dpop_proof. Carries a " +
+              "WWW-Authenticate challenge listing the accepted schemes (RFC 6750 §3).",
+          },
+          "403": { description: "insufficient_scope — the token does not cover the openid scope" },
         },
       },
       post: {
         summary: "UserInfo endpoint (POST)",
-        description: "Returns claims about the authenticated end-user. Token may be in form body or Authorization header.",
+        description:
+          "As GET. The token may also be sent as access_token in an application/x-www-form-urlencoded body " +
+          "(RFC 6750 §2.2), but not by both methods at once. The URI query parameter method of RFC 6750 §2.3 " +
+          "is not supported: RFC 9700 §4.3.2 forbids it.",
+        security: [{ bearerAuth: [] }, { dpopAuth: [] }],
         requestBody: {
           content: {
             "application/x-www-form-urlencoded": {
@@ -189,7 +207,9 @@ const spec: Record<string, unknown> = {
         },
         responses: {
           "200": { description: "User claims" },
-          "401": { description: "Unauthorized" },
+          "400": { description: "invalid_request — see GET" },
+          "401": { description: "Unauthorized — see GET" },
+          "403": { description: "insufficient_scope — the token does not cover the openid scope" },
         },
       },
     },
@@ -1913,6 +1933,14 @@ const spec: Record<string, unknown> = {
         scheme: "bearer",
         bearerFormat: "JWT",
         description: "Access token obtained from the token endpoint",
+      },
+      dpopAuth: {
+        type: "http",
+        scheme: "dpop",
+        description:
+          "DPoP-bound access token (RFC 9449 §7.1). Required for any token issued with token_type: DPoP — " +
+          "§7.2 obliges the resource server to reject such a token presented with the Bearer scheme. Must be " +
+          "accompanied by a DPoP proof JWT in the DPoP header carrying htm, htu and ath.",
       },
       basicAuth: {
         type: "http",

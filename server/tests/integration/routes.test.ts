@@ -74,10 +74,84 @@ describe("Integration: all API routes", () => {
   })
 
   describe("POST /api/userinfo", () => {
+    const okResponse = { action: "OK", responseContent: JSON.stringify({ sub: "user-1" }) }
+
     it("returns userinfo for valid token", async () => {
-      mockApi.userinfo.process.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ sub: "user-1" }) })
+      mockApi.userinfo.process.mockResolvedValue(okResponse)
       const res = await request(app).post("/api/userinfo").set("Authorization", "Bearer at-1").expect(200)
       expect(res.body.sub).toBe("user-1")
+    })
+
+    // RFC 9449 §7.1 makes `DPoP` the only conformant scheme for a DPoP-bound access token. The
+    // endpoint previously stripped the literal "Bearer " prefix only, so this arrived at Authlete as
+    // the string "DPoP <token>" and came back as [A088302] "The access token does not exist."
+    it("accepts the DPoP scheme and forwards the proof", async () => {
+      mockApi.userinfo.process.mockResolvedValue(okResponse)
+      const res = await request(app)
+        .post("/api/userinfo")
+        .set("Authorization", "DPoP at-1")
+        .set("DPoP", "proof-jwt")
+        .expect(200)
+
+      expect(res.body.sub).toBe("user-1")
+      expect(mockApi.userinfo.process).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userinfoRequest: expect.objectContaining({ token: "at-1", dpop: "proof-jwt", htm: "POST" }),
+        })
+      )
+    })
+
+    it("rejects the DPoP scheme with no proof and never calls Authlete", async () => {
+      const res = await request(app).post("/api/userinfo").set("Authorization", "DPoP at-1").expect(401)
+
+      expect(res.body.error).toBe("invalid_dpop_proof")
+      expect(res.headers["www-authenticate"]).toMatch(/^DPoP error="invalid_dpop_proof"/)
+      expect(mockApi.userinfo.process).not.toHaveBeenCalled()
+    })
+
+    it("rejects the Bearer scheme carrying a DPoP proof — RFC 9449 §7.2", async () => {
+      const res = await request(app)
+        .post("/api/userinfo")
+        .set("Authorization", "Bearer at-1")
+        .set("DPoP", "proof-jwt")
+        .expect(400)
+
+      expect(res.body.error).toBe("invalid_request")
+      expect(mockApi.userinfo.process).not.toHaveBeenCalled()
+    })
+
+    it("challenges with both schemes and no error code when no credentials are sent", async () => {
+      // RFC 6750 §3 requires WWW-Authenticate on a 401; §3.1 forbids an error code when the request
+      // carried no authentication information at all.
+      const res = await request(app).post("/api/userinfo").expect(401)
+
+      expect(res.headers["www-authenticate"]).toBe("Bearer, DPoP")
+      expect(res.body).toEqual({})
+      expect(mockApi.userinfo.process).not.toHaveBeenCalled()
+    })
+
+    it("does not forward client-supplied dpop/htu from the request body", async () => {
+      mockApi.userinfo.process.mockResolvedValue(okResponse)
+      await request(app)
+        .post("/api/userinfo")
+        .set("Authorization", "DPoP at-1")
+        .set("DPoP", "real-proof")
+        .type("form")
+        .send("dpop=smuggled&htu=https%3A%2F%2Fas.example.com%2Fapi%2Fpar&htm=POST")
+        .expect(200)
+
+      const sent = mockApi.userinfo.process.mock.calls[0][0].userinfoRequest
+      expect(sent.dpop).toBe("real-proof")
+      expect(sent.htu).toMatch(/\/api\/userinfo$/)
+    })
+
+    it("still forwards Authlete's own challenge verbatim on UNAUTHORIZED", async () => {
+      const challenge =
+        'DPoP error="invalid_token",error_description="[A089311] Expected a DPoP header but none was provided.",algs="ES256"'
+      mockApi.userinfo.process.mockResolvedValue({ action: "UNAUTHORIZED", responseContent: challenge })
+      const res = await request(app).post("/api/userinfo").set("Authorization", "Bearer at-1").expect(401)
+
+      expect(res.headers["www-authenticate"]).toBe(challenge)
     })
   })
 
@@ -392,9 +466,11 @@ describe("Integration: all API routes", () => {
         action: "JSON",
         responseContent: JSON.stringify({ sub: "user-1", name: "user-1", email: "user-1@example.com" }),
       } as any)
+      // The DPoP scheme, not Bearer: RFC 9449 §7.1 requires it for a DPoP-bound token, and §7.2
+      // makes Bearer-plus-proof a rejected presentation.
       const res = await request(app).post("/api/userinfo")
         .set("dpop", "dpop-proof-jwt")
-        .set("Authorization", "Bearer at-dpop-1")
+        .set("Authorization", "DPoP at-dpop-1")
         .expect(200)
       expect(res.headers["dpop-nonce"]).toBe("userinfo-nonce-1")
     })

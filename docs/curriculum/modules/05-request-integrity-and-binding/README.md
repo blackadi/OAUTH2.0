@@ -258,11 +258,15 @@ compares DPoP with mTLS as a design decision. That is what is here.
   not RFC 9126, and it is exactly the kind of vendor detail worth labelling.
 - **`server/src/services/token.service.ts`** (~line 74) and **`par.service.ts`** — both read the `DPoP` header
   and pass `dpop`, `htm`, `htu` to Authlete. Note the server computes `htu` from its own `Host` header.
-- **`server/src/utils/dpop.ts`** — relays Authlete's `DPoP-Nonce` to the client.
+- **`server/src/utils/dpop.ts`** — relays Authlete's `DPoP-Nonce`, and holds all access-token presentation
+  parsing: `extractAccessToken()` (both schemes, case-insensitively), `dpopHttpTarget()` (`htu` without the
+  query, `targetUri` with it) and `authChallenge()`. Read `extractAccessToken` against RFC 6750 §2 and
+  RFC 9449 §7.1 — the lab asks you to justify three of its decisions.
 - **`server/src/routes/jar.routes.ts`** → `POST /api/jar/process`.
-- **`server/src/services/userinfo.service.ts:21`** — `authHeader.replace("Bearer ", "")`. Read that line
-  carefully against RFC 9449 §7.1 and predict what happens with `Authorization: DPoP <token>`. The lab
-  confirms it; it is this module's Tier-3 finding.
+- **`server/src/services/userinfo.service.ts`** — the resource-server side. Note the two fail-closed checks
+  (DPoP scheme without a proof; `Bearer` carrying a proof) and the comment explaining why the request body is
+  allowlisted rather than spread. This file was this module's Tier-3 finding until **2026-08-04**; the fix and
+  the three additional defects it uncovered are recorded in `PROGRESS.md`.
 
 ## Wire-level walkthrough
 
@@ -416,20 +420,36 @@ originally read.)*
 
 </details>
 
-### And a bug worth fixing independently
+### A bug worth fixing independently — ✅ fixed 2026-08-04
 
-`server/src/services/userinfo.service.ts:21` strips only the `Bearer ` prefix:
+`server/src/services/userinfo.service.ts:21` used to strip only the `Bearer ` prefix:
 
 ```ts
 reqBody.token = authHeader.replace("Bearer ", "");
 ```
 
 RFC 9449 §7.1 requires DPoP-bound tokens to be presented with the **`DPoP`** scheme. With
-`Authorization: DPoP <token>` this code passes the literal string `"DPoP <token>"` to Authlete, which reports
-`[A088302] The access token does not exist.` The effect is that **a DPoP-bound access token cannot be used at
-this server's resource endpoint at all** — the token endpoint issues it, and the RS cannot accept it. The fix
-is a one-line change to strip either scheme case-insensitively. I have not made it; it is server source, and
-it makes an honest Tier-3 exercise. It is recorded in `PROGRESS.md`.
+`Authorization: DPoP <token>` this code passed the literal string `"DPoP <token>"` to Authlete, which reported
+`[A088302] The access token does not exist.` The effect was that **a DPoP-bound access token could not be used at
+this server's resource endpoint at all** — the token endpoint issued it, and the RS could not accept it.
+
+**Fixing it turned up three more defects in the same fourteen lines, and the reported one was not the worst.**
+
+| # | Defect | Impact |
+|---|--------|--------|
+| 1 | Scheme parsed case-sensitively, `Bearer` only | The reported bug. Also forwarded `Basic …` as if it were a token. |
+| 2 | `req.body` spread wholesale into the Authlete request | **Proof-replay bypass.** The client could supply its own `htu` — the very value the proof is validated against. A proof minted for `/api/par` returned `200` at `/api/userinfo`. Verified. |
+| 3 | `htu` built from `req.originalUrl`, query string included | RFC 9449 §4.2 excludes query and fragment. Any request with a query string failed proof validation. |
+| 4 | RFC 6750 §2.2 form-body `access_token` | Left `token` undefined → unhandled `500` instead of a `401`. |
+
+Defect 2 is the instructive one, and it generalises past this codebase: **when a server forwards
+client-controlled input as the parameter a security check is evaluated against, the check is no longer a check.**
+Authlete was doing exactly what it was asked; it was asked the wrong question. `introspection.service.ts:19-22`
+had already gotten this right and said so in a comment — the two files disagreed, and nothing flagged it.
+
+All presentation parsing now lives in `server/src/utils/dpop.ts`. The behavioural contract is in
+**AGENTS.md → DPoP & Client Auth**, and the full record — including what was verified live and two plan
+assumptions that turned out to be wrong — is in `PROGRESS.md`.
 
 ## Threat notes — what breaks if you get this wrong
 

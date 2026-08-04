@@ -62,7 +62,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
         { name: 'Access Token', desc: 'A valid access token with the appropriate scopes (e.g. openid, profile, email). Pre-filled from the current session.' },
       ],
       returns: 'JSON object with end-user claims (sub, name, email, etc.). The actual claims depend on the scopes granted.',
-      tips: 'Use the access token from a recent flow. The response is a standard OIDC UserInfo response.',
+      tips: 'Use the access token from a recent flow. The response is a standard OIDC UserInfo response. The endpoint accepts two authentication schemes: Bearer (RFC 6750) for ordinary tokens, and DPoP (RFC 9449 §7.1) for sender-constrained ones. A token issued with token_type: DPoP must use the DPoP scheme — presenting it as Bearer is rejected, per RFC 9449 §7.2.',
     },
     'introspect': {
       title: 'Introspection (Authlete)',
