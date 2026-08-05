@@ -34,10 +34,10 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (449 tests, 50 files)
+npm --prefix server run test              # unit + integration (464 tests, 51 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (401 tests, 49 files)
+npm --prefix server run test:unit         # unit tests only (416 tests, 50 files)
 npm --prefix server run test:integration  # integration tests only (48 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 49 files across 5 categories (401 tests):
-  - `tests/unit/services/` — 24 files (120 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo)
+- **Unit tests**: 50 files across 5 categories (416 tests):
+  - `tests/unit/services/` — 24 files (127 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo)
   - `tests/unit/controllers/` — 9 files (113 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci
   - `tests/unit/middleware/` — 6 files (55 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership
-  - `tests/unit/utils/` — 6 files (96 tests), createLocalJWT/jwksClient/properties/validate/validation/dpop
+  - `tests/unit/utils/` — 7 files (104 tests), basic-auth/createLocalJWT/jwksClient/properties/validate/validation/dpop
   - `tests/unit/routes/` — 4 files (17 tests), fapi + metrics + openapi + protected-resource-metadata routes
 - **Integration tests**: 1 file `tests/integration/routes.test.ts` (48 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 449 tests across 50 files, completes in ~2s
+- Run with `npm --prefix server run test` — 464 tests across 51 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
