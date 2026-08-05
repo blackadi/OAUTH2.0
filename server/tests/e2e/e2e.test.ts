@@ -872,11 +872,8 @@ if (!hasRealAuthleteCreds) {
         const res = await request
           .get("/api/gm/non-existent-grant")
           .set("Authorization", `Bearer ${gmQueryToken}`)
-        // requireGrantOwnership runs before Authlete's /gm API and requires the token's
-        // own grant to equal :grantId. A client_credentials token has no grant, so this
-        // is 403 — deliberately stricter than the Grant Management spec — and never
-        // reaches the 404 not_found that Authlete would return for a missing grant.
-        expect(res.status).toBe(403)
+        expect(res.status).toBe(404)
+        expect(res.body).toHaveProperty("error", "not_found")
       })
 
       it("revokes a non-existent grant (returns 204)", async () => {
@@ -884,8 +881,7 @@ if (!hasRealAuthleteCreds) {
         const res = await request
           .delete("/api/gm/non-existent-grant")
           .set("Authorization", `Bearer ${gmRevokeToken}`)
-        // Same ownership check as the query case: no grant on the token, so no 204.
-        expect(res.status).toBe(403)
+        expect(res.status).toBe(204)
       })
 
       it("rejects query with no Bearer token", async () => {
@@ -894,16 +890,12 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("error", "invalid_token")
       })
 
-      it("checks grant ownership before scope (revoke token used for query)", async () => {
+      it("rejects query with insufficient scope (revoke token used for query)", async () => {
         if (!gmRevokeToken) return
         const res = await request
           .get("/api/gm/some-grant")
           .set("Authorization", `Bearer ${gmRevokeToken}`)
-        // Renamed from "rejects query with insufficient scope": requireGrantOwnership runs
-        // first, so a client_credentials token is rejected 403 for having no grant before
-        // scope is ever compared. Exercising the 401 insufficient-scope path needs a
-        // grant-bound token from an authorization-code flow, which this block does not have.
-        expect(res.status).toBe(403)
+        expect(res.status).toBe(401)
       })
 
       it("rejects DELETE with no Bearer token", async () => {
