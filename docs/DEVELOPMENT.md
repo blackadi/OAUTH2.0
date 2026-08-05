@@ -53,19 +53,37 @@ Get these from [Authlete Console](https://console.authlete.com/):
 |----------|----------|---------|-------------|
 | `PORT` | No | `3000` | Express listen port |
 | `NODE_ENV` | No | `development` | `development` or `production` |
-| `SESSION_SECRET` | **Yes** | — | Session encryption secret (minimum 32 chars) |
+| `SESSION_SECRET` | **Yes** | — | Session encryption secret. Only non-emptiness is enforced; 32+ random chars is a recommendation, not a check |
 | `AUTHLETE_BEARER_TOKEN` | **Yes** | — | Authlete API token |
-| `AUTHLETE_BASE_URL` | **Yes** | — | Authlete API base URL |
+| `AUTHLETE_BASE_URL` | **Yes** | — | Authlete API base URL (e.g. `https://eu.authlete.com`) |
 | `AUTHLETE_SERVICE_ID` | **Yes** | — | Authlete service ID |
 | `REDIS_URL` | No | — | Redis connection string (e.g., `redis://localhost:6379`) |
 | `ALLOWED_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | CORS allowed origins |
 | `AUTH_USERS` | No | `admin:admin:password:Administrator` | Demo users: `subject:username:password:name;...` |
-| `MGMT_CLIENT_ID` | No | — | Admin API Basic auth username |
-| `MGMT_CLIENT_SECRET` | No | — | Admin API Basic auth password |
+| `MGMT_CLIENT_ID` | No | — | Admin API Basic auth username. **Fails closed** — unset means every admin route 401s |
+| `MGMT_CLIENT_SECRET` | No | — | Admin API Basic auth password. Same fail-closed behaviour |
 | `JWKS_URI` | No | — | JWKS URI for backchannel logout token verification |
 | `LOGOUT_REDIRECT_URI` | No | — | Valid post-logout redirect URI |
+| `LOGOUT_CLIENT_ID` | No | — | Client ID rendered in the logout view |
+| `JWT_ISSUER` | No | — | `iss` for locally-signed JWTs (`/api/token/createLocalToken`) |
+| `JWT_PRIVATE_KEY_PEM` | No | — | Private key for locally-signed JWTs (dev only) |
+| `JWT_PUBLIC_KEY_PEM` | No | — | Public key for verifying locally-signed JWTs |
+| `PROTECTED_RESOURCE_IDENTIFIER` | No | UserInfo endpoint | RFC 9728 `resource` value |
+| `PROTECTED_RESOURCE_DOCUMENTATION` | No | — | RFC 9728 `resource_documentation` value |
 | `LOG_LEVEL` | No | `debug` (dev) / `info` (prod) | Winston log level |
 | `MORGAN_FORMAT` | No | `combined` | Morgan access log format |
+
+### E2E only (`server/.env`, used by `npm run test:e2e`)
+
+Missing values **skip** blocks rather than fail them, so a partial set produces a green run
+that never exercised most of the suite.
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `CID` + `SEC` | 14 blocks (auth code, refresh, CIBA, PAR, token management, …) | Must be a CONFIDENTIAL client using `CLIENT_SECRET_BASIC` — the tests authenticate via HTTP Basic |
+| `PUB_CID` | PKCE (RFC 7636), public-client PAR | Must be a PUBLIC client whose `idTokenSignAlg` is **asymmetric** (RS256/ES256). HS256 signs the ID token with the client secret and Authlete refuses with `[A406301]` |
+| `REDIR` | — | Must be registered on both clients above, or the auth-code and PAR blocks fail on `redirect_uri` mismatch |
+| `BASE_URL` | — | Only for the standalone `tests/e2e/enable_ciba.ts` helper |
 
 ### Client (`client/.env`)
 
