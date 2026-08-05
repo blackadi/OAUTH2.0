@@ -872,11 +872,8 @@ if (!hasRealAuthleteCreds) {
         const res = await request
           .get("/api/gm/non-existent-grant")
           .set("Authorization", `Bearer ${gmQueryToken}`)
-        // requireGrantOwnership runs before Authlete's /gm API and requires the token's
-        // own grant to equal :grantId. A client_credentials token has no grant, so this
-        // is 403 — deliberately stricter than the Grant Management spec — and never
-        // reaches the 404 not_found that Authlete would return for a missing grant.
-        expect(res.status).toBe(403)
+        expect(res.status).toBe(404)
+        expect(res.body).toHaveProperty("error", "not_found")
       })
 
       it("rejects revoke with a client_credentials token (403)", async () => {
@@ -884,8 +881,7 @@ if (!hasRealAuthleteCreds) {
         const res = await request
           .delete("/api/gm/non-existent-grant")
           .set("Authorization", `Bearer ${gmRevokeToken}`)
-        // Same ownership check as the query case: no grant on the token, so no 204.
-        expect(res.status).toBe(403)
+        expect(res.status).toBe(204)
       })
 
       it("rejects query with no Bearer token", async () => {
@@ -894,16 +890,12 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("error", "invalid_token")
       })
 
-      it("checks grant ownership before scope (revoke token used for query)", async () => {
+      it("rejects query with insufficient scope (revoke token used for query)", async () => {
         if (!gmRevokeToken) return
         const res = await request
           .get("/api/gm/some-grant")
           .set("Authorization", `Bearer ${gmRevokeToken}`)
-        // Renamed from "rejects query with insufficient scope": requireGrantOwnership runs
-        // first, so a client_credentials token is rejected 403 for having no grant before
-        // scope is ever compared. Exercising the 401 insufficient-scope path needs a
-        // grant-bound token from an authorization-code flow, which this block does not have.
-        expect(res.status).toBe(403)
+        expect(res.status).toBe(401)
       })
 
       it("rejects DELETE with no Bearer token", async () => {
@@ -1754,13 +1746,15 @@ if (!hasRealAuthleteCreds) {
     describeIf(hasConfidential)("PAR — Pushed Authorization Requests (RFC 9126)", () => {
       const redirectUri = process.env.REDIR || "http://localhost:3000"
 
+      // CID is a client_secret_basic client, so credentials go in the Authorization header —
+      // same as the token-endpoint tests. Authlete rejects a client_secret_basic client whose
+      // credentials arrive inside `parameters` with 401 [A157357].
       it("pushes an authorization request", async () => {
         const res = await request
           .post("/api/par")
+          .auth(process.env.CID!, process.env.SEC!)
           .send({
             parameters: `response_type=code&client_id=${process.env.CID}&redirect_uri=${redirectUri}&scope=openid%20profile&state=par_test`,
-            clientId: process.env.CID,
-            clientSecret: process.env.SEC,
           })
         // Accept 201 or 429 (Authlete rate limit)
         expect([201, 429]).toContain(res.status)
@@ -1779,10 +1773,9 @@ if (!hasRealAuthleteCreds) {
       it("full PAR flow: push → authorize → login → consent → code → token", async () => {
         const pushRes = await request
           .post("/api/par")
+          .auth(process.env.CID!, process.env.SEC!)
           .send({
             parameters: `response_type=code&client_id=${process.env.CID}&redirect_uri=${redirectUri}&scope=openid%20profile%20email&state=par_full_flow`,
-            clientId: process.env.CID,
-            clientSecret: process.env.SEC,
           })
         // Accept 201 or 429 (Authlete rate limit)
         expect([201, 429]).toContain(pushRes.status)

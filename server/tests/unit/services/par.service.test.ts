@@ -59,4 +59,98 @@ describe("ParService", () => {
     )
     expect(result).toEqual(mockResponse)
   })
+
+  // Authlete matches the channel the credentials arrive on against the client's registered
+  // auth method. A client_secret_basic client rejects credentials placed in `parameters`
+  // with 401 [A157357], so the Basic header must map to the top-level fields instead.
+  describe("client authentication channel", () => {
+    const basicHeader = (id: string, secret: string) =>
+      `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`
+
+    const makeReq = (headers: Record<string, string>, body: Record<string, unknown>) =>
+      ({
+        body,
+        headers,
+        method: "POST",
+        protocol: "https",
+        get: () => "auth.example.com",
+        originalUrl: "/api/par",
+      }) as any
+
+    beforeEach(() => {
+      vi.mocked(mockApi.pushedAuthorization.create).mockResolvedValue({ action: "CREATED" } as any)
+    })
+
+    const sentRequest = () =>
+      vi.mocked(mockApi.pushedAuthorization.create).mock.calls[0][0].pushedAuthorizationRequest
+
+    it("maps an Authorization: Basic header to top-level clientId/clientSecret", async () => {
+      await service.process(
+        makeReq({ authorization: basicHeader("c-1", "s-1") }, { parameters: "response_type=code" })
+      )
+
+      expect(sentRequest()).toMatchObject({ clientId: "c-1", clientSecret: "s-1" })
+    })
+
+    it("leaves `parameters` untouched when Basic is used", async () => {
+      await service.process(
+        makeReq({ authorization: basicHeader("c-1", "s-1") }, { parameters: "response_type=code" })
+      )
+
+      // No client_id/client_secret smuggled in — that would be the client_secret_post channel.
+      expect(sentRequest().parameters).toBe("response_type=code")
+    })
+
+    it("prefers the Basic header over body credentials", async () => {
+      await service.process(
+        makeReq(
+          { authorization: basicHeader("basic-id", "basic-secret") },
+          { parameters: "response_type=code", clientId: "body-id", clientSecret: "body-secret" }
+        )
+      )
+
+      const sent = sentRequest()
+      expect(sent).toMatchObject({ clientId: "basic-id", clientSecret: "basic-secret" })
+      expect(sent.parameters).toBe("response_type=code")
+    })
+
+    it("preserves a secret containing colons", async () => {
+      await service.process(
+        makeReq({ authorization: basicHeader("c-1", "a:b:c") }, { parameters: "response_type=code" })
+      )
+
+      expect(sentRequest().clientSecret).toBe("a:b:c")
+    })
+
+    it("accepts a lowercase scheme (RFC 9110 §11.1)", async () => {
+      const encoded = Buffer.from("c-1:s-1").toString("base64")
+      await service.process(
+        makeReq({ authorization: `basic ${encoded}` }, { parameters: "response_type=code" })
+      )
+
+      expect(sentRequest()).toMatchObject({ clientId: "c-1", clientSecret: "s-1" })
+    })
+
+    it("falls back to the body channel for a non-Basic Authorization header", async () => {
+      await service.process(
+        makeReq(
+          { authorization: "Bearer some-token" },
+          { parameters: "response_type=code", clientId: "c-1", clientSecret: "s-1" }
+        )
+      )
+
+      const sent = sentRequest()
+      expect(sent.clientId).toBeUndefined()
+      expect(sent.parameters).toBe("response_type=code&client_id=c-1&client_secret=s-1")
+    })
+
+    it("sends no credentials at all when none are presented", async () => {
+      await service.process(makeReq({}, { parameters: "response_type=code" }))
+
+      const sent = sentRequest()
+      expect(sent.clientId).toBeUndefined()
+      expect(sent.clientSecret).toBeUndefined()
+      expect(sent.parameters).toBe("response_type=code")
+    })
+  })
 })

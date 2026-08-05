@@ -42,6 +42,29 @@ describe('parService.pushedAuthorization', () => {
     mockFetch.mockResolvedValue(fail(400, 'Bad request'));
     await expect(parService.pushedAuthorization({ parameters: 'bad' })).rejects.toThrow('Bad request');
   });
+
+  it('sends an Authorization: Basic header when basic credentials are supplied', async () => {
+    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
+    await parService.pushedAuthorization({ parameters: 'response_type=code' }, {
+      clientId: 'cid',
+      clientSecret: 'sec',
+    });
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/par', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${btoa('cid:sec')}`,
+      },
+      body: JSON.stringify({ parameters: 'response_type=code' }),
+    });
+  });
+
+  it('omits the Authorization header when no basic credentials are supplied', async () => {
+    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
+    await parService.pushedAuthorization({ parameters: 'response_type=code', clientId: 'cid' });
+    const init = mockFetch.mock.calls[0][1] as RequestInit;
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+  });
 });
 
 describe('parService.pushedAuthorizationWithDpop', () => {
@@ -87,5 +110,23 @@ describe('parService.pushedAuthorizationWithDpop', () => {
     await expect(
       parService.pushedAuthorizationWithDpop({ parameters: 'bad' }, dpopProof),
     ).rejects.toThrow('Unauthorized');
+  });
+
+  it('sends both DPoP and Authorization: Basic when basic credentials are supplied', async () => {
+    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
+    await parService.pushedAuthorizationWithDpop(
+      { parameters: 'response_type=code' },
+      dpopProof,
+      { clientId: 'cid', clientSecret: 'sec' },
+    );
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/par', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        DPoP: dpopProof,
+        Authorization: `Basic ${btoa('cid:sec')}`,
+      },
+      body: JSON.stringify({ parameters: 'response_type=code' }),
+    });
   });
 });
