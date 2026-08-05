@@ -102,7 +102,10 @@ async function userInfoWithDpop(
   const response = await fetch(USERINFO_ENDPOINT, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      // RFC 9449 §7.1: a DPoP-bound access token is sent with the `DPoP` scheme, not `Bearer`.
+      // §7.2 requires a protected resource to reject a DPoP-bound token received as a bearer token,
+      // so `Bearer` here would be refused — and if it were not, it would silently discard the binding.
+      Authorization: `DPoP ${accessToken}`,
       'Content-Type': 'application/json',
       DPoP: dpopProof,
       Accept: 'application/json',

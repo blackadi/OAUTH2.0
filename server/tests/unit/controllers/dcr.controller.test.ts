@@ -90,20 +90,24 @@ describe("DCR controllers", () => {
       expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: "DCR fail" }))
     })
 
-    it("skips auth when MGMT vars not set", async () => {
+    it("returns 401 when MGMT vars are not set (fails closed)", async () => {
+      // Regression: this previously ALLOWED the request. An unset env var must never disable auth.
+      vi.stubEnv("MGMT_CLIENT_ID", "")
+      vi.stubEnv("MGMT_CLIENT_SECRET", "")
       const req = mockReq({ body: { json: '{}' } })
       const res = mockRes()
       const next = mockNext()
-      mockDcrService.register.mockResolvedValue({ action: "OK", responseContent: null })
 
       await register.handleDcrRegister(req, res, next)
 
-      expect(mockDcrService.register).toHaveBeenCalled()
-      expect(res.status).toHaveBeenCalledWith(200)
+      expect(mockDcrService.register).not.toHaveBeenCalled()
+      expect(res.status).toHaveBeenCalledWith(401)
     })
 
     it("returns 400 when json is missing", async () => {
-      const req = mockReq()
+      vi.stubEnv("MGMT_CLIENT_ID", "admin")
+      vi.stubEnv("MGMT_CLIENT_SECRET", "secret")
+      const req = mockReq({ headers: { authorization: "Basic YWRtaW46c2VjcmV0" } })
       const res = mockRes()
       const next = mockNext()
 

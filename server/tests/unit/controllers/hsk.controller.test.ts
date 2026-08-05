@@ -103,22 +103,26 @@ describe("HSK controllers", () => {
       expect(next).toHaveBeenCalledWith(expect.objectContaining({ message: "HSK create fail" }))
     })
 
-    it("skips auth when MGMT vars not set", async () => {
+    it("returns 401 when MGMT vars are not set (fails closed)", async () => {
+      // Regression: this previously ALLOWED the request. An unset env var must never disable auth.
+      vi.stubEnv("MGMT_CLIENT_ID", "")
+      vi.stubEnv("MGMT_CLIENT_SECRET", "")
       const req = mockReq({ body: { kty: "EC", hsmName: "google" } })
       const res = mockRes()
       const next = mockNext()
-      mockHskService.create.mockResolvedValue({ action: "SUCCESS", hsk: { handle: "abc" } })
 
       await create.handleCreate(req, res, next)
 
-      expect(mockHskService.create).toHaveBeenCalled()
-      expect(res.status).toHaveBeenCalledWith(201)
+      expect(mockHskService.create).not.toHaveBeenCalled()
+      expect(res.status).toHaveBeenCalledWith(401)
     })
 
     it("returns 400 when service throws AppError", async () => {
       const AppError = (await import("../../../src/utils/app-error")).AppError
       mockHskService.create.mockRejectedValue(new AppError("Missing required field: kty", 400))
-      const req = mockReq({ body: { hsmName: "google" } })
+      vi.stubEnv("MGMT_CLIENT_ID", "admin")
+      vi.stubEnv("MGMT_CLIENT_SECRET", "secret")
+      const req = mockReq({ body: { hsmName: "google" }, headers: { authorization: "Basic YWRtaW46c2VjcmV0" } })
       const res = mockRes()
       const next = mockNext()
 

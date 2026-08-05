@@ -32,6 +32,11 @@ flowchart TB
 
 ## Where to Start
 
+### I'm new to OAuth and don't know what to read first
+- **[Learning Path](./curriculum/README.md)** — a structured, assessed curriculum that sequences everything
+  below into dependency order: 14 modules, hands-on labs against this repo's own server, quizzes, four
+  cumulative exams and a capstone. Start here if the tutorial list looks like a wall of RFCs.
+
 ### I want to understand the architecture
 - [Architecture](./ARCHITECTURE.md) — System design, middleware pipeline, deployment
 - [Data Flows](./DATA-FLOWS.md) — OAuth flow sequences with diagrams

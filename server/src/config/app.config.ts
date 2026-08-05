@@ -8,6 +8,16 @@ export const appConfig = {
   consentUrl: "/api/session/consent",
 };
 
+/**
+ * RFC 9728 Protected Resource Metadata. `resource` is the only REQUIRED member of the document; leave
+ * PROTECTED_RESOURCE_IDENTIFIER unset and the endpoint falls back to this deployment's UserInfo endpoint,
+ * which is the resource this server actually protects.
+ */
+export const protectedResource = {
+  resource: process.env.PROTECTED_RESOURCE_IDENTIFIER || "",
+  documentation: process.env.PROTECTED_RESOURCE_DOCUMENTATION || "",
+};
+
 export const server = {
   port: Number(process.env.PORT || 3000),
   nodeEnv: process.env.NODE_ENV || "development",

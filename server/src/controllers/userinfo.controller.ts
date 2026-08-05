@@ -5,7 +5,12 @@ import {
   UserinfoIssueRequest,
 } from "@authlete/typescript-sdk/models";
 import { senduserInfoIssueResponse } from "./userinfo-issue-response.handler";
-import { setDpopNonce } from "../utils/dpop";
+import {
+  authChallenge,
+  extractAccessToken,
+  isTokenPresentationError,
+  setDpopNonce,
+} from "../utils/dpop";
 
 const userInfoService = new UserInfoService();
 
@@ -105,11 +110,10 @@ export const userinfoController = {
 
           logger("Prepared userinfo claims", { subject, claims });
 
-          const token =
-            (req.headers["authorization"] as string)?.replace(
-              /^Bearer\s+/i,
-              ""
-            ) || "";
+          // Same parser the service used, so the two calls can never disagree about what the token
+          // is. This previously stripped only `Bearer`, which meant a DPoP-scheme request that
+          // somehow reached here would issue against a different string than it validated.
+          const token = extractAccessToken(req)?.token ?? "";
           const issueRequest: UserinfoIssueRequest = {
             token,
             sub: subject,
@@ -144,6 +148,26 @@ export const userinfoController = {
         }
       }
     } catch (err) {
+      if (isTokenPresentationError(err)) {
+        // The client's way of presenting the token was unacceptable (RFC 6750 §2/§3, RFC 9449 §7).
+        // Authlete was never called, so build the challenge here.
+        const log = req.logger || logger;
+        log("Userinfo token presentation rejected", {
+          status: err.status,
+          code: err.code ?? "(none)",
+        });
+        res.setHeader(
+          "WWW-Authenticate",
+          authChallenge(err.schemes, err.code, err.description),
+        );
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
+        if (!err.code) return res.status(err.status).send();
+        return res.status(err.status).json({
+          error: err.code,
+          error_description: err.description,
+        });
+      }
       const error = err instanceof Error ? err : new Error(String(err));
       const log = req.logger || logger;
       log.error("UserInfo Response Error", { message: error.message });

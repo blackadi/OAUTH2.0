@@ -41,7 +41,10 @@ describe("validateRequired", () => {
 })
 
 describe("validateAuthorizationParams", () => {
-  it("requires response_type, client_id, redirect_uri without request_uri", () => {
+  // `client_id` is the only parameter required in every request shape, so it is the only thing this
+  // pre-flight check enforces. Everything else is shape-dependent and belongs to the authorization
+  // server, which can also answer per RFC 6749 §4.1.2.1 (error redirect) where this function cannot.
+  it("accepts a plain request", () => {
     expect(
       validateAuthorizationParams({
         response_type: "code",
@@ -51,12 +54,19 @@ describe("validateAuthorizationParams", () => {
     ).toBeNull()
   })
 
-  it("returns error when response_type is missing", () => {
-    const err = validateAuthorizationParams({ client_id: "c1", redirect_uri: "http" })
-    expect(err).toContain("response_type")
+  it("accepts the canonical JAR shape — client_id + request only (RFC 9101 §5)", () => {
+    // The regression guard. This previously failed with "Missing required parameter: response_type",
+    // because a per-shape allowlist demanded parameters that RFC 9101 §5 keeps inside the signed
+    // object and §6.3 says the server must read from there regardless.
+    expect(
+      validateAuthorizationParams({
+        client_id: "c1",
+        request: "eyJhbGciOiJFUzI1NiIsInR5cCI6Im9hdXRoLWF1dGh6LXJlcStqd3QifQ.e30.sig",
+      })
+    ).toBeNull()
   })
 
-  it("requires client_id and request_uri when request_uri present", () => {
+  it("accepts the PAR shape — client_id + request_uri (RFC 9126)", () => {
     expect(
       validateAuthorizationParams({
         request_uri: "urn:ietf:params:oauth:request_uri:abc",
@@ -65,9 +75,35 @@ describe("validateAuthorizationParams", () => {
     ).toBeNull()
   })
 
-  it("returns error when client_id missing with request_uri", () => {
-    const err = validateAuthorizationParams({ request_uri: "urn:..." })
-    expect(err).toContain("client_id")
+  it("accepts a plain request with no redirect_uri (RFC 6749 §3.1.2.3)", () => {
+    // Optional when exactly one full redirection URI is registered — only the authorization server
+    // knows how many are registered, so this check must not demand it.
+    expect(
+      validateAuthorizationParams({ response_type: "code", client_id: "c1" })
+    ).toBeNull()
+  })
+
+  it("no longer rejects a request missing response_type", () => {
+    // Not "valid" — just not this function's call. Authlete rejects it, and does so by redirecting to
+    // the redirection URI with an error parameter, which is what RFC 6749 §4.1.2.1 requires.
+    expect(
+      validateAuthorizationParams({ client_id: "c1", redirect_uri: "http://localhost" })
+    ).toBeNull()
+  })
+
+  it("returns an error when client_id is missing, whatever the shape", () => {
+    for (const query of [
+      { response_type: "code", redirect_uri: "http://localhost" },
+      { request_uri: "urn:ietf:params:oauth:request_uri:abc" },
+      { request: "eyJ.e30.sig" },
+      {},
+    ]) {
+      expect(validateAuthorizationParams(query)).toContain("client_id")
+    }
+  })
+
+  it("treats an empty client_id as missing", () => {
+    expect(validateAuthorizationParams({ client_id: "" })).toContain("client_id")
   })
 })
 

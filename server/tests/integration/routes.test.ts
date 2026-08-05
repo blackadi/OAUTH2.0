@@ -43,8 +43,9 @@ describe("Integration: all API routes", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubEnv("MGMT_CLIENT_ID", "")
-    vi.stubEnv("MGMT_CLIENT_SECRET", "")
+    vi.unstubAllEnvs()
+    vi.stubEnv("MGMT_CLIENT_ID", "test-admin")
+    vi.stubEnv("MGMT_CLIENT_SECRET", "test-secret")
     app = createApp()
   })
 
@@ -57,9 +58,47 @@ describe("Integration: all API routes", () => {
   })
 
   describe("GET /api/authorization", () => {
+    const interaction = {
+      action: "INTERACTION", ticket: "t-1", client: { clientId: 123 }, scopes: [],
+      idTokenClaims: undefined, authorizationDetails: undefined, resultMessage: "",
+    }
+
     it("redirects to login on INTERACTION", async () => {
-      mockApi.authorization.processRequest.mockResolvedValue({ action: "INTERACTION", ticket: "t-1", client: { clientId: 123 }, scopes: [], idTokenClaims: undefined, authorizationDetails: undefined, resultMessage: "" })
+      mockApi.authorization.processRequest.mockResolvedValue(interaction)
       await request(app).get("/api/authorization?response_type=code&client_id=123&redirect_uri=http://localhost:3000/callback&scope=openid").expect(302)
+    })
+
+    // RFC 9101 §5: only `client_id` accompanies a Request Object on the URL — `response_type`,
+    // `redirect_uri` and the rest live inside the signed JWT. Local pre-validation used to demand
+    // them anyway and answered 400 before Authlete was called at all.
+    it("forwards the canonical JAR shape instead of rejecting it", async () => {
+      mockApi.authorization.processRequest.mockResolvedValue(interaction)
+      const jwt = "eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiIxMjMifQ.sig"
+
+      await request(app)
+        .get(`/api/authorization?client_id=123&request=${encodeURIComponent(jwt)}`)
+        .expect(302)
+
+      const sent = mockApi.authorization.processRequest.mock.calls[0][0].authorizationRequest
+      expect(sent.parameters).toContain("client_id=123")
+      expect(sent.parameters).toContain("request=")
+      expect(decodeURIComponent(sent.parameters)).toContain(jwt)
+    })
+
+    it("forwards a request with no redirect_uri (RFC 6749 §3.1.2.3)", async () => {
+      mockApi.authorization.processRequest.mockResolvedValue(interaction)
+      await request(app).get("/api/authorization?response_type=code&client_id=123&scope=openid").expect(302)
+      expect(mockApi.authorization.processRequest).toHaveBeenCalled()
+    })
+
+    it("still rejects locally when client_id is absent, without calling Authlete", async () => {
+      const res = await request(app)
+        .get("/api/authorization?response_type=code&redirect_uri=http://localhost:3000/callback")
+        .expect(400)
+
+      expect(res.body.error).toBe("invalid_request")
+      expect(res.body.error_description).toContain("client_id")
+      expect(mockApi.authorization.processRequest).not.toHaveBeenCalled()
     })
   })
 
@@ -74,10 +113,84 @@ describe("Integration: all API routes", () => {
   })
 
   describe("POST /api/userinfo", () => {
+    const okResponse = { action: "OK", responseContent: JSON.stringify({ sub: "user-1" }) }
+
     it("returns userinfo for valid token", async () => {
-      mockApi.userinfo.process.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ sub: "user-1" }) })
+      mockApi.userinfo.process.mockResolvedValue(okResponse)
       const res = await request(app).post("/api/userinfo").set("Authorization", "Bearer at-1").expect(200)
       expect(res.body.sub).toBe("user-1")
+    })
+
+    // RFC 9449 §7.1 makes `DPoP` the only conformant scheme for a DPoP-bound access token. The
+    // endpoint previously stripped the literal "Bearer " prefix only, so this arrived at Authlete as
+    // the string "DPoP <token>" and came back as [A088302] "The access token does not exist."
+    it("accepts the DPoP scheme and forwards the proof", async () => {
+      mockApi.userinfo.process.mockResolvedValue(okResponse)
+      const res = await request(app)
+        .post("/api/userinfo")
+        .set("Authorization", "DPoP at-1")
+        .set("DPoP", "proof-jwt")
+        .expect(200)
+
+      expect(res.body.sub).toBe("user-1")
+      expect(mockApi.userinfo.process).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userinfoRequest: expect.objectContaining({ token: "at-1", dpop: "proof-jwt", htm: "POST" }),
+        })
+      )
+    })
+
+    it("rejects the DPoP scheme with no proof and never calls Authlete", async () => {
+      const res = await request(app).post("/api/userinfo").set("Authorization", "DPoP at-1").expect(401)
+
+      expect(res.body.error).toBe("invalid_dpop_proof")
+      expect(res.headers["www-authenticate"]).toMatch(/^DPoP error="invalid_dpop_proof"/)
+      expect(mockApi.userinfo.process).not.toHaveBeenCalled()
+    })
+
+    it("rejects the Bearer scheme carrying a DPoP proof — RFC 9449 §7.2", async () => {
+      const res = await request(app)
+        .post("/api/userinfo")
+        .set("Authorization", "Bearer at-1")
+        .set("DPoP", "proof-jwt")
+        .expect(400)
+
+      expect(res.body.error).toBe("invalid_request")
+      expect(mockApi.userinfo.process).not.toHaveBeenCalled()
+    })
+
+    it("challenges with both schemes and no error code when no credentials are sent", async () => {
+      // RFC 6750 §3 requires WWW-Authenticate on a 401; §3.1 forbids an error code when the request
+      // carried no authentication information at all.
+      const res = await request(app).post("/api/userinfo").expect(401)
+
+      expect(res.headers["www-authenticate"]).toBe("Bearer, DPoP")
+      expect(res.body).toEqual({})
+      expect(mockApi.userinfo.process).not.toHaveBeenCalled()
+    })
+
+    it("does not forward client-supplied dpop/htu from the request body", async () => {
+      mockApi.userinfo.process.mockResolvedValue(okResponse)
+      await request(app)
+        .post("/api/userinfo")
+        .set("Authorization", "DPoP at-1")
+        .set("DPoP", "real-proof")
+        .type("form")
+        .send("dpop=smuggled&htu=https%3A%2F%2Fas.example.com%2Fapi%2Fpar&htm=POST")
+        .expect(200)
+
+      const sent = mockApi.userinfo.process.mock.calls[0][0].userinfoRequest
+      expect(sent.dpop).toBe("real-proof")
+      expect(sent.htu).toMatch(/\/api\/userinfo$/)
+    })
+
+    it("still forwards Authlete's own challenge verbatim on UNAUTHORIZED", async () => {
+      const challenge =
+        'DPoP error="invalid_token",error_description="[A089311] Expected a DPoP header but none was provided.",algs="ES256"'
+      mockApi.userinfo.process.mockResolvedValue({ action: "UNAUTHORIZED", responseContent: challenge })
+      const res = await request(app).post("/api/userinfo").set("Authorization", "Bearer at-1").expect(401)
+
+      expect(res.headers["www-authenticate"]).toBe(challenge)
     })
   })
 
@@ -154,7 +267,7 @@ describe("Integration: all API routes", () => {
   describe("POST /api/client/dcr/register", () => {
     it("returns 201 with action CREATED", async () => {
       mockApi.dynamicClientRegistration.register.mockResolvedValue({ action: "CREATED", responseContent: JSON.stringify({ client_id: "dcr-1" }) })
-      const res = await request(app).post("/api/client/dcr/register").send({ json: '{"client_name":"test"}' }).expect(201)
+      const res = await request(app).post("/api/client/dcr/register").auth("test-admin", "test-secret").send({ json: '{"client_name":"test"}' }).expect(201)
       expect(res.body.action).toBe("CREATED")
     })
   })
@@ -182,24 +295,76 @@ describe("Integration: all API routes", () => {
   })
 
   describe("GET /api/gm/:grantId", () => {
-    it("returns 200", async () => {
+    it("returns 200 when the token is bound to that grant", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-1", subject: "alice" })
       mockApi.grantManagement.processRequest.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ grantId: "g-1" }) })
       const res = await request(app).get("/api/gm/g-1").set("Authorization", "Bearer tok-1").expect(200)
       expect(res.body.grantId).toBe("g-1")
     })
+
+    it("returns 403 for another user's grant, without reaching Authlete", async () => {
+      // The cross-user BOLA, verified live before this fix: bob's token read alice's grant.
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-bob", subject: "bob" })
+      const res = await request(app).get("/api/gm/g-alice").set("Authorization", "Bearer bob-tok").expect(403)
+      expect(res.body.error).toBe("access_denied")
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
+
+    it("returns 403 for a token with no grant binding (client credentials)", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "OK" })
+      await request(app).get("/api/gm/g-1").set("Authorization", "Bearer cc-tok").expect(403)
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
+
+    it("returns 401 with no bearer token, without introspecting", async () => {
+      const res = await request(app).get("/api/gm/g-1").expect(401)
+      expect(res.body.error).toBe("invalid_token")
+      expect(mockApi.introspection.process).not.toHaveBeenCalled()
+    })
+
+    it("returns 403 when the token lacks the query scope", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "FORBIDDEN", responseContent: 'Bearer error="insufficient_scope"' })
+      await request(app).get("/api/gm/g-1").set("Authorization", "Bearer weak-tok").expect(403)
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
   })
 
   describe("DELETE /api/gm/:grantId", () => {
-    it("returns 204", async () => {
+    it("returns 204 when the token is bound to that grant", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-1", subject: "alice" })
       mockApi.grantManagement.processRequest.mockResolvedValue({ action: "OK" })
       await request(app).delete("/api/gm/g-1").set("Authorization", "Bearer tok-1").expect(204)
+    })
+
+    it("returns 403 when deleting another user's grant, without reaching Authlete", async () => {
+      // The destructive half: before the fix this returned 204 and destroyed the other user's grant.
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-bob", subject: "bob" })
+      await request(app).delete("/api/gm/g-alice").set("Authorization", "Bearer bob-tok").expect(403)
+      expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("administrative auth fails closed", () => {
+    it("rejects an unauthenticated management request", async () => {
+      const res = await request(app).get("/api/client/list").expect(401)
+      expect(res.body.error).toBe("invalid_client")
+      expect(mockApi.client.list).not.toHaveBeenCalled()
+    })
+
+    it("rejects management requests when MGMT credentials are unset", async () => {
+      // Regression for the fail-open defect: an unset env var must not disable authentication.
+      vi.stubEnv("MGMT_CLIENT_ID", "")
+      vi.stubEnv("MGMT_CLIENT_SECRET", "")
+      const unconfigured = createApp()
+      await request(unconfigured).get("/api/client/list").expect(401)
+      expect(mockApi.client.list).not.toHaveBeenCalled()
     })
   })
 
   describe("GET /api/client/list", () => {
     it("returns client list", async () => {
       mockApi.client.list.mockResolvedValue({ clients: [{ clientId: "c-1" }], totalCount: 1 })
-      const res = await request(app).get("/api/client/list").expect(200)
+      const res = await request(app).get("/api/client/list").auth("test-admin", "test-secret").expect(200)
       expect(res.body.clients).toHaveLength(1)
     })
   })
@@ -207,7 +372,7 @@ describe("Integration: all API routes", () => {
   describe("POST /api/client/create", () => {
     it("creates a client", async () => {
       mockApi.client.create.mockResolvedValue({ action: "OK", clientId: "c-new" } as any)
-      const res = await request(app).post("/api/client/create")
+      const res = await request(app).post("/api/client/create").auth("test-admin", "test-secret")
         .send({ client: { clientName: "test", grantTypes: ["AUTHORIZATION_CODE"] } }).expect(201)
       expect(res.body.clientId).toBe("c-new")
     })
@@ -216,7 +381,7 @@ describe("Integration: all API routes", () => {
   describe("POST /api/token/create", () => {
     it("creates a token", async () => {
       mockApi.token.management.create.mockResolvedValue({ action: "OK", accessToken: "at-1" })
-      const res = await request(app).post("/api/token/create")
+      const res = await request(app).post("/api/token/create").auth("test-admin", "test-secret")
         .send({ grantType: "AUTHORIZATION_CODE", clientId: "123", subject: "user-1" }).expect(200)
       expect(res.body.accessToken).toBe("at-1")
     })
@@ -225,7 +390,7 @@ describe("Integration: all API routes", () => {
   describe("GET /api/token/list", () => {
     it("lists tokens", async () => {
       mockApi.token.management.list.mockResolvedValue({ tokens: [{ accessToken: "at-1" }] })
-      const res = await request(app).get("/api/token/list").expect(200)
+      const res = await request(app).get("/api/token/list").auth("test-admin", "test-secret").expect(200)
       expect(res.body.tokens).toHaveLength(1)
     })
   })
@@ -340,9 +505,11 @@ describe("Integration: all API routes", () => {
         action: "JSON",
         responseContent: JSON.stringify({ sub: "user-1", name: "user-1", email: "user-1@example.com" }),
       } as any)
+      // The DPoP scheme, not Bearer: RFC 9449 §7.1 requires it for a DPoP-bound token, and §7.2
+      // makes Bearer-plus-proof a rejected presentation.
       const res = await request(app).post("/api/userinfo")
         .set("dpop", "dpop-proof-jwt")
-        .set("Authorization", "Bearer at-dpop-1")
+        .set("Authorization", "DPoP at-dpop-1")
         .expect(200)
       expect(res.headers["dpop-nonce"]).toBe("userinfo-nonce-1")
     })

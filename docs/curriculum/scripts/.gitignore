@@ -1,0 +1,2 @@
+# Never commit the filled-in lab env — it holds live credentials.
+curriculum.env
