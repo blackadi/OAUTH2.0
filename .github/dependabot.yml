@@ -9,6 +9,15 @@ updates:
     labels:
       - "dependencies"
       - "server"
+    ignore:
+      # @authlete/typescript-sdk 1.1.5/1.1.6 are numerically higher than the current
+      # stable 1.0.0 but predate it: Speakeasy auto-versioning ran up to 1.1.6 in
+      # Nov 2025, upstream then reset to a 0.0.x beta line and promoted it to a
+      # hand-set stable 1.0.0 in Apr 2026 (npm dist-tag `latest`). Those two versions
+      # are older code that still carries the bugs 1.0.0 fixes, so never "upgrade" to
+      # them. See docs/DEVELOPMENT.md → SDK Version Pin.
+      - dependency-name: "@authlete/typescript-sdk"
+        versions: ["1.1.5", "1.1.6"]
 
   - package-ecosystem: "npm"
     directory: "/client"

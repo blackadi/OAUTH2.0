@@ -321,11 +321,69 @@ const { redisClient } = await import("../middleware/session.js");
 const { redisClient } = await import("../middleware/session");
 ```
 
-### SDK Patch
+### SDK Version Pin
 
-`@authlete/typescript-sdk@^1.1.6` has a patch at `patches/@authlete+typescript-sdk+1.1.6.patch`:
-- `clientCreate.js` accepts `[200, 201]` because Authlete returns 201 for created resources (SDK bug)
-- Applied via `patch-package` in `postinstall`
+`server/package.json` pins the SDK to the **exact** version, with no caret:
+
+```json
+"@authlete/typescript-sdk": "1.0.0"
+```
+
+**This looks like a downgrade and is not.** Version `1.1.6` is numerically higher but is
+*older code*:
+
+| When | What happened |
+|------|---------------|
+| Nov 6–9, 2025 | Speakeasy `versioningStrategy: automatic` ran the package up to `1.1.6`. Only `1.1.5`/`1.1.6` reached npm. |
+| Nov 12, 2025 | Upstream restarted at `0.0.1-beta`, all flagged as GitHub prereleases. |
+| → Mar 2026 | Betas iterated to `0.0.14-beta`. |
+| **Apr 8, 2026** | Commit *"Promote SDK to stable v1.0.0 and align Speakeasy config"* — `versioningStrategy` → `manual`, `version` → `1.0.0`. |
+| Apr 9, 2026 | Published to npm as `1.0.0`, tagged `latest`. |
+
+So `1.0.0` is newer, larger (84 operations vs 75) and is what a plain
+`npm install @authlete/typescript-sdk` gives you today.
+
+> **GitHub's releases page shows `v1.1.6` as "Latest" — disregard it.** GitHub's badge
+> picks the newest release *not* flagged `prerelease`, every release after v1.1.6 *is*
+> flagged prerelease, and the Apr 2026 stable `1.0.0` was never given a GitHub release.
+> The badge is stale metadata. npm's `latest` dist-tag and `.speakeasy/gen.yaml` on `main`
+> both say `1.0.0`.
+
+**Never widen the pin.** `^1.0.0` resolves up to `1.1.6` and silently reintroduces every
+bug below. `.github/dependabot.yml` carries an `ignore` rule for `1.1.5`/`1.1.6` so the
+weekly bot cannot propose that "upgrade".
+
+#### What 1.0.0 fixes (why the old patch existed)
+
+The repo used to carry `patches/@authlete+typescript-sdk+1.1.6.patch` applied by
+`patch-package` in `postinstall`. Both are now removed. Each hunk corrected a place where
+the generated SDK contradicted Authlete's own OpenAPI contract:
+
+| Divergence | Spec says | SDK 1.1.6 did | 1.0.0 |
+|------------|-----------|---------------|-------|
+| `clientCreate` status | `/client/create` declares **both** `201` and `200` | matched `200` only, so a real 201 fell through to `M.fail("4XX")` | native `[200, 201]` |
+| Discovery document | `additionalProperties: true` | `z.object({})` stripped it to `{}` | schema removed; returns the raw object |
+| Service JWKS | `keys[]` items `additionalProperties: true` | stripped every JWK to `{}` | `keys: z.array(z.record(z.any()))` |
+| `TokenRequest.properties` | array of `{key,value,hidden}` | typed `string` — the **only** one of seven request models to get it wrong | `Array<Property>` |
+
+The last row was never patched, so it was a live bug: `token.service.ts` followed the wrong
+type and `JSON.stringify`d the value, putting a JSON *string* on the wire where Authlete
+wants an array. Normalization now lives in `src/utils/properties.ts` (`parseProperties`),
+shared by `token.service.ts` and `token.controller.ts`.
+
+#### Migrating (what changed in our code)
+
+Two breaking changes, both mechanical:
+
+- `client.management.*` — `subjectPathParameter` + `subjectQueryParameter` collapsed into a
+  single `subject`. 1.1.6 merged Authlete's path and query variants into one operation and
+  sent the subject twice (`/get/list/{subject}?subject=…`); 1.0.0 splits them and these
+  methods are the documented path variant. Behavior is unchanged.
+- `TokenRequest.properties` — now `Array<Property>` instead of `string`.
+
+Verified across the 74 operations both versions share: **zero URL or HTTP-method changes**.
+One operation was dropped (`serviceCreate`, unused here) and ten added. Dependencies are
+identical (`zod: ^3.25.0 || ^4.0.0`).
 
 ### Audit Log Retention
 

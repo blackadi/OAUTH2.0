@@ -10,6 +10,7 @@ import { Authlete } from "@authlete/typescript-sdk";
 import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
+import { parseProperties } from "../utils/properties";
 
 export class TokenService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -64,10 +65,10 @@ export class TokenService {
       clientSecret,
     };
 
-    if (bodyProperties !== undefined) {
-      reqBody.properties = typeof bodyProperties === 'string'
-        ? bodyProperties
-        : JSON.stringify(bodyProperties);
+    // Authlete wants an array of {key, value, hidden}, never a JSON string.
+    const properties = parseProperties(bodyProperties);
+    if (properties) {
+      reqBody.properties = properties;
     }
 
     // DPoP support — fields come from HTTP headers, not the body

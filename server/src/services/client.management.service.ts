@@ -213,8 +213,7 @@ export class ClientManagementService {
 
     const response = await this.authleteApi.client.management.listAuthorizations({
       serviceId,
-      subjectPathParameter: subject,
-      subjectQueryParameter: subject,
+      subject,
       developer,
       start,
       end,
@@ -271,8 +270,7 @@ export class ClientManagementService {
     const response = await this.authleteApi.client.management.deleteAuthorizations({
       serviceId,
       clientId,
-      subjectPathParameter: subject,
-      subjectQueryParameter: subject,
+      subject,
     });
 
     return response;
@@ -295,8 +293,7 @@ export class ClientManagementService {
     const response = await this.authleteApi.client.management.getGrantedScopes({
       serviceId,
       clientId,
-      subjectPathParameter: subject,
-      subjectQueryParameter: subject,
+      subject,
     });
 
     return response;
@@ -319,8 +316,7 @@ export class ClientManagementService {
     const response = await this.authleteApi.client.management.deleteGrantedScopes({
       serviceId,
       clientId,
-      subjectPathParameter: subject,
-      subjectQueryParameter: subject,
+      subject,
     });
 
     return response;
