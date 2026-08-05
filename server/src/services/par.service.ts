@@ -4,6 +4,7 @@ import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
+import { parseBasicAuth } from "../utils/basic-auth";
 
 export class ParService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -24,7 +25,24 @@ export class ParService {
       parameters,
     };
 
-    if (clientId && clientSecret) {
+    // Client authentication. Authlete matches the channel the credentials arrive on against
+    // the client's registered auth method, so the caller picks the channel and this service
+    // must not reinterpret it (verified 2026-08-05 against client 1523514379):
+    //
+    //   Authorization: Basic     -> top-level clientId/clientSecret   client_secret_basic
+    //   body clientId+Secret     -> merged into `parameters`          client_secret_post
+    //   body clientId only       -> client_id in `parameters`         none (public client)
+    //
+    // Putting a client_secret_basic client's credentials in `parameters` earns
+    // `401 [A157357] The client identifier is not found at the expected location`, and the
+    // mirror-image error exists for client_secret_post — hence no guessing.
+    const basic = parseBasicAuth(req.headers.authorization);
+
+    if (basic) {
+      // Server-determined, straight from HTTP context — never from the body.
+      requestBody.clientId = basic.clientId;
+      requestBody.clientSecret = basic.clientSecret;
+    } else if (clientId && clientSecret) {
       requestBody.parameters = this.appendToParams(parameters, [
         { key: "client_id", value: clientId },
         { key: "client_secret", value: clientSecret },
@@ -45,7 +63,10 @@ export class ParService {
       requestBody.htu = `${protocol}://${host}${req.originalUrl}`;
     }
 
-    log("ParService: calling Authlete pushed authorization endpoint", { hasDpop: !!dpopHeader });
+    log("ParService: calling Authlete pushed authorization endpoint", {
+      hasDpop: !!dpopHeader,
+      clientAuth: basic ? "basic" : clientSecret ? "post" : clientId ? "none" : "absent",
+    });
 
     const response = await this.authleteApi.pushedAuthorization.create({
       serviceId,

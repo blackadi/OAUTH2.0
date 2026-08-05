@@ -8,6 +8,7 @@ import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
@@ -20,6 +21,10 @@ function ParSection() {
   );
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
+  // Must match the client's registered auth method — Authlete checks the channel the
+  // credentials arrive on, so the wrong choice is a 401. 'post' is the historical default
+  // here and what Authlete gives DCR-created clients.
+  const [authMethod, setAuthMethod] = useState<'post' | 'basic' | 'none'>('post');
   const [useDpop, setUseDpop] = useState(false);
   const [parResult, setParResult] = useState<{ requestUri?: string; expiresIn?: number } | null>(null);
   const [pkceVerifier, setPkceVerifier] = useState('');
@@ -54,6 +59,18 @@ function ParSection() {
   }, []);
 
   const doParRequest = async () => {
+    // basic -> Authorization: Basic header; post -> credentials in the JSON body, which the
+    // server merges into the pushed `parameters`; none -> client_id only (public client).
+    const basicAuth =
+      authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined;
+    // With Basic the secret travels in the header, so keep it out of the body entirely.
+    const body =
+      authMethod === 'basic'
+        ? { parameters }
+        : authMethod === 'none'
+          ? { parameters, clientId }
+          : { parameters, clientId, clientSecret };
+
     if (useDpop) {
       let dpopKeyRaw = sessionStorage.getItem('dpop_private_key');
       if (!dpopKeyRaw) {
@@ -67,13 +84,14 @@ function ParSection() {
       const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
       const proof = await createProof(dpopPrivateKey, 'POST', PAR_ENDPOINT, undefined, storedNonce);
       const { data, dpopNonce } = await parService.pushedAuthorizationWithDpop(
-        { parameters, clientId, clientSecret },
+        body,
         proof,
+        basicAuth,
       );
       if (dpopNonce) sessionStorage.setItem('dpop_nonce', dpopNonce);
       return data;
     }
-    return parService.pushedAuthorization({ parameters, clientId, clientSecret });
+    return parService.pushedAuthorization(body, basicAuth);
   };
 
   const handlePush = async () => {
@@ -133,7 +151,24 @@ function ParSection() {
         </div>
 
         <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
-        <Input label="Client Secret (omit for public clients)" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
+        {authMethod !== 'none' && (
+          <Input label="Client Secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
+        )}
+
+        <Select
+          label="Client Auth Method"
+          value={authMethod}
+          onChange={(e) => setAuthMethod(e.target.value as 'post' | 'basic' | 'none')}
+          options={[
+            { value: 'post', label: 'client_secret_post — credentials in body' },
+            { value: 'basic', label: 'client_secret_basic — Authorization header' },
+            { value: 'none', label: 'none — public client (PKCE required)' },
+          ]}
+        />
+        <p className="text-xs text-slate-400 -mt-1">
+          Must match the client&apos;s registered method. Authlete checks which channel the
+          credentials arrive on and returns 401 on a mismatch.
+        </p>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={useDpop} onChange={(e) => setUseDpop(e.target.checked)} className="accent-blue-500 w-4 h-4" />

@@ -38,10 +38,14 @@ async function postAdmin(url: string, body: Record<string, unknown>, auth: strin
   return response.json();
 }
 
-async function postJson(url: string, body: Record<string, unknown>): Promise<unknown> {
+async function postJson(
+  url: string,
+  body: Record<string, unknown>,
+  headers?: Record<string, string>,
+): Promise<unknown> {
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await response.text());

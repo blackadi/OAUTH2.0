@@ -214,6 +214,15 @@ Push authorization parameters (RFC 9126). No admin auth.
 
 **Body:** `parameters` (URL-encoded), `clientId`, `clientSecret`
 
+**Client authentication** — must match the client's registered method, because Authlete checks
+which channel the credentials arrive on and returns 401 on a mismatch:
+
+| Registered method | How to send credentials |
+|---|---|
+| `client_secret_basic` | `Authorization: Basic <base64(id:secret)>` header; omit them from the body |
+| `client_secret_post` | `clientId` + `clientSecret` body fields (merged into `parameters`) |
+| `none` | `clientId` only |
+
 **Response:** 201 `{ request_uri, expires_in }`, 400, 401, 403, 413
 
 ---

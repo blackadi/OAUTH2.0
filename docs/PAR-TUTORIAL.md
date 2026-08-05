@@ -277,9 +277,48 @@ Authlete applies the same client authentication methods for the PAR endpoint as 
 | `private_key_jwt` | Signed JWT assertion | FAPI 2.0, high-security |
 | `none` | No authentication | Public clients (must use PKCE) |
 
+### Picking the right channel — this is the #1 cause of a 401 here
+
+**Authlete checks *where* your credentials arrive, not just what they are.** It compares the
+channel against the client's registered auth method and rejects a mismatch. So the method you
+pick has to match how you send them:
+
+| Client's registered method | Send credentials as | `/api/par` request |
+|---|---|---|
+| `client_secret_basic` | `Authorization: Basic` header | header + `parameters` in the body |
+| `client_secret_post` | `clientId` / `clientSecret` JSON fields | server merges them into `parameters` |
+| `none` | `clientId` only | `client_id` inside `parameters` |
+
+Get it wrong and Authlete tells you exactly what happened:
+
+```
+401  [A157357] The client identifier is not found at the expected location:
+     The 'client_secret_basic' client authentication method is used...
+```
+
 ### client_secret_basic
 
-The server sends `clientId` and `clientSecret` in the JSON body. Authlete processes them as Basic auth:
+Send the credentials in the **`Authorization` header**, not in the JSON body:
+
+```bash
+curl -X POST http://localhost:3000/api/par \
+  -u "3280859750204:qfd0ScLHhD..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "response_type=code&client_id=3280859750204&redirect_uri=http://localhost:3001/callback&scope=openid&state=xyz"
+  }'
+```
+
+The server decodes the header and hands the credentials to Authlete as its top-level
+`clientId` / `clientSecret` fields — the channel Authlete expects for `client_secret_basic`.
+
+> In the SPA, choose **Client Auth Method → `client_secret_basic`** in the PAR section. Putting
+> the secret in the JSON body for a `client_secret_basic` client will 401.
+
+### client_secret_post
+
+Here the credentials *do* belong in the JSON body. The server merges them into the pushed
+`parameters` string, which is where Authlete looks for a `client_secret_post` client:
 
 ```json
 {
