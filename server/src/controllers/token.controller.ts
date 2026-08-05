@@ -12,26 +12,13 @@ import { handleNativeSso } from "./native-sso-response.handler";
 import { sendTokenFailResponse } from "./token-fail-response.handler";
 import { sendTokenIssueResponse } from "./token-issue-response.handler";
 import { validateTokenParams } from "../utils/validate";
+import { parseProperties } from "../utils/properties";
 import { JwtVerificationService } from "../services/jwt-verification.service";
 import { setDpopNonce } from "../utils/dpop";
 
 const tokenService = new TokenService();
 const loginService = new LoginService();
 const jwtVerificationService = new JwtVerificationService();
-
-function parseProperties(input: unknown): Array<{ key?: string; value?: string; hidden?: boolean }> | undefined {
-  if (!input) return undefined;
-  if (Array.isArray(input)) return input;
-  if (typeof input === 'string') {
-    try {
-      const parsed = JSON.parse(input);
-      return Array.isArray(parsed) ? parsed : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-}
 
 export const tokenController = {
   handleToken: async (

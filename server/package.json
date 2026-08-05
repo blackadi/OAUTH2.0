@@ -14,11 +14,10 @@
     "test:integration": "vitest run tests/integration",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "postinstall": "patch-package"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
-    "@authlete/typescript-sdk": "^1.1.6",
+    "@authlete/typescript-sdk": "1.0.0",
     "body-parser": "^2.3.0",
     "connect-redis": "^9.0.0",
     "cookie-parser": "^1.4.6",
@@ -52,7 +51,6 @@
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.5.0",
-    "patch-package": "^8.0.1",
     "supertest": "^7.2.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^6.0.3",

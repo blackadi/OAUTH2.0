@@ -632,20 +632,27 @@ if (!hasRealAuthleteCreds) {
         reqObjCid = String(createRes.body.clientId)
         reqObjSecret = String(createRes.body.clientSecret)
 
-        // Sign the request object JWT with authorization request params
-        const baseUrl = process.env.AUTHLETE_BASE_URL!
-        const svcId = process.env.AUTHLETE_SERVICE_ID!
+        // Sign the request object JWT with authorization request params.
+        // `aud` MUST be the OP's issuer identifier (RFC 9101 §4, OIDC Core §6.1), not the
+        // Authlete API URL — using the latter earns [A006359] "does not match the issuer
+        // identifier of this service". Read it from discovery so it cannot drift.
+        const discoveryRes = await request.get("/api/.well-known/openid-configuration")
+        const issuer = discoveryRes.body.issuer as string
         const now = Math.floor(Date.now() / 1000)
         const requestJwt = await new SignJWT({
           iss: reqObjCid,
-          aud: `${baseUrl}/api/${svcId}/authorization`,
+          aud: issuer,
           response_type: "code",
           client_id: reqObjCid,
           redirect_uri: redirectUri,
           scope: "openid profile",
           state: "req_obj_test",
           iat: now,
-          exp: now + 300,
+          // The service sets `nbfOptional: false`, which makes `nbf` REQUIRED and caps the
+          // request object's lifespan at 60s (FAPI 1.0 Advanced §5.2.2). Without `nbf`, or
+          // with exp-nbf > 60s, Authlete rejects the request with 400 before any redirect.
+          nbf: now,
+          exp: now + 60,
         })
           .setProtectedHeader({ alg: "ES256", kid })
           .sign(privateKey)
@@ -710,8 +717,6 @@ if (!hasRealAuthleteCreds) {
     // ── 15. Token Management ───────────────────────────────────────────
 
     describeIf(hasManagement)("Token Management", () => {
-      let createdToken = ""
-
       it("lists tokens", async () => {
         const res = await request
           .get("/api/token/list")
@@ -720,54 +725,60 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("totalCount")
       })
 
-      it("creates a token programmatically", async () => {
-        const res = await request
-          .post("/api/token/create")
-          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
-          .type("form")
-          .send(`grantType=CLIENT_CREDENTIALS&subject=test_user&clientId=${process.env.CID}`)
-        expect(res.status).toBe(200)
-        expect(res.status).toBe(200)
-        expect(res.status).toBe(200)
-        expect(res.body).toHaveProperty("accessToken")
-        createdToken = res.body.accessToken
-        expect(createdToken).toBeTruthy()
-      })
+      // These four additionally need a confidential client id: they send `clientId`, which
+      // Authlete requires as a number. Guarding the whole block on hasManagement alone made
+      // them fail rather than skip when CID was unset — `Number(undefined)` is NaN, which the
+      // SDK's zod schema rejects before any HTTP call is made.
+      describeIf(hasConfidential)("with a confidential client", () => {
+        let createdToken = ""
 
-      it("updates token scopes", async () => {
-        expect(createdToken).toBeTruthy()
-        const res = await request
-          .patch("/api/token/update")
-          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
-          .type("form")
-          .send({ accessToken: createdToken, scopes: "openid" })
-        expect(res.status).toBe(200)
-      })
+        it("creates a token programmatically", async () => {
+          const res = await request
+            .post("/api/token/create")
+            .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+            .type("form")
+            .send(`grantType=CLIENT_CREDENTIALS&subject=test_user&clientId=${process.env.CID}`)
+          expect(res.status).toBe(200)
+          expect(res.body).toHaveProperty("accessToken")
+          createdToken = res.body.accessToken
+          expect(createdToken).toBeTruthy()
+        })
 
-      it("revokes token via management API", async () => {
-        expect(createdToken).toBeTruthy()
-        const res = await request
-          .post("/api/token/revoke")
-          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
-          .type("form")
-          .send({ accessTokenIdentifier: createdToken })
-        expect(res.status).toBe(200)
-      })
+        it("updates token scopes", async () => {
+          expect(createdToken).toBeTruthy()
+          const res = await request
+            .patch("/api/token/update")
+            .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+            .type("form")
+            .send({ accessToken: createdToken, scopes: "openid" })
+          expect(res.status).toBe(200)
+        })
 
-      it("deletes a token by identifier", async () => {
-        const createRes = await request
-          .post("/api/token/create")
-          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
-          .type("form")
-          .send(`grantType=CLIENT_CREDENTIALS&subject=delete_me&clientId=${process.env.CID}`)
-        expect(createRes.status).toBe(200)
-        const tokenToDelete = createRes.body.accessToken as string
-        expect(tokenToDelete).toBeTruthy()
+        it("revokes token via management API", async () => {
+          expect(createdToken).toBeTruthy()
+          const res = await request
+            .post("/api/token/revoke")
+            .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+            .type("form")
+            .send({ accessTokenIdentifier: createdToken })
+          expect(res.status).toBe(200)
+        })
 
-        const res = await request
-          .delete(`/api/token/delete/${encodeURIComponent(tokenToDelete)}`)
-          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
-        expect(res.status).toBe(204)
+        it("deletes a token by identifier", async () => {
+          const createRes = await request
+            .post("/api/token/create")
+            .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+            .type("form")
+            .send(`grantType=CLIENT_CREDENTIALS&subject=delete_me&clientId=${process.env.CID}`)
+          expect(createRes.status).toBe(200)
+          const tokenToDelete = createRes.body.accessToken as string
+          expect(tokenToDelete).toBeTruthy()
+
+          const res = await request
+            .delete(`/api/token/delete/${encodeURIComponent(tokenToDelete)}`)
+            .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+          expect(res.status).toBe(204)
+        })
       })
 
       it("reissues an ID token (requires refresh token from auth code flow)", async () => {
