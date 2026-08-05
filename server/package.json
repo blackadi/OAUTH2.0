@@ -47,7 +47,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/jwk-to-pem": "^2.0.3",
     "@types/morgan": "^1.9.10",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.2",
     "@types/supertest": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.5.0",
