@@ -1478,7 +1478,10 @@ if (!hasRealAuthleteCreds) {
           .send(`_csrf=${csrf}&user_code=${browserUserCode}`)
         expect(res.status).toBe(200)
         expect(res.text).toMatch(/is requesting access/)
-        expect(res.text).toMatch(/openid/)
+        // Case-insensitive: partials/scope-list.ejs title-cases the scope name for display
+        // ("openid" -> "Openid") and its description text never repeats the raw name, so a
+        // case-sensitive /openid/ can never match the rendered consent page.
+        expect(res.text).toMatch(/openid/i)
       })
 
       it("authenticates user and authorizes device via consent form", async () => {
