@@ -1,4 +1,6 @@
-import { authleteConfig as defaultConfig } from "../config/authlete.config";
+import { Authlete } from "@authlete/typescript-sdk";
+import { AuthleteError } from "@authlete/typescript-sdk/models/errors";
+import { authleteApi as defaultApi } from "./authlete.service";
 import { server } from "../config/app.config";
 
 export interface AuthleteHealthResponse {
@@ -27,25 +29,29 @@ export interface OverallHealthResponse {
 }
 
 export class HealthService {
-  constructor(private config: { baseUrl: string; AccessToken?: string } = defaultConfig) {}
+  constructor(private authleteApi: Authlete = defaultApi) {}
 
   async checkAuthlete(extended = false): Promise<AuthleteHealthResponse> {
-    const url = `${this.config.baseUrl}/api/lifecycle/healthcheck${extended ? "?extended=true" : ""}`;
-
     try {
-      const headers: Record<string, string> = {};
-      if (this.config.AccessToken) {
-        headers["Authorization"] = `Bearer ${this.config.AccessToken}`;
-      }
-      const res = await fetch(url, { headers });
-      const body = await res.text().catch(() => "");
-      return {
-        healthy: res.ok,
-        statusCode: res.status,
-        body: body || undefined,
-        extended,
-      };
+      // Pass `extended` only when set, so the request URI stays identical to the
+      // documented `GET /api/lifecycle/healthcheck` with no query string.
+      const body = await this.authleteApi.lifecycle.getApiLifecycleHealthcheck(
+        extended ? { extended: true } : undefined,
+      );
+      // The SDK resolves only on 200 (`M.text(200, …)`); anything else throws.
+      return { healthy: true, statusCode: 200, body: body || undefined, extended };
     } catch (err) {
+      // A non-2xx is a health *result*, not a transport failure — AuthleteError
+      // carries the status and body, so report them rather than a bare message.
+      if (err instanceof AuthleteError) {
+        return {
+          healthy: false,
+          statusCode: err.statusCode,
+          body: err.body || undefined,
+          extended,
+        };
+      }
+      // Network/timeout/abort: no HTTP response exists, so there is no status.
       return {
         healthy: false,
         error: err instanceof Error ? err.message : String(err),

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import request from "supertest"
 import { createApp } from "../../src/app"
 
@@ -15,6 +15,7 @@ const mockApi = vi.hoisted(() => {
     revocation: { process: fn() },
     service: { getConfiguration: fn(), getJwks: fn(), get: fn() },
     jwkSetEndpoint: { serviceJwksGetApi: fn() },
+    lifecycle: { getApiLifecycleHealthcheck: fn() },
     dynamicClientRegistration: { register: fn(), get: fn(), update: fn(), delete: fn() },
     ciba: { processAuthentication: fn(), issue: fn(), fail: fn(), complete: fn() },
     pushedAuthorization: { create: fn() },
@@ -360,15 +361,25 @@ describe("Integration: all API routes", () => {
   })
 
   describe("GET /api/health/authlete", () => {
-    afterEach(() => {
-      vi.unstubAllGlobals()
-    })
-
     it("returns healthy", async () => {
-      const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve("OK") })
-      vi.stubGlobal("fetch", mockFetch)
+      mockApi.lifecycle.getApiLifecycleHealthcheck.mockResolvedValue("OK")
       const res = await request(app).get("/api/health/authlete").expect(200)
       expect(res.body.healthy).toBe(true)
+      expect(res.body.statusCode).toBe(200)
+    })
+
+    it("returns 502 with the upstream status when Authlete is unhealthy", async () => {
+      const { AuthleteError } = await import("@authlete/typescript-sdk/models/errors")
+      mockApi.lifecycle.getApiLifecycleHealthcheck.mockRejectedValue(
+        new AuthleteError("HTTP 503", {
+          response: new Response("Service Unavailable", { status: 503 }),
+          request: new Request("https://authlete.example.com/api/lifecycle/healthcheck"),
+          body: "Service Unavailable",
+        }),
+      )
+      const res = await request(app).get("/api/health/authlete").expect(502)
+      expect(res.body.healthy).toBe(false)
+      expect(res.body.statusCode).toBe(503)
     })
   })
 })

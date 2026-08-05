@@ -34,11 +34,11 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (318 tests, 44 files)
+npm --prefix server run test              # unit + integration (344 tests, 46 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (287 tests, 43 files)
-npm --prefix server run test:integration  # integration tests only (31 tests)
+npm --prefix server run test:unit         # unit tests only (312 tests, 45 files)
+npm --prefix server run test:integration  # integration tests only (32 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (100 tests, requires real Authlete creds)
@@ -80,20 +80,20 @@ docker compose up -d prometheus grafana
 ## Testing architecture
 
 - **Vitest** runner, **Supertest** for HTTP integration tests
-- 16 Authlete-dependent services accept `authleteApi` as optional constructor param (defaults to real SDK client)
-- 3 services using raw `fetch()` (`health`, `backchannel-logout`, `metrics`) accept config as optional constructor param
+- 17 Authlete-dependent services accept `authleteApi` as optional constructor param (defaults to real SDK client)
+- 2 services using raw `fetch()` (`backchannel-logout`, `metrics`) accept config as optional constructor param. `health` used to be a third: SDK 1.0.0 exposes `lifecycle.getApiLifecycleHealthcheck()` for `GET /api/lifecycle/healthcheck`, so it now goes through the SDK like every other Authlete call. `backchannel-logout` still cannot — the SDK exposes no backchannel logout token API (re-verified against 1.0.0)
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 43 files across 5 categories (287 tests):
-  - `tests/unit/services/` — 21 files (86 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par)
-  - `tests/unit/controllers/` — 6 files (60 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device
-  - `tests/unit/middleware/` — 4 files (28 tests), error handler, session, audit-log, csrf
-  - `tests/unit/utils/` — 4 files (22 tests), createLocalJWT/jwksClient/validate/validation
-  - `tests/unit/routes/` — 2 files (24 tests), metrics routes + openapi routes
-- **Integration tests**: 1 file `tests/integration/routes.test.ts` (31 tests) — full Express stack with mocked SDK
+- **Unit tests**: 45 files across 5 categories (312 tests):
+  - `tests/unit/services/` — 24 files (107 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo)
+  - `tests/unit/controllers/` — 9 files (113 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci
+  - `tests/unit/middleware/` — 4 files (25 tests), error handler, session, audit-log, csrf
+  - `tests/unit/utils/` — 5 files (58 tests), createLocalJWT/jwksClient/properties/validate/validation
+  - `tests/unit/routes/` — 3 files (9 tests), fapi + metrics + openapi routes
+- **Integration tests**: 1 file `tests/integration/routes.test.ts` (32 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 318 tests across 44 files, completes in ~2s
+- Run with `npm --prefix server run test` — 344 tests across 46 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -117,7 +117,7 @@ docker compose up -d prometheus grafana
 - **Audit logging**: Winston daily-rotate-file logger at `logs/audit-*.log` (90-day retention). Captures `reqId`, method, path, status, duration, IP, user-agent, `user`, `clientId`. Records client identity from Basic auth headers. See `src/utils/audit-logger.ts` and `src/middleware/audit-log.ts`.
 - **Rate limiting**: `tokenLimiter` (20/min, skips Basic auth), `authLimiter` (60/min), `loginLimiter` (5/min), `generalLimiter` (60/min). See `src/middleware/rate-limit.ts`.
 - **Brute-force protection**: 5 failed logins/IP → 60s ban. In-memory Map, cleared on success. See `src/middleware/rate-limit.ts`.
-- **Health endpoints**: `GET /api/health` (server liveness — status, uptime, timestamp), `GET /api/health/authlete` (Authlete connectivity check, `?extended=true` for DB), `GET /api/health/all` (aggregate: redis + authlete). The client SDA polls `/api/health` every 30s for a live server-status indicator in the header. See `src/services/health.service.ts`, `client/src/hooks/useServerStatus.ts`.
+- **Health endpoints**: `GET /api/health` (server liveness — status, uptime, timestamp), `GET /api/health/authlete` (Authlete connectivity check, `?extended=true` for DB), `GET /api/health/all` (aggregate: redis + authlete). The client SDA polls `/api/health` every 30s for a live server-status indicator in the header. The Authlete check delegates to `authleteApi.lifecycle.getApiLifecycleHealthcheck()`, which resolves only on 200 and throws otherwise — a non-2xx is a health *result*, not a transport failure, so `AuthleteError.statusCode`/`.body` are reported (the admin UI renders `statusCode` as "HTTP n"); only a genuine network failure yields `error` with no status. See `src/services/health.service.ts`, `client/src/hooks/useServerStatus.ts`.
 - **Graceful shutdown**: `SIGTERM`/`SIGINT` handlers close Redis then HTTP server. See `src/server.ts`.
 - **OpenAPI spec**: `GET /api/openapi.json` — comprehensive 3.0.3 spec covering all endpoints. See `src/routes/openapi.routes.ts`.
 - **Persistent consent**: In-memory Map with 24h TTL (`src/services/consent-store.service.ts`). Scoped by `{clientId}:{subject}`. Auto-approves if stored scopes cover requested scopes; `prompt=consent` bypasses.
@@ -225,7 +225,7 @@ The token controller (`src/controllers/token.controller.ts`) handles every Authl
 
 - `server/tsconfig.json` uses `module: "node16"` + `moduleResolution: "node16"` — dynamic imports need `.js` extension
 - Build copies `public/` and `src/views/` into `dist/` via `postbuild` script (`rm -rf dist/views dist/public && cp -r src/views dist/views && cp -r public dist/public`). The destructive copy prevents nested `dist/views/views/` on subsequent rebuilds. If you rename/move these directories, update the script.
-- All Authlete API calls go through the SDK client in `src/services/authlete.service.ts` — do not add raw `fetch()` calls
+- All Authlete API calls go through the SDK client in `src/services/authlete.service.ts` — do not add raw `fetch()` calls. **`backchannel-logout.service.ts` is the sole remaining exception**, and only because the SDK exposes no backchannel logout token API (re-verified against 1.0.0). Before writing a `fetch()`, check the SDK first — `health.service.ts` carried one for `GET /api/lifecycle/healthcheck` until 1.0.0 added `lifecycle.getApiLifecycleHealthcheck()`
 - The `server/logs/` directory is gitignored (except `.gitkeep`)
 - **SDK is pinned to the exact version `@authlete/typescript-sdk@1.0.0` — no caret, and this is deliberate.** `1.1.5`/`1.1.6` are numerically *higher* but are **older code**: Speakeasy auto-versioning ran the package up to 1.1.6 in Nov 2025, upstream then restarted at `0.0.1-beta`, and on 2026-04-08 hand-set the version back to a stable `1.0.0` (commit *"Promote SDK to stable v1.0.0 and align Speakeasy config"*, `versioningStrategy: automatic` → `manual`), published 2026-04-09 as npm's `latest`. Widening this to `^1.0.0` resolves *up* to 1.1.6 and silently reintroduces three bugs — see `docs/DEVELOPMENT.md` → SDK Version Pin. A Dependabot `ignore` rule in `.github/dependabot.yml` blocks that "upgrade". **GitHub's releases page shows v1.1.6 as "Latest" — ignore it**: every later release is flagged `prerelease=true` and the Apr 2026 stable 1.0.0 got no GitHub release at all, so the badge is stale metadata, not currency.
 - The repo previously carried `patches/@authlete+typescript-sdk+1.1.6.patch` via `patch-package`. **It is gone, and must not come back** — all three of its fixes are native to 1.0.0 (verified against `openapi-spec`).

@@ -23,6 +23,7 @@ export interface MockAuthleteApi {
   revocation: { process: MockFn }
   service: { getConfiguration: MockFn; getJwks: MockFn }
   jwkSetEndpoint: { serviceJwksGetApi: MockFn }
+  lifecycle: { getApiLifecycleHealthcheck: MockFn }
   dynamicClientRegistration: { register: MockFn; get: MockFn; update: MockFn; delete: MockFn }
   ciba: { processAuthentication: MockFn; issue: MockFn; fail: MockFn; complete: MockFn }
   pushedAuthorization: { create: MockFn }
@@ -88,6 +89,7 @@ export function createMockAuthlete(overrides?: Partial<MockAuthleteApi>) {
     revocation: { process: fn() },
     service: { getConfiguration: fn(), getJwks: fn() },
     jwkSetEndpoint: { serviceJwksGetApi: fn() },
+    lifecycle: { getApiLifecycleHealthcheck: fn() },
     dynamicClientRegistration: {
       register: fn(),
       get: fn(),
