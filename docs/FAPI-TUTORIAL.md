@@ -212,8 +212,17 @@ All FAPI configuration happens in the [Authlete Console](https://console.authlet
 1. Log into [Authlete Console](https://console.authlete.com/)
 2. Select your Service
 3. Go to **Service Settings → Endpoints → Advanced → FAPI**
-4. Under **Supported Service Profiles**, check **FAPI2_SECURITY**
+4. Enable the **FAPI Profile** option, and select **FAPI2_SECURITY**
 5. Click **Save**
+
+> **UNVERIFIED — check both names in your console.** Authlete's
+> [FAPI 2.0 authorization-code-flow guide](https://developers.authlete.com/protocols-and-flows/compliance-profiles/authorization-code-flow-in-fapi-2-0-security-profile)
+> states the prerequisite as *"Supported Service Profiles"* needing to include **FAPI**, while this
+> server derives `mode` from `service.fapiModes` containing **`FAPI2_SECURITY`**
+> (`fapi.controller.ts:5-20`). Those are plausibly two separate settings that both need to be on, and
+> Authlete's [FAPI Basics](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-basics)
+> notes the static profile selection is *optional* when you drive compliance dynamically by scope
+> (Step 2). Do not treat either field name here as authoritative — confirm in the console.
 
 ### Step 2: Create a Scope with `fapi2=sp` Attribute
 
@@ -287,7 +296,7 @@ sequenceDiagram
     Note over Client: 2. Generate DPoP key pair<br/>(sender-constrained binding)
 
     Client->>AS: 3. POST /par<br/>(parameters + client_assertion + DPoP proof)
-    AS->>Authlete: 4. pushedAuthorization.process()
+    AS->>Authlete: 4. pushedAuthorization.create()
     Authlete->>AS: 5. request_uri
     AS->>Client: 6. 201 Created + request_uri
 
@@ -472,15 +481,40 @@ The React SPA includes a **FAPI 2.0 Security Profile** section that lets you run
 
 ### FAPI Tools
 
-**1. Fetch Config** — Shows live FAPI mode and DPoP status:
-- `mode`: `"sp"`, `"ms"`, or `"disabled"`
-- `dpopEnabled`: DPoP nonce is enabled
-- `requiredClientAuth`: always `"PRIVATE_KEY_JWT"` for FAPI configurations
-- `senderConstrainedTokens`: `"DPoP"` or `"none"`
+> ### ⚠️ Both reporting endpoints are currently broken
+>
+> `GET /api/fapi/config` and `GET /api/fapi/status` each return **HTTP 200 with an error body and a
+> stack trace** (verified 2026-08-06):
+>
+> ```json
+> {"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}
+> ```
+>
+> `authleteApi.service.get()` throws a schema-validation error before either handler can read a single
+> field, so **neither tool can report FAPI mode.** Note the status code: `200`. A monitor watching status
+> codes calls this endpoint healthy forever, and a dashboard rendering the JSON shows a stack trace.
+>
+> Read the FAPI settings directly in the Authlete Console until this is fixed.
+> `docs/curriculum/modules/10-fapi-and-grant-management/lab.md` Exercise 4 has the learner reproduce it.
 
-**2. Fetch Status** — Raw Authlete configuration including all flags
+**1. Fetch Config** — *intended* to show live FAPI mode and DPoP status:
+- `mode`: `"sp"`, `"ms"`, or `"disabled"` — derived from `service.fapiModes`
+- `dpopEnabled`: **this is `service.dpopNonceRequired`, not "is DPoP available"**. DPoP works without
+  nonces, so `dpopEnabled: false` does not mean DPoP is off
+- `requiredClientAuth` — **a hardcoded string** (`fapi.controller.ts:38`), not read from the service.
+  FAPI 2.0 SP permits `private_key_jwt` **or** `tls_client_auth`, so a deployment using mTLS would still
+  be told `PRIVATE_KEY_JWT`
+- `senderConstrainedTokens`: `"DPoP"` or `"none"` — derived from the same nonce flag, so it reports
+  `"none"` on a service that issues DPoP-bound tokens perfectly well
+- `parRequired`, `pkceRequired`, `scopeRequired`, `refreshTokenRotation` — **also hardcoded**
+  (`fapi.controller.ts:40-43`). `/api/fapi/status` reads the real `service.parRequired` /
+  `service.pkceRequired`; `/api/fapi/config` does not. When the two disagree, believe `status`
 
-**3. DPoP Key Utilities** — Standalone DPoP proof generation for testing with any endpoint
+**2. Fetch Status** — raw Authlete configuration. Unlike `config`, its fields *are* read from the
+service — which makes it the more trustworthy of the two, once it returns anything at all.
+
+**3. DPoP Key Utilities** — standalone DPoP proof generation for testing against any endpoint. This one
+works; it is pure client-side crypto and does not call the broken endpoints.
 
 ### FAPI 2.0 SP Test Flow Wizard
 
@@ -610,13 +644,33 @@ working route for bound tokens — the downgrade §7.2 exists to prevent.
 
 ## Part 7: Troubleshooting
 
+### `/api/fapi/config` or `/api/fapi/status` returns `Response validation failed`
+
+**This is the expected current behaviour, not your configuration.** Both endpoints return HTTP 200 with
+that error body because `authleteApi.service.get()` fails SDK response-schema validation before either
+handler runs. Nothing you change in the console will fix it. Read the FAPI settings in the Authlete
+Console directly.
+
+Because of this, the two entries below describe states you **cannot currently observe** through these
+endpoints. They are kept because they are the right diagnosis once the endpoints work.
+
 ### "FAPI mode shows disabled"
 
-Authlete service does not have FAPI enabled. Go to Authlete Console → **Service Settings → Endpoints → Advanced → FAPI** → enable `FAPI2_SECURITY`.
+Authlete service does not have FAPI enabled. Go to Authlete Console → **Service Settings → Endpoints →
+Advanced → FAPI** → enable the FAPI profile.
+
+`mode` is derived from `service.fapiModes` containing `FAPI2_SECURITY` (see `fapi.controller.ts:5-20`).
+**UNVERIFIED:** Authlete's FAPI 2.0 documentation phrases the prerequisite as *"Supported Service
+Profiles"* needing to include **FAPI**, while this server reads `fapiModes` for `FAPI2_SECURITY`. Those
+may be two separate settings that both need to be on. Check both in the console rather than trusting
+either name here.
 
 ### "dpopEnabled is false"
 
-Authlete has `dpopNonceRequired` set to `false`. Go to **Service Settings → Tokens and Claims → Advanced → DPoP Token** → set Require Nonce to `true`. Alternatively, DPoP works without nonces — the flag only controls nonce enforcement, not DPoP itself.
+`dpopEnabled` reports `service.dpopNonceRequired`, which is **not** the same question. DPoP works fine
+without nonces — the flag only controls nonce *enforcement*. So `dpopEnabled: false` and
+`senderConstrainedTokens: "none"` can both appear on a service that issues DPoP-bound tokens correctly.
+If you want nonces on: **Service Settings → Tokens and Claims → Advanced → DPoP Token** → Require Nonce.
 
 ### "FAPI mode shows sp but Authlete doesn't enforce FAPI rules"
 
@@ -690,3 +744,28 @@ FAPI 2.0 SP is a comprehensive security profile that layers multiple protections
 - [RFC 9449: DPoP](https://www.rfc-editor.org/rfc/rfc9449.html)
 - [RFC 7523: private_key_jwt](https://www.rfc-editor.org/rfc/rfc7523.html)
 - [RFC 9207: iss parameter](https://www.rfc-editor.org/rfc/rfc9207.html)
+
+**Vendor behavior — Authlete.** FAPI enforcement is Authlete's, not this server's, so these are the
+authority on what actually gets enforced. All verified 2026-08-06.
+
+- [FAPI Basics](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-basics) —
+  where the FAPI profile setting lives, and static versus dynamic (scope-driven) application
+- [How to Use the FAPI Feature](https://developers.authlete.com/protocols-and-flows/compliance-profiles/how-to-use-fapi-feature)
+  — **the key document.** FAPI is *not* applied service-wide: *"Authlete determines whether the FAPI
+  feature is enabled for a request based on these runtime parameters. Even if your service and client
+  configurations satisfy the FAPI requirements, the feature will not be activated if the request
+  parameters are misconfigured."* For **FAPI 1.0** the scope attribute is `fapi` with value `r` or `rw`
+- [Validation in FAPI Mode](https://developers.authlete.com/protocols-and-flows/compliance-profiles/validation-in-fapi-mode)
+  — what Authlete rejects once FAPI mode is active
+- [FAPI Basics Supplement: integration with reference implementations](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-basics-supplement-integration-with-reference-implementations)
+- [FAPI 2.0](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-2-0) — the two
+  FAPI 2.0 profiles, Security and Message Signing
+- [Authorization Code Flow in FAPI 2.0 Security Profile](https://developers.authlete.com/protocols-and-flows/compliance-profiles/authorization-code-flow-in-fapi-2-0-security-profile)
+  — confirms the **`fapi2` = `sp`** scope attribute this tutorial's Part 3 Step 2 relies on, and that
+  `PRIVATE_KEY_JWT` is required at *both* the PAR and token endpoints. Sender-constraining may be
+  satisfied by **mTLS or DPoP**
+- [FAPI 2.0 Message Signing: Signing Authorization Requests](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-2-0-message-signing-profile-signing-authorization-requests)
+
+> **Note on FAPI 1.0 vs 2.0 scope attributes.** They are different keys, and mixing them up silently
+> disables enforcement: FAPI 1.0 uses `fapi` = `r` / `rw`; FAPI 2.0 Security Profile uses
+> `fapi2` = `sp`. This tutorial covers FAPI 2.0 only.
