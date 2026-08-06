@@ -221,7 +221,7 @@ a one-line change to token issuance outweighs a large one anywhere else.
 
 | Concern | Files |
 |---------|-------|
-| Token issuance | `services/token.service.ts`, `controllers/token.controller.ts`, `services/token.operations.service.ts`, `controllers/token.management.controller.ts` |
+| Token issuance | `services/token.service.ts`, `controllers/token.controller.ts`, `services/token.operations.service.ts`, `controllers/token.management.controller.ts`, `controllers/token-exchange-response.handler.ts` |
 | Client authentication | `utils/basic-auth.ts`, `services/par.service.ts`, `middleware/require-basic-auth.ts` |
 | DPoP / proof-of-possession | `utils/dpop.ts`, `client/src/services/dpop.service.ts` |
 | Authorization & consent | `services/authorization.service.ts`, `controllers/authorization.controller.ts`, `controllers/session.controller.ts` (ACR / `auth_time` binding), `utils/validate.ts` |
@@ -239,6 +239,27 @@ Two rules learned the hard way:
   `Authorization` header interacts with body credentials.
 - **A change described in an earlier plan's follow-up section is not an approved change.** A
   follow-up note is a pointer to work, not a reviewed design.
+
+### Deliberate defects — do not "fix" these without updating the curriculum
+
+Some behaviour in this repo is **intentionally wrong** because a module teaches it. Fixing it silently
+breaks a lab, and nothing in the build or test suites will tell you: labs are prose. This already
+happened once — pinning the SDK to 1.0.0 fixed a schema bug that Module 06's gate was built on, and the
+gate had to be rebuilt.
+
+| File | Deliberate gap | Taught by | Locked by |
+|------|----------------|-----------|-----------|
+| `controllers/token-exchange-response.handler.ts:29-34` | Drops `resources`, `audiences`, `actorToken`, `requestedTokenType`; passes no lifetime. So `resource`/`audience` do not audience-restrict, `actor_token` downgrades delegation to impersonation, and tokens live 24h | Module 06 Exercise 6b | `tests/unit/controllers/token-exchange-response.handler.test.ts` |
+| same, response at `:48-55` | Omits `issued_token_type` (RFC 8693 §2.2.1 **REQUIRED**); emits non-spec `client_id`/`subject` | Module 06 Exercise 6a | same |
+| same, `:27` | `result.subject \|\| subjectToken` puts a live access token in an identity field when Authlete resolves no subject | Module 06 Exercise 6c | same |
+
+The characterization test asserts the current behaviour and names the docs to update, so a change fails
+loudly instead of rotting a lab. If you change any of these on purpose, update Module 06's lab and
+quiz-answers, `docs/TOKEN-EXCHANGE-TUTORIAL.md` (Part 12 and Parts 7/9/11), and the `PROGRESS.md` Build
+Log.
+
+**After any change to server behaviour**, grep the curriculum for the symptom you changed —
+`grep -rn "<the error string>" docs/curriculum/modules` — before assuming nothing else is affected.
 
 ## DPoP & Client Auth
 
