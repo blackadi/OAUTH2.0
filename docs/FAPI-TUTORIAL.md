@@ -494,6 +494,28 @@ The React SPA includes a **FAPI 2.0 Security Profile** section that lets you run
 > field, so **neither tool can report FAPI mode.** Note the status code: `200`. A monitor watching status
 > codes calls this endpoint healthy forever, and a dashboard rendering the JSON shows a stack trace.
 >
+> **Root cause — one unrecognised enum member.** Authlete returns 129 fields; the SDK rejects all of
+> them over one value:
+>
+> ```
+> Authlete returns:  supportedTokenAuthMethods[8] = "SPIFFE_JWT"
+> SDK 1.0.0 accepts: NONE, CLIENT_SECRET_BASIC, CLIENT_SECRET_POST, CLIENT_SECRET_JWT,
+>                    PRIVATE_KEY_JWT, TLS_CLIENT_AUTH, SELF_SIGNED_TLS_CLIENT_AUTH,
+>                    ATTEST_JWT_CLIENT_AUTH        ← SPIFFE_JWT is not a member
+> ```
+>
+> `ClientAuthMethod` is a **strict** Zod enum, so an unknown member fails the whole response. Nothing is
+> wrong with your service: `SPIFFE_JWT` is a legitimate Authlete setting that this SDK version does not
+> know about. The fragility is general — every new client-auth method Authlete ships breaks
+> `service.get()` for any TypeScript SDK caller whose service enables it.
+>
+> **Two ways out.** Remove `SPIFFE_JWT` from the service's supported token auth methods (if you are not
+> using it), or wait for an SDK release that knows the member. Do not reach for a `patch-package` patch —
+> see `docs/DEVELOPMENT.md` → SDK Version Pin for why that road is closed here.
+>
+> Blast radius is exactly two call sites, both in `fapi.controller.ts`; nothing else in the server calls
+> `service.get()`.
+>
 > Read the FAPI settings directly in the Authlete Console until this is fixed.
 > `docs/curriculum/modules/10-fapi-and-grant-management/lab.md` Exercise 4 has the learner reproduce it.
 
@@ -646,10 +668,15 @@ working route for bound tokens — the downgrade §7.2 exists to prevent.
 
 ### `/api/fapi/config` or `/api/fapi/status` returns `Response validation failed`
 
-**This is the expected current behaviour, not your configuration.** Both endpoints return HTTP 200 with
-that error body because `authleteApi.service.get()` fails SDK response-schema validation before either
-handler runs. Nothing you change in the console will fix it. Read the FAPI settings in the Authlete
-Console directly.
+**This is the expected current behaviour, not a mistake in your FAPI setup.** Both endpoints return HTTP
+200 with that error body because `authleteApi.service.get()` fails SDK response-schema validation: the
+service lists `SPIFFE_JWT` in `supportedTokenAuthMethods`, and SDK 1.0.0's strict `ClientAuthMethod` enum
+does not include it, so Zod rejects the entire 129-field response. Full detail in
+[Part 5](#fapi-tools).
+
+The one thing you *can* change: if you are not using SPIFFE client authentication, removing `SPIFFE_JWT`
+from the service's supported token auth methods makes the response parse and both endpoints work again.
+Otherwise read the FAPI settings in the Authlete Console directly until the SDK knows the member.
 
 Because of this, the two entries below describe states you **cannot currently observe** through these
 endpoints. They are kept because they are the right diagnosis once the endpoints work.
