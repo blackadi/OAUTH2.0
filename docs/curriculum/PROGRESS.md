@@ -90,6 +90,46 @@ against it before calling the capstone complete._
 - [x] **STAGE 4 COMPLETE — the curriculum is finished.**
 - [x] **2026-08-04 — Module 05's Tier-3 finding fixed in the server; Exercise 5 rewritten** (below)
 - [x] **2026-08-04 — signed JAR unblocked; Module 05 Exercise 2 rewritten around it** (below)
+- [x] **2026-08-06 — the SDK 1.0.0 pin fixed Module 06's gate premise; Exercise 6 rebuilt** (below)
+
+### 2026-08-06 — the SDK pin fixed the defect Module 06's gate was built on; Exercise 6 rebuilt
+
+**Why this matters to a future session:** the server is a moving target under the curriculum. Fixing a defect
+can invalidate an exercise that was *correct when written*, and nothing in the build or test suites will tell
+you — the labs are prose, so a stale lab is silent.
+
+Pinning `@authlete/typescript-sdk` to `1.0.0` fixed the `subjectTokenInfo.scopes` schema mismatch (finding
+above). That defect was Exercise 6's opening step: *"6a — Exchange your user token. It fails."* It now returns
+`200` with a token, so the gate collapsed at step one, and 6b's whole "call Authlete yourself and find out
+whose fault it is" diagnosis went with it.
+
+**Re-verified before rewriting — all still reproduce (live and in source):**
+
+| Finding | Evidence, 2026-08-06 |
+|---|---|
+| Four parameters silently discarded | `actor_token`, `resource`, `audience`, `requested_token_type` → four identical 200s; root cause unchanged at `token-exchange-response.handler.ts:29-34` |
+| `issued_token_type` missing (RFC 8693 §2.2.1 REQUIRED) | absent from the response; built at `handler.ts:48-55`, which also adds non-spec `client_id`/`subject` |
+| A live credential in `subject` | `handler.ts:27` — `result.subject \|\| subjectToken`. Confirmed live: the returned `subject` is **byte-identical** to the subject token sent, and still `active` |
+| `resource` does not audience-restrict | introspection of the resulting token → no `aud` |
+
+**What changed.** Old 6a (the failure) and 6b (the Authlete-vs-SDK diagnosis and Zod reproducer) deleted. Old
+6c → **6a**, reframed: the exchange simply succeeds, and the response is read against RFC 8693 §2.2.1. Old 6d →
+**6b**, old 6e → **6c**, both unchanged in substance. Every `Lab 6c/6d/6e` reference in `quiz-answers.md`
+renumbered; the Verification-block checkbox for the dead step replaced. Exercise 2's stated purpose was
+*"you need a user token for Exercise 6"* — no longer true, since 6a deliberately exchanges the subject-less
+client-credentials token — so it now stands on the Exercise 1 contrast it was really teaching.
+
+Q14 (the staging-passed-for-the-wrong-reason scenario) was **kept and marked historical** rather than deleted:
+a quiz question may pose history, a lab may not, and its final insight is the most transferable thing in the
+module. Its answer carries a dated resolution note.
+
+**Checked and deliberately not changed:** Module 10's `Response validation failed` content is a *different*
+defect — `/api/fapi/config` and `/api/fapi/status`, both confirmed still returning `200` with a stack trace on
+1.0.0 — so Exercise 4's tail and Q12 stand. `AUDIT-PASS-A.md` got a one-line dated annotation only; it is an
+audit snapshot that was accurate when taken, and rewriting it would falsify the record.
+
+**Lesson for the next server change:** after touching server behaviour, grep the curriculum for the symptom
+you just changed. `grep -rn "<the error string>" docs/curriculum/modules` would have caught this in seconds.
 
 ### 2026-08-04 — the authorization endpoint rejected the canonical JAR shape; Exercise 2 now runs it
 
@@ -370,15 +410,22 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   token needs a session store queryable by `sub`/`sid`. Fixing the config alone would turn a no-op into a
   cross-RP forced-logout primitive.
 
-- **Token exchange is broken for any scoped subject token.** The SDK's `TokenResponse` schema types
-  `subjectTokenInfo.scopes` as `string[]`; Authlete returns `[{"name":"profile","defaultEntry":false}]`. Zod
-  rejects the response inside `tokenProcess`, so the controller never runs and the client gets
-  `{"error":"Bad Request","message":"Response validation failed"}` plus a stack trace — not an OAuth error at
-  all. Verified three ways during the Module 06 build: the failure with a scoped subject token; a direct call
-  to Authlete's `/auth/token` with identical parameters returning `[A311001] … processed successfully`; and a
-  standalone `TokenResponse$inboundSchema.safeParse` reproducing the exact Zod issue. A **scopeless** subject
-  token succeeds, which is why any smoke test built on a bare `client_credentials` token passes. Likely needs
-  a `patches/` entry alongside the existing `clientCreate.js` patch.
+- ~~**Token exchange is broken for any scoped subject token.**~~ **RESOLVED 2026-08-06.** The SDK's
+  `TokenResponse` schema typed `subjectTokenInfo.scopes` as `string[]`; Authlete returns
+  `[{"name":"profile","defaultEntry":false}]`. Zod rejected the response inside `tokenProcess`, so the
+  controller never ran and the client got `{"error":"Bad Request","message":"Response validation failed"}`
+  plus a stack trace — not an OAuth error at all. Verified three ways during the Module 06 build: the failure
+  with a scoped subject token; a direct call to Authlete's `/auth/token` with identical parameters returning
+  `[A311001] … processed successfully`; and a standalone `TokenResponse$inboundSchema.safeParse` reproducing
+  the exact Zod issue. A **scopeless** subject token succeeded, which is why any smoke test built on a bare
+  `client_credentials` token passed.
+  **Fixed by pinning the SDK to `1.0.0`** (`e122a5b`), where `TokenInfo.scopes` is `Array<Scope>`. Confirmed
+  two ways on 2026-08-06: the recorded Authlete payload now parses through 1.0.0's schema, and a live exchange
+  with a scoped subject token returns `200` with `scope: profile`. The earlier remediation note — *"needs a
+  `patches/` entry alongside the existing `clientCreate.js` patch"* — is obsolete twice over: `patches/` and
+  `patch-package` are gone, and the `clientCreate` 201 fix is native to 1.0.0. See `docs/DEVELOPMENT.md` →
+  **SDK Version Pin**. **Curriculum impact:** this was Module 06 Exercise 6's entry point; the gate was
+  rebuilt around the three findings that still reproduce (see the Build Log entry for 2026-08-06).
 - **The token-exchange handler discards four request parameters.**
   `token-exchange-response.handler.ts:29-34` builds its `token.create` request from exactly `grantType`,
   `clientId`, `scopes`, `subject`. Verified live: `actor_token`, `resource`, `audience`, and
@@ -983,6 +1030,8 @@ SPA's four Admin sections now return 401 until they are set — locally and in R
   either to the consent page or straight to the callback; both paths were observed. The lab tells the learner
   to read `AUTHLETE_BEARER_TOKEN` from `server/.env` for Exercise 6b — necessary to prove the fault is in the
   SDK and not Authlete, and the only lab in the curriculum that touches the management API.
+  **Superseded 2026-08-06:** that sub-exercise was removed with the SDK fix, so no lab reads
+  `AUTHLETE_BEARER_TOKEN` or touches the management API any more, and the redaction concern it carried is gone.
 
 ### Module 05 — done / verified / uncertain
 

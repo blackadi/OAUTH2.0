@@ -302,7 +302,7 @@ claim I executed **reproduced as documented**.
 | Claim | Module | Result |
 |---|---|---|
 | PAR `request_uri` `expires_in` is exactly **600**, non-conformant with FAPI 2.0 §5.3.2.2 ("less than 600") | 10 Ex 3 | ✅ **Confirmed.** `expires_in = 600`. Spec wording verified verbatim: *"shall issue pushed authorization requests `request_uri` with `expires_in` values of less than 600 seconds"*. The `<` vs `<=` argument is correct. |
-| Token exchange fails for any subject token carrying a scope (SDK response-schema mismatch) | 06 / inventory | ✅ **Confirmed.** `ResponseValidationError: Response validation failed` from `@authlete/typescript-sdk` `matchers.ts:344`. |
+| Token exchange fails for any subject token carrying a scope (SDK response-schema mismatch) | 06 / inventory | ✅ **Confirmed** at audit time. `ResponseValidationError: Response validation failed` from `@authlete/typescript-sdk` `matchers.ts:344`. — **No longer reproduces as of 2026-08-06:** fixed by the SDK 1.0.0 pin; see PROGRESS.md. Row retained as the audit record. |
 | `alg:none` JWT bearer assertion rejected with `[A314310]` | 06 Ex | ✅ **Confirmed**, exact code and message: *"[A314310] The JWT specified by the 'assertion' request parameter is not signed."* |
 | OpenID Federation entity-configuration endpoint is broken | 09b | ✅ **Confirmed.** `/.well-known/openid-federation` → **HTTP 400**. |
 | Verifiable Credentials disabled; refusal code `A364301` | 09b | ✅ **Confirmed**, exact code: *"[A364301] Because the feature of Verifiable Credentials is not enabled on this service…"* |

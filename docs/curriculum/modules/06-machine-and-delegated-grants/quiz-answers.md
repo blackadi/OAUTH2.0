@@ -67,7 +67,7 @@ and the spec notes it "will typically not be issued" for an exchange.
 
 - **A** promotes two non-required parameters and omits the one implementations most often drop.
 - **C** makes `refresh_token` required — the opposite of the spec's guidance.
-- **D** is the assumption behind the bug you found in Lab 6c.
+- **D** is the assumption behind the bug you found in Lab 6a.
 
 ---
 
@@ -140,7 +140,7 @@ in most products is "no restriction." That is why Lab 3c works.
   violated in every dimension at once — scope, audience, lifetime — and worse, the violation is *invisible*,
   because nothing in the analytics service's logs indicates it was ever handed more authority than it needed.
 
-Credit for noting that 2 requires the AS to actually implement `act` — which, as Lab 6d showed, is not
+Credit for noting that 2 requires the AS to actually implement `act` — which, as Lab 6b showed, is not
 something to assume.
 
 ---
@@ -158,9 +158,9 @@ Same principle, three appearances in this module:
   requested by the client, the authorization server MUST include the 'scope' response parameter to inform the
   client of the actual scope granted."* Lab 1d: you asked for `openid profile`, got `scope: "profile"`, and
   the response was conformant precisely because it said so.
-- **Violated:** Lab 6c — `issued_token_type` absent, so a client that asked for an ID token cannot tell it
+- **Violated:** Lab 6a — `issued_token_type` absent, so a client that asked for an ID token cannot tell it
   received an access token.
-- **Violated, worse:** Lab 6d — `actor_token`, `resource`, and `audience` accepted and discarded with no
+- **Violated, worse:** Lab 6b — `actor_token`, `resource`, and `audience` accepted and discarded with no
   indication whatsoever. Here the response is not merely uninformative; it is *misleading*, because HTTP 200
   with no divergence reported means "you got what you asked for," and you did not.
 
@@ -235,7 +235,7 @@ credential can assert any subject.
 **Defect 1 — `result.subject || subjectToken` substitutes a credential for an identity.**
 
 When the AS resolves no subject — which is *correct* for a client-credentials subject token, since there is no
-user — the fallback writes the raw subject-token string into the subject field. You confirmed this in Lab 6e:
+user — the fallback writes the raw subject-token string into the subject field. You confirmed this in Lab 6c:
 the exchanged token's `sub` equals the subject token, and that value is still `active`.
 
 What an operator sees: subject values that look like random 43-character strings instead of usernames, showing
@@ -262,15 +262,23 @@ a source of four values rather than as the answer to a question.**
 
 **Q14 — SDK response-schema mismatch; it lives below the protocol layer; staging passed because its tokens had no scopes.**
 
+> **Resolved 2026-08-06.** This defect was real in this repo and is described in the past tense below. It was
+> fixed by pinning `@authlete/typescript-sdk` to `1.0.0`, which types `TokenInfo.scopes` as `Array<Scope>`
+> rather than `string[]` — see `docs/DEVELOPMENT.md` → **SDK Version Pin** for why 1.0.0 is *newer* than the
+> numerically higher 1.1.6. The question is retained because the reasoning it demands is the point, and the
+> final insight below is the most transferable thing in this module.
+
 Authlete returns `subjectTokenInfo.scopes` as an array of objects (`{"name":"profile","defaultEntry":false}`).
 The SDK's `TokenResponse` schema declares it as an array of strings. Zod rejects the response, the SDK throws
 `ResponseValidationError`, and the Express error handler converts it into a generic 400 — which is why the
 body is `{"error":"Bad Request","message":"Response validation failed"}` rather than any RFC 6749 §5.2 error
 code. The controller never runs, so `action: TOKEN_EXCHANGE` is never handled.
 
-The layer matters for the fix: nothing in the OAuth request or the Authlete configuration is wrong. Calling
-Authlete directly with identical parameters returns `[A311001] … processed successfully` (Lab 6b). The defect
-is in the client library between them.
+The layer matters for the fix: nothing in the OAuth request or the Authlete configuration was wrong. Calling
+Authlete directly with identical parameters returned `[A311001] … processed successfully` — which is how the
+fault was localised to the client library sitting between the two. That comparison is the move worth keeping:
+when a failure is not an OAuth error, call the upstream dependency yourself with the same inputs and see which
+side answers correctly.
 
 Staging passed because a subject token with an **empty** scope list produces an empty array, which satisfies
 `string[]` vacuously. Smoke tests that use a bare `client_credentials` token — the easiest token to obtain in
@@ -457,7 +465,7 @@ from Q16's outcome. They would need a valid user subject token to start a chain,
 may act for whom.
 
 **(iii) Read access to all logs.** Tokens must not be there. Bind with DPoP or mTLS so a logged token is
-useless without the key; log `sub` and the `act` chain but never token values; and — the lesson from Lab 6e —
+useless without the key; log `sub` and the `act` chain but never token values; and — the lesson from Lab 6c —
 ensure no code path can put a credential into an identifier field, because scrubbers keyed on field names will
 not catch it.
 

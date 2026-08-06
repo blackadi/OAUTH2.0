@@ -145,7 +145,8 @@ no principal whose authority the token could represent. The grant would issue a 
 
 ## Exercise 2 — Get a user token to work with
 
-You need a real user-backed access token for Exercise 6. Drive the authorization-code flow exactly as in
+Exercise 1 showed you a token with nobody in it. To know what that absence actually costs, you need the other
+half of the comparison: a token with a human behind it. Drive the authorization-code flow exactly as in
 [Module 02's lab](../02-oauth-core-and-threats/lab.md#exercise-1--drive-the-authorization-code-flow-leg-by-leg);
 this is the condensed version.
 
@@ -186,8 +187,12 @@ curl -s -X POST "$API/introspection/standard" -d "token=$USER_AT"
  "sub":"admin","iss":"https://…","auth_time":1785223980,"acr":"pwd"}
 ```
 
-`sub`, `auth_time`, `acr`. **This** is what a token with a human behind it looks like. Keep `$USER_AT` — it is
-the subject token in Exercise 6.
+`sub`, `auth_time`, `acr`. **This** is what a token with a human behind it looks like. Set it beside the
+introspection from 1b and the three missing claims are the whole difference between the two grants.
+
+Keep `$USER_AT`. Exercise 6 deliberately exchanges the *subject-less* client-credentials token instead —
+that is what makes the defect there visible — but you will want this one to hand to confirm for yourself that
+the same exchange behaves differently when Authlete can resolve a real subject.
 
 > **Why the `case` statement.** Depending on whether `consent-store.service.ts` already holds a consent for
 > this `{clientId}:{subject}` pair (24-hour TTL), the login leg either lands you on the consent page or
@@ -430,81 +435,9 @@ exercise pulls on.
 **Goal:** the module gate. You will find four request parameters silently discarded, one required response
 parameter missing, and a live credential in a `sub` claim.
 
-### 6a — Exchange your user token. It fails.
+### 6a — Exchange a token, and read the response against the spec
 
-```bash
-curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
-  -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
-  --data-urlencode "subject_token=$USER_AT" \
-  -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
-  -d "scope=profile" | head -c 200
-```
-
-```json
-{"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …
-```
-
-Not an OAuth error. `error: "Bad Request"` is not one of RFC 6749 §5.2's six codes, and there is a **stack
-trace** in the body. Something broke *inside* the server before it produced an OAuth response.
-
-Two things to take from the shape alone, before diagnosing: an error that is not an OAuth error means the
-failure is below the protocol layer, and a stack trace in a response body is an information disclosure.
-(`NODE_ENV=development` gates it — `errorHandler.ts:50` — so this particular leak should not reach production.
-Confirm that for yourself rather than trusting me.)
-
-### 6b — Ask Authlete directly, and find out whose fault it is
-
-The server delegates to Authlete. Call Authlete yourself with the same parameters and compare. You need your
-Authlete management credentials from `server/.env`:
-
-```bash
-AUTHLETE_BEARER_TOKEN=$(grep -m1 '^AUTHLETE_BEARER_TOKEN=' server/.env | cut -d= -f2-)
-AUTHLETE_BASE_URL=$(grep -m1 '^AUTHLETE_BASE_URL=' server/.env | cut -d= -f2-)
-AUTHLETE_SERVICE_ID=$(grep -m1 '^AUTHLETE_SERVICE_ID=' server/.env | cut -d= -f2-)
-
-P="grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange&subject_token=$USER_AT&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token&scope=profile"
-
-curl -s -X POST -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" -H "Content-Type: application/json" \
-  "$AUTHLETE_BASE_URL/api/$AUTHLETE_SERVICE_ID/auth/token" \
-  -d "{\"parameters\":\"$P\",\"clientId\":\"$CLIENT_ID\",\"clientSecret\":\"$CLIENT_SECRET\"}"
-```
-
-```json
-{"action":"TOKEN_EXCHANGE","grantType":"TOKEN_EXCHANGE","scopes":["profile"],
- "subjectTokenType":"ACCESS_TOKEN",
- "subjectTokenInfo":{"subject":"admin","scopes":[{"name":"profile","defaultEntry":false}],…},
- "resultCode":"A311001",
- "resultMessage":"[A311001] The token request (grant_type=…token-exchange) was processed successfully."}
-```
-
-**Authlete is fine.** `A311001`, processed successfully, and it correctly resolved `subject: admin`. The
-failure is in the SDK layer between Authlete and the controller.
-
-Look at `subjectTokenInfo.scopes`. Authlete returns an **array of objects** — `{"name": "profile",
-"defaultEntry": false}`. The SDK's response schema declares that field as an array of **strings**, so Zod
-rejects the response and the controller never runs. Confirm it yourself:
-
-```bash
-cd server && node -e '
-const {TokenResponse$inboundSchema} = require("@authlete/typescript-sdk/models/tokenresponse.js");
-const r = TokenResponse$inboundSchema.safeParse({
-  action:"TOKEN_EXCHANGE",
-  subjectTokenInfo:{ scopes:[{name:"profile",defaultEntry:false}] }
-});
-console.log(JSON.stringify(r.error.issues.filter(i=>i.path.includes("subjectTokenInfo")), null, 1));'
-```
-
-```json
-[{ "code": "invalid_type", "expected": "string", "received": "object",
-   "path": ["subjectTokenInfo","scopes",0], "message": "Expected string, received object" }]
-```
-
-**Finding, precisely stated:** token exchange fails for any subject token that carries at least one scope.
-It is an SDK response-schema mismatch, not a protocol error, and it is invisible from the OAuth surface.
-
-### 6c — Confirm the diagnosis by removing the scope
-
-If the theory is right, a subject token with **no** scopes will pass validation. Test it:
+Mint a client-credentials token to use as the subject token, then exchange it:
 
 ```bash
 CC0=$(curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" -d "grant_type=client_credentials" \
@@ -521,7 +454,12 @@ curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
  "scope":"","client_id":…,"subject":"EXAMPLE-subject-token-value"}
 ```
 
-Theory confirmed. Now hold this response up against RFC 8693 §2.2.1:
+**200, and a token.** Nothing in the OAuth surface complains, which is the point of this exercise: everything
+you are about to find is invisible from a green response. A scoped subject token works identically — that has
+not always been true here, and the reason is worth knowing once you have finished the module
+(`docs/DEVELOPMENT.md` → **SDK Version Pin**; the same story sits behind Q14).
+
+Now hold this response up against RFC 8693 §2.2.1:
 
 | §2.2.1 | Status | Present? |
 |---|---|---|
@@ -534,7 +472,7 @@ Theory confirmed. Now hold this response up against RFC 8693 §2.2.1:
 
 Two non-standard fields added; one required field dropped. That is the answer to Exercise 5, question 4.
 
-### 6d — The four silent discards
+### 6b — The four silent discards
 
 Send every optional parameter that should change the outcome. Predict each one first.
 
@@ -601,9 +539,9 @@ One root cause explains all four. `token-exchange-response.handler.ts:29-34` bui
 from exactly four fields — `grantType`, `clientId`, `scopes`, `subject` — and throws away everything else
 Authlete resolved. Read those six lines; the whole table above follows from them.
 
-### 6e — Find the credential in the identity field
+### 6c — Find the credential in the identity field
 
-Look again at the response in 6c. The `subject` field looked like a random string. Compare it to your subject
+Look again at the response in 6a. The `subject` field looked like a random string. Compare it to your subject
 token:
 
 ```bash
@@ -744,8 +682,8 @@ You have completed this lab when every line is true, checked against your own ou
 - [ ] All five assertion breaks returned `invalid_grant`, and you can say which two were rejected by the repo
       rather than by Authlete, and how you can tell from the message alone.
 - [ ] A valid `client_assertion` was refused because the client's auth method is pinned.
-- [ ] A scoped subject token failed token exchange with a non-OAuth error; a scopeless one succeeded; and you
-      located the schema mismatch that explains both.
+- [ ] Token exchange returned HTTP 200 with a usable token, and you can name what that response omits, what
+      it adds that RFC 8693 does not define, and why neither is visible from the status code.
 - [ ] `actor_token`, `resource`, `audience`, and `requested_token_type` all produced identical 200 responses,
       and the `resource` token had no `aud`.
 - [ ] The success response is missing `issued_token_type`, and you can quote its status in RFC 8693 §2.2.1.
@@ -756,7 +694,7 @@ You have completed this lab when every line is true, checked against your own ou
 
 ```bash
 rm -f /tmp/mkassert.mjs "$CJ"
-unset CC CC0 AC AT NEW SUB USER_AT ASSERTION CA AUTHLETE_BEARER_TOKEN
+unset CC CC0 AC AT NEW SUB USER_AT ASSERTION CA
 ```
 
 The tokens you minted in Exercise 3 have `sub` values for users who do not exist and 24-hour lifetimes. Revoke

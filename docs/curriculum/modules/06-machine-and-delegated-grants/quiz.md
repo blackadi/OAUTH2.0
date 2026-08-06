@@ -103,9 +103,13 @@ const req = { grantType: "TOKEN_EXCHANGE", clientId, scopes, subject };
 Two separate defects are visible in these two lines. Name both, and for each say what an operator would see
 in production.
 
-**Q14.** A client integrating token exchange reports: *"Exchange works in our staging smoke test but fails in
+**Q14.** *(Historical. This was a live defect in this repo until 2026-08-06, when pinning the SDK to 1.0.0
+fixed it — see `docs/DEVELOPMENT.md` → **SDK Version Pin**. The lab no longer reproduces it, so reason from
+the scenario as stated rather than from the running server.)*
+
+A client integrating token exchange reports: *"Exchange works in our staging smoke test but fails in
 production with a 400 that isn't an OAuth error. The only difference is that production tokens have scopes."*
-Given what you found in the lab, state the root cause, the layer it lives in, and why the staging test passed.
+State the root cause, the layer it lives in, and why the staging test passed.
 
 **Q15.** A service exchanges tokens for downstream calls and logs every issued token's subject to its
 observability pipeline for per-user metrics. Six months later a security review finds live access tokens in
