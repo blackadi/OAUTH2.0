@@ -212,6 +212,34 @@ The token controller (`src/controllers/token.controller.ts`) handles every Authl
 | `ID_TOKEN_REISSUABLE` | Reissue ID token during refresh flow → `token.issue()` |
 | `default` | 500 (logged as unknown action) |
 
+## Security-critical surfaces
+
+Changes here decide whether a token is issued, to whom, and on what proof. A wrong edit is a
+security bug, not a rendering glitch — and because this repo teaches OAuth, it also propagates
+into other people's mental models. Treat these as review-before-edit, **regardless of diff size**:
+a one-line change to token issuance outweighs a large one anywhere else.
+
+| Concern | Files |
+|---------|-------|
+| Token issuance | `services/token.service.ts`, `controllers/token.controller.ts`, `services/token.operations.service.ts`, `controllers/token.management.controller.ts` |
+| Client authentication | `utils/basic-auth.ts`, `services/par.service.ts`, `middleware/require-basic-auth.ts` |
+| DPoP / proof-of-possession | `utils/dpop.ts`, `client/src/services/dpop.service.ts` |
+| Authorization & consent | `services/authorization.service.ts`, `controllers/authorization.controller.ts`, `controllers/session.controller.ts` (ACR / `auth_time` binding), `utils/validate.ts` |
+| Token presentation & introspection | `services/userinfo.service.ts`, `services/introspection.service.ts`, `controllers/introspection.controller.ts` |
+| Access control | `middleware/require-grant-ownership.ts`, `middleware/csrf.ts` |
+
+Paths are under `server/src/` unless noted. **Not** on this list, despite living in the same
+directories: `metrics`, `health`, `discovery`, `jwks`, `federation`, `vci`, `hsk` — ordinary changes
+there need no special ceremony.
+
+Two rules learned the hard way:
+
+- **Size is not the trigger; the concern is.** Judging by diff size is how a "3-line cleanup" to
+  `token.service.ts` turned out to change three behaviours, one of which altered how a malformed
+  `Authorization` header interacts with body credentials.
+- **A change described in an earlier plan's follow-up section is not an approved change.** A
+  follow-up note is a pointer to work, not a reviewed design.
+
 ## DPoP & Client Auth
 
 - **DPoP proof signature format**: For ES256, the JWS signature must be raw IEEE P1363 R||S concatenation (64 bytes for P-256), **not** DER-encoded. The `crypto.subtle.sign()` returns raw R||S natively. Using DER encoding causes `"invalid_dpop_proof: Signed JWT rejected: Invalid signature"`. See `client/src/services/dpop.service.ts:95-101`.

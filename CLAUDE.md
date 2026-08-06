@@ -8,8 +8,14 @@ changes, edit `AGENTS.md`, not this file.
 
 ### Working style
 
-- Use plan mode for changes under `server/src/controllers/`, `server/src/services/`, and anything
-  touching client authentication, token issuance, or DPoP proof validation.
+- Use plan mode for any change to a file listed under **Security-critical surfaces** in `AGENTS.md`.
+  The trigger is the concern, not the diff size — a one-line change to token issuance needs a plan;
+  a large refactor of `metrics.service.ts` does not. The only exemption is a semantics-free edit
+  (renaming a local, comment typo, import path after a file move, formatting). If a change reveals
+  mid-edit that behaviour *does* shift, stop and plan rather than finishing and explaining after.
+  A change described in an earlier plan's follow-up section is **not** pre-approved.
+  Keep the ceremony proportionate: a short plan stating what changes, what behaviour shifts and how
+  it is verified is enough for a small change — the point is the review checkpoint, not paperwork.
 - Run `npm --prefix server run typecheck && npm --prefix server run lint && npm --prefix server run test`
   before proposing a commit. All three must be clean.
 - Do not run `npm --prefix server run test:e2e` unless I ask — it consumes real Authlete API quota
