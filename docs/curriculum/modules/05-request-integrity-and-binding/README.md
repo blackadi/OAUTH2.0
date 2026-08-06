@@ -240,7 +240,7 @@ on ecosystem and infrastructure, not on strength alone.
 
 | Read | For |
 |---|---|
-| [`docs/PAR-TUTORIAL.md`](../../../PAR-TUTORIAL.md) | The PAR endpoint end to end as this server implements it, including the `client_secret`-inside-`parameters` quirk |
+| [`docs/PAR-TUTORIAL.md`](../../../PAR-TUTORIAL.md) | The PAR endpoint end to end as this server implements it, including its two client-authentication channels — `Authorization: Basic` versus credentials inside `parameters` — and why sending the wrong one for a client's registered method is a 401 |
 | [`docs/FAPI-TUTORIAL.md`](../../../FAPI-TUTORIAL.md) — the DPoP sections | DPoP proof construction, the nonce flow, and the repo's DPoP key tools |
 
 **The delta this module adds:** both tutorials show you how to *use* the mechanisms. Neither explains why the

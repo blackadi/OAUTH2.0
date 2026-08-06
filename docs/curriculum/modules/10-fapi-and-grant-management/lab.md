@@ -174,10 +174,13 @@ evidenced from configuration; requires an empirical test or vendor documentation
 
 > **Note on `client_secret_basic` and PAR.** If you push a PAR request for the *confidential* client with its
 > secret inside the `parameters` string, you get `[A157357] The client identifier is not found at the expected
-> location`. That is not a FAPI finding — it is client-auth-method pinning (Module 06), because this client is
-> registered `CLIENT_SECRET_BASIC` and the repo's PAR service sends credentials the `CLIENT_SECRET_POST` way.
-> The exercise above uses the public client to isolate the number being measured. Keeping those two causes
-> apart is the skill.
+> location`. That is not a FAPI finding — it is client-auth-method pinning (Module 06). This client is
+> registered `CLIENT_SECRET_BASIC`, and credentials placed inside `parameters` are the `CLIENT_SECRET_POST`
+> channel, so Authlete refuses to look for them there. Send them as an `Authorization: Basic` header instead
+> and the same push succeeds: `/api/par` selects the channel from how *you* presented the credentials and
+> passes them to Authlete accordingly. The error is Authlete enforcing the client's registered method, not a
+> limitation of this server. The exercise above uses the public client to isolate the number being measured.
+> Keeping those two causes apart is the skill.
 
 ---
 
