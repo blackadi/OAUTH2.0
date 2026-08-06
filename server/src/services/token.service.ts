@@ -11,6 +11,7 @@ import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 import { parseProperties } from "../utils/properties";
+import { parseBasicAuth } from "../utils/basic-auth";
 
 export class TokenService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -27,10 +28,10 @@ export class TokenService {
     let clientId = (req.body.clientId ?? bodyClientId) as string | undefined;
     let clientSecret = (req.body.clientSecret ?? bodyClientSecret) as string | undefined;
 
-    const { authorization } = req.headers;
-    if (authorization?.startsWith("Basic ")) {
-      const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-      [clientId, clientSecret] = credentials.split(":");
+    const basic = parseBasicAuth(req.headers.authorization);
+    if (basic) {
+      clientId = basic.clientId;
+      clientSecret = basic.clientSecret;
       log("TokenService: decoded Basic auth", { clientId });
     }
 
