@@ -25,7 +25,7 @@ This material is substantially more accurate than teaching material of this size
 be precise about that rather than reassuring. Of roughly 45 specification identifiers and section pointers I
 checked against primary sources, the great majority were correct including several that looked wrong until I
 fetched the document. Three suspected defects dissolved on direct verification (recorded below as
-[near misses](#near-misses)), which is itself evidence the curriculum's own verification pass was real.
+[near misses](#near-misses--suspected-defects-that-dissolved-on-verification)), which is itself evidence the curriculum's own verification pass was real.
 
 The defects that survive cluster in one place: **status and section-pointer hygiene in
 `SPEC-INVENTORY.md` and Module 00**, not in the teaching. The eighteen classic failure modes you asked

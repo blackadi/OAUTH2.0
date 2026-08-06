@@ -589,5 +589,7 @@ JWT Bearer Grant is simple:
 ## References
 
 - [RFC 7523: JWT Bearer Assertion Grant](https://www.rfc-editor.org/rfc/rfc7523.html)
-- [Authlete KB: JWT Bearer Grant](https://www.authlete.com/kb/jwt-bearer-grant/)
+- [Authlete: JWT Authorization Grant (RFC 7523 §2.1)](https://www.authlete.com/developers/jwt_authorization_grant/)
+  — vendor documentation, including which RFC 7523 validation steps Authlete performs so the
+  authorization server can omit them
 - [OpenID Connect Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess)

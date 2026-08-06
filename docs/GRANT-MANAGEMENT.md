@@ -550,5 +550,8 @@ Grant Management is simple:
 ## References
 
 - [Grant Management for OAuth 2.0](https://openid.net/specs/oauth-v2-grant-management.html)
-- [FAPI 2.0 Security Profile](https://openid.net/specs/openid-financial-api-2_0.html)
-- [Authlete KB: Grant Management](https://www.authlete.com/kb/grant-management/)
+- [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html) — OpenID
+  Foundation **Final Specification**
+- [Authlete: Grant Management for OAuth 2.0](https://www.authlete.com/developers/grant_management/) —
+  vendor documentation for the `/api/gm` API, the `grant_management_action` / `grant_id` parameters, and
+  the `grant_management_action_required` service setting

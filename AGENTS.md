@@ -261,11 +261,34 @@ Log.
 **After any change to server behaviour**, grep the curriculum for the symptom you changed —
 `grep -rn "<the error string>" docs/curriculum/modules` — before assuming nothing else is affected.
 
+### Documentation drift check
+
+```bash
+node scripts/check-docs.mjs           # offline: source refs, relative links, anchors. CI runs this on every push
+node scripts/check-docs.mjs --links   # also fetches external URLs. CI runs this weekly, not per-push
+```
+
+Covers 104 markdown files. It catches the mechanically detectable drift only — `file.ts:NNN` references
+past the end of the file, broken relative links, anchors matching no heading, and dead external links.
+
+Two design decisions worth keeping:
+
+- **External links are checked on a schedule, not per push.** A third party moving a page is not a
+  reason to fail somebody's pull request.
+- **Only markdown links (`[text](url)`) are fetched, never bare URLs.** A bare URL in a table or code
+  block is *data* — an `iss` value, a sample redirect, a placeholder host — not a reference anyone
+  follows. Narrowing to links removed 20 of 20 false positives on the first run. Reserved TLDs
+  (`.example`, `.invalid`, `.test`, `.internal`) are skipped per RFC 6761/6762.
+
+**A hit is a symptom, not the bug.** The `TOKEN-EXCHANGE-TUTORIAL.md` audit started with one 404 and
+found wrong line numbers, fabricated test-coverage claims, and prose contradicting the curriculum behind
+it. When this script reports something, check whether the surrounding claim is still true.
+
 ## DPoP & Client Auth
 
-- **DPoP proof signature format**: For ES256, the JWS signature must be raw IEEE P1363 R||S concatenation (64 bytes for P-256), **not** DER-encoded. The `crypto.subtle.sign()` returns raw R||S natively. Using DER encoding causes `"invalid_dpop_proof: Signed JWT rejected: Invalid signature"`. See `client/src/services/dpop.service.ts:95-101`.
-- **DPoP proof `ath` claim (not `sub`)**: Per RFC 9449 §4.3, when a DPoP proof is used with an access token (resource access), the payload MUST contain `ath` (base64url-encoded SHA-256 hash of the access token), **not** `sub`. Using `sub` causes the server to reject the proof or ignore the binding. The `computeAth()` function computes the hash correctly. See `client/src/services/dpop.service.ts:81-83`.
-- **DPoP proof JWT header**: Per RFC 9449 §2.1, the JOSE header MUST include the `jwk` member with the public key. The `kid` parameter alone is insufficient. Without `jwk`, Authlete returns `"The DPoP header did not include a public key in JWK format."`. See `client/src/services/dpop.service.ts:89`.
+- **DPoP proof signature format**: For ES256, the JWS signature must be raw IEEE P1363 R||S concatenation (64 bytes for P-256), **not** DER-encoded. The `crypto.subtle.sign()` returns raw R||S natively. Using DER encoding causes `"invalid_dpop_proof: Signed JWT rejected: Invalid signature"`. See `client/src/services/dpop.service.ts:76-84` — the `crypto.subtle.sign()` call and the `rawSignature` conversion that follows it.
+- **DPoP proof `ath` claim (not `sub`)**: Per RFC 9449 §4.3, when a DPoP proof is used with an access token (resource access), the payload MUST contain `ath` (base64url-encoded SHA-256 hash of the access token), **not** `sub`. Using `sub` causes the server to reject the proof or ignore the binding. The `computeAth()` function computes the hash correctly; the proof body sets it at `client/src/services/dpop.service.ts:59-61` (`if (ath) payload.ath = ath`).
+- **DPoP proof JWT header**: Per RFC 9449 §2.1, the JOSE header MUST include the `jwk` member with the public key. The `kid` parameter alone is insufficient. Without `jwk`, Authlete returns `"The DPoP header did not include a public key in JWK format."`. See `client/src/services/dpop.service.ts:70` — the `const header = { typ, alg, jwk }` literal.
 - **Client auth for DCR confidential clients**: Authlete defaults DCR-created confidential clients to `CLIENT_SECRET_POST` even when the service's `supportedTokenAuthMethods` lists only `CLIENT_SECRET_BASIC`. Token exchange requests must send `client_id` and `client_secret` in the URL-encoded body, not as `Authorization: Basic`. Using Basic auth produces `"The client authentication method is 'client_secret_post' but the request does not include a client secret."`. The SPA callback must persist `client_secret` to `sessionStorage` before the auth redirect. See `client/src/pages/CallbackPage.tsx:72-90`, `client/src/components/auth/AuthFlowsSection.tsx:112`.
 - **PAR client authentication has two channels, and Authlete checks which one you used** (verified 2026-08-05 against a `CLIENT_SECRET_BASIC` client). `par.service.ts` picks the channel from how the caller presented the credentials and must never guess:
 

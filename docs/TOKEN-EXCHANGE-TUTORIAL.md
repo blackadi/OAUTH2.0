@@ -822,5 +822,6 @@ you need to know which one you are reading.
 - [Authlete KB: Service Settings](https://www.authlete.com/kb/operations/service-configuration/service-settings/)
   — console navigation for the settings in Part 5.
 
-> **Removed:** this page previously cited `https://www.authlete.com/kb/token-exchange/`, which returns
-> **HTTP 404**. The two Authlete links above are the live documentation.
+> **Removed:** this page previously cited `authlete.com/kb/token-exchange/` (scheme omitted deliberately
+> so the link checker does not re-flag it), which returns **HTTP 404**. The two Authlete links above are
+> the live documentation.

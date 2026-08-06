@@ -9,7 +9,7 @@
 - [Logout Flow](#logout-flow)
 - [CIBA Flow](#ciba-flow)
 - [Device Flow](#device-flow)
-- [Backchannel Logout](#backchannel-logout)
+- [Backchannel Logout](#backchannel-logout-server-initiated)
 - [Grant Management](#grant-management)
 - [Dynamic Client Registration](#dynamic-client-registration)
 - [Pushed Authorization Requests (PAR)](#pushed-authorization-requests)

@@ -682,7 +682,9 @@ FAPI 2.0 SP is a comprehensive security profile that layers multiple protections
 
 ## References
 
-- [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-2_0-03.html)
+- [FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html) — OpenID
+  Foundation **Final Specification**. (The old `fapi-2_0-03.html` link cited Draft 03 and is now dead;
+  the profile reached Final, so cite Final rather than a draft revision.)
 - [RFC 9126: PAR](https://www.rfc-editor.org/rfc/rfc9126.html)
 - [RFC 7636: PKCE](https://www.rfc-editor.org/rfc/rfc7636.html)
 - [RFC 9449: DPoP](https://www.rfc-editor.org/rfc/rfc9449.html)

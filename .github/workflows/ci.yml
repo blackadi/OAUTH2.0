@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly, Monday 06:00 UTC — only the external link check needs this. Documentation rots
+    # because somebody else's page moves, which no push of ours would ever notice.
+    - cron: "0 6 * * 1"
 
 jobs:
   server:
@@ -28,6 +32,25 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run test -- --run
+
+  # Documentation drift. Offline checks run on every push; external links only on the weekly
+  # schedule, because a third party's 404 is not a reason to fail somebody's pull request.
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check docs (offline — source refs, relative links, anchors)
+        run: node scripts/check-docs.mjs
+
+      - name: Check external links
+        if: github.event_name == 'schedule'
+        run: node scripts/check-docs.mjs --links
 
   client:
     runs-on: ubuntu-latest

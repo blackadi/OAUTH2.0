@@ -589,4 +589,7 @@ CIBA is simple:
 - [CIBA Core 1.0](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html)
 - [Authlete: How to Implement CIBA](https://developers.authlete.com/guides/flows-and-protocols/grant-types-and-token-flows/how-to-implement-ciba-with-authlete) — Service and client configuration details
 - [Authlete: Configuring Client Authentication](https://developers.authlete.com/configuration-reference/endpoints/configuring-client-authentication.md) — CLIENT_SECRET_BASIC vs CLIENT_SECRET_POST
-- [FAPI-CIBA Profile](https://openid.net/specs/fapi-1_0-final.html#client-initiated-backchannel-authentication-profile)
+- [Financial-grade API: Client Initiated Backchannel Authentication Profile](https://openid.net/specs/openid-financial-api-ciba.html)
+  — OpenID Foundation **Implementer's Draft** (Draft-02). FAPI-CIBA is a **standalone profile**, not a
+  section of FAPI 1.0; the previous link pointed at an anchor inside `fapi-1_0-final.html` that does not
+  exist. Note the profile permits only confidential clients and forbids **push** mode.
