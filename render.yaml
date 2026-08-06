@@ -10,8 +10,6 @@ services:
         sync: false
       - key: JWT_ISSUER
         sync: false
-      - key: JWT_SELF_SIGNED_CERT_PEM
-        sync: false
       - key: JWT_PRIVATE_KEY_PEM
         sync: false
       - key: JWT_PUBLIC_KEY_PEM
