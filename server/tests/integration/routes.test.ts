@@ -401,15 +401,44 @@ describe("Integration: all API routes", () => {
         fapiModes: ["FAPI2_SECURITY"],
         dpopNonceRequired: true,
         clientIdMetadataDocumentSupported: true,
+        supportedTokenAuthMethods: ["PRIVATE_KEY_JWT"],
+        tlsClientCertificateBoundAccessTokens: true,
+        parRequired: true,
+        pkceRequired: true,
+        refreshTokenKept: true,
+        scopeRequired: true,
       })
       const res = await request(app).get("/api/fapi/config").expect(200)
       expect(res.body.mode).toBe("sp")
       expect(res.body.dpopEnabled).toBe(true)
-      expect(res.body.requiredClientAuth).toBe("PRIVATE_KEY_JWT")
+      expect(res.body.supportedTokenAuthMethods).toEqual(["PRIVATE_KEY_JWT"])
+      expect(res.body.certificateBoundAccessTokens).toBe(true)
       expect(res.body.parRequired).toBe(true)
       expect(res.body.pkceRequired).toBe(true)
+      expect(res.body.refreshTokenRotation).toBe(false)
       expect(res.body.scopeRequired).toBe(true)
       expect(res.body.cimdSupported).toBe(true)
+    })
+
+    // FAPI2-W1: these values are read from the service, never asserted. Same route, unhardened service.
+    it("reports the unhardened posture without asserting a hardened one", async () => {
+      mockApi.service.get.mockResolvedValue({
+        fapiModes: [],
+        dpopNonceRequired: false,
+        supportedTokenAuthMethods: ["NONE", "CLIENT_SECRET_BASIC"],
+        tlsClientCertificateBoundAccessTokens: false,
+        parRequired: false,
+        pkceRequired: false,
+        refreshTokenKept: false,
+        scopeRequired: false,
+      })
+      const res = await request(app).get("/api/fapi/config").expect(200)
+      expect(res.body.mode).toBe("disabled")
+      expect(res.body.parRequired).toBe(false)
+      expect(res.body.pkceRequired).toBe(false)
+      expect(res.body.scopeRequired).toBe(false)
+      expect(res.body.refreshTokenRotation).toBe(true)
+      expect(res.body).not.toHaveProperty("requiredClientAuth")
     })
   })
 

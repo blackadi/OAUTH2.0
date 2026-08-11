@@ -754,10 +754,10 @@ const docs: Record<string, Record<string, OpDoc>> = {
   'fapi': {
     'config': {
       title: 'FAPI 2.0 Configuration',
-      description: 'Displays the current FAPI 2.0 Security Profile configuration on the server. Shows whether FAPI mode (Security Profile only, or +Message Signing) is enabled, whether DPoP sender-constrained tokens are active, and what security requirements are enforced (PAR required, PKCE required, scope required, refresh token rotation disabled).',
+      description: 'Displays this deployment\'s actual FAPI 2.0 posture, read from the live Authlete service. Shows whether FAPI mode (Security Profile only, or +Message Signing) is enabled, which client authentication methods the service permits, and which requirements are genuinely enforced — PAR, PKCE, scope, and whether refresh tokens are rotated.',
       params: [],
-      returns: 'JSON with mode ("disabled", "sp", "ms"), dpopEnabled (boolean), requiredClientAuth ("PRIVATE_KEY_JWT"), senderConstrainedTokens ("DPoP" or "none"), parRequired, pkceRequired, refreshTokenRotation, scopeRequired, and specs describing which FAPI profiles are active.',
-      tips: 'The server reads FAPI mode and DPoP settings dynamically from the Authlete API (authleteApi.service.get()). The mode "sp" enables FAPI 2.0 Security Profile; "ms" adds Message Signing (JARM + signed request objects with nbf). Configure FAPI modes in the Authlete console.',
+      returns: 'JSON with mode ("disabled", "sp", "ms"), dpopEnabled (boolean), supportedTokenAuthMethods (array), certificateBoundAccessTokens (boolean), parRequired, pkceRequired, refreshTokenRotation, scopeRequired, cimdSupported, and specs describing which FAPI profiles are active.',
+      tips: 'Every field is read from authleteApi.service.get() — none is hardcoded, so a "false" here means the control really is off. Two traps worth knowing: dpopEnabled is the service\'s dpopNonceRequired flag, not "is DPoP available" (DPoP works fine without nonces); and refreshTokenRotation inverts refreshTokenKept, because a refresh token that is kept is one that is not rotated. Configure FAPI modes in the Authlete console.',
     },
     'status': {
       title: 'FAPI Status (Live Authlete Config)',

@@ -91,6 +91,75 @@ against it before calling the capstone complete._
 - [x] **2026-08-04 — Module 05's Tier-3 finding fixed in the server; Exercise 5 rewritten** (below)
 - [x] **2026-08-04 — signed JAR unblocked; Module 05 Exercise 2 rewritten around it** (below)
 - [x] **2026-08-06 — the SDK 1.0.0 pin fixed Module 06's gate premise; Exercise 6 rebuilt** (below)
+- [x] **2026-08-10 — RFC conformance audit (Phases 0–2 + Phase 3a); two exploitable S1s fixed; Module 08 Ex 6b rewritten** (below)
+
+### 2026-08-11 — Phase 3 complete, and the two Tier-0 fixes that report honestly
+
+**Why this matters to a future session:** the audit's **Phase 3 is done** — batches 3a, 3b, 3c and 3d are
+all in `audit/03-curriculum-audit.md`, and `audit/RESUME.md` §8 is written as the Phase 4 brief. Headline:
+across ~31,500 lines the curriculum produced **0×S1 and 0×S2**; the nine tutorials under `docs/` produced
+**6×S2**. Same subject matter, same deployment — the curriculum marks what was run versus what was
+reasoned, and the tutorials never did (`CUR-3c-W1`, the highest-leverage item in Phase 3).
+
+Two Tier-0 findings shipped ahead of Gate 4 because both fix **false reporting** and neither depends on
+the `SPIFFE_JWT` decision:
+
+- **EH-W1 — `middleware/errorHandler.ts` served failures as HTTP 200.** It derived the status from the
+  thrown error, and the SDK's `AuthleteError` subclasses carry the status of the response they were
+  *reading* — so a `200` whose body fails Zod validation arrived as `statusCode: 200` and was emitted
+  verbatim. A success status carrying an error body that called itself a Bad Request, across **all 57 SDK
+  call sites**. `errorStatusFrom()` now trusts an error-supplied status only inside 400–599; `AppError`
+  keeps its deliberate values. The sweep found the repo had already met this SDK behaviour once and
+  handled it locally (`jwks.controller.ts:17` catches `statusCode === 204`), and that
+  `health.service.ts:45-51` builds its own result and is untouched by the clamp.
+- **FAPI2-W1+ — `GET /api/fapi/config` asserted six controls it never read.** All six were the *opposite*
+  of the live configuration, on the endpoint whose job is to report that configuration. Now read from the
+  service. Two are not passthroughs: `supportedTokenAuthMethods` replaces the scalar `requiredClientAuth`
+  (client auth is pinned per client, and FAPI 2.0 permits mTLS *or* `private_key_jwt`), and
+  `refreshTokenRotation` is `refreshTokenKept === false` — a kept refresh token is one that is *not*
+  rotated.
+
+**Module 10 Exercise 4 was reframed, not retired**, per `ERRORHANDLER-STATUS-INVERSION.md` F-2: the
+endpoints still fail (the enum gap is untouched), so the exercise now separates *two defects with one
+visible symptom* — the one that made the failure silent, and the one that makes it fail. The old 200 is
+kept as a dated historical transcript, the pattern Module 05 uses for the UserInfo `Bearer`-prefix bug.
+**Dropping `SPIFFE_JWT` is still what would retire the exercise.** 514 tests (was 504).
+
+### 2026-08-10 — the conformance audit, and the two S1 fixes it forced early
+
+**Why this matters to a future session:** the audit lives in `audit/` and is resumable from
+`audit/RESUME.md` — read that before touching it. Phases 0–2 are complete (**55 per-spec findings** in
+`audit/02-findings/`, 8×S1 · 20×S2 · 17×S3 · 11×S4). Phase 3 batch 3a (Modules 00–03) is in
+`audit/03-curriculum-audit.md`; batches 3b/3c are re-scoped by risk in `RESUME.md` §4. **Do not re-probe
+Authlete or re-fetch the ~45 specifications listed in `RESUME.md` §2.3.**
+
+Two of the eight S1 findings were exploitable in a deployed instance, so they were fixed ahead of the
+remediation plan rather than waiting for Gate 4:
+
+1. **The logout open redirect** — see the (now struck-through) entry in the findings register below. `startsWith`
+   → parse-and-compare-origins, 14 regression tests.
+2. **`POST /api/device/complete` was reachable in every environment** with no auth, no limiter and no gate,
+   approving any live `userCode` as any `subject`. Now development-only via the new
+   `middleware/development-only.ts` (the same 404 shape `createLocalToken` already used), plus a new
+   `deviceCodeLimiter` (5/min) on both user-code paths sized against RFC 8628 §5.1's own worked example.
+   `generalLimiter` added to `/api/device/authorization`, which had none. Gate asserted in the new
+   `tests/unit/routes/device.routes.test.ts`.
+
+**Curriculum consequence, and the pattern to remember:** fixing #1 changed **Module 08 Exercise 6b's
+transcript** — two of five rows flipped from `302` to `200`. The exercise was **rewritten around the fix**, not
+deleted: it now shows the old code, explains why prefix matching accepted an attacker's host as a subdomain
+label and as userinfo, shows the parse-then-compare replacement, and points at the one row that *still*
+redirects in dev. Same treatment Module 05 Exercise 5 got in August. Module 08's README and verification block
+were updated to match.
+
+`AGENTS.md` gained a Quirks entry for the origin-matching rule, a corrected device-flow security note, two new
+rows in **Security-critical surfaces** (`logout.service.ts`/`logout.controller.ts`; `device.routes.ts`/
+`development-only.ts` — the audit found the list did not cover either), and refreshed test counts, which were
+already stale by ~21 tests before this change (now 504 across 53 files).
+
+**Still open on the logout path, deliberately:** `id_token_hint` is decoded but never verified, and there is no
+§2 confirmation step. Both are queued (`RPL-W2`, `RPL-W3`). **`RPL-W2` must land before any client registers a
+`backchannel_logout_uri`** — an unverified hint plus a live delivery target is a remote forced-logout primitive.
 
 ### 2026-08-06 — the SDK pin fixed the defect Module 06's gate was built on; Exercise 6 rebuilt
 
@@ -391,14 +460,22 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   `prompt=none` request never reaches, because the AS answers it with `NO_INTERACTION`. Dead code that reads
   as a feature. Not exploitable; breaks every client that relies on silent renewal, in a way the client cannot
   classify.
-- **The logout endpoint is an open redirect, and it survives production.**
-  `logout.service.ts` validates `post_logout_redirect_uri` with two `startsWith` prefix checks. Verified live:
-  `http://localhost:3000.evil.example.com/bye` and `http://localhost:3001@evil.example.com/` both get a **302
-  to the attacker's host**. The middle clause is gated on `NODE_ENV !== "production"`, but the
-  `allowedOrigins.some(o => uri.startsWith(o))` clause is not — so with `ALLOWED_ORIGINS=https://app.example.com`,
-  `https://app.example.com.evil.net/` still passes. **Do not file as dev-only.** RFC 9700 §2.1 forbids
-  exactly this. Note the contrast: the *authorization* endpoint gets exact matching right (400, no `Location`).
-  Fix is one line — exact comparison against a registered set.
+- **~~The logout endpoint is an open redirect, and it survives production.~~ ✅ FIXED 2026-08-10.**
+  `logout.service.ts` validated `post_logout_redirect_uri` with two `startsWith` prefix checks. Verified live:
+  `http://localhost:3000.evil.example.com/bye` and `http://localhost:3001@evil.example.com/` both got a **302
+  to the attacker's host**. The middle clause was gated on `NODE_ENV !== "production"`, but the
+  `allowedOrigins.some(o => uri.startsWith(o))` clause was not — so with `ALLOWED_ORIGINS=https://app.example.com`,
+  `https://app.example.com.evil.net/` also passed. RFC 9700 §2.1 forbids exactly this. Note the contrast: the
+  *authorization* endpoint got exact matching right all along (400, no `Location`).
+  **Fix:** `isAllowedPostLogoutRedirectUri` (same file) now parses the value with `new URL()` and compares
+  **origins exactly** — `LOGOUT_REDIRECT_URI` by full-URI equality, `ALLOWED_ORIGINS` entries by origin, plus a
+  non-production `hostname === "localhost"` clause so the labs keep working. Unparseable values and non-http(s)
+  schemes are refused; `new URL()` *throws* on the first payload and returns a foreign origin for the second.
+  14 regression tests in `tests/unit/services/logout.service.test.ts`. Module 08 Exercise 6b was rewritten
+  around the fix rather than deleted — it now teaches the defect, the parse-don't-prefix rule, and the row that
+  still redirects in dev. **Still open, and deliberately:** RP-Initiated Logout §3 wants exact matching against
+  per-client **registered** `post_logout_redirect_uris`, and no client registers any, so the allowlist remains
+  environment-driven. Recorded in `audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` (work items RPL-W2/W3/W4).
 - **Back-channel logout receipt cannot work, and misreports why.** `JWKS_URI` is unset, so
   `logout.controller.ts:45` throws and the `catch` returns `{"error":"invalid_request","error_description":
   "Invalid logout token"}` — blaming the caller's input for a server configuration problem. Confirmed against

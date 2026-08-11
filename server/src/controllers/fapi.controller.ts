@@ -27,20 +27,37 @@ export const fapiController = {
       });
 
       const mode = computeFapiMode(service.fapiModes);
+      // `dpopEnabled` is `dpopNonceRequired`, NOT "is DPoP available". DPoP works without nonces, so
+      // `dpopEnabled: false` does not mean DPoP is off. Whether DPoP is *required* is per-client
+      // (`dpopRequired`) and is out of this endpoint's reach — see FAPI2-W4.
       const dpopEnabled = service.dpopNonceRequired ?? false;
       const cimdSupported =
         (service as Record<string, unknown>)
           .clientIdMetadataDocumentSupported === true;
 
+      // Every field below is read from the live service. This endpoint reports the deployment's own
+      // security posture, so it must never assert a control it has not checked — six of these values
+      // used to be hardcoded, and all six were the opposite of the live configuration.
+      //
+      // Two are not straight passthroughs:
+      //   * `supportedTokenAuthMethods` replaces a hardcoded `requiredClientAuth: "PRIVATE_KEY_JWT"`.
+      //     Client authentication is pinned per client (`tokenAuthMethod`), so a scalar "required
+      //     method" cannot be read from the service at all — which is why it was a constant. FAPI 2.0
+      //     §5.3.2.1 permits mTLS *or* private_key_jwt, so asserting one would misreport the other.
+      //   * `refreshTokenRotation` inverts `refreshTokenKept`: per the SDK, `refreshTokenKept: true`
+      //     means the refresh token survives use, i.e. it is NOT rotated. The console label ("Enable
+      //     Token Rotation") is the trap. `=== false` rather than `!` so an absent field reports
+      //     `false` instead of inventing rotation.
       res.json({
         mode,
         dpopEnabled,
-        requiredClientAuth: "PRIVATE_KEY_JWT",
-        senderConstrainedTokens: dpopEnabled ? "DPoP" : "none",
-        parRequired: true,
-        pkceRequired: true,
-        refreshTokenRotation: false,
-        scopeRequired: true,
+        supportedTokenAuthMethods: service.supportedTokenAuthMethods ?? [],
+        certificateBoundAccessTokens:
+          service.tlsClientCertificateBoundAccessTokens ?? false,
+        parRequired: service.parRequired ?? false,
+        pkceRequired: service.pkceRequired ?? false,
+        refreshTokenRotation: service.refreshTokenKept === false,
+        scopeRequired: service.scopeRequired ?? false,
         cimdSupported,
         specs: {
           securityProfile: "FAPI 2.0 Security Profile",

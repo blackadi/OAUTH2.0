@@ -1800,7 +1800,7 @@ const spec: Record<string, unknown> = {
     "/fapi/config": {
       get: {
         summary: "FAPI configuration",
-        description: "Returns the FAPI 2.0 configuration including supported algorithms, DPoP settings, signing parameters, and CIMD (Client ID Metadata Document) support status.",
+        description: "Returns the FAPI 2.0 posture of this deployment, read from the live Authlete service configuration. Every field is a value the server has actually checked — none is asserted.",
         responses: {
           "200": {
             description: "FAPI configuration",
@@ -1810,12 +1810,12 @@ const spec: Record<string, unknown> = {
                   type: "object",
                   properties: {
                     mode: { type: "string", enum: ["sp", "ms", "disabled"], description: "FAPI mode: sp=Security Profile, ms=Message Signing, disabled" },
-                    dpopEnabled: { type: "boolean", description: "Whether DPoP nonce requirement is enabled" },
-                    requiredClientAuth: { type: "string", description: "Required client authentication method" },
-                    senderConstrainedTokens: { type: "string", description: "Token binding method (DPoP or none)" },
+                    dpopEnabled: { type: "boolean", description: "The service's dpopNonceRequired flag. NOT 'is DPoP available' — DPoP works without nonces, so false does not mean DPoP is off." },
+                    supportedTokenAuthMethods: { type: "array", items: { type: "string" }, description: "Client authentication methods the service permits. FAPI 2.0 requires mTLS or private_key_jwt; which one a given client must use is pinned per client, so there is no service-level 'required' method." },
+                    certificateBoundAccessTokens: { type: "boolean", description: "The service's tlsClientCertificateBoundAccessTokens flag — mTLS sender-constraining. DPoP binding is a per-client setting and is not reported here." },
                     parRequired: { type: "boolean", description: "Whether PAR is required" },
                     pkceRequired: { type: "boolean", description: "Whether PKCE is required" },
-                    refreshTokenRotation: { type: "boolean", description: "Whether refresh token rotation is enabled" },
+                    refreshTokenRotation: { type: "boolean", description: "Whether refresh tokens are rotated. Derived as refreshTokenKept === false: a kept refresh token is one that survives use, i.e. is not rotated." },
                     scopeRequired: { type: "boolean", description: "Whether scope parameter is required" },
                     cimdSupported: { type: "boolean", description: "Whether OAuth Client ID Metadata Document (CIMD) is supported. When enabled, clients can use HTTPS URLs as client_id and Authlete auto-fetches metadata from that URL." },
                     specs: {

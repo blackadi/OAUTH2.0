@@ -483,18 +483,33 @@ The React SPA includes a **FAPI 2.0 Security Profile** section that lets you run
 
 > ### ⚠️ Both reporting endpoints are currently broken
 >
-> `GET /api/fapi/config` and `GET /api/fapi/status` each return **HTTP 200 with an error body and a
-> stack trace** (verified 2026-08-06):
+> `GET /api/fapi/config` and `GET /api/fapi/status` each return **HTTP 500 with an error body**:
 >
 > ```json
-> {"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}
+> {"error":"Internal Server Error","message":"Response validation failed"}
 > ```
 >
 > `authleteApi.service.get()` throws a schema-validation error before either handler can read a single
-> field, so **neither tool can report FAPI mode.** Note the status code: `200`. A monitor watching status
-> codes calls this endpoint healthy forever, and a dashboard rendering the JSON shows a stack trace.
+> field, so **neither tool can report FAPI mode.**
 >
-> **Root cause — one unrecognised enum member.** Authlete returns 129 fields; the SDK rejects all of
+> **This used to be an HTTP 200** (verified 2026-08-06, fixed 2026-08-11), and the 200 was a separate
+> defect worth understanding on its own:
+>
+> ```json
+> HTTP/1.1 200 OK
+> {"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}
+> ```
+>
+> A success status, carrying an error body, that calls itself a Bad Request. The cause was not the SDK:
+> `middleware/errorHandler.ts` derived the HTTP status from the thrown error, and the SDK's
+> `AuthleteError` subclasses set `statusCode` from the response they were *reading* — which for a `200`
+> whose body fails validation is `200`. A monitor watching status codes called this endpoint healthy
+> forever. The handler now trusts an error-supplied status only inside 400–599.
+>
+> **Two layers, two fixes, and only one of them is about `SPIFFE_JWT`.** The status inversion is fixed;
+> the enum gap below is not, which is why the endpoints still fail.
+>
+> **Root cause of the failure itself — one unrecognised enum member.** Authlete returns 129 fields; the SDK rejects all of
 > them over one value:
 >
 > ```
@@ -519,21 +534,28 @@ The React SPA includes a **FAPI 2.0 Security Profile** section that lets you run
 > Read the FAPI settings directly in the Authlete Console until this is fixed.
 > `docs/curriculum/modules/10-fapi-and-grant-management/lab.md` Exercise 4 has the learner reproduce it.
 
-**1. Fetch Config** — *intended* to show live FAPI mode and DPoP status:
+**1. Fetch Config** — shows live FAPI mode and the controls the service actually enforces:
 - `mode`: `"sp"`, `"ms"`, or `"disabled"` — derived from `service.fapiModes`
 - `dpopEnabled`: **this is `service.dpopNonceRequired`, not "is DPoP available"**. DPoP works without
   nonces, so `dpopEnabled: false` does not mean DPoP is off
-- `requiredClientAuth` — **a hardcoded string** (`fapi.controller.ts:38`), not read from the service.
-  FAPI 2.0 SP permits `private_key_jwt` **or** `tls_client_auth`, so a deployment using mTLS would still
-  be told `PRIVATE_KEY_JWT`
-- `senderConstrainedTokens`: `"DPoP"` or `"none"` — derived from the same nonce flag, so it reports
-  `"none"` on a service that issues DPoP-bound tokens perfectly well
-- `parRequired`, `pkceRequired`, `scopeRequired`, `refreshTokenRotation` — **also hardcoded**
-  (`fapi.controller.ts:40-43`). `/api/fapi/status` reads the real `service.parRequired` /
-  `service.pkceRequired`; `/api/fapi/config` does not. When the two disagree, believe `status`
+- `supportedTokenAuthMethods` — the methods the service permits. FAPI 2.0 SP requires `private_key_jwt`
+  **or** `tls_client_auth`, and *which* one a given client must use is pinned per client
+  (`tokenAuthMethod`), so there is no service-level "required method" to report
+- `certificateBoundAccessTokens` — `service.tlsClientCertificateBoundAccessTokens`, i.e. mTLS
+  sender-constraining. DPoP binding is a per-client setting and is not reported here
+- `parRequired`, `pkceRequired`, `scopeRequired`, `refreshTokenRotation` — all read from the service.
+  Note the last one inverts `refreshTokenKept`: a refresh token that is *kept* survives use, so it is
+  **not** rotated. The console label ("Enable Token Rotation") is the trap
 
-**2. Fetch Status** — raw Authlete configuration. Unlike `config`, its fields *are* read from the
-service — which makes it the more trustworthy of the two, once it returns anything at all.
+> **Until 2026-08-11, six of those fields were hardcoded** — `requiredClientAuth: "PRIVATE_KEY_JWT"`,
+> `senderConstrainedTokens` derived from the nonce flag, and `parRequired` / `pkceRequired` /
+> `scopeRequired` / `refreshTokenRotation` as constants — and every one was the **opposite** of this
+> deployment's live configuration. An endpoint whose entire job is to report a security posture was
+> answering from constants. Worth keeping in mind as a shape: *a status page that cannot fail is not
+> reporting anything.*
+
+**2. Fetch Status** — raw Authlete configuration. Both endpoints now read from the service, so they no
+longer disagree; `status` remains the fuller view.
 
 **3. DPoP Key Utilities** — standalone DPoP proof generation for testing against any endpoint. This one
 works; it is pure client-side crypto and does not call the broken endpoints.
