@@ -93,6 +93,41 @@ against it before calling the capstone complete._
 - [x] **2026-08-06 — the SDK 1.0.0 pin fixed Module 06's gate premise; Exercise 6 rebuilt** (below)
 - [x] **2026-08-10 — RFC conformance audit (Phases 0–2 + Phase 3a); two exploitable S1s fixed; Module 08 Ex 6b rewritten** (below)
 - [x] **2026-08-11 — Gate 4 approved; Phase 5 began. T0-1: the token and revocation endpoints stopped logging request bodies** (below)
+- [x] **2026-08-11 — T0-5 + T0-6 (audit hygiene, 21 drifted citations); T0-2: `id_token_hint` is verified, not decoded** (below)
+
+### 2026-08-11 — T0-2: `id_token_hint` became a signed assertion again, and BCL-W5 is unblocked
+
+**Why this matters to a future session:** **a client may now register a `backchannel_logout_uri`.** That was
+gated on `RPL-W2`, and `RPL-W2` is done.
+
+`logout.service.ts` used `jwt.decode` on `id_token_hint` and took `payload.sub` as the End-User — and that
+subject drives back-channel logout delivery. So anyone could hand-craft an **unsigned** JWT naming any subject
+and call `GET /api/logout?backchannel=true&id_token_hint=<forged>` to force that user out of every RP with a
+registered logout URI. It was inert only because no client had registered one; registering the first would have
+turned it into a remote forced-logout primitive. RP-Initiated Logout §2 defines the hint as an *"ID Token
+previously issued by the OP"* — an assertion, whose value is its signature.
+
+The verifier is a **pure** function, `utils/verify-id-token-hint.ts`, so all 21 of its branches are testable
+without network or SDK access. Five decisions in it are worth knowing:
+
+- **Keys come from Authlete's service JWKS, not `JWKS_URI`** — that env var is unset here (it is the root of
+  BCL-W3), so reusing it would have broken the feature for an unrelated reason.
+- **The expected `iss` comes from live discovery, not `JWT_ISSUER`** — which is also unset, and using it would
+  have silently disabled the `iss` check. Both are cached for five minutes.
+- **Algorithms are pinned to the nine asymmetric ones `jsonwebtoken@9` supports.** `alg: none` and the `HS*`
+  family are refused. **Consequence:** client `1523514379` signs ID tokens with `HS256` (probe 2 §7), which is
+  symmetric, so *its* hints are now ignored. Logout still works for its users via the session cookie. The real
+  fix is moving that client to `ES256` — one console field, adjacent to T1-5.
+- **`exp` is deliberately not enforced.** A hint is an old token by definition — sessions here last 30 minutes.
+  The signature is what proves the OP issued it. Reported as `hintExpired` in the log. *`UNVERIFIED`: whether
+  §2 says anything explicit about expired hints was not checked against the primary source.*
+- **`aud` is pinned only when `client_id` is supplied**, because §2 makes `client_id` OPTIONAL.
+
+**Failure is never an error to the caller**: the session is still destroyed, the cookie cleared, the redirect
+validated. There is simply no subject, so nothing is delivered.
+
+**Verified by reintroducing the bug** — restoring the trust-the-payload behaviour fails 4 of the new service
+tests, including the forged `alg: none` case. **553 tests (was 526), 55 files.**
 
 ### 2026-08-11 — Phase 5 began, and the first thing it closed was a credential leak
 
@@ -189,9 +224,11 @@ rows in **Security-critical surfaces** (`logout.service.ts`/`logout.controller.t
 `development-only.ts` — the audit found the list did not cover either), and refreshed test counts, which were
 already stale by ~21 tests before this change (now 504 across 53 files).
 
-**Still open on the logout path, deliberately:** `id_token_hint` is decoded but never verified, and there is no
-§2 confirmation step. Both are queued (`RPL-W2`, `RPL-W3`). **`RPL-W2` must land before any client registers a
-`backchannel_logout_uri`** — an unverified hint plus a live delivery target is a remote forced-logout primitive.
+**Still open on the logout path, deliberately:** ~~`id_token_hint` is decoded but never verified~~ — **`RPL-W2`
+shipped 2026-08-11 as T0-2**, so the hint is now verified against the OP's JWKS with `iss` and `aud`; an
+unverifiable hint yields no subject and delivers nothing. **This unblocks `BCL-W5`: a client may now register a
+`backchannel_logout_uri`.** What remains is the §2 confirmation step (`RPL-W3`, queued as T0-3) and §3's
+per-client registered-URI matching (`RPL-W1`, queued as T0-4).
 
 ### 2026-08-06 — the SDK pin fixed the defect Module 06's gate was built on; Exercise 6 rebuilt
 

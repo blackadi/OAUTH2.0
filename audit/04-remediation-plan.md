@@ -54,7 +54,7 @@ against its Phase 2 entry — **two entries still describe pre-fix code in their
 | # | Entry | Phase 2 | Working tree, 2026-08-11 | Entry accurate? |
 |---|---|---|---|---|
 | 1 | [`RFC8628-device-authorization-grant.md`](02-findings/RFC8628-device-authorization-grant.md) | S1 | **Downgraded.** `POST /api/device/complete` gated by `developmentOnly` + `deviceCodeLimiter` (`server/src/routes/device.routes.ts:27`); `/verification` and `POST /device` carry `deviceCodeLimiter` (`:26`, `:31`). **8628-W1 ✅ and 8628-W2 ✅** | ❌ **stale** — header still reads S1, work items still read "close this" |
-| 2 | [`OIDC-RP-INITIATED-LOGOUT-1.0.md`](02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md) | S1 | **Downgraded.** `isAllowedPostLogoutRedirectUri` (`server/src/services/logout.service.ts:33-70`) parses with `new URL()` and compares origins exactly; both verified payloads refused; malformed allowlist entries dropped rather than widening | ❌ **stale** — header still reads S1 |
+| 2 | [`OIDC-RP-INITIATED-LOGOUT-1.0.md`](02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md) | S1 | **Downgraded.** `isAllowedPostLogoutRedirectUri` (`server/src/services/logout.service.ts:90-127`) parses with `new URL()` and compares origins exactly; both verified payloads refused; malformed allowlist entries dropped rather than widening. **Also 2026-08-11 (T0-2): `id_token_hint` is verified, not decoded** (`utils/verify-id-token-hint.ts`), which closes F-3 and **unblocks BCL-W5**. Remaining: RPL-W1 (T0-4), RPL-W3 (T0-3), RPL-W4, RPL-W5 | ✅ banner + severity revised S1→S2 (fixed 2026-08-11) |
 | 3 | [`ERRORHANDLER-STATUS-INVERSION.md`](02-findings/ERRORHANDLER-STATUS-INVERSION.md) | S1 | **Closed.** `errorStatusFrom()` (`server/src/middleware/errorHandler.ts:25-33`) trusts a supplied status only inside 400–599. **All five items EH-W1…W5 ✅** | ✅ banner + severity revised S1→S3 |
 | 4 | [`FAPI-2.0-SECURITY-PROFILE.md`](02-findings/FAPI-2.0-SECURITY-PROFILE.md) | S1 | **Partially remediated.** All six posture fields read live (`server/src/controllers/fapi.controller.ts:51-64`). **FAPI2-W1 ✅, FAPI2-W2 ✅**; W3/W4/W5/W6 open | ✅ banner + severity revised S1→S2 |
 | 5 | [`RFC7662-token-introspection.md`](02-findings/RFC7662-token-introspection.md) | S1 | **OPEN — and worse than the entry.** `server/src/routes/introspection.routes.ts:7-8` carries **no middleware at all**: no authentication, no rate limiter. New corroboration: discovery advertises `introspection_endpoint_auth_methods_supported: []` | ✅ |
@@ -87,11 +87,13 @@ curriculum grep — **not** a reason to leave it open, and the plan does not.
 | Shipped | Items closed | Evidence |
 |---|---|---|
 | 2026-08-10 | **8628-W1, 8628-W2** (device approval oracle + rate limits) | `server/src/routes/device.routes.ts:25-32`, `server/tests/unit/routes/device.routes.test.ts` |
-| 2026-08-10 | The logout open redirect (**not RPL-W1** — see §6.3) | `server/src/services/logout.service.ts:33-70` |
+| 2026-08-10 | The logout open redirect (**not RPL-W1** — see §6.3) | `server/src/services/logout.service.ts:90-127` |
 | 2026-08-10 | Three of four `AGENTS.md` surface additions | `AGENTS.md:225`, `AGENTS.md:230` |
-| 2026-08-11 | **EH-W1, EH-W2, EH-W3, EH-W4, EH-W5** — all five | `server/src/middleware/errorHandler.ts:25-33`; `AGENTS.md:357-359`; Module 10 Ex 4 reframed |
+| 2026-08-11 | **EH-W1, EH-W2, EH-W3, EH-W4, EH-W5** — all five | `server/src/middleware/errorHandler.ts:25-33`; `AGENTS.md:358-360`; Module 10 Ex 4 reframed |
 | 2026-08-11 | **FAPI2-W1, FAPI2-W2** (widened from five literals to six fields) | `server/src/controllers/fapi.controller.ts:51-64` |
 | 2026-08-11 | **9700-W1, 9700-W2** — **T0-1, the first Phase 5 action.** Request-body logging stopped at both sites | `server/src/services/token.service.ts:57-60`, `server/src/services/revocation.service.ts:64-67`, `server/tests/unit/services/credential-logging.test.ts`; `AGENTS.md:363` |
+| 2026-08-11 | **T0-5, T0-6** — the MCP opening sentence, both stale entries banner-ed, and 21 drifted citations re-anchored | `docs/MCP-OAUTH-TUTORIAL.md:3`; the two entry banners; §6.3 |
+| 2026-08-11 | **RPL-W2** — **T0-2.** `id_token_hint` verified rather than decoded; **BCL-W5 unblocked** | `server/src/utils/verify-id-token-hint.ts`, `server/src/services/logout.service.ts:159`, `server/tests/unit/utils/verify-id-token-hint.test.ts` |
 
 **EH-W5's sweep, re-run independently here, agrees and adds one item.** The clamp covers every path that
 reaches the global handler. Four sites derive a status from a caught error locally and therefore bypass it:
@@ -571,7 +573,7 @@ and both shipped 2026-08-11; **this is what remains.**
 | # | Action | Items | Notes |
 |---|---|---|---|
 | **T0-1** | ✅ **SHIPPED 2026-08-11.** **Stop logging request bodies.** Remove `body: parameters` from `server/src/services/token.service.ts:59` and `server/src/services/revocation.service.ts:66`; match `introspection.service.ts`'s length-only pattern. Add a spy-logger test asserting no captured message contains `client_secret`, `password`, `code_verifier`, `refresh_token`, `assertion`, `subject_token` or `actor_token` | 9700-W1 ✅, 9700-W2 ✅ | 📋 Planned under plan mode. **The S1 is closed.** Both blocks kept at four lines deliberately — a deletion would have shifted ~20 `audit/` citations below the edit, which `check-docs.mjs` cannot see. Test: 12 cases, 11 of which fail if the line returns. Suite 514 → **526** / 54 files. Curriculum re-checked by phrase per §7.4 steps 2–4: still empty |
-| **T0-2** | **Verify `id_token_hint` before trusting `sub`** — signature against the OP JWKS, plus `iss` and `aud`; an unverifiable hint yields "no subject", never an attacker-chosen one | RPL-W2 | 📋 **Blocks BCL-W5** — no client may register a `backchannel_logout_uri` until this lands |
+| **T0-2** | ✅ **SHIPPED 2026-08-11.** **Verify `id_token_hint` before trusting `sub`** — signature against the OP JWKS, plus `iss` and `aud`; an unverifiable hint yields "no subject", never an attacker-chosen one | RPL-W2 ✅ | 📋 **BCL-W5 is unblocked** — a client may now register a `backchannel_logout_uri`. Delivered as a pure verifier (`server/src/utils/verify-id-token-hint.ts`, 21 tests) called from `logout.service.ts:159`. Keys from Authlete's service JWKS, **not** `JWKS_URI` (unset); `iss` from live discovery, **not** `JWT_ISSUER` (unset, and using it would have silently disabled the check); both cached 5 min. `alg` pinned to the nine asymmetric algs `jsonwebtoken@9` can verify, so `alg: none` and `HS*` are refused — **the `HS256` client's hints are now ignored** (T1-5 territory). `exp` deliberately unenforced, marked `UNVERIFIED` in code. Restoring the old behaviour fails 4 service tests. **553 tests / 55 files** |
 | **T0-3** | **Add the logout confirmation step** — GET renders a confirm page with a CSRF token; the session dies only on POST | RPL-W3 | 📋 Satisfies RP-Initiated Logout §2's MUST and closes the CSRF-able GET |
 | **T0-4** | **Register `postLogoutRedirectUris` on the clients, then switch the comparison to the client's registered set.** W4 before W1 — matching an empty set would break the SPA's logout flow | RPL-W4 ⚙️ → RPL-W1 📋 | **This is the conformance item the 2026-08-10 fix did *not* deliver** (§6.3). RP-Initiated Logout §3 wants exact matching against per-client registered URIs; what shipped was origin-exact matching against `ALLOWED_ORIGINS`. Both are safe; only one is §3 |
 | **T0-5** | ✅ **SHIPPED 2026-08-11.** **Correct `MCP-OAUTH-TUTORIAL.md`'s opening sentence** — name the two preconditions MCP discovery needs here (a self-consistent issuer; `clientIdMetadataDocumentSupported = true`) and that neither holds | CUR-3c-W2 ✅, 8414-W5 ✅ | Smallest fix with the largest blast radius in Phase 3. Delivered as a three-row precondition table plus **a fourth item the work items did not name** — `registration_endpoint` is absent, so DCR cannot be discovered at all — and a pointer to the deliberate reason the retired grants are on. **`MCP-W3` is now down to its "link it from both tutorial indexes" half** |
@@ -708,6 +710,17 @@ a defect *before* the audit did.
    skipped twice.
 6. **Run** `npm --prefix server run typecheck && lint && test`, then `node scripts/check-docs.mjs`. Never
    `test:e2e` (quota + rate limit).
+7. **Re-anchor every citation that points into a file you edited** — by matching *content*, not by adding an
+   offset. Added 2026-08-11, because its absence is what produced both drifts in §6.3, and the second one was
+   created by the very commit that fixed the first. Two rules learned doing it:
+   - **A multi-hunk diff shifts different regions by different amounts.** `b5e60d4` moved one range by 69 and
+     another by 77; blanket arithmetic would have "fixed" nine refs into new wrong positions.
+   - **Sometimes the target is gone, not moved** — `PROGRESS.md:401`'s quoted sentence was deleted. Then the
+     citation has to be *reworded* (quote the revision by git ref), not renumbered.
+
+   `check-docs.mjs` cannot help here: it validates only `server/`|`client/` source refs, and only that the line
+   is not past EOF. **Prefer an edit that does not move lines at all** when one exists — T0-1 kept both of its
+   blocks at four lines for exactly this reason.
 
 ---
 

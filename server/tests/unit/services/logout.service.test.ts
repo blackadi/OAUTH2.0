@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { generateKeyPairSync } from "node:crypto"
+import jwt from "jsonwebtoken"
 import { BackchannelLogoutService } from "../../../src/services/backchannel-logout.service"
 import {
   isAllowedPostLogoutRedirectUri,
@@ -96,6 +98,107 @@ describe("rpInitiatedLogoutService", () => {
 
     expect(res.redirect).not.toHaveBeenCalled()
     expect(res.render).toHaveBeenCalledWith("logout", expect.any(Object))
+  })
+
+  // RPL-W2 / T0-2. `id_token_hint` used to be `jwt.decode`d and its `sub` trusted, and that subject drives
+  // back-channel delivery — so a forged hint was a remote forced-logout primitive against any user. It was
+  // inert only because no client had registered a `backchannel_logout_uri`.
+  // See audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md F-3.
+  describe("id_token_hint verification", () => {
+    const opKey = generateKeyPairSync("ec", { namedCurve: "prime256v1" })
+    const material = {
+      jwks: [{ ...(opKey.publicKey.export({ format: "jwk" }) as object), kid: "k1", alg: "ES256" }],
+      issuer: "https://op.example.com",
+    }
+    const hintService = (m = material) =>
+      new rpInitiatedLogoutService(mockBclService, async () => m as any)
+
+    const run = async (query: Record<string, string>, m = material) => {
+      const req = {
+        // No session user, so the hint is the only route to a subject.
+        session: { destroy: vi.fn((cb: (e: unknown) => void) => cb(null)) },
+        query,
+      } as any
+      const res = { clearCookie: vi.fn(), render: vi.fn(), redirect: vi.fn() } as any
+      await hintService(m).rpInitiatedLogout(req, res)
+      return { req, res }
+    }
+
+    const genuineHint = (over: Record<string, unknown> = {}) =>
+      jwt.sign(
+        { iss: material.issuer, aud: "client-abc", sub: "victim", ...over },
+        opKey.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+        { algorithm: "ES256", keyid: "k1" }
+      )
+
+    it("does NOT fire backchannel logout for a forged alg:none hint", async () => {
+      const forged = jwt.sign({ iss: material.issuer, aud: "client-abc", sub: "victim" }, "", {
+        algorithm: "none",
+      })
+
+      const { res } = await run({ backchannel: "true", id_token_hint: forged, client_id: "client-abc" })
+
+      expect(mockBclService.issueAndDeliverToAll).not.toHaveBeenCalled()
+      // Logout still completes — an unverifiable hint is not an error to the caller.
+      expect(res.render).toHaveBeenCalledWith("logout", expect.objectContaining({ subject: "" }))
+    })
+
+    it("does not fire backchannel logout for a hint signed by a foreign key", async () => {
+      const foreign = generateKeyPairSync("ec", { namedCurve: "prime256v1" })
+      const hint = jwt.sign(
+        { iss: material.issuer, aud: "client-abc", sub: "victim" },
+        foreign.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+        { algorithm: "ES256", keyid: "k1" }
+      )
+
+      await run({ backchannel: "true", id_token_hint: hint, client_id: "client-abc" })
+
+      expect(mockBclService.issueAndDeliverToAll).not.toHaveBeenCalled()
+    })
+
+    it("fires backchannel logout for a genuine hint", async () => {
+      await run({ backchannel: "true", id_token_hint: genuineHint(), client_id: "client-abc" })
+
+      expect(mockBclService.issueAndDeliverToAll).toHaveBeenCalledWith("victim")
+    })
+
+    it("ignores a genuine hint whose aud is not the supplied client_id", async () => {
+      const hint = genuineHint({ aud: "another-client" })
+
+      await run({ backchannel: "true", id_token_hint: hint, client_id: "client-abc" })
+
+      expect(mockBclService.issueAndDeliverToAll).not.toHaveBeenCalled()
+    })
+
+    it("prefers the session subject and never consults the hint", async () => {
+      const req = {
+        session: { user: "admin", destroy: vi.fn((cb: (e: unknown) => void) => cb(null)) },
+        query: { backchannel: "true", id_token_hint: genuineHint({ sub: "victim" }) },
+      } as any
+      const res = { clearCookie: vi.fn(), render: vi.fn(), redirect: vi.fn() } as any
+
+      await hintService().rpInitiatedLogout(req, res)
+
+      expect(mockBclService.issueAndDeliverToAll).toHaveBeenCalledWith("admin")
+    })
+
+    it("completes logout when the key material cannot be fetched", async () => {
+      const failing = new rpInitiatedLogoutService(mockBclService, async () => {
+        throw new Error("discovery unavailable")
+      })
+      const req = {
+        session: { destroy: vi.fn((cb: (e: unknown) => void) => cb(null)) },
+        query: { backchannel: "true", id_token_hint: genuineHint() },
+        logger: Object.assign(vi.fn(), { error: vi.fn(), warn: vi.fn(), child: vi.fn() }),
+      } as any
+      const res = { clearCookie: vi.fn(), render: vi.fn(), redirect: vi.fn() } as any
+
+      await failing.rpInitiatedLogout(req, res)
+
+      expect(mockBclService.issueAndDeliverToAll).not.toHaveBeenCalled()
+      expect(req.session.destroy).toHaveBeenCalled()
+      expect(res.render).toHaveBeenCalled()
+    })
   })
 })
 

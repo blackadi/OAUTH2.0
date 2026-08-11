@@ -1,8 +1,65 @@
 import { Request, Response } from "express";
 import session from "express-session";
-import jwt from "jsonwebtoken";
 import logger from "../utils/logger";
 import { BackchannelLogoutService } from "./backchannel-logout.service";
+import { DiscoveryService } from "./discovery.service";
+import { JwksService } from "./jwks.service";
+import { HintVerificationJwk, verifyIdTokenHint } from "../utils/verify-id-token-hint";
+
+/** The OP's own signing keys and advertised issuer — everything needed to verify an `id_token_hint`. */
+export interface OpVerificationMaterial {
+  jwks: HintVerificationJwk[];
+  issuer: string;
+}
+
+/**
+ * Fetch this OP's verification material, cached for five minutes.
+ *
+ * Both values are read from **live** sources rather than configuration, for the reason `AGENTS.md` gives for
+ * `protected-resource-metadata.routes.ts`: derived values cannot drift. Specifically:
+ *
+ * - **Keys** come from Authlete's service JWKS, not from `JWKS_URI`. That env var is unset on this
+ *   deployment (it is the root of the back-channel logout failure recorded as BCL-W3), so reusing it would
+ *   have made hint verification fail for a reason unrelated to the hint.
+ * - **The issuer** comes from the discovery document, not from `JWT_ISSUER`. That config exists for
+ *   locally-minted development JWTs and is unset here; using it would silently disable the `iss` check.
+ *
+ * The five-minute TTL matches `utils/jwksClient.ts`'s default. Logout is not a hot path, so two Authlete
+ * calls per cache window is not worth optimising further.
+ */
+const MATERIAL_TTL_MS = 300_000;
+let materialCache: { expires: number; value: OpVerificationMaterial } | null = null;
+
+/**
+ * The cache is process-wide and deliberately has no reset hook: tests inject the whole provider through
+ * `rpInitiatedLogoutService`'s second constructor argument, so nothing test-facing ever reaches this cache.
+ */
+async function fetchOpVerificationMaterial(req: Request): Promise<OpVerificationMaterial> {
+  const now = Date.now();
+  if (materialCache && materialCache.expires > now) return materialCache.value;
+
+  const [rawJwks, rawDiscovery] = await Promise.all([
+    new JwksService().serviceJwksGetApi(),
+    new DiscoveryService().getConfiguration(req),
+  ]);
+
+  // Authlete hands both documents back as either a JSON string or an object, so both shapes are handled —
+  // the same defensive parse `protected-resource-metadata.controller.ts:24-25` uses.
+  const jwksDoc: Record<string, unknown> =
+    typeof rawJwks === "string" ? JSON.parse(rawJwks) : ((rawJwks ?? {}) as Record<string, unknown>);
+  const discovery: Record<string, unknown> =
+    typeof rawDiscovery === "string"
+      ? JSON.parse(rawDiscovery)
+      : ((rawDiscovery ?? {}) as Record<string, unknown>);
+
+  const value: OpVerificationMaterial = {
+    jwks: Array.isArray(jwksDoc.keys) ? (jwksDoc.keys as HintVerificationJwk[]) : [],
+    issuer: typeof discovery.issuer === "string" ? discovery.issuer : "",
+  };
+
+  materialCache = { expires: now + MATERIAL_TTL_MS, value };
+  return value;
+}
 
 /**
  * Decide whether the OP may redirect the user agent to a supplied `post_logout_redirect_uri`.
@@ -70,7 +127,10 @@ export function isAllowedPostLogoutRedirectUri(
 }
 
 export class rpInitiatedLogoutService {
-  constructor(private backchannelLogoutService: BackchannelLogoutService = new BackchannelLogoutService()) {}
+  constructor(
+    private backchannelLogoutService: BackchannelLogoutService = new BackchannelLogoutService(),
+    private verificationMaterial: (req: Request) => Promise<OpVerificationMaterial> = fetchOpVerificationMaterial
+  ) {}
 
   async rpInitiatedLogout(
     req: Request & { session: Partial<session.SessionData> },
@@ -84,15 +144,41 @@ export class rpInitiatedLogoutService {
     // 1. Identify the user — from local session or id_token_hint
     let subject: string | undefined = req.session.user;
 
+    // An `id_token_hint` is a signed assertion (RP-Initiated Logout §2: *"ID Token previously issued by the
+    // OP"*), so it identifies the End-User only once its signature is verified. This used to call
+    // `jwt.decode` and trust `payload.sub`, which let anyone name any subject — and that subject drives the
+    // back-channel delivery below. An unverifiable hint now yields no subject at all; it is never an error
+    // to the caller, and logout proceeds either way.
+    //
+    // `aud` is pinned only when the caller supplied `client_id`. §2 makes `client_id` OPTIONAL, so demanding
+    // it would refuse conformant requests; a genuine OP-signed token issued to a different client still
+    // names the right subject, which is why an unpinned `aud` is logged rather than refused.
     if (!subject && id_token_hint) {
       try {
-        const decoded = jwt.decode(id_token_hint, { complete: true }) as jwt.JwtPayload | null;
-        if (decoded?.payload?.sub) {
-          subject = decoded.payload.sub as string;
-          log("Logout: identified subject from id_token_hint", { subject });
+        const { jwks, issuer } = await this.verificationMaterial(req);
+        const result = verifyIdTokenHint(id_token_hint, {
+          jwks,
+          issuer,
+          audience: client_id,
+        });
+
+        if (result.subject) {
+          subject = result.subject;
+          log("Logout: verified subject from id_token_hint", {
+            subject,
+            audiencePinned: !!client_id,
+            hintExpired: !!result.expired,
+          });
+        } else {
+          log("Logout: id_token_hint rejected, continuing without a subject", {
+            reason: result.reason,
+          });
         }
-      } catch {
-        log("Logout: failed to decode id_token_hint");
+      } catch (err) {
+        // Losing the key set or the issuer must not identify anybody, and must not fail the logout.
+        log.error("Logout: could not verify id_token_hint", {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

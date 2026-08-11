@@ -1,11 +1,11 @@
 # OpenID Connect RP-Initiated Logout 1.0
 
-> ## ⚠️ PARTIALLY FIXED 2026-08-10 — the open redirect is closed; severity **S1 → S2**. Three work items remain
+> ## ⚠️ PARTIALLY FIXED (2026-08-10 open redirect, 2026-08-11 hint verification) — severity **S1 → S2**. Four work items remain
 >
 > **This entry's findings and work items below describe the pre-fix code.** They are kept as the evidence.
 > Read this banner first; `04-remediation-plan.md` §1.1 row 2 is the authority on current state.
 >
-> **What shipped (2026-08-10).** `isAllowedPostLogoutRedirectUri` (`server/src/services/logout.service.ts:33-70`)
+> **What shipped (2026-08-10).** `isAllowedPostLogoutRedirectUri` (`server/src/services/logout.service.ts:90-127`)
 > parses the value with `new URL()` and compares **origins exactly**: `LOGOUT_REDIRECT_URI` by full-URI
 > equality, `ALLOWED_ORIGINS` entries by origin, plus a non-production `hostname === "localhost"` clause so the
 > labs keep working. A malformed allowlist entry is **dropped** rather than widening the allowlist. Unparseable
@@ -24,7 +24,7 @@
 > |---|---|
 > | The open redirect (F-1's exploitable half) | ✅ **closed 2026-08-10** |
 > | **RPL-W1** — match the client's registered set | ⬜ open — **T0-4**, after RPL-W4 |
-> | **RPL-W2** — verify `id_token_hint` before trusting `sub` | ⬜ open — **T0-2**. `logout.service.ts:89` still calls `jwt.decode`, never `jwt.verify`, so the subject is attacker-chosen. **Blocks BCL-W5** |
+> | **RPL-W2** — verify `id_token_hint` before trusting `sub` | ✅ **DONE 2026-08-11 (T0-2)** — `utils/verify-id-token-hint.ts`, called at `logout.service.ts:159`. Signature against the OP's own JWKS, `iss` from live discovery, `aud` pinned when `client_id` is supplied; `alg: none` and `HS*` refused. **This unblocks BCL-W5** — a client may now register a `backchannel_logout_uri` |
 > | **RPL-W3** — the §2 confirmation MUST (F-2) | ⬜ open — **T0-3**. `docs/DATA-FLOWS.md:159-166` already documents a confirmation page and a `POST /api/logout` that do not exist |
 > | **RPL-W4** — register `postLogoutRedirectUris` | ⬜ open — console change, prerequisite for RPL-W1 |
 > | **RPL-W5** — name the departure from §3 in `AGENTS.md` | ⬜ open — T2-17, pair with T0-4 |
@@ -75,7 +75,7 @@
 | 3 | The OP **MUST** ask the End-User to confirm when no `id_token_hint` was supplied, or the ID Token is not for the current session | §2 | ❌ never asks; the session is destroyed unconditionally at `:56` — F-2 |
 | 4 | Echo `state` on the post-logout redirect | §3 | ✅ `:75-77`, URL-encoded, with correct `?`/`&` separator handling |
 | 5 | Advertise `end_session_endpoint` (REQUIRED) | §2.1 | ✅ live: `https://…/api/logout` (probe 3) |
-| 6 | An `id_token_hint` is an ID Token — i.e. a signed assertion | §2 | ❌ `jwt.decode` only, no signature check — F-3 |
+| 6 | An `id_token_hint` is an ID Token — i.e. a signed assertion | §2 | ✅ **fixed 2026-08-11** (was ❌ `jwt.decode` only) — verified against the OP's JWKS with `iss`, and `aud` when `client_id` is given (`utils/verify-id-token-hint.ts`); **`RPL-W2`**, F-3 |
 
 ## Authlete integration boundary
 
@@ -115,7 +115,7 @@ The third clause is `startsWith` against each allowed **origin**, and it is **no
 | `http://localhost:3000.evil.example.com/bye` | `startsWith("http://localhost:3000")` — the attacker's host merely *begins* with the allowed origin | **302 to the attacker** |
 | `http://localhost:3001@evil.example.com/` | `startsWith("http://localhost:3001")`; everything before `@` is userinfo, so the real host is `evil.example.com` | **302 to the attacker** |
 
-Both were **verified live** by the repo (`PROGRESS.md:495-510`, `modules/08…/lab.md:638-660`). With
+Both were **verified live** by the repo (`PROGRESS.md:532-547`, `modules/08…/lab.md:638-660`). With
 `ALLOWED_ORIGINS=https://app.example.com` in production, `https://app.example.com.evil.net/` passes identically.
 
 **Against the specification this is not a hardening gap, it is a MUST violation twice over.** §3:
@@ -131,7 +131,7 @@ Two aggravating factors:
 1. **`GET /api/logout` carries no middleware at all** — no CSRF, no rate limiter, no authentication (`00-inventory.md` §3.5). So the redirect is reachable by any third-party page.
 2. **`AGENTS.md` presents this as working validation**: *"Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars."* True as a description of the mechanism, and it reads as an assurance.
 
-**The fix is small and the repo already knew it.** The `PROGRESS.md` entry as it stood on 2026-08-10 read *"Fix is one line — exact comparison against a registered set."* **That sentence no longer exists**: the entry was rewritten when the fix shipped, and now records the fix instead (`PROGRESS.md:495-510`, with the `**Fix:**` sentence at `:502`). Quoted here from the pre-fix revision (`git show b5e60d4~1:docs/curriculum/PROGRESS.md`, line 401) because the prediction is part of the finding's evidence. Note the contrast that same entry draws, which survives the rewrite at `PROGRESS.md:500-501`: the **authorization** endpoint gets exact matching right (400, no `Location`). Two redirect-validating code paths, one correct.
+**The fix is small and the repo already knew it.** The `PROGRESS.md` entry as it stood on 2026-08-10 read *"Fix is one line — exact comparison against a registered set."* **That sentence no longer exists**: the entry was rewritten when the fix shipped, and now records the fix instead (`PROGRESS.md:532-547`, with the `**Fix:**` sentence at `:502`). Quoted here from the pre-fix revision (`git show b5e60d4~1:docs/curriculum/PROGRESS.md`, line 401) because the prediction is part of the finding's evidence. Note the contrast that same entry draws, which survives the rewrite at `PROGRESS.md:537-538`: the **authorization** endpoint gets exact matching right (400, no `Location`). Two redirect-validating code paths, one correct.
 
 ## Finding F-2 — the OP never asks the user to confirm logout (S2)
 
@@ -151,7 +151,26 @@ a GET, so without confirmation it is CSRF-able by construction. The impact is nu
 which is why S2 and not S1 — but it also makes the F-1 open redirect trivially reachable, because the attacker
 does not need the victim to intend to log out.
 
-## Finding F-3 — `id_token_hint` is decoded but never verified (S2)
+## Finding F-3 — `id_token_hint` is decoded but never verified (S2) — ✅ **FIXED 2026-08-11 (T0-2 / RPL-W2)**
+
+> **Status:** closed. `utils/verify-id-token-hint.ts` verifies the hint's signature against the OP's own JWKS
+> (Authlete's service key set, **not** `JWKS_URI`, which is unset here), checks `iss` against the live discovery
+> document, and pins `aud` to `client_id` when the caller supplies it. `alg: none` and the whole `HS*` family are
+> refused by an allowlist of the nine asymmetric algorithms `jsonwebtoken@9` can verify. An unverifiable hint
+> yields **no subject**, so nothing is delivered; logout itself still completes. Called at
+> `services/logout.service.ts:159`. 21 unit tests on the verifier plus 6 on the service; restoring the old
+> trust-the-payload behaviour fails 4 of them, including the forged `alg: none` case.
+>
+> **`BCL-W5` is unblocked** — this was the item that had to land before any client could register a
+> `backchannel_logout_uri`.
+>
+> **Two consequences to know about.** `idTokenSignAlg` is **`HS256` on client `1523514379`** (probe 2 §7);
+> HS256 is symmetric, so that client's hints are now ignored and its users log out via the session cookie
+> instead. Moving it to `ES256` is one console field, adjacent to **T1-5**. And **`exp` is deliberately not
+> enforced** — a hint is an old token by definition — which is stated in the code as this deployment's decision;
+> whether §2 addresses expired hints explicitly is marked `UNVERIFIED` there.
+>
+> The finding text below is preserved as the historical record, with its **pre-fix** line numbers.
 
 `services/logout.service.ts:22-32` uses `jwt.decode` — no signature verification, no `iss`/`aud` check, no
 expiry check — and takes `payload.sub` as the subject. That subject is then used to trigger back-channel logout
@@ -173,7 +192,7 @@ any back-channel logout URI is registered, not after.
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
 | Title, Final, **12 Sep 2022** | `SPEC-INVENTORY.md:183` | **Confirmed** against `openid.net/specs/openid-connect-rpinitiated-1_0.html` this session | **Accurate** |
-| Open redirect found, two payloads, "survives `NODE_ENV=production`", "Fix is one line — exact comparison against a registered set" | `PROGRESS.md:495-510`; `modules/08…/lab.md:638-660` | Confirmed by reading the code; matches §3 | **Accurate — and the analysis is better than the code** |
+| Open redirect found, two payloads, "survives `NODE_ENV=production`", "Fix is one line — exact comparison against a registered set" | `PROGRESS.md:532-547`; `modules/08…/lab.md:638-660` | Confirmed by reading the code; matches §3 | **Accurate — and the analysis is better than the code** |
 | "Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars" | `AGENTS.md` | Describes the mechanism; reads as assurance, and the mechanism is the defect | `DOC_INCORRECT` / **S1** |
 | Nothing states that §3 requires matching against **registered client metadata**, not an env allowlist | all docs | F-1 — this is the design error beneath the string-matching bug | **Omission** / **S1** |
 | Nothing notes the §2 confirmation MUST | all docs | F-2 | **Omission** / S2 |
@@ -183,7 +202,7 @@ any back-channel logout URI is registered, not after.
 
 - OpenID Connect RP-Initiated Logout 1.0 §§2, 2.1, 3, 6 — `https://openid.net/specs/openid-connect-rpinitiated-1_0.html`, fetched this session. §3's exact-match MUST NOT and §2's confirmation MUST quoted verbatim.
 - Live probe 3 (2026-08-10): `end_session_endpoint`, per-client `postLogoutRedirectUris` (absent on all three) — `SERVICE-CONFIG-PROBE.md` §8, §10
-- Repo-sourced live evidence: `PROGRESS.md:495-510` (both bypass payloads, verified), `modules/08…/lab.md:638-660`
+- Repo-sourced live evidence: `PROGRESS.md:532-547` (both bypass payloads, verified), `modules/08…/lab.md:638-660`
 - Code: `services/logout.service.ts` (whole file, esp. `:16-17,22-32,44-46,56-59,62-71,75-77`), `controllers/logout.controller.ts:9-19`, `routes/logout.routes.ts:7`
 
 ## Proposed work items

@@ -20,7 +20,7 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 | 2 — per-spec deep audit | `audit/02-findings/` — **55 files** | ✅ **complete**, all batches B1–B7 approved at Gate 2 |
 | 3 — curriculum audit | `audit/03-curriculum-audit.md` | ✅ **complete** — 3a, 3b, 3c, 3d all written |
 | 4 — synthesis + remediation plan | `audit/04-remediation-plan.md`, `audit/05-decision-records.md` | ✅ **complete** — awaiting Gate 4. **§8 below is superseded by those two files** |
-| 5 — execution | code + docs | 🔨 **in progress** — Gate 4 approved. **T0-1 ✅ shipped 2026-08-11** (9700-W1 + 9700-W2, request-body logging; the RFC 9700 S1 is closed, 4 open). Next: T0-2/3/4, the logout trio |
+| 5 — execution | code + docs | 🔨 **in progress** — Gate 4 approved. **T0-1, T0-2, T0-5, T0-6 ✅ shipped 2026-08-11.** RFC 9700 S1 closed; `id_token_hint` verified so **BCL-W5 is unblocked**. Next: **T0-3** (logout confirmation), then **T0-4** (needs `postLogoutRedirectUris` registered in the console first) |
 
 > **Phase 4 output, and what it settled.** Read [`04-remediation-plan.md`](04-remediation-plan.md) first — its
 > §1.1 supersedes §6 below, and its §2 supersedes §8.3.

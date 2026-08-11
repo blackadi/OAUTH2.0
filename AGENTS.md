@@ -34,10 +34,10 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (526 tests, 54 files)
+npm --prefix server run test              # unit + integration (553 tests, 55 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (477 tests, 53 files)
+npm --prefix server run test:unit         # unit tests only (504 tests, 54 files)
 npm --prefix server run test:integration  # integration tests only (49 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 53 files across 5 categories (477 tests):
-  - `tests/unit/services/` — 25 files (157 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo). One file is a cross-service invariant rather than a service: `credential-logging.test.ts` asserts no request body reaches a log line (see **Quirks & gotchas**)
+- **Unit tests**: 54 files across 5 categories (504 tests):
+  - `tests/unit/services/` — 25 files (163 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo). One file is a cross-service invariant rather than a service: `credential-logging.test.ts` asserts no request body reaches a log line (see **Quirks & gotchas**)
   - `tests/unit/controllers/` — 9 files (113 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci
   - `tests/unit/middleware/` — 6 files (60 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership (plus `development-only.ts`, covered via `tests/unit/routes/device.routes.test.ts`)
-  - `tests/unit/utils/` — 7 files (104 tests), basic-auth/createLocalJWT/jwksClient/properties/validate/validation/dpop
+  - `tests/unit/utils/` — 8 files (125 tests), basic-auth/createLocalJWT/jwksClient/properties/validate/validation/dpop/verify-id-token-hint
   - `tests/unit/routes/` — 5 files, fapi + metrics + openapi + protected-resource-metadata + device routes
 - **Integration tests**: 1 file `tests/integration/routes.test.ts` (49 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 526 tests across 54 files, completes in ~2s
+- Run with `npm --prefix server run test` — 553 tests across 55 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -346,6 +346,7 @@ it. When this script reports something, check whether the surrounding claim is s
   | `new URL(value).hostname === "localhost"` | **non-production only**, any port — retained so the labs keep working |
 
   Anything unparseable or on a scheme other than http/https is refused. That matters: `new URL()` *throws* on `http://localhost:3000.evil.example.com/bye` (`3000.evil.example.com` is not a valid port) and yields a `null` origin for `javascript:`, so failing closed is doing real work. **RP-Initiated Logout §3 actually requires exact matching against per-client registered `post_logout_redirect_uris`** — no client here registers any, so this deployment keeps an env-driven allowlist and the departure is recorded in `audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md`. Do not reintroduce prefix matching, and do not "simplify" this to `includes()`.
+- **`id_token_hint` is verified, not decoded** (fixed 2026-08-11; `utils/verify-id-token-hint.ts`, called from `services/logout.service.ts`). It used to be `jwt.decode`d with `payload.sub` taken as the End-User — and that subject drives back-channel logout delivery, so an unsigned hand-made JWT naming any subject was a remote forced-logout primitive via `GET /api/logout?backchannel=true`. It was inert only because no client had registered a `backchannel_logout_uri`. The rule now: signature against **Authlete's service JWKS** (not `JWKS_URI`, which is unset here), `iss` against the **live discovery document** (not `JWT_ISSUER`, also unset — using it would silently disable the check), both cached 5 minutes; `aud` pinned to `client_id` when the caller supplies it, since RP-Initiated Logout §2 makes `client_id` OPTIONAL. **`alg` is pinned to the nine asymmetric algorithms `jsonwebtoken@9` can verify**, so `alg: none` and the `HS*` family are refused — which means the client whose `idTokenSignAlg` is `HS256` has its hints ignored (HS256 is symmetric; the OP would need that client's secret). Failure yields **no subject**, never an error: the session is still destroyed and the redirect still validated, but nothing is delivered. `exp` is deliberately **not** enforced — a hint is an old token by definition — and that choice is marked `UNVERIFIED` against §2 in the code. Do not "simplify" this back to a decode, and when adding a `jwt.verify` anywhere else, pass `issuer` and `audience` as this does.
 - `server/tsconfig.json` uses `module: "node16"` + `moduleResolution: "node16"` — dynamic imports need `.js` extension
 - Build copies `public/` and `src/views/` into `dist/` via `postbuild` script (`rm -rf dist/views dist/public && cp -r src/views dist/views && cp -r public dist/public`). The destructive copy prevents nested `dist/views/views/` on subsequent rebuilds. If you rename/move these directories, update the script.
 - All Authlete API calls go through the SDK client in `src/services/authlete.service.ts` — do not add raw `fetch()` calls. **`backchannel-logout.service.ts` is the sole remaining exception**, and only because the SDK exposes no backchannel logout token API (re-verified against 1.0.0). Before writing a `fetch()`, check the SDK first — `health.service.ts` carried one for `GET /api/lifecycle/healthcheck` until 1.0.0 added `lifecycle.getApiLifecycleHealthcheck()`

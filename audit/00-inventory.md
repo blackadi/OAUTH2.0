@@ -337,11 +337,11 @@ Optional in `config/`: `PROTECTED_RESOURCE_IDENTIFIER` (`app.config.ts:17`),
 `JWT_PUBLIC_KEY_PEM` / `JWT_ISSUER` (`authlete.config.ts:10-12`), `JWKS_URI` (`:16` — but
 `controllers/logout.controller.ts:45-47` **throws** if unset when verifying a logout token).
 
-Read outside `config/`: `ALLOWED_ORIGINS` (`app.ts:78`, `services/logout.service.ts:66`),
+Read outside `config/`: `ALLOWED_ORIGINS` (`app.ts:78`, `services/logout.service.ts:107`),
 `MGMT_CLIENT_ID` / `MGMT_CLIENT_SECRET` (`middleware/require-basic-auth.ts:27,46,47`),
 `AUTH_USERS` (`services/login.service.ts:4`, falls back to `admin:password` with a warning at `:7-8`),
-`LOGOUT_REDIRECT_URI` (`services/logout.service.ts:62`), `LOGOUT_CLIENT_ID` (`:90`),
-`NODE_ENV` (`services/logout.service.ts:70` — non-prod allows any `http://localhost:` post-logout
+`LOGOUT_REDIRECT_URI` (`services/logout.service.ts:213`), `LOGOUT_CLIENT_ID` (`:238`),
+`NODE_ENV` (`services/logout.service.ts:124` — non-prod allows any `http://localhost:` post-logout
 redirect).
 
 `configDotenv()` is invoked once, at `config/app.config.ts:1-2`.
@@ -473,7 +473,7 @@ re-enabled, so **no lab step shows FAPI being enforced**; the five Module 09a co
 |---|---|---|
 | `docs/TICKET-PARAMETER.md` | 290 | Zero inbound links or prose mentions anywhere |
 | `docs/curriculum/AUDIT-PASS-B.md` | 1,482 | Zero mentions; largest single doc file |
-| `docs/curriculum/AUDIT-PASS-A.md` | 748 | Prose mention only, at `PROGRESS.md:229`; never a link |
+| `docs/curriculum/AUDIT-PASS-A.md` | 748 | Prose mention only, at `PROGRESS.md:266`; never a link |
 | `docs/MCP-OAUTH-TUTORIAL.md` | 293 | Absent from both tutorial indexes while `README.md`/`CHANGELOG.md` claim it shipped |
 | `CHANGELOG.md` | 73 | Self-referential only |
 
