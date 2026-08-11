@@ -67,7 +67,7 @@ confidential and public clients."* OAuth 2.1 consolidates the BCP-240 rules that
 `RFC9700-security-bcp.md` plus probe 1 establish that this service:
 
 - enables the **implicit** grant (`IMPLICIT` in `supportedGrantTypes`; RFC 9700 §2.1.2 SHOULD NOT, removed in OAuth 2.1);
-- enables the **password** grant (`PASSWORD`; RFC 9700 §2.4 MUST NOT, removed in OAuth 2.1) — and `PROGRESS.md:951-952` records a live transcript issuing a 24-hour access token and a 10-day refresh token from it;
+- enables the **password** grant (`PASSWORD`; RFC 9700 §2.4 MUST NOT, removed in OAuth 2.1) — and `PROGRESS.md:1060-1061` records a live transcript issuing a 24-hour access token and a 10-day refresh token from it;
 - does **not require PKCE** (`pkceRequired = false`, `pkceS256Required = false`; `RFC7636-pkce.md` F-1), while OAuth 2.1 makes PKCE mandatory for all authorization-code clients.
 
 For a teaching deployment that must demonstrate the retired grants, enabling them is a defensible choice — the
@@ -138,7 +138,7 @@ than illustrative.
 
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
-| "this server supports MCP flows out of the box" | `docs/MCP-OAUTH-TUTORIAL.md`; `README.md` | F-1, F-2, CIMD off | `DOC_INCORRECT` / **S2** |
+| ~~"this server supports MCP flows out of the box"~~ | `docs/MCP-OAUTH-TUTORIAL.md:3` **only** — ~~`README.md`~~ | F-1, F-2, CIMD off | ✅ **FIXED 2026-08-11 (T0-5)** — replaced by a three-row precondition table naming the OAuth 2.1 conflict, the issuer inconsistency and CIMD being off, plus the absent `registration_endpoint`. **Correction to this row: `README.md` never carried the claim** — it mentions neither MCP nor CIMD (`grep -rni "model context\|cimd" README.md` → nothing, checked 2026-08-11). The attribution here was wrong, which means **MCP-W3's `README.md` half is a no-op** and T0-5 closed the claim completely rather than partially |
 | MCP listed as a shipped feature | `README.md` | Fourth member of the *claimed working, flag off* pattern (`NATIVE-SSO-1.0.md` F-1) | `DOC_INCORRECT` / S2 |
 | `mcp.service.ts` "`buildAuthorizationUrl()` (PKCE S256 + RFC 8707 resource indicator)" and `exchangeCode()` | `AGENTS.md` | Accurate as written — and the accuracy is the problem: `resource` is described only on the authorization side, matching the code and missing the MUST | **Accurate but incomplete** / **S2** |
 | `GET /.well-known/oauth-authorization-server` serves RFC 8414 metadata at root | `AGENTS.md`; `routes/oauth-as-metadata.routes.ts:9` | Confirmed. Note the asymmetry: the 8414 path is at true root while OIDC Discovery is only under `/api` (B3) | **Accurate** |

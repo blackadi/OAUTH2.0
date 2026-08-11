@@ -116,6 +116,9 @@ nothing from it). **Still unverified:** RFC 8446 and RFC 9110 dates cited at `mo
 | *"Neither Module 01 nor 07 names `fapiModes`"* (3a-F5) | **Both do** — `modules/01…/lab.md:270`, `modules/07…/lab.md:298`. **CUR-3a-W5 is already satisfied** | 3d-F2 |
 | *"Module 07 declares no `## Prerequisites` section"* (3c) | It does — *"**Modules 02–06, all of them**"* (`README.md:10-13`). A grep missed the plural range form | 3d-F1 |
 | Deferred item 4: *"Module 09b's **two** `UNVERIFIED` markers and the VCI **tutorials**"* | **One** marker; there is **no** separate VCI tutorial | 3c, deferred-items table (**CUR-3c-W13**) |
+| *"this server supports MCP flows out of the box"* attributed to `docs/MCP-OAUTH-TUTORIAL.md` **and `README.md`** | `MCP-OAUTH-TUTORIAL.md:3` **only** — `README.md` mentions neither MCP nor CIMD. So **MCP-W3's `README.md` half is a no-op** and T0-5 closed the claim completely | `MCP-OAUTH.md` doc-delta row, corrected 2026-08-11 during T0-5 |
+| `04-remediation-plan.md` §7.2 — *"Tier 0 exits when **five** actions shipped"* | **Six** (T0-1…T0-6). The criterion predated T0-6 being split out | fixed 2026-08-11 during T0-6 |
+| `03-curriculum-audit.md` citing `PROGRESS.md:1264` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:1327-1328` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
 
 **Calibration worth carrying into Phase 4:** five of Phase 3's findings correct the audit rather than the
 curriculum, and **every one arose where the audit reasoned from a grep or a recollection while the curriculum

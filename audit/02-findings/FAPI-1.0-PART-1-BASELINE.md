@@ -31,7 +31,7 @@
 | 1 | Authenticate confidential clients with **mTLS**, **`client_secret_jwt`** or **`private_key_jwt`** | the one confidential client uses `CLIENT_SECRET_BASIC`; no client has a JWKS | ❌ |
 | 2 | **Require PKCE with `S256`** | `pkceRequired = false`, `pkceS256Required = false` | ❌ |
 | 3 | TLS 1.2+ for all communications, with an RFC 6125 server-certificate check | terminated upstream by the platform / ngrok tunnel; Authlete's own APIs are HTTPS | ✅ **met by deployment**, not by this code (`server.ts` speaks HTTP) |
-| 4 | **Exact** `redirect_uri` matching against pre-registered URIs | Authlete's, and verified: the authorization endpoint rejects a non-matching URI with 400 and no `Location` (`PROGRESS.md:400`) | ✅ |
+| 4 | **Exact** `redirect_uri` matching against pre-registered URIs | Authlete's, and verified: the authorization endpoint rejects a non-matching URI with 400 and no `Location` (`PROGRESS.md:500-501`) | ✅ |
 | 5 | Return an ID Token whose `sub` is the authenticated user when `openid` is requested | verified live in Module 08 (`lab.md:94-107,148-173`) | ✅ |
 | 6 | Access tokens under 10 minutes unless sender-constrained — **should**, not shall | `accessTokenDuration = 86400` (24 h), tokens not sender-constrained | ❌ **should** unmet, and by 144× |
 | — | `fapiModes` set to a FAPI 1.0 mode | **absent**, and `computeFapiMode` cannot represent one | ❌ |
@@ -134,7 +134,7 @@ alongside the other FAPI-1.0-labelled entries; `FAPI-1.0-PART-2-ADVANCED.md` cro
 - FAPI 1.0 Part 1: Baseline §5.2.2 — `https://openid.net/specs/openid-financial-api-part-1-1_0.html`, fetched this session. Quoted: the three permitted client-authentication methods, *"shall require RFC7636 with S256"*, the TLS 1.2+/RFC 6125 requirements, *"shall require the value of `redirect_uri` to exactly match one of the pre-registered redirect URIs"*, the `sub` requirement, and the 10-minute **should**.
 - FAPI 1.0 Part 2: Advanced §5.2.2 (for F-3's 60-minute bound) — `https://openid.net/specs/openid-financial-api-part-2-1_0.html`
 - Live probes 1–3 (2026-08-10): `fapiModes`, `pkceRequired`, `pkceS256Required`, `accessTokenDuration`, per-client `tokenAuthMethod` / `jwksUri` / `dpopRequired` — `SERVICE-CONFIG-PROBE.md` §2–§10
-- Repo-sourced live evidence: `PROGRESS.md:400` (exact redirect-URI matching at the authorization endpoint), `modules/08…/lab.md:94-107,148-173` (`sub` in the ID token)
+- Repo-sourced live evidence: `PROGRESS.md:500-501` (exact redirect-URI matching at the authorization endpoint), `modules/08…/lab.md:94-107,148-173` (`sub` in the ID token)
 - Code: `controllers/fapi.controller.ts:5-20`, `server/src/server.ts` (plain `app.listen`)
 
 ## Proposed work items

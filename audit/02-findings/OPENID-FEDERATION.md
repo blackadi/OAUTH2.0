@@ -4,7 +4,7 @@
 - **Severity:** **S2**
 - **Status:** OpenID **Final**, **17 February 2026** — verified this session. **`SPEC-INVENTORY.md` and `01-spec-matrix.md` record "1.1, Final, 5 May 2026", which the served document does not support — see F-3.**
 - **Authlete version:** 3.0 (`api-reference/federation-endpoint/*`)
-- **Repo docs under test:** `docs/curriculum/SPEC-INVENTORY.md`, `docs/curriculum/PROGRESS.md:368-374`, `docs/curriculum/modules/09b-identity-and-credentials/`
+- **Repo docs under test:** `docs/curriculum/SPEC-INVENTORY.md`, `docs/curriculum/PROGRESS.md:469-475`, `docs/curriculum/modules/09b-identity-and-credentials/`
 
 <thinking>
 1. Requirements on the OP: publish an entity configuration — a **signed JWT**, explicitly typed
@@ -16,7 +16,7 @@
    content type. `Service.supportedClientRegistrationTypes` is the gate.
 3. Code: two endpoints, correct action mapping, correct `application/entity-statement+jwt` content type — and
    the configuration call omits a request body Authlete requires, so it always 400s.
-4. Docs: `PROGRESS.md:368-374` diagnoses this precisely, including that the SDK types the field as optional so
+4. Docs: `PROGRESS.md:469-475` diagnoses this precisely, including that the SDK types the field as optional so
    the bug compiles and passes review, and that a direct call with `{}` returns 200.
 5. Delta: the entity configuration endpoint — the one thing a federation participant fetches first — returns 400
    at both of its paths, and reports the failure as a caller error.
@@ -56,7 +56,7 @@ const response = await this.authleteApi.federation.configuration({
 });
 ```
 
-No `requestBody`. `PROGRESS.md:368-374` records the diagnosis and I confirm it against the code and the SDK:
+No `requestBody`. `PROGRESS.md:469-475` records the diagnosis and I confirm it against the code and the SDK:
 
 - The SDK types the field as **optional** — `requestBody?: FederationConfigurationApiRequestBody` where the type is `{}` — so omitting it compiles cleanly and reads as correct.
 - Authlete requires a body. Both `GET /.well-known/openid-federation` and `GET /api/federation/configuration` therefore return **400** with `[A126203] The request body is missing or empty.`
@@ -66,7 +66,7 @@ No `requestBody`. `PROGRESS.md:368-374` records the diagnosis and I confirm it a
 fetches — it is the root of trust discovery, the equivalent of the discovery document. An OP whose entity
 configuration 400s is not partially federated; it is invisible to the federation. And the failure is reported as
 a **caller** error (`[A126203]` is a 400 about the request), so an operator debugging it looks at the requester
-first. `PROGRESS.md:381-383` groups this with two siblings — Module 06's Zod failure and Module 08's unset
+first. `PROGRESS.md:482-484` groups this with two siblings — Module 06's Zod failure and Module 08's unset
 `JWKS_URI` — as one recurring pattern: *"a server configuration error reported as a caller error."* This is the
 third instance, and `POST /api/federation/registration` **in the same file** is written correctly, passing its
 body through.
@@ -111,9 +111,9 @@ mechanism to catch it existed — this entry just gets there first.
 
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
-| The endpoint is broken, the SDK's optional typing hid it, `{}` returns 200, and the failure misreports the cause | `PROGRESS.md:368-374` | **Confirmed** line by line. An unusually complete diagnosis | **Accurate** |
+| The endpoint is broken, the SDK's optional typing hid it, `{}` returns 200, and the failure misreports the cause | `PROGRESS.md:469-475` | **Confirmed** line by line. An unusually complete diagnosis | **Accurate** |
 | "OpenID Federation 1.1 … Final, 5 May 2026", *"superseding 1.0"* | `SPEC-INVENTORY.md`, `01-spec-matrix.md` §3 | The served document is 1.0, Final, 17 Feb 2026 — F-3 | `DOC_INCORRECT` / S3 |
-| `POST /api/federation/registration` is written correctly | `PROGRESS.md:383` | Confirmed — it forwards `entityConfiguration` / `trustChain` (`services/federation.service.ts:34-37`) | **Accurate** |
+| `POST /api/federation/registration` is written correctly | `PROGRESS.md:484` | Confirmed — it forwards `entityConfiguration` / `trustChain` (`services/federation.service.ts:34-37`) | **Accurate** |
 | Content type `application/entity-statement+jwt` on the `OK` branch | `00-inventory.md` §5 | Confirmed; matches §15.1 | **Accurate** |
 | Nothing states that `client_registration_types_supported` is unadvertised | all docs | F-2 | **Omission** / S3 |
 | Federation is **not** listed as "Working" in `README.md`'s feature tables | `README.md:92-130` | Correct — and a welcome contrast with Native SSO, VCI, FAPI 2.0 and MCP | **Accurate** |
@@ -122,7 +122,7 @@ mechanism to catch it existed — this entry just gets there first.
 
 - OpenID Federation 1.0 §§3, 3.2, 5.1.2, 5.1.3, 10, 12, 15.1 — `https://openid.net/specs/openid-federation-1_0.html`, fetched this session. Quoted: the entity statement is *"a signed JWT"*, the `typ: entity-statement+jwt` requirement, the `application/entity-statement+jwt` media type, the six required claims, and `client_registration_types_supported`.
 - Live probe 3 (2026-08-10): `supportedClientRegistrationTypes`; `client_registration_types_supported` absent from the discovery document — `SERVICE-CONFIG-PROBE.md` §8, §9
-- Repo-sourced live evidence: `PROGRESS.md:368-374` (`[A126203]`, and the direct `{}` call returning 200)
+- Repo-sourced live evidence: `PROGRESS.md:469-475` (`[A126203]`, and the direct `{}` call returning 200)
 - SDK 1.0.0: `federation.configuration`'s optional `requestBody` typing
 - Code: `services/federation.service.ts:10-19,21-40`, `controllers/federation.controller.ts:13-27,34,54,56`, `routes/federation.routes.ts:11,12,16`
 

@@ -1,7 +1,48 @@
 # OpenID Connect RP-Initiated Logout 1.0
 
+> ## ⚠️ PARTIALLY FIXED 2026-08-10 — the open redirect is closed; severity **S1 → S2**. Three work items remain
+>
+> **This entry's findings and work items below describe the pre-fix code.** They are kept as the evidence.
+> Read this banner first; `04-remediation-plan.md` §1.1 row 2 is the authority on current state.
+>
+> **What shipped (2026-08-10).** `isAllowedPostLogoutRedirectUri` (`server/src/services/logout.service.ts:33-70`)
+> parses the value with `new URL()` and compares **origins exactly**: `LOGOUT_REDIRECT_URI` by full-URI
+> equality, `ALLOWED_ORIGINS` entries by origin, plus a non-production `hostname === "localhost"` clause so the
+> labs keep working. A malformed allowlist entry is **dropped** rather than widening the allowlist. Unparseable
+> values and non-http(s) schemes are refused. **Both verified payloads are now refused** — F-1's
+> `http://localhost:3000.evil.example.com/bye` (where the allowed origin was a prefix of the attacker's
+> hostname) and `http://localhost:3001@evil.example.com/` (where everything before `@` is userinfo). 14
+> regression tests in `server/tests/unit/services/logout.service.test.ts`.
+>
+> **What did *not* ship, and this is the important part: the fix is not RPL-W1.** RP-Initiated Logout §3 wants
+> exact matching against each client's **registered** `post_logout_redirect_uris`. No client here registers
+> any, so the deployment kept an **environment-driven** allowlist. Both designs are safe; only one is §3.
+> RPL-W1 is therefore still open and is sequenced in `04-remediation-plan.md` as **T0-4**, deliberately behind
+> **RPL-W4** (register the URIs first — matching an empty set would break the SPA's logout).
+>
+> | Item | State |
+> |---|---|
+> | The open redirect (F-1's exploitable half) | ✅ **closed 2026-08-10** |
+> | **RPL-W1** — match the client's registered set | ⬜ open — **T0-4**, after RPL-W4 |
+> | **RPL-W2** — verify `id_token_hint` before trusting `sub` | ⬜ open — **T0-2**. `logout.service.ts:89` still calls `jwt.decode`, never `jwt.verify`, so the subject is attacker-chosen. **Blocks BCL-W5** |
+> | **RPL-W3** — the §2 confirmation MUST (F-2) | ⬜ open — **T0-3**. `docs/DATA-FLOWS.md:159-166` already documents a confirmation page and a `POST /api/logout` that do not exist |
+> | **RPL-W4** — register `postLogoutRedirectUris` | ⬜ open — console change, prerequisite for RPL-W1 |
+> | **RPL-W5** — name the departure from §3 in `AGENTS.md` | ⬜ open — T2-17, pair with T0-4 |
+>
+> Both `services/logout.service.ts` and `controllers/logout.controller.ts` were added to `AGENTS.md`'s
+> Security-critical surfaces list in the same change, which closes half of `RESUME.md` §5.3.
+>
+> **Severity.** S1 → **S2**: the exploitable open redirect is gone, and what remains is a real but
+> non-exploitable conformance gap (§3's registered-set matching, §2's confirmation) plus RPL-W2, which is
+> tracked as its own Tier-0 item. RPL-W2 alone would justify S2 on its own.
+>
+> **One citation in this entry could not be renumbered — it had to be reworded.** F-1 quoted
+> `PROGRESS.md:401`'s *"Fix is one line…"*, and that sentence was **deleted** when the fix was recorded. See
+> the note at F-1's end. This is the drift class that produced this banner in the first place.
+
 - **Verdict:** `PARTIAL`
-- **Severity:** **S1**
+- **Severity:** **S2** — was S1; see the banner above
+- **Original severity:** **S1** (F-1's open redirect, fixed 2026-08-10)
 - **Status:** OpenID **Final**, **12 September 2022** — re-verified against the primary source this session
 - **Authlete version:** 3.0 — **no Authlete API**; this specification is implemented wholly in local code
 - **Repo docs under test:** `docs/curriculum/modules/08-oidc-core-and-logout/lab.md` Exercise 6b, `AGENTS.md` logout paragraph, `client/src/components/oidc/LogoutSection.tsx`, `docs/curriculum/SPEC-INVENTORY.md:183`
@@ -74,7 +115,7 @@ The third clause is `startsWith` against each allowed **origin**, and it is **no
 | `http://localhost:3000.evil.example.com/bye` | `startsWith("http://localhost:3000")` — the attacker's host merely *begins* with the allowed origin | **302 to the attacker** |
 | `http://localhost:3001@evil.example.com/` | `startsWith("http://localhost:3001")`; everything before `@` is userinfo, so the real host is `evil.example.com` | **302 to the attacker** |
 
-Both were **verified live** by the repo (`PROGRESS.md:394-401`, `modules/08…/lab.md:638-660`). With
+Both were **verified live** by the repo (`PROGRESS.md:495-510`, `modules/08…/lab.md:638-660`). With
 `ALLOWED_ORIGINS=https://app.example.com` in production, `https://app.example.com.evil.net/` passes identically.
 
 **Against the specification this is not a hardening gap, it is a MUST violation twice over.** §3:
@@ -90,7 +131,7 @@ Two aggravating factors:
 1. **`GET /api/logout` carries no middleware at all** — no CSRF, no rate limiter, no authentication (`00-inventory.md` §3.5). So the redirect is reachable by any third-party page.
 2. **`AGENTS.md` presents this as working validation**: *"Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars."* True as a description of the mechanism, and it reads as an assurance.
 
-**The fix is small and the repo already knows it.** `PROGRESS.md:401` — *"Fix is one line — exact comparison against a registered set."* Note the contrast that same entry draws: the **authorization** endpoint gets exact matching right (400, no `Location`). Two redirect-validating code paths, one correct.
+**The fix is small and the repo already knew it.** The `PROGRESS.md` entry as it stood on 2026-08-10 read *"Fix is one line — exact comparison against a registered set."* **That sentence no longer exists**: the entry was rewritten when the fix shipped, and now records the fix instead (`PROGRESS.md:495-510`, with the `**Fix:**` sentence at `:502`). Quoted here from the pre-fix revision (`git show b5e60d4~1:docs/curriculum/PROGRESS.md`, line 401) because the prediction is part of the finding's evidence. Note the contrast that same entry draws, which survives the rewrite at `PROGRESS.md:500-501`: the **authorization** endpoint gets exact matching right (400, no `Location`). Two redirect-validating code paths, one correct.
 
 ## Finding F-2 — the OP never asks the user to confirm logout (S2)
 
@@ -132,7 +173,7 @@ any back-channel logout URI is registered, not after.
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
 | Title, Final, **12 Sep 2022** | `SPEC-INVENTORY.md:183` | **Confirmed** against `openid.net/specs/openid-connect-rpinitiated-1_0.html` this session | **Accurate** |
-| Open redirect found, two payloads, "survives `NODE_ENV=production`", "Fix is one line — exact comparison against a registered set" | `PROGRESS.md:394-401`; `modules/08…/lab.md:638-660` | Confirmed by reading the code; matches §3 | **Accurate — and the analysis is better than the code** |
+| Open redirect found, two payloads, "survives `NODE_ENV=production`", "Fix is one line — exact comparison against a registered set" | `PROGRESS.md:495-510`; `modules/08…/lab.md:638-660` | Confirmed by reading the code; matches §3 | **Accurate — and the analysis is better than the code** |
 | "Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars" | `AGENTS.md` | Describes the mechanism; reads as assurance, and the mechanism is the defect | `DOC_INCORRECT` / **S1** |
 | Nothing states that §3 requires matching against **registered client metadata**, not an env allowlist | all docs | F-1 — this is the design error beneath the string-matching bug | **Omission** / **S1** |
 | Nothing notes the §2 confirmation MUST | all docs | F-2 | **Omission** / S2 |
@@ -142,7 +183,7 @@ any back-channel logout URI is registered, not after.
 
 - OpenID Connect RP-Initiated Logout 1.0 §§2, 2.1, 3, 6 — `https://openid.net/specs/openid-connect-rpinitiated-1_0.html`, fetched this session. §3's exact-match MUST NOT and §2's confirmation MUST quoted verbatim.
 - Live probe 3 (2026-08-10): `end_session_endpoint`, per-client `postLogoutRedirectUris` (absent on all three) — `SERVICE-CONFIG-PROBE.md` §8, §10
-- Repo-sourced live evidence: `PROGRESS.md:394-401` (both bypass payloads, verified), `modules/08…/lab.md:638-660`
+- Repo-sourced live evidence: `PROGRESS.md:495-510` (both bypass payloads, verified), `modules/08…/lab.md:638-660`
 - Code: `services/logout.service.ts` (whole file, esp. `:16-17,22-32,44-46,56-59,62-71,75-77`), `controllers/logout.controller.ts:9-19`, `routes/logout.routes.ts:7`
 
 ## Proposed work items

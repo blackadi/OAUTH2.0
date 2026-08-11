@@ -40,7 +40,7 @@ the target had reasoned from a primary source. The three found here:
 
 | The audit said | The working tree says | Where |
 |---|---|---|
-| "~120 work-item IDs" (`RESUME.md:267`) | **280** — 239 Phase 2 + 41 Phase 3 | §5.1 |
+| "~120 work-item IDs" (`RESUME.md:290`) | **280** — 239 Phase 2 + 41 Phase 3 | §5.1 |
 | Two of the four `AGENTS.md` surface additions are open | **One.** `controllers/logout.controller.ts` landed too — `AGENTS.md:230` | §6.4 |
 | EH-W3 and EH-W5 remain open | **Both closed.** All five EH items shipped 2026-08-11 | §1.2 |
 
@@ -360,7 +360,7 @@ process change that makes the next audit cheaper.
 | Phase 3 — `03-curriculum-audit.md` batches 3a–3d | **41** |
 | **Total** | **280** |
 
-`RESUME.md:267` estimated *"~120"*. The estimate was low by a factor of 2.3 — recorded here because a plan
+`RESUME.md:290` estimated *"~120"*. The estimate was low by a factor of 2.3 — recorded here because a plan
 built for 120 items would have silently dropped half of them.
 
 **280 reduces to 55 numbered actions.** The reduction:
@@ -490,7 +490,33 @@ Not a forward dependency. **A fix has already shipped and the curriculum still t
 |---|---|
 | Module 10 — five references to the logout open redirect (`README.md:205`; `lab.md:81-91,423,430-431,469`) | ⚠️ **stale since 2026-08-10.** CUR-3b-W1 |
 | `final-exam-answers.md:227-229` — a sixth reference | ⚠️ **stale.** CUR-3d-W2 (3d-F4) |
-| `02-findings/RFC8628-…md`, `02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` | ⚠️ **the audit's own entries are stale** (§1.1). Add fixed-banners, as `ERRORHANDLER-…` and `FAPI-2.0-…` already carry |
+| `02-findings/RFC8628-…md`, `02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` | ✅ **fixed 2026-08-11 (T0-6).** Both banner-ed, severities revised S1→S3 and S1→S2, and the stale in-body rows corrected |
+| **Every `PROGRESS.md:NNN` citation in `audit/`** — 20 refs across 11 files | ✅ **fixed 2026-08-11 (T0-6)**, and it was worse than a uniform shift. See below |
+
+**The citation drift, and why it is a fourth detection gap rather than a typo.** Found while shipping T0-1 and
+fixed with T0-6. Commit `b5e60d4` (the 2026-08-11 Tier-0 fixes) inserted **77 lines into `PROGRESS.md` in two
+hunks** — 69 at `:91` and 8 at `:391` — so every `audit/` citation below those points was wrong. Four things
+this exposed, all worth carrying:
+
+1. **The drift was not uniform.** Refs above the second hunk moved by 69, refs below it by 77. Arithmetic
+   applied blanket would have "fixed" nine refs into new wrong positions. Each of the 20 was re-resolved by
+   matching its **content** across three revisions (`b5e60d4~1`, `HEAD`, working tree).
+2. **Two refs were not drift at all.** `MCP-OAUTH.md:70` and `03-curriculum-audit.md:146` cite the *same*
+   `PROGRESS.md:951-952` for **different content**, because one was written before `b5e60d4` and one after —
+   they resolve to `:1060-1061` and `:983-984`. And `03-curriculum-audit.md`'s `PROGRESS.md:1264` matched
+   *neither* baseline: it was **wrong when written** (correct target `:1327-1328`).
+3. **One citation could not be renumbered.** `OIDC-RP-INITIATED-LOGOUT-1.0.md` quoted `PROGRESS.md:401`'s
+   *"Fix is one line — exact comparison against a registered set"*, and `b5e60d4` **deleted that sentence**
+   when it recorded the fix. Reworded to quote the pre-fix revision explicitly by git ref.
+4. **`check-docs.mjs` cannot see any of this.** Its source-ref regex covers only `server/`|`client/`
+   `.ts/.tsx/.ejs/.mjs`, so **markdown line references are a fourth detection gap**, alongside the three
+   **T2-7** already bundles (bare paths, prose `Line ~NN`, endpoint paths in fenced blocks). Add it there.
+
+**`PROGRESS.md` will do this again**, because entries are appended *at the top*: any future build-log entry
+re-breaks every citation below it. Two options, and the second is better — **(a)** teach `check-docs.mjs` the
+`.md:NNN` form so the breakage is at least loud, or **(b)** stop citing `PROGRESS.md` by line and cite it by
+**section heading** instead, which is stable under prepending. Recommend both, (a) in T2-7 and (b) as a
+convention note in `RESUME.md` §7.
 
 **Why it happened, and the fix for the process.** The 2026-08-10 change correctly updated `AGENTS.md`,
 `docs/API.md`, `docs/DEVICE-FLOW-TUTORIAL.md`, `PROGRESS.md`, the tests and **Module 08** — and missed
@@ -548,8 +574,8 @@ and both shipped 2026-08-11; **this is what remains.**
 | **T0-2** | **Verify `id_token_hint` before trusting `sub`** — signature against the OP JWKS, plus `iss` and `aud`; an unverifiable hint yields "no subject", never an attacker-chosen one | RPL-W2 | 📋 **Blocks BCL-W5** — no client may register a `backchannel_logout_uri` until this lands |
 | **T0-3** | **Add the logout confirmation step** — GET renders a confirm page with a CSRF token; the session dies only on POST | RPL-W3 | 📋 Satisfies RP-Initiated Logout §2's MUST and closes the CSRF-able GET |
 | **T0-4** | **Register `postLogoutRedirectUris` on the clients, then switch the comparison to the client's registered set.** W4 before W1 — matching an empty set would break the SPA's logout flow | RPL-W4 ⚙️ → RPL-W1 📋 | **This is the conformance item the 2026-08-10 fix did *not* deliver** (§6.3). RP-Initiated Logout §3 wants exact matching against per-client registered URIs; what shipped was origin-exact matching against `ALLOWED_ORIGINS`. Both are safe; only one is §3 |
-| **T0-5** | **Correct `MCP-OAUTH-TUTORIAL.md`'s opening sentence** — name the two preconditions MCP discovery needs here (a self-consistent issuer; `clientIdMetadataDocumentSupported = true`) and that neither holds | CUR-3c-W2, 8414-W5 | Smallest fix with the largest blast radius in Phase 3 |
-| **T0-6** | **Add fixed-banners to the two stale audit entries** | §1.1 rows 1–2 | The audit must not be the last carrier of pre-fix state (§6.3) |
+| **T0-5** | ✅ **SHIPPED 2026-08-11.** **Correct `MCP-OAUTH-TUTORIAL.md`'s opening sentence** — name the two preconditions MCP discovery needs here (a self-consistent issuer; `clientIdMetadataDocumentSupported = true`) and that neither holds | CUR-3c-W2 ✅, 8414-W5 ✅ | Smallest fix with the largest blast radius in Phase 3. Delivered as a three-row precondition table plus **a fourth item the work items did not name** — `registration_endpoint` is absent, so DCR cannot be discovered at all — and a pointer to the deliberate reason the retired grants are on. **`MCP-W3` is now down to its "link it from both tutorial indexes" half** |
+| **T0-6** | ✅ **SHIPPED 2026-08-11.** **Add fixed-banners to the two stale audit entries** | §1.1 rows 1–2 | The audit must not be the last carrier of pre-fix state (§6.3). Both banner-ed, with severities revised (`RFC8628-…` **S1→S3**, `OIDC-RP-INITIATED-LOGOUT-1.0.md` **S1→S2**) and the stale in-body rows corrected — 8628's normative rows 8–9 and its boundary table said "no rate limiter" and "not implemented". **Also fixed in the same pass: 21 drifted line citations** — see §6.3's fourth row |
 
 ### Tier 1 — configuration and contained code
 
@@ -589,7 +615,7 @@ and both shipped 2026-08-11; **this is what remains.**
 | **T2-4** | **The TLS citation reconciliation** — Module 00 `:87` and `:250` note RFC 9846; RFC 9110 sharpened to Internet Standard STD 97; a new RFC 9864 row. **`SPEC-INVENTORY.md:42-50` is correct and is not to be edited** | CUR-3d-W1's outcome, CUR-3a-W4 | §2.1 |
 | **T2-5** | **One `SPEC-INVENTORY.md` pass** — 15 IDs in one commit, each row carrying its fetched URL and header line | cluster 29 + **FED-W4** | Theme 5's remedy |
 | **T2-6** | **`sd-jwt.mjs`: enforce the trailing tilde, fix `--out`/`--iss`, add a test file** | CUR-3c-W3, CUR-3c-W4, CUR-3c-W5 | The wrong ACCEPT is the substantive one. `scripts/` is outside both Vitest configs — the repo's only SD-JWT implementation has no regression net |
-| **T2-7** | **Teach `check-docs.mjs` three reference forms** — bare paths, prose `Line ~NN`, `/api/…` endpoint paths in fenced blocks | CUR-3a-W1 + CUR-3b-W5 + CUR-3c-W11 | **Scope as one change.** Two EOF-overrunning pointers slipped through the first two gaps |
+| **T2-7** | **Teach `check-docs.mjs` four reference forms** — bare paths, prose `Line ~NN`, `/api/…` endpoint paths in fenced blocks, and **`*.md:NNN` markdown line refs** | CUR-3a-W1 + CUR-3b-W5 + CUR-3c-W11 + **the fourth gap found 2026-08-11** | **Scope as one change.** Two EOF-overrunning pointers slipped through the first two gaps. The fourth gap let **20 `PROGRESS.md` citations drift silently** (§6.3) — the checker validates only `server/`\|`client/` source refs, so no markdown-to-markdown pointer is checked at all. Note the checker can only catch *past-EOF* refs; the `PROGRESS.md` drift was mostly *in-range and wrong*, which argues for §6.3's option (b) — cite `PROGRESS.md` by **section heading** — as the real fix, with the checker as the backstop |
 | **T2-8** | **The claimed-working/flag-off table**, derived from live configuration | NSSO-W4 ⊃ FAPI2-W3, MCP-W3, VCI-W1's doc half | Theme 2. See §7.3 for the mechanical version |
 | **T2-9** | **Export `errorStatusFrom`**, or record the prohibition | EH-W5's residue (§1.2) | So the next local handler inherits the clamp instead of re-deriving the bug |
 | **T2-10** | **The stale line-number sets** — handler refs across four documents; `dpop.service.ts` pointers; `introspection.controller.ts:47`; two Phase 2 re-anchors; `ParSection.tsx` | 8693-W3 ⊃ CUR-3b-W6 ⊃ CUR-3c-W10, CUR-3b-W4, CUR-3b-W7, CUR-3c-W12, CUR-3a-W2 | Prefer anchoring on the ⚠️ comment text — these have drifted once already |
@@ -646,7 +672,7 @@ gate, after Tier 0–2 have closed the five open S1s and the false reporting.
 
 | Tier | Exits when |
 |---|---|
-| 0 | Five actions shipped; 514+ tests green; `check-docs.mjs` clean; the two stale entries banner-ed |
+| 0 | **Six** actions shipped (T0-1…T0-6 — the "five" here predated T0-6 being split out); 514+ tests green; `check-docs.mjs` clean; the two stale entries banner-ed |
 | 1 | Every ⚙️ change verified **from the discovery document**, not from the console UI; the four `UNVERIFIED` markers retired; T1-17's three probes recorded in `PROGRESS.md` |
 | 2 | `check-docs.mjs` clean **with the three new detection forms enabled** — that is what makes T2-7 worth doing |
 | 3 | Each decision record dated, with its revisit trigger, and its curriculum change in the same commit |

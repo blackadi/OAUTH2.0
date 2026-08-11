@@ -92,6 +92,38 @@ against it before calling the capstone complete._
 - [x] **2026-08-04 — signed JAR unblocked; Module 05 Exercise 2 rewritten around it** (below)
 - [x] **2026-08-06 — the SDK 1.0.0 pin fixed Module 06's gate premise; Exercise 6 rebuilt** (below)
 - [x] **2026-08-10 — RFC conformance audit (Phases 0–2 + Phase 3a); two exploitable S1s fixed; Module 08 Ex 6b rewritten** (below)
+- [x] **2026-08-11 — Gate 4 approved; Phase 5 began. T0-1: the token and revocation endpoints stopped logging request bodies** (below)
+
+### 2026-08-11 — Phase 5 began, and the first thing it closed was a credential leak
+
+**Why this matters to a future session:** **Gate 4 is approved and Phase 5 (execution) is under way.**
+The ordered plan is `audit/04-remediation-plan.md` §7 — four tiers, 55 numbered actions — and its §7.4 is a
+per-commit checklist that is now mandatory rather than advisory. `audit/RESUME.md` §1 tracks which action
+is next. **Tier 0 is the only tier that ships before anything else**, and T0-1 is done.
+
+**T0-1 (9700-W1 + 9700-W2) — `token.service.ts` and `revocation.service.ts` wrote the raw request body to
+the log.** `log(..., { length, body: parameters })`, where `parameters` is preferentially `req.rawBody`, so
+the exclusion list that strips `client_secret` only ever ran on the fallback path. Depending on the grant,
+`logs/app-*.log` therefore held **client secrets, end-user passwords (ROPC), authorization codes, PKCE
+`code_verifier`s, refresh tokens, JWT `assertion`s and token-exchange `subject_token`/`actor_token`** — at
+`info`, the rotating file transport's production level, retained 14 days. Not debug-only. Both sites now log
+`{ length }` only, which is the pattern `introspection.service.ts` already used three files away.
+
+Two things about it are worth carrying forward:
+
+- **The edits were line-preserving on purpose.** Both blocks were four lines and remain four (a comment plus
+  a three-line call). ~14 citations across `audit/` point *below* `token.service.ts:60` and ~8 below
+  `revocation.service.ts:67`, and `scripts/check-docs.mjs` only catches refs *past EOF* — so deleting one
+  line would have silently created ~20 off-by-one citations instead of one visible failure.
+- **The test was checked by reintroducing the bug.** `tests/unit/services/credential-logging.test.ts` drives
+  six grant shapes and both client-auth channels through a spy logger, asserts on distinctive *values*
+  rather than parameter names (asserting `code` false-positives on *"URL-en**code**d"* and
+  *"de**code**d Basic auth"*), and asserts in the other direction that the length **is** still logged so
+  "log nothing at all" cannot pass instead. Putting `body: parameters` back fails 11 of its 12 tests.
+
+**526 tests (was 514), 54 files.** Curriculum impact was nil and was confirmed *before* the change by the
+phrase grep §7.4 step 2 requires — the step that was skipped on 2026-08-10 and cost Module 10 five stale
+references.
 
 ### 2026-08-11 — Phase 3 complete, and the two Tier-0 fixes that report honestly
 

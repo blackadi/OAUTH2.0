@@ -1,7 +1,39 @@
 # RFC 8628 — OAuth 2.0 Device Authorization Grant
 
+> ## ⚠️ PARTIALLY FIXED 2026-08-10 — the approval oracle is closed; severity **S1 → S3**. Four work items remain
+>
+> **This entry's findings and work items below describe the pre-fix code** — 8628-W1 still reads "close this".
+> They are kept as the evidence. Read this banner first; `04-remediation-plan.md` §1.1 row 1 is the authority
+> on current state.
+>
+> **What shipped (2026-08-10).** `server/src/routes/device.routes.ts:25-32`:
+>
+> - **8628-W1 ✅** — `POST /api/device/complete` is gated by `middleware/development-only.ts` and answers a
+>   flat **404** outside development. It approved any live `userCode` as any `subject` with no authentication
+>   of that subject, which made it a token-minting oracle for anyone who could read a user code off a screen
+>   (RFC 8628 §5.5). The authenticated path, `POST /device/consent`, is available in every environment.
+> - **8628-W2 ✅** — `deviceCodeLimiter` (5/min) on `/api/device/verification` and `POST /device`, sized
+>   against §5.1's own worked example. `/api/device/authorization` keeps `generalLimiter` and stays public: it
+>   is §3.1's device authorization endpoint and Authlete authenticates the client from the body credentials.
+>
+> Asserted by `server/tests/unit/routes/device.routes.test.ts`. `routes/device.routes.ts` and
+> `middleware/development-only.ts` were added to `AGENTS.md`'s Security-critical surfaces list in the same
+> change.
+>
+> **Still true, and the reason this is not "FIXED".** `/api/device/complete` remains **unauthenticated
+> *within* development** — the gate moved the exposure out of production rather than removing it. And the
+> non-security findings are untouched: **8628-W3** (the `responseContent` wire shape), **8628-W4** (the §3.1
+> form-encoded wire format — deliberately deferred, `04-remediation-plan.md` §7.1), **8628-W5**
+> (`deviceVerificationUri` on an ephemeral tunnel) and **8628-W6** (whether `USER_CODE` is substituted in
+> `deviceVerificationUriComplete` — one of T1-17's unprobed behaviours).
+>
+> **Severity.** S1 → **S3**: no exploitable path remains in a deployed configuration, and what is left is
+> wire-format conformance plus one development-only gap. Lower than the logout entry's S2 because nothing here
+> is a live MUST violation with a security consequence — 8628-W3/W4 are interoperability, not exposure.
+
 - **Verdict:** `PARTIAL`
-- **Severity:** **S1**
+- **Severity:** **S3** — was S1; see the banner above
+- **Original severity:** **S1** (the `/api/device/complete` approval oracle, fixed 2026-08-10)
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/DEVICE-FLOW-TUTORIAL.md`, `AGENTS.md` Device Flow paragraph, `docs/curriculum/modules/09a-interaction-extensions/`, `client/src/components/oidc/DeviceSection.tsx`
 
@@ -39,8 +71,8 @@
 | 5 | The device displays `user_code` and `verification_uri` | §3.3 | ⚠️ `verification_uri` points at an ephemeral tunnel — **F-4** |
 | 6 | Token endpoint handles `grant_type=urn:ietf:params:oauth:grant-type:device_code` | §3.4 | ✅ Authlete's, natively; the URN is in the live `grant_types_supported` |
 | 7 | `authorization_pending`, `slow_down`, `access_denied`, `expired_token` | §3.5 | ✅ Authlete's; `ACCESS_DENIED` correctly modelled as a *request* value, not a response action (`01-spec-matrix.md` §6) |
-| 8 | **Rate-limit user code attempts** | §5.1 | ❌ **no rate limiter on any `/api/device/*` route** — F-3 |
-| 9 | The AS authenticates the user before recording approval | §3.3, §5.3, §5.5 | ❌ **`POST /api/device/complete` authenticates nobody** — F-3 |
+| 8 | **Rate-limit user code attempts** | §5.1 | ✅ **fixed 2026-08-10** (was ❌ none on any route) — `deviceCodeLimiter` 5/min on `/api/device/verification` and `POST /device`; `8628-W2` |
+| 9 | The AS authenticates the user before recording approval | §3.3, §5.3, §5.5 | ⚠️ **narrowed 2026-08-10** (was ❌) — `POST /api/device/complete` still authenticates nobody, but is now development-only (404 elsewhere); the production path `POST /device/consent` does authenticate. `8628-W1` |
 | 10 | Advertise `device_authorization_endpoint` | §4 | ✅ live: `https://…/api/device/authorization` |
 
 ## Authlete integration boundary
@@ -53,13 +85,14 @@
 | **Authenticating the end user** | **This server** | `POST /device/consent` ✅ / `POST /api/device/complete` ❌ |
 | Recording approval or denial | Authlete | `deviceFlow.complete` |
 | Polling | Authlete, at the token endpoint | no AS code needed |
-| Rate-limiting code entry | **This server** | not implemented — F-3 |
+| Rate-limiting code entry | **This server** | ✅ `deviceCodeLimiter` (`routes/device.routes.ts:26,31`) — was "not implemented", fixed 2026-08-10 |
 
 Live service settings (probe 3): `deviceAuthorizationEndpoint` and `deviceVerificationUri` set,
 `deviceVerificationUriComplete = https://…/device?user_code=USER_CODE`, `deviceFlowCodeDuration = 600`,
 `deviceFlowPollingInterval = 5`, `userCodeCharset = BASE20`, `userCodeLength = 0` (⇒ Authlete's default, 8 for
 BASE20 per `AGENTS.md`). All of `AGENTS.md`'s stated mandatory fields are present, so the flow's configuration
-is complete — which is what makes F-3 exploitable rather than theoretical.
+is complete — which is what made F-3 exploitable rather than theoretical **at the time this entry was written**.
+It is no longer reachable outside development; see the banner.
 
 ## Finding F-3 — an unauthenticated endpoint approves any pending device authorization as any subject (S1) — ✅ **FIXED 2026-08-10**
 
@@ -194,8 +227,8 @@ verified it against the SDK enums:
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 8628-W1 | **Close `POST /api/device/complete`** | S | **Highest priority in B6.** Either gate all three `/api/device/*` routes on `NODE_ENV === "development"` (matching `createLocalToken`), or require admin Basic auth on `/complete`, or delete it in favour of `POST /device/consent`. A test asserts an unauthenticated call is refused. Then correct `AGENTS.md`'s "local testing surfaces" sentence to describe what the code actually does. |
-| 8628-W2 | Rate-limit the device routes | S | `/api/device/verification` and `POST /device` carry a limiter sized against §5.1's calculation (the RFC's own worked example allows ~5 attempts); a brute-force test shows the lockout. |
+| 8628-W1 | ✅ **DONE 2026-08-10.** **Close `POST /api/device/complete`** | S | **Highest priority in B6.** Either gate all three `/api/device/*` routes on `NODE_ENV === "development"` (matching `createLocalToken`), or require admin Basic auth on `/complete`, or delete it in favour of `POST /device/consent`. A test asserts an unauthenticated call is refused. Then correct `AGENTS.md`'s "local testing surfaces" sentence to describe what the code actually does. |
+| 8628-W2 | ✅ **DONE 2026-08-10.** Rate-limit the device routes | S | `/api/device/verification` and `POST /device` carry a limiter sized against §5.1's calculation (the RFC's own worked example allows ~5 attempts); a brute-force test shows the lockout. |
 | 8628-W3 | Return `responseContent` at `/api/device/authorization` | S | The 200 body is exactly §3.2's JSON with snake_case members; `resultCode`/`resultMessage`/`action` never reach the device. Same one-line pattern as `token.controller.ts:52`. |
 | 8628-W4 | Accept the §3.1 wire format | M | Form-encoded accepted; JSON `{parameters}` retained for the SPA. One change with **9126-W1** and **CIBA-W1**. |
 | 8628-W5 | Move `deviceVerificationUri` off the ephemeral tunnel | S | A stable host, or the tutorial states that the device flow's human-facing leg is time-bombed and how to re-point it. |
