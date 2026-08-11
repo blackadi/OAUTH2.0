@@ -1,7 +1,52 @@
 # RFC 9700 — Best Current Practice for OAuth 2.0 Security (BCP 240)
 
+> ## ✅ FIXED 2026-08-11 — 9700-W1 and 9700-W2 shipped (T0-1); severity **S1 → S2**
+>
+> `body: parameters` is gone from both sites. `services/token.service.ts:57-60` and
+> `services/revocation.service.ts:64-67` now log `{ length: parameters.length }` and nothing else, which is
+> `introspection.service.ts:115-117`'s pattern. **F-1 is closed.**
+>
+> - **9700-W1** ✅ — both log calls, plus a comment at each site naming the eight credentials that used to
+>   land on disk, so the line is not "simplified" back.
+> - **9700-W2** ✅ — `grep -rn 'body: parameters\|body: req.body' server/src` returns nothing. The
+>   prohibition is recorded in **two** places, per the item's acceptance criteria: the code comments above,
+>   and a new `AGENTS.md` **Quirks & gotchas** bullet (*"Never log a request body — log its length"*).
+> - **The test** is `tests/unit/services/credential-logging.test.ts` — a spy logger shaped as
+>   `CallableLogger`, driven by ROPC, `authorization_code` + PKCE, `refresh_token`, `jwt-bearer`, token
+>   exchange, the `rawBody`-absent fallback rebuild, and both client-auth channels; for revocation the
+>   revoked token in all three shapes. It asserts on distinctive **values** rather than parameter names
+>   (asserting `code` would false-positive on *"URL-en**code**d"* and *"de**code**d Basic auth"*), plus the
+>   unambiguous `name=` forms, plus — in the other direction — that the length *is* still logged, so
+>   "log nothing at all" cannot pass instead. Verified as a real net: reintroducing `body: parameters`
+>   fails **11 of its 12 tests**. Suite 514 → **526** across 54 files.
+> - **Edits were line-preserving on purpose.** Both blocks were four lines and remain four lines, because
+>   ~14 citations across `audit/` point *below* `token.service.ts:60` (`:76`, `:82`, `:86-89`,
+>   `:97,106,115`) and ~8 below `revocation.service.ts:67` (`:73-74`, `:82`). `scripts/check-docs.mjs` only
+>   catches refs past EOF, so deleting a line would have silently created ~20 off-by-one citations.
+>
+> **Severity, restated.** This entry's S1 rested entirely on F-1. What remains is F-2 (ROPC advertised
+> without its §2.4 caveat — S3, and deliberate teaching material), F-3 (`implicit` mappable — S4), and
+> F-4/F-4a's residue: the posture is still unreadable *through the SDK* because `service.get()` throws on
+> the `SPIFFE_JWT` enum gap. That residue is **S2**, so the header reads S2 — the same basis on which
+> `FAPI-2.0-SECURITY-PROFILE.md` went S1→S2. The verdict stays `PARTIAL`: §2.4 is still deliberately unmet.
+>
+> **One other part of this entry is now stale.** F-4a's *"`/api/fapi/config` **hardcodes**
+> `pkceRequired: true`"* was fixed by **FAPI2-W1** on 2026-08-11 — all six posture fields are read live at
+> `controllers/fapi.controller.ts:51-64`. The endpoint still fails, but it no longer fabricates. **9700-W4's
+> hardcoding half is therefore already shipped**; its observability half remains blocked on the enum gap,
+> which is DR-07's decision, not this item's.
+>
+> **Curriculum impact: nil, re-confirmed before the change** (§7.4 steps 2–4, the steps skipped on
+> 2026-08-10). Phrase greps — not error-string greps — for *"logs the request body"*, *"body: parameters"*,
+> *"credential leak"*, *"secrets in logs"* and *"redact"* across `docs/`, `README.md` and `AGENTS.md` found
+> nothing that teaches this log line. The one near-hit,
+> `modules/05-request-integrity-and-binding/quiz-answers.md:213` (*"Stop logging credentials at all…"*), is a
+> hypothetical exercise that **recommends this fix** and makes no claim about the code. 9700-W1/W2 appear in
+> neither direction of the lab-breakage register (`04-remediation-plan.md` §6.1, §6.2).
+
 - **Verdict:** `PARTIAL`
-- **Severity:** **S1**
+- **Severity:** **S2** — was S1; see the banner above
+- **Original severity:** **S1** (F-1, fixed 2026-08-11)
 - **Authlete version:** 3.0 — no vendor surface; RFC 9700 is realised through other flags and through this server's own code
 - **Repo docs under test:** `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/curriculum/modules/07-oauth-2-1-and-security-bcp/`, `modules/01`, `modules/02`, `modules/03`
 
@@ -41,9 +86,12 @@
 | 5 | *"The resource owner password credentials grant MUST NOT be used."* | §2.4 | ❌ Implemented (`controllers/token.controller.ts:98-145`) — deliberately, as teaching material; see F-2 |
 | 6 | *"Clients SHOULD NOT use the implicit grant"* | §2.1.2 | ⚠️ `implicit` is a mappable grant type (`services/token.operations.service.ts:29`) |
 | 7 | *"Clients MUST NOT pass access tokens in a URI query parameter"* | §4.3.2 | ✅ **Deliberately not implemented**, with the citation in the code — `utils/dpop.ts:100-102` |
-| 8 | Do not leak credentials | §4.2.4 and the BCP's general posture | ❌ **Violated** — F-1 |
+| 8 | Do not leak credentials | §4.2.4 and the BCP's general posture | ✅ **fixed 2026-08-11** — was ❌ Violated; see F-1 |
 
-## Finding F-1 — the token endpoint writes client secrets, passwords, authorization codes, PKCE verifiers and refresh tokens to disk (S1)
+## Finding F-1 — ✅ FIXED 2026-08-11 — the token endpoint wrote client secrets, passwords, authorization codes, PKCE verifiers and refresh tokens to disk (was S1)
+
+> **Fixed by T0-1 / 9700-W1.** Both sites log the length only; the description below is the **pre-fix**
+> state, retained because it is the evidence. See the banner at the top of this file.
 
 `server/src/services/token.service.ts:57-60`:
 
@@ -174,7 +222,7 @@ adds that it converts an unobservable posture into a *confidently wrong* one.
 
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
-| *"Redact them in logs, docs, and examples"* | `AGENTS.md`, `CLAUDE.md` | The token and revocation endpoints log full bodies | `DOC_INCORRECT` / **S1** — a stated repo rule is violated by the code it governs. Scope note: this instruction addresses contributors, not learners, and **no document tells readers the logs are safe to share** (checked: no `docs/` file mentions `logs/app-*`). So the harm is the live defect in F-1, not a false reassurance. |
+| *"Redact them in logs, docs, and examples"* | `AGENTS.md`, `CLAUDE.md` | ~~The token and revocation endpoints log full bodies~~ → **✅ resolved 2026-08-11**: they log the length only, and `AGENTS.md` now carries the prohibition explicitly rather than only as a general instruction | ~~`DOC_INCORRECT` / **S1**~~ → **CONSISTENT.** The rule and the code agree. Scope note retained for the record: the instruction addresses contributors, not learners, and **no document told readers the logs were safe to share** (checked: no `docs/` file mentions `logs/app-*`), so the harm was the live defect in F-1 rather than a false reassurance |
 | ROPC listed as "Working" with no §2.4 note | `README.md:94` — `\| Resource Owner Password \| Working \| API Reference \|` | Correct that it works; omits that BCP 240 forbids it | `DOC_INCORRECT` / S3 — a learner reading only the feature table would ship ROPC believing it is a supported modern grant |
 | `GET /api/fapi/config` reports `pkceRequired: true` | `fapi.controller.ts:41` | Hardcoded, not read | `DOC_INCORRECT` / S2 — a learner auditing this deployment records a PKCE posture nobody verified |
 | Module 07 teaches posture triangulation against this deployment | `modules/07…/README.md:66-78` | The stored-configuration leg is broken | `S2` — the lab cannot complete as written |
@@ -188,16 +236,25 @@ adds that it converts an unobservable posture into a *confidently wrong* one.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 9700-W1 | **Stop logging request bodies.** Remove `body: parameters` from `token.service.ts:59` and `revocation.service.ts:66`, matching `introspection.service.ts`'s length-only pattern | S | No log line at any level contains `client_secret`, `password`, `code`, `code_verifier`, `refresh_token`, `assertion`, `subject_token` or `actor_token`. Add a unit test that drives a ROPC and a `client_secret_post` request through a spy logger and asserts no captured message contains the secret values. **Security-critical file — needs its own plan.** |
-| 9700-W2 | Sweep for the same pattern elsewhere | S | `grep -rn 'body: parameters\|body: req.body' server/src` returns nothing; a lint rule or a code comment records the prohibition so it does not return |
+| 9700-W1 | ✅ **DONE 2026-08-11.** **Stop logging request bodies.** Remove `body: parameters` from `token.service.ts:59` and `revocation.service.ts:66`, matching `introspection.service.ts`'s length-only pattern | S | **Met.** Both sites log `{ length }` only; `tests/unit/services/credential-logging.test.ts` drives six grant shapes and both client-auth channels through a spy logger and asserts on the values (11 of its 12 tests fail if the line is reintroduced). Planned under plan mode, as the file is on the Security-critical surfaces list |
+| 9700-W2 | ✅ **DONE 2026-08-11.** Sweep for the same pattern elsewhere | S | **Met.** `grep -rn 'body: parameters\|body: req.body' server/src` returns nothing (`health.service.ts:42`'s `body` is a return value, not a log). Prohibition recorded twice: a comment at each site, and an `AGENTS.md` **Quirks & gotchas** bullet. No lint rule — the two greppable forms plus the test are cheaper than a custom rule, and a rule could not see a rename |
 | 9700-W3 | Caveat ROPC in `README.md` | S | The feature row cites RFC 9700 §2.4 and points at Module 01; "Working" becomes "Working — deliberately, to teach why §2.4 forbids it" |
 | 9700-W4 | Make the deployment's posture observable | M | Depends on the `service.get()` fix (B7). Then remove the hardcoded values at `fapi.controller.ts:38-43` so `config` reports what the service holds. Blocks Module 07's lab. |
 | 9700-W5 | Note `implicit` on the admin surface | S | `docs/API.md` records that admin token-create accepts `implicit` and why that is not a client-facing grant |
 
-**Ordering.** 9700-W1 is the highest-priority item found in the audit so far and is a two-line change,
-but `token.service.ts` is security-critical, so it gets its own plan. 9700-W4 is blocked on B7.
+**Ordering.** ~~9700-W1 is the highest-priority item found in the audit so far~~ — **shipped 2026-08-11 as
+T0-1, the first action of Phase 5**, planned under plan mode because `token.service.ts` is
+security-critical. It was a two-line change and the prediction held: no curriculum consequence, no lab
+touched. 9700-W3 and 9700-W5 are documentation and sit in `04-remediation-plan.md` T2-17. **9700-W4 is
+half-shipped** — the hardcoding is gone (FAPI2-W1), the observability half is still blocked on the
+`SPIFFE_JWT` enum gap, i.e. on DR-07 rather than on B7 as originally written.
 
-**Curriculum check — already performed.** `grep -rn "TokenService: URL-encoded\|URL-encoded parameters"
-docs/` returns **nothing**, so no lab or tutorial shows this log line as expected output. 9700-W1 is
-therefore an isolated code change with **no curriculum impact** — unusually clean for this repo, and the
-reason it should go first.
+**Curriculum check — performed twice, both times empty.** Pre-remediation: `grep -rn "TokenService:
+URL-encoded\|URL-encoded parameters" docs/` returns **nothing**, so no lab or tutorial shows this log line
+as expected output. Re-run on 2026-08-11 before the change landed, this time as the **phrase** grep that
+`04-remediation-plan.md` §7.4 step 2 requires (*"logs the request body"*, *"body: parameters"*, *"credential
+leak"*, *"secrets in logs"*, *"redact"*) plus step 3's check of cross-referencing modules: still nothing.
+The single near-hit is `modules/05-request-integrity-and-binding/quiz-answers.md:213`, a hypothetical
+*"what I would change about the logging"* answer that **recommends this fix** and asserts nothing about
+`token.service.ts`. So 9700-W1 was an isolated code change with **no curriculum impact** — unusually clean
+for this repo, and the reason it went first.

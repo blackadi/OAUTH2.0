@@ -34,10 +34,10 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (514 tests, 53 files)
+npm --prefix server run test              # unit + integration (526 tests, 54 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (465 tests, 52 files)
+npm --prefix server run test:unit         # unit tests only (477 tests, 53 files)
 npm --prefix server run test:integration  # integration tests only (49 tests)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 52 files across 5 categories (465 tests):
-  - `tests/unit/services/` — 24 files (127 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo)
+- **Unit tests**: 53 files across 5 categories (477 tests):
+  - `tests/unit/services/` — 25 files (157 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo). One file is a cross-service invariant rather than a service: `credential-logging.test.ts` asserts no request body reaches a log line (see **Quirks & gotchas**)
   - `tests/unit/controllers/` — 9 files (113 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci
   - `tests/unit/middleware/` — 6 files (60 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership (plus `development-only.ts`, covered via `tests/unit/routes/device.routes.test.ts`)
   - `tests/unit/utils/` — 7 files (104 tests), basic-auth/createLocalJWT/jwksClient/properties/validate/validation/dpop
   - `tests/unit/routes/` — 5 files, fapi + metrics + openapi + protected-resource-metadata + device routes
 - **Integration tests**: 1 file `tests/integration/routes.test.ts` (49 tests) — full Express stack with mocked SDK
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 514 tests across 53 files, completes in ~2s
+- Run with `npm --prefix server run test` — 526 tests across 54 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -360,6 +360,7 @@ it. When this script reports something, check whether the surrounding claim is s
 - **`GET /api/fapi/config` reports live values only** (fixed 2026-08-11). It used to hardcode `requiredClientAuth`, `senderConstrainedTokens`, `parRequired`, `pkceRequired`, `scopeRequired` and `refreshTokenRotation` — six constants describing the deployment's security posture, every one the opposite of the live configuration, on an endpoint whose entire job is to report that posture. It now reads all six from the service, and two are not straight passthroughs: **`supportedTokenAuthMethods`** replaces the scalar `requiredClientAuth`, because client auth is pinned *per client* (`tokenAuthMethod`) and FAPI 2.0 permits mTLS *or* `private_key_jwt`, so no service-level "required method" exists to report; and **`refreshTokenRotation` is `refreshTokenKept === false`**, since a kept refresh token is one that is *not* rotated (the console label "Enable Token Rotation" is the trap). `dpopEnabled` remains `dpopNonceRequired` and is **not** "is DPoP available" — DPoP works without nonces. Whether DPoP is *required* is per-client and is still unreported.
 - `dotenv` only loaded in `app.config.ts` (was duplicated in `authlete.config.ts`)
 - All logging uses `const log = req.logger || logger;` — `CallableLogger` is callable + has `.error()`, `.warn()`, `.child()`
+- **Never log a request body — log its length** (fixed 2026-08-11; RFC 9700 §4.2.4). `token.service.ts` and `revocation.service.ts` logged `body: parameters`, and `parameters` is preferentially `req.rawBody`, so the `client_secret` exclusion list in the fallback rebuild never ran on the real path. That wrote **client secrets, end-user passwords (ROPC), authorization codes, PKCE `code_verifier`s, refresh tokens, JWT `assertion`s and token-exchange `subject_token`/`actor_token`** to `logs/app-*.log` — at `info`, which is the rotating file transport's level in production, retained 14 days. The callable logger is `info` unless `LOG_LEVEL=debug`, so this was never debug-only. The pattern to copy is `introspection.service.ts`: `{ length: parameters.length }` and nothing else. `clientId` is fine to log; `clientSecret` is not. Locked by `tests/unit/services/credential-logging.test.ts`, which drives six grant shapes plus both client-auth channels through a spy logger — extend it rather than adding a new log line to these services.
 - No hardcoded credentials in source — login template passes empty strings
 - Login page credentials moved to env var `AUTH_USERS` (defaults to `admin:password` demo user)
 - **`server/coverage/`** is gitignored — generated report dir
