@@ -4,10 +4,10 @@
 the state so a new session resumes without re-reading the repo, re-fetching specifications, or re-probing
 Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` §5 second.
 
-- **Last updated:** 2026-08-11
-- **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `main`, at `b16f5da` (audit files are untracked)
+- **Last updated:** 2026-08-11 (Phase 4 written)
+- **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `audit/phase3-and-tier0-fixes`
 - **Skill:** `.claude/skills/rfc-audit/SKILL.md` — invoke with `/rfc-audit` or follow it directly
-- **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **164 markdown files, 68 source refs, clean**
+- **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **166 markdown files, 97 source refs, clean**
 
 ---
 
@@ -19,10 +19,30 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 | 1 — specification matrix | `audit/01-spec-matrix.md` | ✅ complete, Gate 1 approved |
 | 2 — per-spec deep audit | `audit/02-findings/` — **55 files** | ✅ **complete**, all batches B1–B7 approved at Gate 2 |
 | 3 — curriculum audit | `audit/03-curriculum-audit.md` | ✅ **complete** — 3a, 3b, 3c, 3d all written |
-| 4 — synthesis + remediation plan | `audit/04-remediation-plan.md`, `audit/05-decision-records.md` | ⬜ **next** — see §8 |
+| 4 — synthesis + remediation plan | `audit/04-remediation-plan.md`, `audit/05-decision-records.md` | ✅ **complete** — awaiting Gate 4. **§8 below is superseded by those two files** |
 | 5 — execution | code + docs | ⬜ not started, gated on Gate 4 |
 
-**58 markdown files under `audit/`.** Verdict spread across Phase 2: 20 `PARTIAL`, 10 `MISCONFIGURED`,
+> **Phase 4 output, and what it settled.** Read [`04-remediation-plan.md`](04-remediation-plan.md) first — its
+> §1.1 supersedes §6 below, and its §2 supersedes §8.3.
+>
+> - **All three §8.3 verification items are closed.** **CUR-3d-W1**: RFC 9846 exists (Standards Track, July 2026,
+>   obsoletes RFC 8446) — `SPEC-INVENTORY.md:42-50` was **right**; Module 00 is the stale file. RFC 9110 confirmed
+>   (Internet Standard, STD 97, Jun 2022); RFC 9864 is a new row. **ATT-W5**: `challenge_endpoint` and
+>   `client_attestation_pop_methods_supported` both **ABSENT**, and the same 62-member response corroborated
+>   **nineteen** other findings. **AM-W2**: both attacker-model URLs serve the same Final 22 Feb 2025 document —
+>   no superseded version exists.
+> - **S1 register: 8 found / 3 downgraded / 5 open**, each re-verified against the working tree. **Two entries in
+>   `02-findings/` still describe pre-fix code** — `RFC8628-…` and `OIDC-RP-INITIATED-LOGOUT-1.0.md`.
+> - **Work items: 280, not ~120.** Reconciled into 55 numbered actions across four tiers; coverage checked
+>   mechanically, so every ID is accounted for.
+> - **`AGENTS.md` surfaces (§5.3): three of four landed**, not two. Only `middleware/errorHandler.ts` is open —
+>   decided in **DR-12**.
+> - **All five EH items are closed** (W1–W5), not three.
+> - **Do not re-probe Authlete and do not re-fetch** the four specs in the plan's §2.1. Two fetches remain in the
+>   whole audit: **CUR-3b-W12** (RFC 9101 §10.1) and **8252-W1** (RFC 8252 §7.3).
+
+**61 markdown files under `audit/`** — 6 top-level plus 55 findings. *(The pre-Phase-4 figure read 58; the
+actual count was 59. Corrected here rather than carried.)* Verdict spread across Phase 2: 20 `PARTIAL`, 10 `MISCONFIGURED`,
 7 `IMPLEMENTED_VERIFIED`, 4 `DOC_ONLY`, 4 `ABSENT`, 4 `OUT_OF_SCOPE`, 2 `IMPLEMENTED_UNVERIFIED`,
 2 `CODE_ONLY`. Severities: **8×S1, 20×S2, 17×S3, 11×S4**.
 
