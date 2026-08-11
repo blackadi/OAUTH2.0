@@ -165,11 +165,14 @@ Verify user code.
 **Response:** 200 (VALID), 404 (NOT_EXIST), 400 (EXPIRED)
 
 ### `POST /api/device/complete`
-Complete device authentication.
+Complete device authentication. **Development-only** — returns a flat `404` unless `NODE_ENV=development`
+(`middleware/development-only.ts`), because it approves a pending authorization as any `subject` the caller
+names with no authentication of that subject. The production path is `POST /device/consent`, which logs the user
+in first. Rate-limited by `deviceCodeLimiter` (5/min).
 
 **Body:** `userCode`, `result` (`AUTHORIZED`/`ACCESS_DENIED`), `subject`
 
-**Response:** 200 (SUCCESS), 403 (ACCESS_DENIED), 404 (USER_CODE_NOT_EXIST), 400 (EXPIRED)
+**Response:** 200 (SUCCESS), 403 (ACCESS_DENIED), 404 (USER_CODE_NOT_EXIST — or the environment gate), 400 (EXPIRED)
 
 ### `GET /device`
 Browser form for user code entry. No `/api` prefix.

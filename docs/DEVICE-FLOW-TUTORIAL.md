@@ -578,7 +578,7 @@ curl -s -X POST http://localhost:3000/api/token \
   -d "grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=$DEVICE_CODE" | jq .
 ```
 
-> **This shortcut skips the human.** Step 3 above approves the request by calling `/api/device/complete` directly with a `subject` you picked — no password, no session, no consent screen. That is exactly what makes it convenient for testing and exactly why it is **not** a production pattern. See [Part 12](#part-12-security-considerations) before you copy this anywhere real. The browser flow in [Part 6](#part-6-browser-based-flow) is the one that actually authenticates the user.
+> **This shortcut skips the human, and only works in development.** Step 3 above approves the request by calling `/api/device/complete` directly with a `subject` you picked — no password, no session, no consent screen. That is exactly what makes it convenient for testing and exactly why it is **not** a production pattern — so since 2026-08-10 the endpoint answers `404` unless `NODE_ENV=development`. See [Part 12](#part-12-security-considerations) before you copy this anywhere real. The browser flow in [Part 6](#part-6-browser-based-flow) is the one that actually authenticates the user.
 
 ### Scenario 2: User Denies Access
 
@@ -696,12 +696,12 @@ RFC 8628 is [published as a Proposed Standard](https://datatracker.ietf.org/doc/
 
 | Path | Protection | Source |
 |------|-----------|--------|
-| `POST /device` (browser code entry) | `generalLimiter` — 60 requests/min/IP | `server/src/routes/device.routes.ts` |
+| `POST /device` (browser code entry) | `deviceCodeLimiter` — **5/min/IP** (since 2026-08-10; was `generalLimiter` at 60/min) | `server/src/routes/device.routes.ts` |
 | `POST /device/consent` (login + approve) | `generalLimiter` — 60/min/IP. **Not** the 5/min `loginLimiter` and **not** the brute-force IP ban used by `/api/session/login` | `server/src/routes/device.routes.ts` |
-| `POST /api/device/verification` | **No rate limiter at all** | `server/src/routes/device.routes.ts` |
-| `POST /api/device/complete` | **No rate limiter and no authentication** | `server/src/routes/device.routes.ts` |
+| `POST /api/device/verification` | `deviceCodeLimiter` — **5/min/IP** (since 2026-08-10; previously none) | `server/src/routes/device.routes.ts` |
+| `POST /api/device/complete` | **Development-only** since 2026-08-10 — a flat `404` in every other environment — plus `deviceCodeLimiter`. Still unauthenticated *within* development | `server/src/routes/device.routes.ts` |
 
-Do not talk yourself out of this one on entropy grounds. A `BASE20` 8-character code is 20⁸ ≈ 2.6 × 10¹⁰ combinations — about **34.5 bits**, which RFC 8628 §5.1 itself calls out as "typically less than would be used for the device code," precisely because the user has to type it. That is *why* the spec says "it is recommended that the server rate-limit user code attempts." 34.5 bits is comfortable against a throttled attacker and much less comfortable against an unthrottled one. Put a limiter on the API verification endpoint before exposing it.
+Do not talk yourself out of this one on entropy grounds. A `BASE20` 8-character code is 20⁸ ≈ 2.6 × 10¹⁰ combinations — about **34.5 bits**, which RFC 8628 §5.1 itself calls out as "typically less than would be used for the device code," precisely because the user has to type it. That is *why* the spec says "it is recommended that the server rate-limit user code attempts." 34.5 bits is comfortable against a throttled attacker and much less comfortable against an unthrottled one. A limiter is now on both verification paths (`deviceCodeLimiter`, 5/min) — sized against the RFC's own worked example, which assumes roughly five attempts.
 
 ---
 
@@ -727,7 +727,7 @@ Do not talk yourself out of this one on entropy grounds. A `BASE20` 8-character 
 
 This repo is a teaching and debugging server. Three things here are deliberately looser than a production deployment should be, and you should know which is which.
 
-**1. `POST /api/device/complete` is unauthenticated.** Anyone who can reach it and knows a live `user_code` can approve that session as *any* `subject` they name — no password, no session, no consent. The browser path (`POST /device/consent`) does authenticate via `LoginService.validateUser`, so the two paths have very different trust properties despite driving the same Authlete API. Treat `/api/device/*` as a local testing surface only. In a real deployment, `/device/complete` must run only after you have authenticated the user yourself.
+**1. `POST /api/device/complete` is unauthenticated — and is now development-only for that reason (fixed 2026-08-10).** Anyone who could reach it and knew a live `user_code` could approve that session as *any* `subject` they named — no password, no session, no consent — and the device's next token poll returned a token for that subject. It is now gated by `middleware/development-only.ts` and answers a flat `404` unless `NODE_ENV=development`; the gate is asserted in `tests/unit/routes/device.routes.test.ts`. The browser path (`POST /device/consent`) authenticates via `LoginService.validateUser` and is available in every environment, so the two paths always had very different trust properties despite driving the same Authlete API. The lesson stands whether or not the gate is there: **`/device/complete` must run only after you have authenticated the user yourself** — a `subject` parameter supplied by the caller is a claim, not evidence.
 
 **2. The user code is never echoed back on the consent screen — RFC 8628 §3.3.1.** When the user arrives through `verification_uri_complete` (the QR-code path), the code is pre-filled and submitted for them, so they never see what they are confirming. The spec says the server "SHOULD display the `user_code` to the user and ask them to verify that it matches the `user_code` being displayed on the device" — that check is what stops an attacker from getting a victim to approve the *attacker's* session by scanning a code (§5.4 Remote Phishing). The consent view in `server/src/views/device-verification.ejs` carries `user_code` only as a hidden field.
 

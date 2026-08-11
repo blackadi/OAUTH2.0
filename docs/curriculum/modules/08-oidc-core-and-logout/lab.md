@@ -2,8 +2,8 @@
 
 **The short version:** six exercises. You will validate an ID token through all thirteen OIDC Core steps with
 a script you write, forge one six different ways, discover that on this deployment knowing the client secret
-is enough to mint an ID token for anybody, break `prompt=none`, and drive an open redirect out of the logout
-endpoint.
+is enough to mint an ID token for anybody, break `prompt=none`, and take apart the open redirect the logout
+endpoint used to have.
 
 ## Before you start
 
@@ -651,22 +651,28 @@ done
 
 ```
 http://localhost:3000                          status=302 loc=http://localhost:3000/?state=xyz
-http://localhost:3000.evil.example.com/bye     status=302 loc=http://localhost:3000.evil.example.com/bye?state=xyz
-http://localhost:3001@evil.example.com/        status=302 loc=http://localhost:3001@evil.example.com/?state=xyz
+http://localhost:3000.evil.example.com/bye     status=200 loc=
+http://localhost:3001@evil.example.com/        status=200 loc=
 http://localhost:31337/bye                     status=302 loc=http://localhost:31337/bye?state=xyz
 https://evil.example.com/bye                   status=200 loc=
 ```
 
-**Three redirects to hosts nobody registered.** Read the second and third carefully:
+> **This exercise used to reproduce a live open redirect. It was fixed on 2026-08-10, and the transcript above
+> is the post-fix output.** The two attacker hosts now render the logout page instead of redirecting. The
+> exercise is still worth running, because *why* they used to pass is the lesson — and because one row still
+> redirects somewhere nobody registered. Keep reading.
+
+**What used to happen, and why.** Before the fix, rows two and three were both `302`s to `evil.example.com`:
 
 - `http://localhost:3000.evil.example.com` — the host is `evil.example.com`. `localhost:3000` is a *subdomain
   label*. A human skims it as localhost.
 - `http://localhost:3001@evil.example.com/` — everything before `@` is userinfo. The host is, again,
   `evil.example.com`.
 
-The cause is in `server/src/services/logout.service.ts`:
+The cause was in `server/src/services/logout.service.ts`, and it is worth reading the old code:
 
 ```js
+// BEFORE — the defect
 const isAllowed =
   post_logout_redirect_uri === allowedRedirectUri ||
   (process.env.NODE_ENV !== "production" && post_logout_redirect_uri.startsWith("http://localhost:")) ||
@@ -675,20 +681,45 @@ const isAllowed =
 
 Two prefix matches. **`startsWith` is not URI matching** — it has no idea where the host ends.
 
-Now do the part that separates a finding from a shrug: **decide whether this survives in production.** The
-middle clause is gated on `NODE_ENV !== "production"`, so it disappears. But the third clause does not — and
-with `ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001`, the string
-`http://localhost:3000.evil.example.com/bye` still passes `startsWith("http://localhost:3000")`. **The open
-redirect survives**, and in a real deployment where `ALLOWED_ORIGINS` is `https://app.example.com`, so does
-`https://app.example.com.evil.net/`. Do not file this as dev-only.
+Now do the part that separates a finding from a shrug: **decide whether it survived in production.** The middle
+clause is gated on `NODE_ENV !== "production"`, so it disappeared. The third clause did not — and with
+`ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001`, the string
+`http://localhost:3000.evil.example.com/bye` still passed `startsWith("http://localhost:3000")`. **The open
+redirect survived production**, and in a real deployment where `ALLOWED_ORIGINS` is `https://app.example.com`, so
+did `https://app.example.com.evil.net/`. It was not a dev-only finding.
 
 RFC 9700 §2.1: *"Clients and authorization servers MUST NOT expose URLs that forward the user's browser to
 arbitrary URIs obtained from a query parameter."* Note the contrast with Module 07 Exercise 2a, where the
 **authorization** endpoint refused an unregistered `redirect_uri` with a 400 and no `Location` — the same
-deployment gets exact matching right in one place and wrong in another. That is the "enforced in one path"
+deployment got exact matching right in one place and wrong in another. That is the "enforced in one path"
 shape of conformance theatre, found in the wild.
 
-The fix is one line: exact comparison against a registered set.
+**The fix, and what it teaches.** `isAllowedPostLogoutRedirectUri` in the same file now *parses* the value and
+compares **origins**, never strings:
+
+```js
+// AFTER — parse, then compare
+const url = new URL(candidate);                    // throws → refuse
+if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+if (allowedOrigins.has(url.origin)) return true;   // exact origin equality
+```
+
+Three details are doing the work, and each is a transferable lesson:
+
+1. **`new URL("http://localhost:3000.evil.example.com/bye")` throws** — `3000.evil.example.com` is not a valid port. Failing closed on a parse error is not defensive padding; it is the check.
+2. **`new URL("http://localhost:3001@evil.example.com/").origin` is `http://evil.example.com`** — the parser knows where userinfo ends and the host begins. `startsWith` never will.
+3. **Origin comparison normalises host case** (RFC 3986 §3.2.2), so `https://APP.EXAMPLE.COM` matches `https://app.example.com`. String comparison would have needed that by hand, and most implementations forget.
+
+**Now the row that still redirects.** `http://localhost:31337/bye` is *still* a `302`, to a port nobody
+registered. That is deliberate: outside production the check accepts any `localhost` host so the labs keep
+working. Two things to take from it — the fix narrowed the defect rather than eliminating the category, and
+**"it's only dev" is a claim you should always test rather than accept**, which is exactly what you just did to
+the old third clause.
+
+**One more gap this did not close.** RP-Initiated Logout §3 requires exact matching against the client's
+**registered** `post_logout_redirect_uris`. No client on this deployment registers any, so the allowlist is
+still environment-driven rather than per-client. Write that up: the open redirect is fixed, and the deployment
+still departs from §3 in a way that is defensible only because it is written down.
 
 ### 6c — Back-channel logout
 
@@ -801,8 +832,10 @@ to actually end it, and which of the four logout specs (if any) covers it.
 - [ ] `nonce` appeared in the ID token when sent and was absent when not.
 - [ ] `prompt=none` returned a 302 with an empty `Location`, you traced it to `NO_INTERACTION`, and you can
       name the four errors it should have returned instead.
-- [ ] You obtained a 302 to a host nobody registered from the logout endpoint, and you can explain why
-      `NODE_ENV=production` does not fix it.
+- [ ] The two attacker hosts were **refused** by the logout endpoint, and you can explain — from the old code —
+      why prefix matching accepted them and why `NODE_ENV=production` did not fix it.
+- [ ] You can state which single row in 6b still redirects somewhere nobody registered, and why that is
+      deliberate rather than an oversight.
 - [ ] You can list, from the code, two things the back-channel logout handler fails to validate.
 
 ## Clean up

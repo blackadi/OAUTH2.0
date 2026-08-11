@@ -446,7 +446,7 @@ detail that only shows up when you look at the artefact.
 | Code injection in hybrid | A code from another session paired with this ID token | `c_hash` | **Ex 3 — verified here** |
 | ID token used as an access token | RS accepts evidence as authority | RFC 9068 `typ: at+jwt`; never send it | Ex 1 |
 | Broken `prompt=none` | Silent renewal fails in a way clients cannot handle | Return one of the four §3.1.2.6 errors | **Ex 5 — verified here** |
-| Logout open redirect | `post_logout_redirect_uri` not exactly matched | Exact matching against registered URIs | **Ex 6 — verified here** |
+| Logout open redirect | `post_logout_redirect_uri` not exactly matched | Exact matching against registered URIs | **Ex 6 — reproduced here, fixed 2026-08-10** |
 | Unverified logout token | Anyone can end anyone's session | Verify against the OP's JWKS; check `iss`/`aud`/`exp`/`events` | **Ex 6 — verified here** |
 | `sub` collision across issuers | Two providers' users merge into one account | Key records on `(iss, sub)` | Ex 2 |
 
@@ -572,8 +572,8 @@ Evidence is not authority. If the API accepts it, you have found a token-confusi
 if (allowed.some(o => uri.startsWith(o))) return res.redirect(uri);
 ```
 
-`http://localhost:3000` allows `http://localhost:3000.evil.example.com`. You will exploit exactly this in Lab
-Exercise 6.
+`http://localhost:3000` allows `http://localhost:3000.evil.example.com`. This server shipped exactly this bug
+until 2026-08-10; Lab Exercise 6b walks the defect, the fix, and the gap the fix left.
 
 **✅ Exact string comparison against registered URIs**
 
@@ -618,7 +618,8 @@ Read after the lesson, before the lab:
 ## Then do the lab
 
 **[lab.md](lab.md)** — six exercises. You will validate an ID token through all thirteen steps by hand, forge
-one four different ways, break `prompt=none`, and drive an open redirect out of the logout endpoint.
+one four different ways, break `prompt=none`, and take apart the open redirect the logout endpoint used to
+have (fixed 2026-08-10 — Exercise 6b now walks the defect, the fix, and the gap the fix left).
 
 Then **[quiz.md](quiz.md)** — 19 items. Tier 4 is the gate.
 
