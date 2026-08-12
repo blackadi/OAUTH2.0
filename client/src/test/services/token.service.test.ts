@@ -84,32 +84,47 @@ describe('tokenService.userInfo', () => {
   });
 });
 
+// RFC 7662 §2.1 requires the introspection endpoint to be protected. Since 2026-08-12 both endpoints take
+// this deployment's admin Basic credentials; the header previously carried `Bearer <access token>`, which
+// the server never read. See audit/02-findings/RFC7662-token-introspection.md F-1.
+const ADMIN_BASIC = `Basic ${btoa('mgmt-id:mgmt-secret')}`;
+
 describe('tokenService.introspection', () => {
-  it('sends POST with Bearer auth when accessToken provided', async () => {
+  it('sends POST with admin Basic auth, not the access token', async () => {
     mockFetch.mockResolvedValue(ok({ active: true }));
-    const result = await tokenService.introspection('tok1', 'at1');
+    const result = await tokenService.introspection('tok1', 'mgmt-id', 'mgmt-secret');
     expect(result).toEqual({ active: true });
     const call = mockFetch.mock.calls[0];
     expect(call[0]).toBe('http://localhost:3000/api/introspection');
     expect(call[1].method).toBe('POST');
-    expect(call[1].headers['Authorization']).toBe('Bearer at1');
+    expect(call[1].headers['Authorization']).toBe(ADMIN_BASIC);
+    expect(call[1].body).toBe('token=tok1');
   });
 
-  it('sends POST without auth when accessToken omitted', async () => {
-    mockFetch.mockResolvedValue(ok({ active: false }));
-    await tokenService.introspection('tok1');
-    expect(mockFetch.mock.calls[0][1].headers['Authorization']).toBeUndefined();
+  it('passes the RFC 9470 step-up options through in the body', async () => {
+    mockFetch.mockResolvedValue(ok({ active: true }));
+    await tokenService.introspection('tok1', 'mgmt-id', 'mgmt-secret', {
+      acrValues: 'pwd',
+      maxAge: 300,
+    });
+    const body = mockFetch.mock.calls[0][1].body as string;
+    expect(body).toContain('token=tok1');
+    expect(body).toContain('acrValues=pwd');
+    expect(body).toContain('maxAge=300');
   });
 });
 
 describe('tokenService.introspectionStandard', () => {
-  it('sends POST form to standard endpoint', async () => {
+  it('sends POST form to the standard endpoint with admin Basic auth', async () => {
     mockFetch.mockResolvedValue(ok({ active: true }));
-    const result = await tokenService.introspectionStandard('tok1');
+    const result = await tokenService.introspectionStandard('tok1', 'mgmt-id', 'mgmt-secret');
     expect(result).toEqual({ active: true });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/introspection/standard', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: ADMIN_BASIC,
+      },
       body: 'token=tok1',
     });
   });

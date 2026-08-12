@@ -91,6 +91,417 @@ against it before calling the capstone complete._
 - [x] **2026-08-04 — Module 05's Tier-3 finding fixed in the server; Exercise 5 rewritten** (below)
 - [x] **2026-08-04 — signed JAR unblocked; Module 05 Exercise 2 rewritten around it** (below)
 - [x] **2026-08-06 — the SDK 1.0.0 pin fixed Module 06's gate premise; Exercise 6 rebuilt** (below)
+- [x] **2026-08-10 — RFC conformance audit (Phases 0–2 + Phase 3a); two exploitable S1s fixed; Module 08 Ex 6b rewritten** (below)
+- [x] **2026-08-11 — Gate 4 approved; Phase 5 began. T0-1: the token and revocation endpoints stopped logging request bodies** (below)
+- [x] **2026-08-11 — T0-5 + T0-6 (audit hygiene, 21 drifted citations); T0-2: `id_token_hint` is verified, not decoded** (below)
+- [x] **2026-08-12 — T0-3: RP-Initiated Logout became two requests; Module 08 Ex 6b reframed around it** (below)
+- [x] **2026-08-12 — T0-4: §3 per-client matching, and the Authlete field that does not exist. TIER 0 COMPLETE** (below)
+- [x] **2026-08-12 — T1-1: both introspection endpoints protected; the last easily-exploitable S1 is closed** (below)
+- [x] **2026-08-12 — T1-7: `prompt=none` answers properly, and the latent step-up S1 is retired** (below)
+
+### 2026-08-12 — T1-7: `prompt=none` gives a real answer, and the trap behind the obvious fix
+
+**Why this matters to a future session:** **the latent S1 is retired, not deferred.** The register is now
+8 found / 5 downgraded-or-retired / 3 open, and none of the three is directly exploitable. `prompt=none`
+returns a code or a §3.1.2.6 error, and **`EXCEEDS_MAX_AGE` is reachable for the first time**.
+
+Two findings in one code path, and the audit was emphatic that fixing either alone was worse than fixing
+neither (`OIDC-CORE-1.0.md` OIDC-W1: *"Same change as 9470-W3 — do not split"*). It was right, and the reason
+is worth carrying.
+
+**The visible bug.** `case "NO_INTERACTION"` did `res.redirect(result.responseContent ?? "")`. Authlete
+answers `prompt=none` with `NO_INTERACTION`, a ticket, and **`responseContent: null`** — a *"you decide"*
+answer, not a redirect URL. So every silent-renewal request got a **302 with an empty `Location`**: neither
+success nor one of OIDC Core §3.1.2.6's four errors, and no client error handler can classify it.
+
+**The trap.** The controller already contained `prompt=none` logic — inside `case "INTERACTION"`, which such
+a request never reaches. Dead code that read as a feature. And it opened by **inventing an authentication
+event**: `acr: "pwd"` with no evidence a password was used, `auth_time: now` for an event at an unknown
+earlier time, both passed to Authlete to be stamped on the tokens — with no `max_age` and no essential-`acr`
+check anywhere on that path, because those run on the login POST that `prompt=none` bypasses. **Routing
+`NO_INTERACTION` into that block — the obvious one-line fix — would have armed a step-up bypass.** A resource
+server enforcing RFC 9470 would have accepted freshness the OP fabricated: a security control silently not
+applied, which is worse than the visible bug, and it would have arrived labelled as progress.
+
+**What shipped.** `decideWithoutInteraction` follows Authlete's contract — `NOT_LOGGED_IN` →
+`CONSENT_REQUIRED` → step-up → issue — and the fabrication block is deleted. The decision runs through a new
+pure function, **`server/src/utils/step-up.ts`**, whose whole rule is one sentence: *an authentication this
+OP did not observe is one it will not assert.* An unknown `acr` does not satisfy an essential `acr` request;
+an unknown `auth_time` does not satisfy a `max_age`. "We cannot prove it" is answered as "no", never as "skip
+the check". `session.controller.ts` was refactored onto the same function, so there is one implementation of
+the check rather than two that can drift. The dead `INTERACTION` branch **delegates** instead of being
+deleted, so it cannot diverge if Authlete's action ever changes.
+
+**A finding about the plan itself: T1-8 was subsumed, and its framing was wrong.** 9470-W2 says the `max_age`
+check "cannot fail" because `authTime` is set immediately before it is read. True — and **correct**: that is
+the login POST, where the End-User has just actively authenticated, so any maximum age is satisfied by
+construction. The place `max_age` must be able to fail is the path that does *not* re-authenticate, and that
+path did not exist until this change built it. Recorded in the entry rather than closed silently.
+
+**Verified live**, with a real session and cookie jar: no session → `login_required` (with `state` and `iss`
+echoed); session + stored consent → a real code; `max_age=3600` → a code; **`max_age=0` against a
+two-second-old session → refused**. No Authlete token call was needed for any of it.
+
+**Module 08 Exercise 5c/5d is now the best exercise in the module**, because the trap is the lesson. 5c gains
+the real transcript including the `max_age=0` row; 5d keeps its diagnosis, then asks the reader to compare
+their proposed `NO_INTERACTION` branch against the dead code — and shows why the obvious answer would have
+been a regression. It closes on the term the audit uses: a **latent** finding is one that is not exploitable
+in the code as it stands but is armed by a change someone is already planning. Those are worth hunting
+precisely because the fix that activates them looks like an improvement. Q13's answer key gains a bonus mark
+for spotting it.
+
+**Checked and deliberately not changed:** `modules/05…/lab.md:32` also warns about an empty `Location`, but
+from a different cause (`parRequired: true` makes the AS return a 400 body, not a redirect) — unaffected.
+`modules/02…/README.md:263` and `GLOSSARY.md:85` remain accurate.
+
+**Verification.** typecheck clean; lint 0 errors (same 4 pre-existing warnings); **635 tests / 58 files**, up
+from 613 — 15 on the pure checker plus 8 controller cases including the two fail-closed-on-absence paths.
+`check-docs.mjs` clean at 167 files. `test:e2e` not run. No Authlete probe and no service write.
+
+### 2026-08-12 — T1-1: the introspection oracle is closed, and 21 lab commands grew a `-u`
+
+**Why this matters to a future session:** **every introspection call in this repo now needs
+`-u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET"`** — six module labs, both root scripts, three tutorials and the
+SPA. And the S1 register is down to four open, none of them directly exploitable.
+
+Both endpoints carried **no middleware at all**: no authentication, no rate limiter. Anyone who could reach
+the server could post a string and learn whether it was a live token, then harvest `sub`, `scope`,
+`client_id` and `exp` from the hits. RFC 7662 §2.1 names exactly this — *"To prevent token scanning attacks,
+the endpoint MUST also require some form of authorization"*. The proprietary `/api/introspection` was the
+richer leak: it also returns the RFC 9470 `acr`, `auth_time` and step-up challenge, so it disclosed **how
+strongly a user authenticated and when**.
+
+**What shipped:** admin Basic auth (`requireBasicAuth`, which fails closed) plus `generalLimiter` on both.
+Four decisions worth knowing:
+
+- **The gate runs before the Authlete call.** That is what closes the oracle — not the status code. A check
+  that authenticates *after* the lookup still leaks through timing and error shape. Asserted directly: the
+  tests require that Authlete is never called on a rejected request.
+- **It is admin auth, not client auth, and the entry says so plainly.** §2.1 requires "some form of
+  authorization" and names client authentication only as an example, so the MUST is met. But nothing in this
+  server can validate a client secret — only Authlete can — and **whether Authlete's `standardProcess`
+  rejects bad client credentials is unestablished**. Demanding a credential nothing validates would look like
+  protection and provide none. Recorded as **7662-W6**, a behavioural probe.
+- **7662-W3 was satisfied by deleting code, not by adopting `parseBasicAuth`.** The old block decoded
+  `Authorization: Basic` and forwarded it to Authlete as `client_id`/`client_secret`. Once the header carries
+  *admin* credentials, doing that would ship this deployment's management secret to the vendor labelled as
+  somebody's client secret. Client credentials still work — they belong in the body.
+- **Two different 401s now exist on `/api/introspection`,** and the docs teach the difference: ours is
+  `WWW-Authenticate: Basic realm="introspection"` ("you may not ask"), Authlete's is
+  `Bearer error="invalid_token"` ("the answer is no"). Verified live, both.
+
+**The curriculum cost was the real work: 21 call sites.** Most was mechanical, but **a regex sweep was the
+wrong tool and nearly caused a defect** — it added credentials to Module 07 Exercise 5a's *deliberately
+unauthenticated* call, destroying the contrast the exercise is built on. Caught by re-reading every hit.
+Worth remembering: a mechanical edit across a curriculum will silently "fix" the examples that are supposed
+to be broken.
+
+**Two exercises inverted and were reframed rather than deleted.** Module 04's *"Break it — is the
+introspection endpoint protected?"* used to reproduce the finding live; it now shows the `401` as the after,
+keeps the exploit reasoning as the before, and gains three audit questions the fix invites — does the check
+run before the work, does it fail closed, and is it the *right* credential. Module 07's Exercise 5a compared
+two sibling endpoints with "opposite postures"; they now have the same posture, and the exercise gained a
+better lesson: `introspection_endpoint_auth_methods_supported: []` is *still* accurate, because no **client**
+auth method is supported there — so metadata can be accurate about a capability and silent about a control.
+
+**Three citations were wrong before this change**, all in `docs/STEP-UP-AUTH-TUTORIAL.md`:
+`introspection.controller.ts:47` pointed at a 400-return rather than the step-up parser, the client
+`token.service.ts:117` pointed at an unrelated line, and a test-count claim said 5 where the file has 4. That
+is the third consecutive session in which the pre-existing citation drift outnumbered the drift the change
+itself caused.
+
+**Verification.** typecheck clean; lint 0 errors (same 4 pre-existing warnings); **612 tests / 57 files**, up
+from 589 — 20 of them a new `tests/unit/routes/introspection.routes.test.ts` covering both endpoints, five
+rejection shapes, the fails-closed case, a 429, and a regression that the admin credentials never reach
+Authlete. `check-docs.mjs` clean. Client builds; 109 client tests green. `test:e2e` not run. Live: both
+endpoints 401 unauthenticated with the right challenge, 200 authenticated, and no Authlete call on rejection.
+
+### 2026-08-12 — T0-4: §3 matches per client now, and the field Authlete does not have
+
+**Why this matters to a future session:** **Tier 0 is complete.** Next is Tier 1, starting with T1-1 — the
+introspection endpoints still carry no middleware at all, which is the last easily-exploitable open S1.
+Also: **`GET`/`POST /api/logout` no longer redirect anywhere unless the request identifies a client.**
+
+RP-Initiated Logout §3 asks for two things and the deployment was meeting one:
+
+> …does not exactly match one of the **previously registered** `post_logout_redirect_uris` values.
+
+*"Exactly match"* was fixed on 2026-08-10 (origin comparison, replacing a `startsWith` open redirect).
+*"Previously registered"* was not: the list came from `ALLOWED_ORIGINS`, a **deployment-wide** env var, so
+every client shared one list and any client could be sent to any other client's target. That is a different
+security model, and a weaker one.
+
+**The plan was to register the URIs on the clients and then match against them. The first half is
+impossible.** Authlete 3.0 has **no client field for post-logout redirect URIs**. Checked three ways against
+the vendored `docs/openapi-spec.json` (API Explorer 3.0.16): **0 of the `Client` schema's 108 properties**
+contain "post"; **0 of 33 schemas** define a post-logout member; `ClientExtension` carries only scopes and
+durations. Its only client-level logout fields are `backchannelLogoutUri` and
+`backchannelLogoutSessionRequired`.
+
+**And the write appeared to succeed.** Sending `postLogoutRedirectUris` through `client/update` returned
+**HTTP 200** with the field silently discarded — no error, no warning. A before/after key-by-key diff of all
+three clients showed nothing changed but `modifiedAt`. **A vendor that accepts and discards is worse than one
+that rejects**: a 400 costs minutes, a 200 costs an afternoon and then resurfaces as "logout stopped
+redirecting" with nothing pointing at the cause. The rule to carry: **when a configuration write is
+load-bearing for a security decision, read it back.**
+
+**What shipped instead.** The registry is the deployment's own — `POST_LOGOUT_REDIRECT_URIS`, a JSON
+`clientId → string[]` — and the comparison is `===` per element. The departure from §3 is now *where the
+registration is stored*, not what the rule is. Four decisions:
+
+- **Client identity comes from `client_id`, else the `aud` of a *verified* `id_token_hint`.** §2 makes
+  `client_id` OPTIONAL precisely because the hint can name the RP, and §3 needs that identity. So T0-2's
+  verifier gained a verified `audience` alongside `subject`, and the hint is now verified whenever it could
+  supply either piece — not only when the session lacks a subject. An `aud` naming several clients yields no
+  client.
+- **No client ⇒ no redirect.** An unidentified client has an empty registered set, and §3's answer for an
+  empty set is to refuse. Not caution — conformance.
+- **All the `new URL()` parsing is gone.** It existed to compare *origins* safely. Matching whole registered
+  URIs needs a string comparison, and a check with no parser cannot have a parser bug. Both 2026-08-10
+  payloads are still refused, now because nobody registered them.
+- **The non-production `localhost` clause is gone**, so `http://localhost:31337/bye` — Module 08 Ex 6b's "row
+  that still redirects" — is refused. There is no environment where an unregistered URI redirects.
+
+**Two more findings fell out of this, both worth more than the fix.** `SERVICE-CONFIG-PROBE.md` §10 recorded
+`postLogoutRedirectUris` as client metadata that was merely *unset*; it is not a field at all, so that row was
+withdrawn. And the audit spelled Authlete's back-channel field **`backChannelLogoutUri`** (capital `C`) in
+three places — the real name is **`backchannelLogoutUri`**. The BCL conclusion survives, because the correctly
+spelled key is also unset, but the probe was reading a key that *cannot* exist and so could not have returned
+anything else. Both are the audit correcting itself, the pattern `RESUME.md` §2.5 tracks: **every instance so
+far arose where the audit reasoned from a name it had inferred rather than one it had read.**
+
+A third is recorded but not fixed: `audit/02-findings/CLIENT-UPDATE-FIELD-LOSS.md`. `buildClientInput` names
+roughly forty of Authlete's 108 `Client` fields, and the SDK's `ClientInput` strips unknown keys — so an admin
+`PUT /api/client/:clientId` may silently clear what it does not name. The full-object round trip is
+**verified** lossless; whether a *partial* update clears the rest is marked **`UNVERIFIED`**, because the test
+is destructive on a shared service. **CU-W1 settles it on a throwaway DCR client and gates whether CU-W2 is
+needed at all.**
+
+**Module 08 Ex 6b keeps its shape and gains its best lesson.** The POST loop now sends `client_id`; row 4
+flips 302 → 200. A new four-line block shows the same URI accepted for one client, refused for no client,
+refused for an unknown client, and refused with a trailing slash — three §3 lessons in one transcript. The
+exercise closes on the vendor gap: **a specification's MUST can be unsatisfiable in the form the specification
+imagines, because your IdP does not model the field.** The honest response is to implement the *property* the
+requirement exists to provide, record precisely where you depart and why, and make that a stored fact rather
+than folklore. The two-findings table is now three, with the two clauses of §3 separated.
+
+**Verification.** typecheck clean; lint 0 errors (the same 4 pre-existing warnings); **589 tests / 56 files**,
+up from 569. `check-docs.mjs` clean. `test:e2e` not run. Live: both Ex 6b loops plus the four-case client
+matrix, re-run against a local server. Authlete calls: 1 read + 3 writes + 1 verification read = **5**, all
+announced, net effect `modifiedAt` only.
+
+**Citations re-anchored by content.** `logout.service.ts` moved this time — the change is inside the matcher,
+above everything cited — so 13 references were re-resolved by matching content, not by offset. Two of them
+described code that **no longer exists**: `ALLOWED_ORIGINS` and `NODE_ENV` are no longer read by the logout
+service at all, so those `00-inventory.md` entries were rewritten rather than renumbered. That is the case
+§7.4 step 7 warns about — sometimes the target is gone, not moved.
+
+### 2026-08-12 — T0-3: logout stopped happening on a `GET`, and Module 08 Ex 6b grew a second half
+
+**Why this matters to a future session:** **`GET /api/logout` no longer logs anybody out.** Anything that
+drove logout with a bare `GET` — a script, a lab step, a smoke test, an `<img>` tag — now gets a confirmation
+page. Tier 0 is down to **T0-4 alone**, and T0-4 is blocked on a console change (RPL-W4).
+
+RP-Initiated Logout 1.0 §2:
+
+> At the Logout Endpoint, the OP SHOULD ask the End-User whether to log out of the OP as well. Furthermore,
+> the OP **MUST** ask the End-User this question if an `id_token_hint` was not provided or if the supplied
+> ID Token does not belong to the current OP session.
+
+The server never asked. It destroyed the session on a bare `GET` with **no middleware at all** — so
+`<img src="http://localhost:3000/api/logout">` on any page logged its viewer out. That is a MUST violation on
+its own, and it also made the 2026-08-10 open redirect reachable without the victim intending to log out.
+
+`GET /api/logout` now renders `views/logout-confirm.ejs`: a question, a CSRF token, and every RP parameter
+replayed as a hidden field. `POST /api/logout` — behind the same `middleware/csrf.ts` the device flow's
+browser paths use — does the verifying, delivering, destroying and redirecting. Four decisions worth knowing:
+
+- **The question is unconditional**, which meets §2's SHOULD as well as its MUST. The narrower reading (skip
+  the page when a verified hint names the session's subject) was considered and rejected: it leaves a `GET`
+  that still destroys a session, so a captured `id_token_hint` would stay a forced-logout primitive.
+- **Parameters are read body-first, query second.** §2 blesses both GET and POST for the logout request, so
+  the form body is the spec-shaped source. Merging widens nothing — unlike `introspection.service.ts`'s
+  server-determined fields, nothing here is a value a caller must not choose.
+- **The CSRF token is single-use and the logout destroys the session holding it**, so a scripted logout needs
+  one `GET` per `POST`. Verified live: a reused token returns `403`. Every consumer recipe was rewritten to
+  do the two-step (`CURL-TEST.md` §11/§13d, `test-all.sh`, `docs/BACKCHANNEL-LOGOUT-TUTORIAL.md`).
+- **The rate limiter was deliberately not added.** F-1's second aggravating factor ("no rate limiter") stays
+  open and recorded rather than being closed outside RPL-W3's acceptance criteria.
+
+**`docs/DATA-FLOWS.md` had documented this page and a `POST /api/logout` since before either existed.** The
+change makes it true. Its other branch — a `400` on an invalid `post_logout_redirect_uri` — described
+behaviour that has never existed either, and was corrected in the same pass: an invalid redirect does not fail
+the logout, it just lands you on the signed-out page. Documentation ahead of the code rather than behind it is
+a drift class no checker catches, and this is the second time this endpoint has produced one.
+
+**Module 08 Exercise 6b was reframed, not retired**, and it is a better exercise for it. Its five-URI loop
+used to *discriminate* redirect-from-render; under a confirm-on-`GET` rule every row returns `200`, which
+would have left the exercise teaching nothing. It now runs twice:
+
+1. the original `GET` loop, whose five identical `200`s **are** the new lesson (§2, and the CSRF consequence);
+2. a new `POST` loop that preserves the original discrimination exactly — rows 1 and 4 redirect, rows 2, 3
+   and 5 do not.
+
+Plus a third snippet proving the single-use token. **All three transcripts were run against a live local
+server**, not reasoned about; none of the three paths makes an Authlete call (no `id_token_hint`, no
+`backchannel=true`), and the server makes none at boot. The exercise closes on a new table separating the two
+findings this one endpoint carries — §3's *"exactly match"* (fixed 2026-08-10, cost the attacker the
+destination) and §2's *"MUST ask"* (fixed here, cost the attacker the trigger) — with the point that neither
+fix subsumes the other.
+
+**Verification.** typecheck clean; lint 0 errors (the same 4 pre-existing warnings); **569 tests / 56 files**,
+up from 553 / 55 — a new `tests/unit/routes/logout.routes.test.ts` (10) plus 7 service tests. Reverting to a
+one-shot `GET` fails 8 of them. `check-docs.mjs` clean at 166 files. `test:e2e` not run; its logout assertion
+accepts `[200, 302]` and is unaffected.
+
+**Citations re-anchored by content, per the §7.4 checklist.** `logout.service.ts` was edited so that **not one
+cited line moved** — the parameter read stayed two lines and both new blocks were appended after everything
+cited. `logout.controller.ts` shifted uniformly by +19 below the new export, which was *verified line by line
+rather than assumed*: 13 citations across `00-inventory.md`, `OIDC-BACKCHANNEL-LOGOUT-1.0.md`,
+`JOSE-rfc7515-7517-7519.md` and this file. **Two were already wrong before this change** —
+`RESUME.md:243` still carried the pre-2026-08-10 range `:33-63`, and `JOSE:145` pointed at a `jwt.decode` in
+`logout.service.ts` that T0-2 deleted. Both fixed. `check-docs.mjs` sees neither class: it validates only that
+a `server/`|`client/` ref is not past EOF.
+
+**One thing found and not fixed, for T2-2.** `exams/final-exam.md:76` still states that the logout endpoint
+"validates `post_logout_redirect_uri` with a `startsWith` prefix check" — stale since 2026-08-10, and **not**
+in T2-2's current scope, which names Module 10 ×5 plus `final-exam-answers.md:227-229`. The question and its
+answer key drifted apart. Add it to T2-2.
+
+### 2026-08-11 — T0-2: `id_token_hint` became a signed assertion again, and BCL-W5 is unblocked
+
+**Why this matters to a future session:** **a client may now register a `backchannel_logout_uri`.** That was
+gated on `RPL-W2`, and `RPL-W2` is done.
+
+`logout.service.ts` used `jwt.decode` on `id_token_hint` and took `payload.sub` as the End-User — and that
+subject drives back-channel logout delivery. So anyone could hand-craft an **unsigned** JWT naming any subject
+and call `GET /api/logout?backchannel=true&id_token_hint=<forged>` to force that user out of every RP with a
+registered logout URI. It was inert only because no client had registered one; registering the first would have
+turned it into a remote forced-logout primitive. RP-Initiated Logout §2 defines the hint as an *"ID Token
+previously issued by the OP"* — an assertion, whose value is its signature.
+
+The verifier is a **pure** function, `utils/verify-id-token-hint.ts`, so all 21 of its branches are testable
+without network or SDK access. Five decisions in it are worth knowing:
+
+- **Keys come from Authlete's service JWKS, not `JWKS_URI`** — that env var is unset here (it is the root of
+  BCL-W3), so reusing it would have broken the feature for an unrelated reason.
+- **The expected `iss` comes from live discovery, not `JWT_ISSUER`** — which is also unset, and using it would
+  have silently disabled the `iss` check. Both are cached for five minutes.
+- **Algorithms are pinned to the nine asymmetric ones `jsonwebtoken@9` supports.** `alg: none` and the `HS*`
+  family are refused. **Consequence:** client `1523514379` signs ID tokens with `HS256` (probe 2 §7), which is
+  symmetric, so *its* hints are now ignored. Logout still works for its users via the session cookie. The real
+  fix is moving that client to `ES256` — one console field, adjacent to T1-5.
+- **`exp` is deliberately not enforced.** A hint is an old token by definition — sessions here last 30 minutes.
+  The signature is what proves the OP issued it. Reported as `hintExpired` in the log. *`UNVERIFIED`: whether
+  §2 says anything explicit about expired hints was not checked against the primary source.*
+- **`aud` is pinned only when `client_id` is supplied**, because §2 makes `client_id` OPTIONAL.
+
+**Failure is never an error to the caller**: the session is still destroyed, the cookie cleared, the redirect
+validated. There is simply no subject, so nothing is delivered.
+
+**Verified by reintroducing the bug** — restoring the trust-the-payload behaviour fails 4 of the new service
+tests, including the forged `alg: none` case. **553 tests (was 526), 55 files.**
+
+### 2026-08-11 — Phase 5 began, and the first thing it closed was a credential leak
+
+**Why this matters to a future session:** **Gate 4 is approved and Phase 5 (execution) is under way.**
+The ordered plan is `audit/04-remediation-plan.md` §7 — four tiers, 55 numbered actions — and its §7.4 is a
+per-commit checklist that is now mandatory rather than advisory. `audit/RESUME.md` §1 tracks which action
+is next. **Tier 0 is the only tier that ships before anything else**, and T0-1 is done.
+
+**T0-1 (9700-W1 + 9700-W2) — `token.service.ts` and `revocation.service.ts` wrote the raw request body to
+the log.** `log(..., { length, body: parameters })`, where `parameters` is preferentially `req.rawBody`, so
+the exclusion list that strips `client_secret` only ever ran on the fallback path. Depending on the grant,
+`logs/app-*.log` therefore held **client secrets, end-user passwords (ROPC), authorization codes, PKCE
+`code_verifier`s, refresh tokens, JWT `assertion`s and token-exchange `subject_token`/`actor_token`** — at
+`info`, the rotating file transport's production level, retained 14 days. Not debug-only. Both sites now log
+`{ length }` only, which is the pattern `introspection.service.ts` already used three files away.
+
+Two things about it are worth carrying forward:
+
+- **The edits were line-preserving on purpose.** Both blocks were four lines and remain four (a comment plus
+  a three-line call). ~14 citations across `audit/` point *below* `token.service.ts:60` and ~8 below
+  `revocation.service.ts:67`, and `scripts/check-docs.mjs` only catches refs *past EOF* — so deleting one
+  line would have silently created ~20 off-by-one citations instead of one visible failure.
+- **The test was checked by reintroducing the bug.** `tests/unit/services/credential-logging.test.ts` drives
+  six grant shapes and both client-auth channels through a spy logger, asserts on distinctive *values*
+  rather than parameter names (asserting `code` false-positives on *"URL-en**code**d"* and
+  *"de**code**d Basic auth"*), and asserts in the other direction that the length **is** still logged so
+  "log nothing at all" cannot pass instead. Putting `body: parameters` back fails 11 of its 12 tests.
+
+**526 tests (was 514), 54 files.** Curriculum impact was nil and was confirmed *before* the change by the
+phrase grep §7.4 step 2 requires — the step that was skipped on 2026-08-10 and cost Module 10 five stale
+references.
+
+### 2026-08-11 — Phase 3 complete, and the two Tier-0 fixes that report honestly
+
+**Why this matters to a future session:** the audit's **Phase 3 is done** — batches 3a, 3b, 3c and 3d are
+all in `audit/03-curriculum-audit.md`, and `audit/RESUME.md` §8 is written as the Phase 4 brief. Headline:
+across ~31,500 lines the curriculum produced **0×S1 and 0×S2**; the nine tutorials under `docs/` produced
+**6×S2**. Same subject matter, same deployment — the curriculum marks what was run versus what was
+reasoned, and the tutorials never did (`CUR-3c-W1`, the highest-leverage item in Phase 3).
+
+Two Tier-0 findings shipped ahead of Gate 4 because both fix **false reporting** and neither depends on
+the `SPIFFE_JWT` decision:
+
+- **EH-W1 — `middleware/errorHandler.ts` served failures as HTTP 200.** It derived the status from the
+  thrown error, and the SDK's `AuthleteError` subclasses carry the status of the response they were
+  *reading* — so a `200` whose body fails Zod validation arrived as `statusCode: 200` and was emitted
+  verbatim. A success status carrying an error body that called itself a Bad Request, across **all 57 SDK
+  call sites**. `errorStatusFrom()` now trusts an error-supplied status only inside 400–599; `AppError`
+  keeps its deliberate values. The sweep found the repo had already met this SDK behaviour once and
+  handled it locally (`jwks.controller.ts:17` catches `statusCode === 204`), and that
+  `health.service.ts:45-51` builds its own result and is untouched by the clamp.
+- **FAPI2-W1+ — `GET /api/fapi/config` asserted six controls it never read.** All six were the *opposite*
+  of the live configuration, on the endpoint whose job is to report that configuration. Now read from the
+  service. Two are not passthroughs: `supportedTokenAuthMethods` replaces the scalar `requiredClientAuth`
+  (client auth is pinned per client, and FAPI 2.0 permits mTLS *or* `private_key_jwt`), and
+  `refreshTokenRotation` is `refreshTokenKept === false` — a kept refresh token is one that is *not*
+  rotated.
+
+**Module 10 Exercise 4 was reframed, not retired**, per `ERRORHANDLER-STATUS-INVERSION.md` F-2: the
+endpoints still fail (the enum gap is untouched), so the exercise now separates *two defects with one
+visible symptom* — the one that made the failure silent, and the one that makes it fail. The old 200 is
+kept as a dated historical transcript, the pattern Module 05 uses for the UserInfo `Bearer`-prefix bug.
+**Dropping `SPIFFE_JWT` is still what would retire the exercise.** 514 tests (was 504).
+
+### 2026-08-10 — the conformance audit, and the two S1 fixes it forced early
+
+**Why this matters to a future session:** the audit lives in `audit/` and is resumable from
+`audit/RESUME.md` — read that before touching it. Phases 0–2 are complete (**55 per-spec findings** in
+`audit/02-findings/`, 8×S1 · 20×S2 · 17×S3 · 11×S4). Phase 3 batch 3a (Modules 00–03) is in
+`audit/03-curriculum-audit.md`; batches 3b/3c are re-scoped by risk in `RESUME.md` §4. **Do not re-probe
+Authlete or re-fetch the ~45 specifications listed in `RESUME.md` §2.3.**
+
+Two of the eight S1 findings were exploitable in a deployed instance, so they were fixed ahead of the
+remediation plan rather than waiting for Gate 4:
+
+1. **The logout open redirect** — see the (now struck-through) entry in the findings register below. `startsWith`
+   → parse-and-compare-origins, 14 regression tests.
+2. **`POST /api/device/complete` was reachable in every environment** with no auth, no limiter and no gate,
+   approving any live `userCode` as any `subject`. Now development-only via the new
+   `middleware/development-only.ts` (the same 404 shape `createLocalToken` already used), plus a new
+   `deviceCodeLimiter` (5/min) on both user-code paths sized against RFC 8628 §5.1's own worked example.
+   `generalLimiter` added to `/api/device/authorization`, which had none. Gate asserted in the new
+   `tests/unit/routes/device.routes.test.ts`.
+
+**Curriculum consequence, and the pattern to remember:** fixing #1 changed **Module 08 Exercise 6b's
+transcript** — two of five rows flipped from `302` to `200`. The exercise was **rewritten around the fix**, not
+deleted: it now shows the old code, explains why prefix matching accepted an attacker's host as a subdomain
+label and as userinfo, shows the parse-then-compare replacement, and points at the one row that *still*
+redirects in dev. Same treatment Module 05 Exercise 5 got in August. Module 08's README and verification block
+were updated to match.
+
+`AGENTS.md` gained a Quirks entry for the origin-matching rule, a corrected device-flow security note, two new
+rows in **Security-critical surfaces** (`logout.service.ts`/`logout.controller.ts`; `device.routes.ts`/
+`development-only.ts` — the audit found the list did not cover either), and refreshed test counts, which were
+already stale by ~21 tests before this change (now 504 across 53 files).
+
+**Still open on the logout path, deliberately:** ~~`id_token_hint` is decoded but never verified~~ — **`RPL-W2`
+shipped 2026-08-11 as T0-2**, so the hint is now verified against the OP's JWKS with `iss` and `aud`; an
+unverifiable hint yields no subject and delivers nothing. **This unblocks `BCL-W5`: a client may now register a
+`backchannel_logout_uri`.** What remains is the §2 confirmation step (`RPL-W3`, queued as T0-3) and §3's
+per-client registered-URI matching (`RPL-W1`, queued as T0-4).
 
 ### 2026-08-06 — the SDK pin fixed the defect Module 06's gate was built on; Exercise 6 rebuilt
 
@@ -381,6 +792,7 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   of the same class** after Module 06 (Zod failure → `"Bad Request"`) and Module 08 (unset `JWKS_URI` →
   `"Invalid logout token"`): *a server configuration error reported as a caller error.* For contrast,
   `POST /api/federation/registration` in the same file is written correctly.
+- ✅ **FIXED 2026-08-12 (T1-7) — see the Build Log entry above; the paragraph below is the original report.**
 - **`prompt=none` returns a 302 with an empty `Location` header.** `authorization.controller.ts:50-53` treats
   Authlete's `NO_INTERACTION` action as though `responseContent` held a redirect URL. It does not: verified by
   calling `/auth/authorization/authorization` directly, `NO_INTERACTION` comes back with
@@ -391,16 +803,24 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   `prompt=none` request never reaches, because the AS answers it with `NO_INTERACTION`. Dead code that reads
   as a feature. Not exploitable; breaks every client that relies on silent renewal, in a way the client cannot
   classify.
-- **The logout endpoint is an open redirect, and it survives production.**
-  `logout.service.ts` validates `post_logout_redirect_uri` with two `startsWith` prefix checks. Verified live:
-  `http://localhost:3000.evil.example.com/bye` and `http://localhost:3001@evil.example.com/` both get a **302
-  to the attacker's host**. The middle clause is gated on `NODE_ENV !== "production"`, but the
-  `allowedOrigins.some(o => uri.startsWith(o))` clause is not — so with `ALLOWED_ORIGINS=https://app.example.com`,
-  `https://app.example.com.evil.net/` still passes. **Do not file as dev-only.** RFC 9700 §2.1 forbids
-  exactly this. Note the contrast: the *authorization* endpoint gets exact matching right (400, no `Location`).
-  Fix is one line — exact comparison against a registered set.
+- **~~The logout endpoint is an open redirect, and it survives production.~~ ✅ FIXED 2026-08-10.**
+  `logout.service.ts` validated `post_logout_redirect_uri` with two `startsWith` prefix checks. Verified live:
+  `http://localhost:3000.evil.example.com/bye` and `http://localhost:3001@evil.example.com/` both got a **302
+  to the attacker's host**. The middle clause was gated on `NODE_ENV !== "production"`, but the
+  `allowedOrigins.some(o => uri.startsWith(o))` clause was not — so with `ALLOWED_ORIGINS=https://app.example.com`,
+  `https://app.example.com.evil.net/` also passed. RFC 9700 §2.1 forbids exactly this. Note the contrast: the
+  *authorization* endpoint got exact matching right all along (400, no `Location`).
+  **Fix:** `isAllowedPostLogoutRedirectUri` (same file) now parses the value with `new URL()` and compares
+  **origins exactly** — `LOGOUT_REDIRECT_URI` by full-URI equality, `ALLOWED_ORIGINS` entries by origin, plus a
+  non-production `hostname === "localhost"` clause so the labs keep working. Unparseable values and non-http(s)
+  schemes are refused; `new URL()` *throws* on the first payload and returns a foreign origin for the second.
+  14 regression tests in `tests/unit/services/logout.service.test.ts`. Module 08 Exercise 6b was rewritten
+  around the fix rather than deleted — it now teaches the defect, the parse-don't-prefix rule, and the row that
+  still redirects in dev. **Still open, and deliberately:** RP-Initiated Logout §3 wants exact matching against
+  per-client **registered** `post_logout_redirect_uris`, and no client registers any, so the allowlist remains
+  environment-driven. Recorded in `audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` (work items RPL-W2/W3/W4).
 - **Back-channel logout receipt cannot work, and misreports why.** `JWKS_URI` is unset, so
-  `logout.controller.ts:45` throws and the `catch` returns `{"error":"invalid_request","error_description":
+  `logout.controller.ts:64` throws and the `catch` returns `{"error":"invalid_request","error_description":
   "Invalid logout token"}` — blaming the caller's input for a server configuration problem. Confirmed against
   the server log (*"JWKS_URI must be configured to verify backchannel logout tokens"*). Two structural defects
   beyond the config: (1) `jwt.verify(token, key, { algorithms })` passes no `issuer` or `audience`, so `iss`

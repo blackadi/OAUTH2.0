@@ -73,6 +73,11 @@ something other than documentation.
 **F11 (12 pts).** You are given four findings from a review of one deployment. Rank them for remediation and
 defend the order. You may not use "by severity" as the justification.
 
+> **These four are drawn from findings this deployment actually carried**, which is why they read so
+> specifically. Several have since been remediated — (1) on 2026-08-10 and 2026-08-12, (3) on 2026-08-12 —
+> and the exercise is to rank them **as they stood**, not to check the current code. Knowing the fixes exist
+> is not an answer; the reasoning about reachability, effort and dependency is.
+
 1. The logout endpoint validates `post_logout_redirect_uri` with a `startsWith` prefix check, so
    `https://app.example.com.evil.net/` is accepted. Reachable unauthenticated.
 2. Access tokens are JWTs with a 24-hour lifetime, validated offline. Revocation is a blocklist synced every

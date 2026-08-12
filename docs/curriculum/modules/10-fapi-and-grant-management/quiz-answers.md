@@ -155,6 +155,13 @@ Three defects:
 1. **HTTP 200 with an error body.** Any monitor checking status codes reports this endpoint as healthy,
    permanently. This is the one that matters most to an operator: it does not merely fail, it fails
    *invisibly*, and it will never appear on a dashboard or trigger an alert.
+
+   > **Fixed 2026-08-11**, and the fix is part of the answer. The cause was not the SDK and not FAPI: the
+   > global error handler derived the HTTP status from the thrown error, and `AuthleteError` subclasses
+   > carry the status of the response they were *reading* — `200`, for a body that failed validation. One
+   > clause (trust an error-supplied status only inside 400–599) fixed it across all 57 SDK call sites.
+   > The endpoints still return 500, because the enum gap that makes them *fail* is a different defect.
+   > Full marks now require separating the two.
 2. **A stack trace returned to the caller**, including absolute filesystem paths and internal module
    structure. On an unauthenticated endpoint this is information disclosure.
 3. **An upstream/internal failure reported as `"Bad Request"`** — blaming the caller for a server-side

@@ -3,8 +3,33 @@ import { IntrospectionService } from "../services/introspection.service";
 import logger from "../utils/logger";
 import { validateIntrospectionParams } from "../utils/validate";
 import { setDpopNonce } from "../utils/dpop";
+import { requireBasicAuth } from "../middleware/require-basic-auth";
 
 const introspectionService = new IntrospectionService();
+
+/**
+ * RFC 7662 §2.1: *"the endpoint MUST also require some form of authorization to access this endpoint, such
+ * as client authentication… or a separate OAuth 2.0 access token"*.
+ *
+ * **The credential here is this deployment's admin Basic auth, not per-client authentication**, and the
+ * reason is worth recording. Nothing in this server can validate a client secret on its own — only Authlete
+ * can — so "client authentication" would mean forwarding the credentials and relying on Authlete's
+ * `/auth/introspection/standard` to reject bad ones. **Whether it does is `UNVERIFIED`**, and the evidence
+ * points the other way: credentials were optional on this path and their absence was never an error. A check
+ * that demands a credential nothing validates looks like protection and provides none, which is worse than
+ * an honest admin gate.
+ *
+ * `requireBasicAuth` **fails closed**: with `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` unset, every request is
+ * rejected rather than allowed through.
+ *
+ * The gate runs **before** any Authlete call, so a rejected caller learns nothing about the token — which is
+ * the whole point of §2.1's anti-token-scanning rationale.
+ *
+ * Both endpoints use one realm deliberately: they are the same resource under two wire formats, and the
+ * proprietary one at `/api/introspection` is the *richer* oracle — it also discloses the RFC 9470 `acr`,
+ * `auth_time` and step-up challenge assembled below.
+ */
+const checkAuth = requireBasicAuth("introspection");
 
 /**
  * RFC 9470: Parse a WWW-Authenticate Bearer error string from Authlete
@@ -38,6 +63,10 @@ function parseBearerError(responseContent: string): {
 export const introspectionController = {
   handleIntrospection: async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Authorise before validating: an unauthenticated caller must not be able to distinguish
+      // "malformed request" from "no such token" — both are reconnaissance.
+      if (!checkAuth(req, res)) return;
+
       const validationError = validateIntrospectionParams(
         req.body as Record<string, unknown>
       );

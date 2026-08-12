@@ -321,8 +321,15 @@ succeeds immediately or returns one of four specific errors (OIDC Core §3.1.2.6
 | `account_selection_required` | *"The End-User is REQUIRED to select a session at the Authorization Server."* |
 
 A `prompt=none` that returns anything else — including a dead redirect — breaks every client that relies on
-it, and it breaks them *silently*, because the client's error handler is looking for those four strings. You
-will find exactly that defect in Lab Exercise 5.
+it, and it breaks them *silently*, because the client's error handler is looking for those four strings. This
+server did exactly that until 2026-08-12, and Lab Exercise 5 walks the defect, the diagnosis, and the trap
+hiding behind the obvious fix.
+
+**`max_age` is where `prompt=none` gets genuinely interesting.** Succeeding "immediately" is only correct if
+the OP can *evidence* what the client asked about. A client sending `max_age=300` is asking "was this person
+authenticated in the last five minutes?" — and an OP that cannot answer must say so, not guess. The failure
+mode to recognise is an OP that fills in `acr` and `auth_time` from nowhere in order to return a code, which
+turns a step-up control into decoration. Exercise 5 has a worked example.
 
 ## The logout family — four specs, four problems
 
@@ -331,7 +338,7 @@ places.
 
 | Spec | Mechanism | Who is told | Needs a live browser? | Fails when |
 |---|---|---|---|---|
-| **RP-Initiated Logout 1.0** | RP redirects the user to `end_session_endpoint` | The **OP** | Yes | The user closes the tab mid-flow |
+| **RP-Initiated Logout 1.0** | RP sends the user to `end_session_endpoint`; the OP asks, the user confirms (§2) | The **OP** | Yes | The user closes the tab mid-flow, or declines at the confirmation |
 | **Front-Channel Logout 1.0** | OP renders hidden `<iframe>`s to each RP's logout URI | **Other RPs** | Yes | Third-party cookies are blocked — i.e. usually, now |
 | **Back-Channel Logout 1.0** | OP POSTs a signed **logout token** to each RP, server to server | **Other RPs** | **No** | An RP is down; no browser state is cleared |
 | **Session Management 1.0** | RP polls the OP via a `check_session_iframe` | The **RP**, by polling | Yes | Third-party cookies again |
@@ -445,8 +452,11 @@ detail that only shows up when you look at the artefact.
 | Stale authentication accepted | Token from a months-old session treated as a fresh login | Steps 9, 10, 13; `max_age` | Ex 5 |
 | Code injection in hybrid | A code from another session paired with this ID token | `c_hash` | **Ex 3 — verified here** |
 | ID token used as an access token | RS accepts evidence as authority | RFC 9068 `typ: at+jwt`; never send it | Ex 1 |
-| Broken `prompt=none` | Silent renewal fails in a way clients cannot handle | Return one of the four §3.1.2.6 errors | **Ex 5 — verified here** |
-| Logout open redirect | `post_logout_redirect_uri` not exactly matched | Exact matching against registered URIs | **Ex 6 — verified here** |
+| Broken `prompt=none` | Silent renewal fails in a way clients cannot handle | Return one of the four §3.1.2.6 errors | **Ex 5 — reproduced here, fixed 2026-08-12** |
+| Fabricated `acr` / `auth_time` | OP asserts an authentication it never observed, so step-up checks pass vacuously | Assert only what was observed; refuse what cannot be evidenced | **Ex 5 — a *latent* finding, armed by fixing the row above; both fixed 2026-08-12** |
+| Logout open redirect | `post_logout_redirect_uri` not exactly matched | Exact matching against registered URIs | **Ex 6 — reproduced here, fixed 2026-08-10** |
+| Forced logout via `<img>` | Logout acts on a bare `GET`, so any page can trigger it | RP-Initiated Logout §2 — ask the End-User; act only on the POST | **Ex 6 — reproduced here, fixed 2026-08-12** |
+| One client redirected to another's target | Post-logout URIs allowlisted deployment-wide, not per client | RP-Initiated Logout §3 — match the *client's* **registered** set | **Ex 6 — reproduced here, fixed 2026-08-12** |
 | Unverified logout token | Anyone can end anyone's session | Verify against the OP's JWKS; check `iss`/`aud`/`exp`/`events` | **Ex 6 — verified here** |
 | `sub` collision across issuers | Two providers' users merge into one account | Key records on `(iss, sub)` | Ex 2 |
 
@@ -456,7 +466,7 @@ detail that only shows up when you look at the artefact.
 |---|---|---|---|
 | OIDC Core 1.0 | OpenID **Final**, errata set 2, Dec 2023 | ID token, `nonce`, UserInfo, `prompt`/`max_age`, hybrid, `acr`/`amr`, the 13 validation steps | Every RP invents its own login protocol on top of access tokens |
 | OIDC Discovery 1.0 | OpenID Final, errata set 2 | `/.well-known/openid-configuration`; OP metadata | Manual configuration of every endpoint and algorithm |
-| RP-Initiated Logout 1.0 | OpenID Final | `end_session_endpoint`, `id_token_hint`, `post_logout_redirect_uri` | No standard way for an RP to end the OP session |
+| RP-Initiated Logout 1.0 | OpenID Final | `end_session_endpoint`, `id_token_hint`, `post_logout_redirect_uri`, and the End-User confirmation (§2) | No standard way for an RP to end the OP session — and logout becomes CSRF-able |
 | Front-Channel Logout 1.0 | OpenID Final | Browser-mediated multi-RP logout via iframes | No way to notify other RPs at all |
 | Back-Channel Logout 1.0 | OpenID Final | Signed logout token, POSTed server-to-server | Logout cannot survive blocked third-party cookies |
 | Session Management 1.0 | OpenID Final | `check_session_iframe`, session state polling | RPs cannot detect an OP-side logout |
@@ -572,8 +582,28 @@ Evidence is not authority. If the API accepts it, you have found a token-confusi
 if (allowed.some(o => uri.startsWith(o))) return res.redirect(uri);
 ```
 
-`http://localhost:3000` allows `http://localhost:3000.evil.example.com`. You will exploit exactly this in Lab
-Exercise 6.
+`http://localhost:3000` allows `http://localhost:3000.evil.example.com`. This server shipped exactly this bug
+until 2026-08-10; Lab Exercise 6b walks the defect, the fix, and the gap the fix left.
+
+**❌ One allowlist for the whole deployment**
+
+```js
+if (process.env.ALLOWED_ORIGINS.split(",").includes(new URL(uri).origin)) return res.redirect(uri);
+```
+
+Safe against the bug above, and still not §3. *"Previously registered"* means registered **by that client**;
+a deployment-wide list lets any client be sent to any other client's target. Match `client_id` (or the `aud`
+of a verified `id_token_hint`) to a per-client set, and refuse when no client is identified.
+
+**❌ Logging the user out on a `GET`**
+
+```js
+router.get("/logout", (req, res) => { req.session.destroy(); res.redirect(uri); });
+```
+
+RP-Initiated Logout §2 says the OP **MUST** ask the End-User first, and the reason is visible in one line of
+HTML: `<img src="https://as.example/api/logout">` on any page logs its viewer out. This server shipped that
+too, until 2026-08-12. Render a confirmation carrying a CSRF token on the `GET`; act on the `POST`.
 
 **✅ Exact string comparison against registered URIs**
 
@@ -618,7 +648,8 @@ Read after the lesson, before the lab:
 ## Then do the lab
 
 **[lab.md](lab.md)** — six exercises. You will validate an ID token through all thirteen steps by hand, forge
-one four different ways, break `prompt=none`, and drive an open redirect out of the logout endpoint.
+one four different ways, break `prompt=none`, and take apart the open redirect the logout endpoint used to
+have (fixed 2026-08-10 — Exercise 6b now walks the defect, the fix, and the gap the fix left).
 
 Then **[quiz.md](quiz.md)** — 19 items. Tier 4 is the gate.
 

@@ -652,14 +652,15 @@ const spec: Record<string, unknown> = {
     },
     "/logout": {
       get: {
-        summary: "RP-initiated logout",
+        summary: "RP-initiated logout — confirmation page",
         description:
-          "Initiates RP-initiated logout (OIDC Session Management). Requires client_id and post_logout_redirect_uri.",
+          "Renders the logout confirmation page required by OpenID Connect RP-Initiated Logout 1.0 §2. " +
+          "This request destroys nothing: it returns an HTML form carrying a CSRF token and the supplied " +
+          "parameters as hidden fields. Submitting that form (POST /logout) is what ends the session.",
         parameters: [
           {
             name: "client_id",
             in: "query",
-            required: true,
             schema: { type: "string" },
           },
           {
@@ -676,7 +677,7 @@ const spec: Record<string, unknown> = {
             name: "backchannel",
             in: "query",
             schema: { type: "string", enum: ["true"] },
-            description: "Trigger backchannel logout delivery",
+            description: "Trigger backchannel logout delivery on the subsequent POST",
           },
           {
             name: "state",
@@ -685,7 +686,48 @@ const spec: Record<string, unknown> = {
           },
         ],
         responses: {
-          "302": { description: "Redirect to post_logout_redirect_uri" },
+          "200": {
+            description: "HTML confirmation page containing the _csrf token",
+            content: { "text/html": { schema: { type: "string" } } },
+          },
+        },
+      },
+      post: {
+        summary: "RP-initiated logout — end the session",
+        description:
+          "Ends the session: verifies any id_token_hint against the OP's JWKS, optionally delivers " +
+          "backchannel logout tokens, destroys the session and clears the cookie, then redirects if " +
+          "post_logout_redirect_uri is allowed. Requires the _csrf token issued by GET /logout.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/x-www-form-urlencoded": {
+              schema: {
+                type: "object",
+                properties: {
+                  _csrf: {
+                    type: "string",
+                    description: "CSRF token from the GET /logout confirmation page",
+                  },
+                  client_id: { type: "string" },
+                  post_logout_redirect_uri: { type: "string", format: "uri" },
+                  id_token_hint: { type: "string" },
+                  state: { type: "string" },
+                  backchannel: { type: "string", enum: ["true"] },
+                },
+                required: ["_csrf"],
+              },
+            },
+          },
+        },
+        responses: {
+          "302": { description: "Session ended; redirect to post_logout_redirect_uri" },
+          "200": {
+            description:
+              "Session ended; signed-out page rendered because no allowed redirect target was supplied",
+            content: { "text/html": { schema: { type: "string" } } },
+          },
+          "403": { description: "CSRF token missing or mismatched — the session is untouched" },
         },
       },
     },
@@ -1800,7 +1842,7 @@ const spec: Record<string, unknown> = {
     "/fapi/config": {
       get: {
         summary: "FAPI configuration",
-        description: "Returns the FAPI 2.0 configuration including supported algorithms, DPoP settings, signing parameters, and CIMD (Client ID Metadata Document) support status.",
+        description: "Returns the FAPI 2.0 posture of this deployment, read from the live Authlete service configuration. Every field is a value the server has actually checked — none is asserted.",
         responses: {
           "200": {
             description: "FAPI configuration",
@@ -1810,12 +1852,12 @@ const spec: Record<string, unknown> = {
                   type: "object",
                   properties: {
                     mode: { type: "string", enum: ["sp", "ms", "disabled"], description: "FAPI mode: sp=Security Profile, ms=Message Signing, disabled" },
-                    dpopEnabled: { type: "boolean", description: "Whether DPoP nonce requirement is enabled" },
-                    requiredClientAuth: { type: "string", description: "Required client authentication method" },
-                    senderConstrainedTokens: { type: "string", description: "Token binding method (DPoP or none)" },
+                    dpopEnabled: { type: "boolean", description: "The service's dpopNonceRequired flag. NOT 'is DPoP available' — DPoP works without nonces, so false does not mean DPoP is off." },
+                    supportedTokenAuthMethods: { type: "array", items: { type: "string" }, description: "Client authentication methods the service permits. FAPI 2.0 requires mTLS or private_key_jwt; which one a given client must use is pinned per client, so there is no service-level 'required' method." },
+                    certificateBoundAccessTokens: { type: "boolean", description: "The service's tlsClientCertificateBoundAccessTokens flag — mTLS sender-constraining. DPoP binding is a per-client setting and is not reported here." },
                     parRequired: { type: "boolean", description: "Whether PAR is required" },
                     pkceRequired: { type: "boolean", description: "Whether PKCE is required" },
-                    refreshTokenRotation: { type: "boolean", description: "Whether refresh token rotation is enabled" },
+                    refreshTokenRotation: { type: "boolean", description: "Whether refresh tokens are rotated. Derived as refreshTokenKept === false: a kept refresh token is one that survives use, i.e. is not rotated." },
                     scopeRequired: { type: "boolean", description: "Whether scope parameter is required" },
                     cimdSupported: { type: "boolean", description: "Whether OAuth Client ID Metadata Document (CIMD) is supported. When enabled, clients can use HTTPS URLs as client_id and Authlete auto-fetches metadata from that URL." },
                     specs: {

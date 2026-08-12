@@ -319,6 +319,7 @@ Introspecting the token also returns `authorization_details`:
 
 ```bash
 curl -X POST http://localhost:3000/api/introspection \
+  -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d "token=YOUR_ACCESS_TOKEN"
 ```

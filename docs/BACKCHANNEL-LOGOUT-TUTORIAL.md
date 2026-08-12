@@ -213,7 +213,7 @@ sequenceDiagram
 
     User->>RP1: Click "Logout"
     RP1->>OP: GET /logout?id_token_hint=...&backchannel=true
-    OP->>OP: Decode id_token_hint → get sub
+    OP->>OP: Verify id_token_hint signature<br/>(OP JWKS + iss + aud) → get sub
     
     par Issue Logout Tokens
         OP->>RP1: POST /backchannel-logout<br/>logout_token=eyJ...
@@ -234,7 +234,8 @@ sequenceDiagram
 
 2. **RP1** called the OP's logout endpoint with `backchannel=true`
 
-3. **OP** decoded the `id_token_hint` to identify the user
+3. **OP** *verified* the `id_token_hint` — signature against its own JWKS, plus `iss` and `aud` — and took
+   `sub` from the verified payload to identify the user
 
 4. **OP** issued Logout Tokens for **both** RP1 and RP2 — each with the same `sub` but different `aud`
 
@@ -432,20 +433,57 @@ curl -X POST http://localhost:3000/api/backchannel_logout/deliver-all \
 
 ### RP-Initiated Logout with Backchannel
 
+Logout is **two requests**. The `GET` renders the confirmation page RP-Initiated Logout 1.0 §2 requires;
+the `POST` it submits is what delivers the Logout Tokens.
+
 ```bash
-curl "http://localhost:3000/api/logout?\
-id_token_hint=eyJhbGciOiJSUzI1NiIs...\
-&post_logout_redirect_uri=http://localhost:3000/logged-out\
-&state=xyz123\
-&client_id=YOUR_CLIENT_ID\
-&backchannel=true"
+# Step 1 — get the confirmation page, keeping its cookie, and read the CSRF token out of it.
+J=$(mktemp)
+CSRF=$(curl -s -c "$J" "http://localhost:3000/api/logout" |
+  sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+
+# Step 2 — submit it. This is the request that actually logs anybody out.
+curl -s -b "$J" -X POST "http://localhost:3000/api/logout" \
+  --data-urlencode "_csrf=${CSRF}" \
+  --data-urlencode "id_token_hint=eyJhbGciOiJSUzI1NiIs..." \
+  --data-urlencode "post_logout_redirect_uri=http://localhost:3000/logged-out" \
+  --data-urlencode "state=xyz123" \
+  --data-urlencode "client_id=YOUR_CLIENT_ID" \
+  --data-urlencode "backchannel=true"
+rm -f "$J"
 ```
 
-This:
-1. Decodes `id_token_hint` → gets `sub`
+The POST:
+1. **Verifies** `id_token_hint` → gets `sub`
 2. Delivers Logout Tokens to all RPs
 3. Destroys local session
 4. Redirects to `post_logout_redirect_uri`
+
+> **Why the extra round trip (changed 2026-08-12).** §2 requires the OP to ask the End-User before ending
+> the session, and asking is also what keeps a state-changing operation off a bare `GET` — while the `GET`
+> did the work, an `<img src="…/api/logout">` on any page logged the viewer out, which is a *forced* logout
+> rather than an RP-initiated one. The CSRF token is single-use and the logout destroys the session holding
+> it, so each POST needs its own preceding GET.
+
+> **Why "verifies" and not "decodes" (changed 2026-08-11).** An `id_token_hint` is an ID Token — a *signed*
+> assertion — so it says nothing about who the user is until the signature is checked. The server used to
+> `jwt.decode` it and trust `sub`, which meant anyone could hand-craft an unsigned JWT naming any subject and
+> use `backchannel=true` to force that user out of every RP. It now verifies against the OP's own JWKS and
+> checks `iss`, plus `aud` when you pass `client_id`.
+>
+> **What you will see if the hint is rejected:** logout still succeeds — the session is destroyed, the
+> redirect still happens — but **no Logout Tokens are delivered**, because the server has no subject to
+> deliver for. Check the server log for `id_token_hint rejected` and a `reason`.
+>
+> Two reasons worth knowing about, because they are not your mistake:
+>
+> | `reason` | What it means |
+> |---|---|
+> | `unsupported_alg:HS256` | The client that issued the ID token signs with **HS256**, which is symmetric — the OP cannot verify it without that client's secret, so the hint is ignored. Use a client configured for `ES256`, or log out with a session cookie instead |
+> | `no_expected_issuer` | The OP could not read its own `issuer` from discovery, so it refuses to check `iss` rather than skip the check |
+>
+> An **expired** hint is still accepted: a hint is an old token by definition, and the signature is what
+> matters. The server logs `hintExpired: true` when that happens.
 
 ---
 
@@ -599,7 +637,8 @@ POST /api/backchannel_logout/issue      → Issue Logout Token
 POST /api/backchannel_logout/deliver    → Issue + deliver to one RP
 POST /api/backchannel_logout/deliver-all → Issue + deliver to all RPs
 POST /api/backchannel_logout            → Receive incoming Logout Token
-GET  /api/logout?backchannel=true       → RP-Initiated Logout with backchannel
+GET  /api/logout                        → RP-Initiated Logout, confirmation page (§2)
+POST /api/logout  (backchannel=true)    → RP-Initiated Logout with backchannel
 ```
 
 ### Files

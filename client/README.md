@@ -451,27 +451,33 @@ sequenceDiagram
 
 ### 9. RP-Initiated Logout
 
-**What it does**: Implements OpenID Connect RP-Initiated Logout 1.0. When the user clicks logout, the browser redirects to the server's logout endpoint, the server-side session is destroyed, and the user is optionally redirected back to the application.
+**What it does**: Implements OpenID Connect RP-Initiated Logout 1.0. When the user clicks logout, the browser goes to the server's logout endpoint, the server **asks the user to confirm**, and only then is the session destroyed and the user optionally redirected back to the application.
 
 **What happens step by step**:
 
 ```
 1. User clicks "Logout" in the app
 2. Client clears tokens from browser storage
-3. Browser redirects to: GET /api/logout?id_token_hint=...&post_logout_redirect_uri=...&state=...
-4. Server identifies the user (from id_token_hint or existing session)
-5. Server destroys the session
-6. Server validates the post_logout_redirect_uri
-7. If valid: Server redirects browser back to post_logout_redirect_uri
-8. If invalid: Server shows a logout confirmation page
+3. Browser navigates to: GET /api/logout?id_token_hint=...&post_logout_redirect_uri=...&state=...
+4. Server renders a confirmation page — nothing is destroyed yet
+5. User clicks "Sign out"; the form POSTs back to /api/logout with a CSRF token
+6. Server identifies the user (from the verified id_token_hint, or the existing session)
+7. Server destroys the session
+8. Server matches post_logout_redirect_uri against the client's registered set (§3)
+9. If valid: Server redirects browser back to post_logout_redirect_uri
+10. If invalid: Server shows the signed-out page — the session is gone either way
 ```
+
+> **Why steps 4 and 5 exist.** RP-Initiated Logout 1.0 §2 requires the OP to ask the End-User before ending
+> the session. It also keeps a state-changing operation off a bare `GET`: while the `GET` did the work, an
+> `<img src="…/api/logout">` on any page the user visited logged them out.
 
 **Parameters**:
 
 | Parameter | Purpose |
 |-----------|---------|
-| `id_token_hint` | The ID token identifying the session to end. Helps the server find the right session even without a cookie |
-| `post_logout_redirect_uri` | Where to send the user after logout. Must be allowed by the server's configuration |
+| `id_token_hint` | The ID token identifying the session to end. Helps the server find the right session even without a cookie, and — when `client_id` is absent — identifies the client whose registered redirect URIs apply |
+| `post_logout_redirect_uri` | Where to send the user after logout. Must **exactly** match a URI registered for this client (§3) — byte for byte, so a trailing slash counts |
 | `state` | A random value for CSRF protection. The server echoes it back in the redirect URL |
 
 **Real-world example**: When you click "Sign out" on a website that uses "Sign in with Google", it redirects you to Google's logout endpoint, logs you out of Google, then redirects you back to the website.
@@ -615,7 +621,7 @@ These are the two most commonly confused features. They are **complementary**, n
 | **Who is involved?** | User, browser, OP | OP, target RP server (no user browser) |
 | **Session affected** | The OP's session (user logs out of SSO) | The RP's session (app logs user out) |
 | **Auth required** | None (user's session cookie) | Admin Basic (MGMT credentials) |
-| **Endpoint** | `GET /api/logout` | `POST /api/backchannel_logout/{issue,deliver,deliver-all}` |
+| **Endpoint** | `GET /api/logout` (confirm) then `POST /api/logout` (act) | `POST /api/backchannel_logout/{issue,deliver,deliver-all}` |
 | **The output is...** | A redirect (user goes somewhere else) | A JWT logout token (delivered to RP) |
 
 **Real-world scenario showing both in action:**
@@ -623,7 +629,8 @@ These are the two most commonly confused features. They are **complementary**, n
 1. Alice is logged into **SSO Portal** (this server, acting as OP) and three connected apps: **Mail**, **Docs**, and **CRM** (each acting as RPs).
 
 2. Alice clicks **"Logout"** on the SSO Portal.
-   - This is **RP-Initiated Logout**: The SSO Portal redirects Alice to this server's `/api/logout`.
+   - This is **RP-Initiated Logout**: The SSO Portal sends Alice to this server's `/api/logout`.
+   - The server asks Alice to confirm; she clicks **Sign out** and the page POSTs back.
    - The server destroys Alice's SSO session.
    - Alice is redirected back to the SSO Portal's home page.
 

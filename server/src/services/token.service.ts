@@ -54,10 +54,10 @@ export class TokenService {
       parameters = params.toString();
     }
 
-    log("TokenService: URL-encoded parameters (length), body", {
-      length: parameters.length,
-      body: parameters,
-    });
+    // Length only. Logging `parameters` writes the raw request body — client_secret, password, code,
+    // code_verifier, refresh_token, assertion, subject_token, actor_token — to logs/app-*.log at info
+    // level (RFC 9700 §4.2.4). Never log the value; see tests/unit/services/credential-logging.test.ts.
+    log("TokenService: URL-encoded parameters length", { length: parameters.length });
 
     // Build Authlete TokenRequest — only send what's needed
     const reqBody: TokenRequest = {

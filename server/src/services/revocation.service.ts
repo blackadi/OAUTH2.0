@@ -61,10 +61,10 @@ export class RevocationService {
       throw new Error("Revocation request body is empty");
     }
 
-    log("RevocationService: URL-encoded parameters", {
-      length: parameters.length,
-      body: parameters,
-    });
+    // Length only. Logging `parameters` writes the raw request body — the token being revoked, plus
+    // client_secret on the client_secret_post channel — to logs/app-*.log at info level (RFC 9700
+    // §4.2.4). Never log the value; see tests/unit/services/credential-logging.test.ts.
+    log("RevocationService: URL-encoded parameters length", { length: parameters.length });
 
     const reqBody: RevocationRequest = {
       parameters,

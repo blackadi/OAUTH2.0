@@ -1,0 +1,170 @@
+# OpenID Connect Native SSO for Mobile Apps 1.0
+
+- **Verdict:** `MISCONFIGURED`
+- **Severity:** **S2**
+- **Status:** OpenID **Implementer's Draft, draft 07** — the document served at `openid.net` this session is dated **16 January 2025**. `SPEC-INVENTORY.md` records *"2nd Implementer's Draft (draft 07), approved 2025-10-17"*. **The two dates disagree — see F-3.**
+- **Authlete version:** 3.0
+- **Repo docs under test:** `docs/NATIVE-SSO-TUTORIAL.md`, `README.md` feature table, `docs/curriculum/SPEC-INVENTORY.md`, `AGENTS.md`
+
+<thinking>
+1. Requirements on the AS: recognise `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` with
+   `subject_token_type=urn:ietf:params:oauth:token-type:id_token` and
+   `actor_token_type=urn:openid:params:token-type:device-secret`; when the authorization request carries the
+   `device_sso` scope, *"the Authorization Server MUST issue a `device_secret` and an `id_token`"*; put `ds_hash`
+   and `sid` in that ID token; before issuing to the second app, validate the device secret, the ID token
+   signature, the `ds_hash` binding, that the `sid` session is still active, and the requesting client; advertise
+   `native_sso_supported: true`.
+2. Authlete boundary: `nativeSso.process` / `nativeSso.logout`, plus `TokenResponseAction.NATIVE_SSO` on the
+   token endpoint, gated by the service flag `nativeSsoSupported`. The AS's own work is the two endpoints, the
+   `sessionId` it generates at authorization time, and admin authentication.
+3. Code: all of it is present and looks correct — two endpoints, basic auth on both, `sessionId` generated at
+   `services/authorization.service.ts:111-115`, `NATIVE_SSO` handled in the token controller.
+4. Docs: `README.md` lists Native SSO as **"Working"** and there is a full tutorial.
+5. Delta: `nativeSsoSupported = false` and `native_sso_supported` is absent from discovery, so nothing here can
+   work. This is the sharpest instance of the repo's recurring "code exists, config disabled, feature table says
+   Working" pattern.
+6. The status/date discrepancy is a real finding in a repo whose master claim is verified citations — recorded
+   rather than smoothed.
+</thinking>
+
+## Normative requirements (AS side)
+
+| # | Requirement | Source | Status |
+|---|---|---|---|
+| 1 | Recognise the token-exchange grant with `subject_token_type=…:id_token` and `actor_token_type=urn:openid:params:token-type:device-secret` | draft 07 | ⊘ Authlete's, via `TokenResponseAction.NATIVE_SSO`; ❌ **unreachable** — F-1 |
+| 2 | With the `device_sso` scope, the AS **MUST** issue a `device_secret` and an `id_token` | draft 07 | ❌ unreachable — F-1 |
+| 3 | The ID token carries `ds_hash` (binding to the device secret) and `sid` | draft 07 | ⊘ Authlete's — the AS supplies `sessionId` (`services/authorization.service.ts:111-115`), which is the `sid` input |
+| 4 | Before issuing to the second app: validate the device secret, the ID token signature, the `ds_hash` match, that `sid` is still active, and the client | draft 07 | ⊘ Authlete's, inside `nativeSso.process` — the AS forwards `accessToken`, `deviceSecret`, optional `deviceSecretHash` (`services/native-sso.service.ts:29-46`) |
+| 5 | Session termination | draft 07 | ✅ `POST /api/nativesso/logout` → `nativeSso.logout({ sessionId })` |
+| 6 | Advertise `native_sso_supported: true` | draft 07 | ❌ **absent** from the live discovery document — F-1 |
+
+## Authlete integration boundary
+
+| Concern | Owner | Where |
+|---|---|---|
+| The `NATIVE_SSO` token-endpoint action | Authlete | handled at `controllers/token.controller.ts` (in the action switch, `00-inventory.md` §5) |
+| Device-secret validation, `ds_hash` verification, session check | Authlete | `nativeSso.process` |
+| Generating the `sessionId` that becomes `sid` | **This server** | `services/authorization.service.ts:111-115` — `crypto.randomUUID()` when `nativeSsoRequested` |
+| Exposing the two endpoints and authenticating the caller | **This server** | `controllers/native-sso.controller.ts:37,49` with `requireBasicAuth` at `:39,:51` |
+| Enabling the feature at all | Service configuration | `nativeSsoSupported` — **`false`** |
+
+The code side is genuinely complete: `native-sso-response.handler.ts` maps `OK`/`CALLER_ERROR`/`INTERNAL_SERVER_ERROR`,
+and `01-spec-matrix.md` §6 confirmed the apparent inconsistency between `native-sso.controller.ts:17` and `:26`
+(`INTERNAL_SERVER_ERROR` vs `SERVER_ERROR`) is **correct** — the two Authlete APIs genuinely use different
+literals. This is well-built code for a feature that is switched off.
+
+## Finding F-1 — the feature is disabled on the service and `README.md` lists it as "Working" (S2)
+
+Probe 1 §3.6 and probe 3:
+
+```
+nativeSsoSupported  = false      # service
+native_sso_supported = <ABSENT>  # generated discovery document
+```
+
+Against:
+
+- `README.md:92-130` — three feature-status tables asserting **"Working"** for, among others, Native SSO (recorded in `00-inventory.md` §9 as one of the repo's highest-claim-density statements).
+- `docs/NATIVE-SSO-TUTORIAL.md` — a full tutorial.
+- Nine SDK-backed code paths, admin auth, action mapping, and a `sessionId` generator.
+
+Everything exists except the flag. With `nativeSsoSupported = false`, Authlete will not issue a `device_secret`
+for the `device_sso` scope and `nativeSso.process` cannot succeed, so **no part of this feature has ever run on
+this deployment.**
+
+**Failure scenario.** A learner reads the feature table, works through the tutorial, and cannot reproduce a
+single step; there is no error message that says "the service flag is off", because the failure surfaces as an
+Authlete rejection at whichever call they reach first. The severity is S2 rather than S3 because the claim is
+made in `README.md`'s status table — the one place a reader goes specifically to find out what works.
+
+**This is the fourth instance of one pattern**, and it is now the audit's clearest Phase 4 theme:
+
+| Feature | Claim | Live flag |
+|---|---|---|
+| Native SSO | `README.md` "Working" + full tutorial | `nativeSsoSupported = false` |
+| FAPI 2.0 | `README.md` "Working" | `fapiModes` absent |
+| Verifiable Credentials | 9 endpoints + tutorial | `verifiableCredentialsEnabled = false` |
+| MCP "out of the box" | `docs/MCP-OAUTH-TUTORIAL.md` | `clientIdMetadataDocumentSupported = false` |
+
+Probe 1 §3.6 already tabulated these and deferred them to B6/B7. Native SSO is the B6 member, and its verdict is
+`MISCONFIGURED` — implemented, documented, and contradicted by the service configuration.
+
+## Finding F-2 — the `sid` the AS generates is fresh per authorization, with no session continuity (S3)
+
+`services/authorization.service.ts:111-115`:
+
+```ts
+if (req.session.authorization?.nativeSsoRequested) {
+  const sessionId = crypto.randomUUID();
+  reqBody.sessionId = sessionId;
+}
+```
+
+A new UUID on every authorization that requests Native SSO, with nothing tying it to the browser session
+(`req.session`) or to any prior `sessionId`. The draft's `sid` is meant to *"uniquely identif[y] this user's
+authentication session"* — a session, not a request — and the whole point of the flow is that a second app
+inherits the first app's session.
+
+I am recording this at S3 rather than S2 because I cannot demonstrate the consequence: with the feature disabled,
+no second app has ever presented an ID token whose `sid` had to still be active. It may also be that Authlete
+treats each `sessionId` as an opaque handle it associates with the subject, in which case regenerating it per
+authorization simply creates a new session each time — which would make single-sign-*on* impossible while leaving
+each individual exchange valid. **Named next action:** enable the flag (9068-style console change), run the
+tutorial's two-app sequence, and observe whether a second app can exchange an ID token issued under a *previous*
+`sessionId`. That single test distinguishes "harmless handle" from "the SSO in Native SSO does not work."
+
+Also unreviewed for the same reason: `POST /api/nativesso/logout` takes a `sessionId` from the request body, so
+the caller chooses which session to terminate. It is behind admin Basic auth, so this is not an authorization
+gap — but nothing correlates that `sessionId` with anything the server recorded, because the server never stores
+the UUIDs it generates.
+
+## Finding F-3 — the recorded status and date do not match the served document (S3)
+
+| Source | Status | Date |
+|---|---|---|
+| `openid.net/specs/openid-connect-native-sso-1_0.html`, fetched this session | Implementer's Draft, **draft 07** | **16 January 2025** |
+| `SPEC-INVENTORY.md` / `01-spec-matrix.md` §2 | **2nd** Implementer's Draft (draft 07) | approved **2025-10-17** |
+
+Both may be defensible — a document dated January can be approved as a 2nd Implementer's Draft by a later vote,
+and the repo may be citing the approval announcement rather than the document header. But the repo's master claim
+is that *"Every spec identifier here is verified against its primary source, labeled by type … drafts are never
+presented as normative"* (`docs/curriculum/README.md:116-122`), and a date that does not appear on the primary
+source is exactly what that claim exists to prevent. `SPEC-INVENTORY.md` is also the file that corrected itself
+twice on this precise class of error (the JARM errata-set title, the `-final.html`-is-not-current trap), so the
+standard is its own.
+
+**Resolution needed:** cite the document header date, and if the approval date is the intended fact, label it as
+such — *"draft 07, dated 16 Jan 2025; approved as 2nd Implementer's Draft 17 Oct 2025 (OIDF announcement)"* —
+with the announcement as a separate source. This is one of the ten rows `01-spec-matrix.md` §7 already selected
+for spot re-verification in Phase 3; it can be closed there.
+
+## Documentation delta
+
+| Doc claim | Location | Reality | Verdict |
+|---|---|---|---|
+| Native SSO listed as **"Working"** | `README.md:92-130` | `nativeSsoSupported = false`; nothing can run | `DOC_INCORRECT` / **S2** |
+| Full tutorial with an end-to-end flow | `docs/NATIVE-SSO-TUTORIAL.md` | Cannot have been reproduced on this deployment. **Not read line-by-line here** — its transcripts are Phase 3 work | **Deferred to Phase 3**, but the feature-level verdict already stands |
+| Two endpoints behind admin basic auth; `NATIVE_SSO` token action handled | `AGENTS.md`, `00-inventory.md` §3.3 | Matches the code | **Accurate** |
+| `native-sso.controller.ts:26` uses `SERVER_ERROR` where `:17` uses `INTERNAL_SERVER_ERROR` | `01-spec-matrix.md` §6 | **Correct** — the two Authlete APIs use different literals | **Accurate** |
+| 2nd Implementer's Draft, approved 2025-10-17 | `SPEC-INVENTORY.md` | The served document says draft 07, 16 Jan 2025 — F-3 | `DOC_INCORRECT` / S3 |
+| Nothing states that the `sid` is regenerated per authorization | all docs | F-2 | **Omission** / S3 |
+
+## Sources consulted
+
+- OpenID Connect Native SSO for Mobile Apps 1.0, **draft 07** — `https://openid.net/specs/openid-connect-native-sso-1_0.html`, fetched this session. Quoted: the `device_sso` scope obligation (*"the Authorization Server MUST issue a `device_secret` and an `id_token`"*), the `ds_hash` binding, `sid` as *"uniquely identifies this user's authentication session"*, the token-type URNs, and `native_sso_supported`.
+- RFC 8693 §3 token-type identifiers (the `subject_token_type` used here) — `https://www.rfc-editor.org/rfc/rfc8693.txt`
+- Live probes 1 and 3 (2026-08-10): `nativeSsoSupported`, `native_sso_supported` — `SERVICE-CONFIG-PROBE.md` §3.6, §8
+- SDK 1.0.0: `NativeSsoResponseAction`, `NativeSsoLogoutResponseAction`, `TokenResponseAction.NATIVE_SSO` (`01-spec-matrix.md` §6)
+- Code: `services/native-sso.service.ts` (whole file), `controllers/native-sso.controller.ts:17,26,37,39,49,51`, `controllers/native-sso-response.handler.ts:42-58`, `services/authorization.service.ts:111-115`, `routes/native-sso.routes.ts:10-11`
+
+## Proposed work items
+
+| ID | Item | Effort | Acceptance criteria |
+|---|---|---|---|
+| NSSO-W1 | Set `nativeSsoSupported = true`, or stop claiming the feature works | S | **A Gate 4 decision, not a default.** If enabled: the tutorial's two-app sequence produces a real transcript and `native_sso_supported` appears in discovery. If not: `README.md`'s table says "implemented, service flag off" and the tutorial carries the same banner. |
+| NSSO-W2 | Settle the `sid` question | S | Conditional on W1. Run the two-app sequence and record whether a second app can exchange an ID token issued under an earlier `sessionId`. If it cannot, the `sessionId` must be derived from the browser session rather than freshly generated — a code change with a plan, since `services/authorization.service.ts` is on the **Security-critical surfaces** list. |
+| NSSO-W3 | Fix the status/date citation | S | `SPEC-INVENTORY.md` cites the document header (draft 07, 16 Jan 2025) and, separately and labelled, any approval announcement. Closes one of the `01-spec-matrix.md` §7 spot-check rows. |
+| NSSO-W4 | Add the four-row "claimed working / flag off" table to Phase 4 | S | Native SSO, FAPI 2.0, VCI and MCP treated as one systemic finding rather than four, with a single remedy: `README.md`'s status tables derive from, or are checked against, the live service configuration. |
+
+**Ordering.** W1 gates W2. W3 is documentation and independent. W4 is a Phase 4 synthesis item, recorded here
+because this entry is where the pattern became unambiguous.

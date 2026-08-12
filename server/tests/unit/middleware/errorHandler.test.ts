@@ -111,6 +111,59 @@ describe("errorHandler", () => {
     expect(res.status).toHaveBeenCalledWith(500)
   })
 
+  // EH-W1. The Authlete SDK's AuthleteError subclasses carry the status of the response they were
+  // *reading*, so a 200 whose body fails Zod validation arrives here as `statusCode: 200`. Emitting it
+  // verbatim served every unparseable Authlete response as an HTTP success carrying an error body.
+  it("clamps a 2xx statusCode to 500 — the SDK ResponseValidationError case", () => {
+    const req = mockReq()
+    const res = mockRes()
+    const err = { statusCode: 200, message: "Response validation failed" }
+
+    errorHandler(err, req, res, () => {})
+
+    expect(res.status).toHaveBeenCalledWith(500)
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "Internal Server Error" })
+    )
+  })
+
+  it("clamps a 3xx status to 500", () => {
+    const req = mockReq()
+    const res = mockRes()
+
+    errorHandler({ status: 302, message: "Found" }, req, res, () => {})
+
+    expect(res.status).toHaveBeenCalledWith(500)
+  })
+
+  it("falls back to 500 for a non-numeric status", () => {
+    const req = mockReq()
+    const res = mockRes()
+
+    errorHandler({ status: "teapot", message: "nope" }, req, res, () => {})
+
+    expect(res.status).toHaveBeenCalledWith(500)
+  })
+
+  it("prefers a usable statusCode when status is out of range", () => {
+    const req = mockReq()
+    const res = mockRes()
+
+    errorHandler({ status: 200, statusCode: 404 }, req, res, () => {})
+
+    expect(res.status).toHaveBeenCalledWith(404)
+  })
+
+  it("keeps an AppError status verbatim", async () => {
+    const { AppError } = await import("../../../src/utils/app-error")
+    const req = mockReq()
+    const res = mockRes()
+
+    errorHandler(new AppError("Missing parameter", 400), req, res, () => {})
+
+    expect(res.status).toHaveBeenCalledWith(400)
+  })
+
   it("includes stack trace in development", () => {
     const req = mockReq()
     const res = mockRes()

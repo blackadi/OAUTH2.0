@@ -18,6 +18,25 @@ export async function rpInitiatedLogout(req: Request & { session: Partial<sessio
     }
 }
 
+/**
+ * `GET /api/logout` — render the confirmation page and nothing else.
+ *
+ * RP-Initiated Logout §2 requires the OP to ask before ending the session; `rpInitiatedLogout` above is the
+ * POST that acts on the answer. See `services/logout.service.ts` → `showConfirmation` for why the question is
+ * asked unconditionally.
+ */
+export async function showLogoutConfirmation(req: Request & { session: Partial<session.SessionData> }, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const logoutService = new rpInitiatedLogoutService();
+        await logoutService.showConfirmation(req, res);
+    } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        const log = req.logger || logger;
+        log.error("RP-Initiated Logout confirmation error", { message: error.message });
+        next(error);
+    }
+}
+
 export async function opBackchannelLogout(req: Request, res: Response, _next: NextFunction): Promise<void> {
     const log = req.logger || logger;
     const logoutToken: string | undefined = req.body.logout_token;

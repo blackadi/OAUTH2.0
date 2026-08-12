@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:developers.authlete.com)",
+      "WebFetch(domain:www.authlete.com)",
+      "WebFetch(domain:datatracker.ietf.org)",
+      "WebFetch(domain:www.rfc-editor.org)",
+      "WebFetch(domain:openid.net)",
+      "WebFetch(domain:darutk.medium.com)"
+    ]
+  }
+}

@@ -2,8 +2,8 @@
 
 **The short version:** six exercises. You will validate an ID token through all thirteen OIDC Core steps with
 a script you write, forge one six different ways, discover that on this deployment knowing the client secret
-is enough to mint an ID token for anybody, break `prompt=none`, and drive an open redirect out of the logout
-endpoint.
+is enough to mint an ID token for anybody, break `prompt=none`, and take apart the open redirect the logout
+endpoint used to have.
 
 ## Before you start
 
@@ -113,7 +113,7 @@ AT=$(echo "$R" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=
 IDT=$(echo "$R" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).id_token))')
 
 echo "--- access token, introspected ---"
-curl -s -X POST "$API/introspection/standard" -d "token=$AT"; echo
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$AT"; echo
 echo "--- id token, decoded ---"
 node docs/curriculum/scripts/decode-jwt.mjs "$IDT"
 ```
@@ -550,12 +550,32 @@ curl -s -i -G "$API/authorization" \
 
 ```
 HTTP/1.1 302 Found
-Location: 
+Location: http://localhost:3001/callback?error=login_required&error_description=%5BA060301%5D+The+authorization+
+request+contains+prompt%3Dnone%2C+but+no+end-user+has+logged+in+this+service.&state=p1&iss=https%3A%2F%2F…
 ```
 
-**A 302 with an empty `Location` header.** Not a success, not one of the four errors — a dead redirect. Try it
-again with an established session (run any flow first to get a session cookie, then re-send with `-b`): same
-result.
+**`login_required` — one of the four §3.1.2.6 errors, delivered to the redirect URI with `state` and `iss`
+echoed.** That is what a client's silent-renewal handler is written to parse.
+
+> **Until 2026-08-12 this returned `Location: ` — empty.** Not a success, not one of the four errors: a dead
+> redirect. The transcript above is the post-fix output, and 5d below is the diagnosis that produced the fix.
+> **Run 5d anyway** — the reasoning is the exercise, and the second half of what it uncovers is more
+> interesting than the empty header.
+
+Now establish a session and try again, because "is the user still signed in?" is the question `prompt=none`
+exists to answer. Run any interactive flow with a cookie jar (`-c jar`), then re-send with `-b jar`:
+
+```
+plain                        SUCCESS (code=…)
+max_age=3600                 SUCCESS (code=…)
+max_age=0  (auth is 2s old)  error=login_required
+```
+
+The last row is the one to sit with. `max_age=0` says *"I will only accept an authentication that just
+happened."* The session is two seconds old, so the OP refuses and tells the client to re-authenticate —
+`EXCEEDS_MAX_AGE` internally, which Authlete renders as `login_required` because that is what §3.1.2.6 gives
+the client to act on. **Before this fix that request returned a code**, with an `auth_time` the server had
+made up. Keep that in mind through 5d.
 
 ### 5d — Diagnose it
 
@@ -587,9 +607,10 @@ There it is. `NO_INTERACTION` means *"you must not show any UI — decide for yo
 this, then call `/auth/authorization/issue` or `/auth/authorization/fail`."* It comes with a **ticket** and
 **no `responseContent`**, because there is nothing to redirect to yet.
 
-Now read `server/src/controllers/authorization.controller.ts:50-53`:
+Now read the branch that used to handle it:
 
 ```js
+// BEFORE — the defect
 case "NO_INTERACTION":
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Pragma", "no-cache");
@@ -597,21 +618,54 @@ case "NO_INTERACTION":
 ```
 
 It treats a *"you decide"* answer as if it were a ready-made redirect URL. `responseContent` is `null`, so
-`res.redirect("")` emits `Location: `.
+`res.redirect("")` emitted `Location: `.
 
-There is a second, subtler part. The controller *does* contain `prompt=none` handling — at line 96, checking
-for a session and stored consent. But that code is inside `case "INTERACTION"`, and the authorization server
-answers a `prompt=none` request with `NO_INTERACTION`, never `INTERACTION`. **The handling is unreachable for
-the only parameter value it was written for.**
+**Now the second, subtler part, and it is the reason this exercise matters.** The controller *did* contain
+`prompt=none` handling — checking for a session and stored consent. But that code sat inside
+`case "INTERACTION"`, and the authorization server answers a `prompt=none` request with `NO_INTERACTION`,
+never `INTERACTION`. **The handling was unreachable for the only parameter value it was written for.** Dead
+code that reads as a feature.
 
-Write the finding, then write what a correct `NO_INTERACTION` branch would do: check whether a session
-satisfies the request; if yes call the issue API with the ticket; if no call the fail API with the reason that
-maps to `login_required` / `consent_required` / `interaction_required` / `account_selection_required`.
+Before reading on, do the exercise: **write what a correct `NO_INTERACTION` branch would do.** Check whether
+the session satisfies the request; if yes call the issue API with the ticket; if no call the fail API with the
+reason that maps to `login_required` / `consent_required` / `interaction_required` /
+`account_selection_required`.
 
-**Severity, using Module 07's method:** it is not directly exploitable — nobody gains access. It is a
-**correctness defect with an availability consequence**: every client relying on silent renewal breaks, and
-breaks in a way its error handling cannot classify, because the client is looking for four specific error
-strings and receives a dead redirect instead. Reachable by any client, no credentials required.
+Then compare your answer with the dead code — because the obvious fix was a trap:
+
+```js
+// The trap: route NO_INTERACTION into the existing prompt=none block, which contained…
+if (!req.session.stepUp) {
+  req.session.stepUp = { acr: "pwd", authTime: Math.floor(Date.now() / 1000) };
+}
+```
+
+**That invents an authentication event.** `acr: "pwd"` with no evidence a password was used; `auth_time: now`
+for an authentication that happened at some unknown earlier point — or never. Both were then passed to
+Authlete, which stamps them onto the access and ID tokens. And on that path there was no `max_age` check and
+no essential-`acr` check at all; those live on the login POST, which `prompt=none` bypasses entirely.
+
+So a one-line "fix" to the empty `Location` would have activated a path where a resource server enforcing
+step-up authentication accepts a token whose freshness the OP fabricated. **That is a security control that is
+silently not applied** — the exact failure mode `modules/05-request-integrity-and-binding/lab.md` teaches you
+to fear. It is strictly worse than the visible bug, and it would have looked like progress.
+
+**Both were fixed together on 2026-08-12**, which is why the `max_age=0` row in 5c now refuses. The rule the
+fix encodes is one line long: *an authentication this OP did not observe is one it will not assert.* An
+unknown `acr` does not satisfy an essential `acr` request, and an unknown `auth_time` does not satisfy a
+`max_age` — "we cannot prove it" is answered as "no", never as "skip the check".
+
+**Severity, using Module 07's method.** Two findings, and they rank differently:
+
+| | Empty `Location` | Fabricated authentication event |
+|---|---|---|
+| Exploitable | No — nobody gains access | **Yes, once activated** — a step-up control is bypassed |
+| Effect | Availability: silent renewal breaks in a way clients cannot classify | Integrity: tokens assert authentication strength and freshness that were never checked |
+| Reachable | Any client, no credentials | Only after the first one is "fixed" |
+
+Write both up. The second is what the audit calls a **latent** finding: not exploitable in the code as it
+stands, but armed by a change someone is already planning to make. Those are the ones worth hunting, because
+the fix that activates them arrives labelled as an improvement.
 
 ---
 
@@ -637,6 +691,8 @@ two lines and it is the difference between "I fetched a profile" and "I fetched 
 
 ### 6b — RP-initiated logout, and an open redirect
 
+Start with the obvious thing: hand the logout endpoint five destinations and see which ones it accepts.
+
 ```bash
 for U in "http://localhost:3000" \
          "http://localhost:3000.evil.example.com/bye" \
@@ -650,23 +706,108 @@ done
 ```
 
 ```
-http://localhost:3000                          status=302 loc=http://localhost:3000/?state=xyz
-http://localhost:3000.evil.example.com/bye     status=302 loc=http://localhost:3000.evil.example.com/bye?state=xyz
-http://localhost:3001@evil.example.com/        status=302 loc=http://localhost:3001@evil.example.com/?state=xyz
-http://localhost:31337/bye                     status=302 loc=http://localhost:31337/bye?state=xyz
+http://localhost:3000                          status=200 loc=
+http://localhost:3000.evil.example.com/bye     status=200 loc=
+http://localhost:3001@evil.example.com/        status=200 loc=
+http://localhost:31337/bye                     status=200 loc=
 https://evil.example.com/bye                   status=200 loc=
 ```
 
-**Three redirects to hosts nobody registered.** Read the second and third carefully:
+**Five identical rows, and not one of them logged you out.** That is not the redirect check working — it is
+the endpoint refusing to *act* on a `GET` at all, and it is the second of two fixes this exercise carries.
+
+RP-Initiated Logout 1.0 §2:
+
+> At the Logout Endpoint, the OP SHOULD ask the End-User whether to log out of the OP as well. Furthermore,
+> the OP **MUST** ask the End-User this question if an `id_token_hint` was not provided or if the supplied
+> ID Token does not belong to the current OP session.
+
+Until 2026-08-12 the server never asked. It destroyed the session on a bare `GET`, which is a MUST violation
+and — because logout is a state-changing operation reachable by `GET` — CSRF-able by construction. **An
+`<img src="http://localhost:3000/api/logout">` on any page you visited logged you out of the OP.** Note what
+that does to the *other* finding in this exercise: an attacker did not need you to intend to log out, so the
+open redirect below was reachable without your cooperation.
+
+Confirm the fix for yourself — fetch the page and read what came back:
+
+```bash
+curl -s "$API/logout?client_id=demo-client&post_logout_redirect_uri=http://localhost:3000/bye&state=xyz" \
+  | grep -E '_csrf|<h1>|hidden'
+```
+
+```html
+    <h1>Sign out?</h1>
+      <input type="hidden" name="_csrf" value="4d3b69d6fde7abf252a46fa5b9b1d1b23cc86c3ab3f29f0161af59687e16c529" />
+      <input type="hidden" name="post_logout_redirect_uri" value="http://localhost:3000/bye" />
+      <input type="hidden" name="state" value="xyz" />
+      <input type="hidden" name="client_id" value="demo-client" />
+```
+
+A question, a CSRF token, and your parameters held for replay. **Now** do the loop properly — as a `POST`
+that submits that form:
+
+```bash
+for U in "http://localhost:3000" \
+         "http://localhost:3000.evil.example.com/bye" \
+         "http://localhost:3001@evil.example.com/" \
+         "http://localhost:31337/bye" \
+         "https://evil.example.com/bye"; do
+  J=$(mktemp)
+  CSRF=$(curl -s -c "$J" "$API/logout" | sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+  printf '%-46s ' "$U"
+  curl -s -b "$J" -o /dev/null -w 'status=%{http_code} loc=%{redirect_url}\n' -X POST "$API/logout" \
+    --data-urlencode "_csrf=$CSRF" --data-urlencode "client_id=$CLIENT_ID" \
+    --data-urlencode "post_logout_redirect_uri=$U" --data-urlencode "state=xyz"
+  rm -f "$J"
+done
+```
+
+```
+http://localhost:3000                          status=302 loc=http://localhost:3000/?state=xyz
+http://localhost:3000.evil.example.com/bye     status=200 loc=
+http://localhost:3001@evil.example.com/        status=200 loc=
+http://localhost:31337/bye                     status=200 loc=
+https://evil.example.com/bye                   status=200 loc=
+```
+
+**Note the `client_id`.** It is not decoration — §3 matches against *that client's* registered URIs, so
+without it there is nothing to match and every row would be a `200`. You will prove that in a moment.
+
+**Why a fresh `GET` inside the loop?** Two reasons, both worth internalising. The CSRF token is rotated on
+every accepted `POST`, and a successful logout destroys the session that was holding it — so a token is good
+for exactly one logout. Try it: reuse one and you get `403`.
+
+```bash
+J=$(mktemp)
+CSRF=$(curl -s -c "$J" "$API/logout" | sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+echo -n "no token    : "; curl -s -o /dev/null -w '%{http_code}\n' -X POST "$API/logout"
+echo -n "first POST  : "; curl -s -b "$J" -o /dev/null -w '%{http_code}\n' -X POST "$API/logout" -d "_csrf=$CSRF"
+echo -n "same token  : "; curl -s -b "$J" -o /dev/null -w '%{http_code}\n' -X POST "$API/logout" -d "_csrf=$CSRF"
+rm -f "$J"
+```
+
+```
+no token    : 403
+first POST  : 200
+same token  : 403
+```
+
+> **This exercise used to reproduce a live open redirect. It was fixed on 2026-08-10, and the `POST`
+> transcript above is the post-fix output.** The two attacker hosts now render the signed-out page instead of
+> redirecting. The exercise is still worth running, because *why* they used to pass is the lesson — and
+> because one row still redirects somewhere nobody registered. Keep reading.
+
+**What used to happen, and why.** Before the 2026-08-10 fix — back when a bare `GET` did all of this — rows two and three were both `302`s to `evil.example.com`:
 
 - `http://localhost:3000.evil.example.com` — the host is `evil.example.com`. `localhost:3000` is a *subdomain
   label*. A human skims it as localhost.
 - `http://localhost:3001@evil.example.com/` — everything before `@` is userinfo. The host is, again,
   `evil.example.com`.
 
-The cause is in `server/src/services/logout.service.ts`:
+The cause was in `server/src/services/logout.service.ts`, and it is worth reading the old code:
 
 ```js
+// BEFORE — the defect
 const isAllowed =
   post_logout_redirect_uri === allowedRedirectUri ||
   (process.env.NODE_ENV !== "production" && post_logout_redirect_uri.startsWith("http://localhost:")) ||
@@ -675,20 +816,118 @@ const isAllowed =
 
 Two prefix matches. **`startsWith` is not URI matching** — it has no idea where the host ends.
 
-Now do the part that separates a finding from a shrug: **decide whether this survives in production.** The
-middle clause is gated on `NODE_ENV !== "production"`, so it disappears. But the third clause does not — and
-with `ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001`, the string
-`http://localhost:3000.evil.example.com/bye` still passes `startsWith("http://localhost:3000")`. **The open
-redirect survives**, and in a real deployment where `ALLOWED_ORIGINS` is `https://app.example.com`, so does
-`https://app.example.com.evil.net/`. Do not file this as dev-only.
+Now do the part that separates a finding from a shrug: **decide whether it survived in production.** The middle
+clause is gated on `NODE_ENV !== "production"`, so it disappeared. The third clause did not — and with
+`ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001`, the string
+`http://localhost:3000.evil.example.com/bye` still passed `startsWith("http://localhost:3000")`. **The open
+redirect survived production**, and in a real deployment where `ALLOWED_ORIGINS` is `https://app.example.com`, so
+did `https://app.example.com.evil.net/`. It was not a dev-only finding.
 
 RFC 9700 §2.1: *"Clients and authorization servers MUST NOT expose URLs that forward the user's browser to
 arbitrary URIs obtained from a query parameter."* Note the contrast with Module 07 Exercise 2a, where the
 **authorization** endpoint refused an unregistered `redirect_uri` with a 400 and no `Location` — the same
-deployment gets exact matching right in one place and wrong in another. That is the "enforced in one path"
+deployment got exact matching right in one place and wrong in another. That is the "enforced in one path"
 shape of conformance theatre, found in the wild.
 
-The fix is one line: exact comparison against a registered set.
+**The first fix, and what it teaches.** On 2026-08-10 `isAllowedPostLogoutRedirectUri` was changed to *parse*
+the value and compare **origins**, never strings:
+
+```js
+// 2026-08-10 — parse, then compare  (superseded 2026-08-12; see below)
+const url = new URL(candidate);                    // throws → refuse
+if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+if (allowedOrigins.has(url.origin)) return true;   // exact origin equality
+```
+
+Three details were doing the work, and each is a transferable lesson — they are why the two attacker rows are
+refused, and they remain true about URL parsing even though this code has since been replaced:
+
+1. **`new URL("http://localhost:3000.evil.example.com/bye")` throws** — `3000.evil.example.com` is not a valid port. Failing closed on a parse error is not defensive padding; it is the check.
+2. **`new URL("http://localhost:3001@evil.example.com/").origin` is `http://evil.example.com`** — the parser knows where userinfo ends and the host begins. `startsWith` never will.
+3. **Origin comparison normalises host case** (RFC 3986 §3.2.2), so `https://APP.EXAMPLE.COM` matches `https://app.example.com`. String comparison would have needed that by hand, and most implementations forget.
+
+**The row that used to redirect, and no longer does.** `http://localhost:31337/bye` was a `302` until
+2026-08-12 — to a port nobody registered — because outside production the check accepted any `localhost` host
+so the labs would keep working. That clause is gone, and the reason is the second half of §3.
+
+**Matching origins was never what §3 asked for.** Read it again:
+
+> The OP also MUST NOT perform post-logout redirection if the `post_logout_redirect_uri` value supplied does
+> not exactly match one of the **previously registered** `post_logout_redirect_uris` values.
+
+Two requirements, and origin matching met only one. *"Exactly match"* — met. *"Previously registered"* — not
+met at all: the list came from `ALLOWED_ORIGINS`, a **deployment-wide** environment variable, so every client
+shared one list and any client could be sent to any allowed origin. §3 wants a **per-client** registry.
+
+Prove the difference yourself. Same URI, same everything, only the client changes:
+
+```bash
+post() {                       # $1 = label, then extra curl args
+  local L="$1"; shift
+  local J=$(mktemp)
+  local CSRF=$(curl -s -c "$J" "$API/logout" | sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+  printf '%-30s ' "$L"
+  curl -s -b "$J" -o /dev/null -w 'status=%{http_code} loc=%{redirect_url}\n' -X POST "$API/logout" \
+    --data-urlencode "_csrf=$CSRF" --data-urlencode "post_logout_redirect_uri=http://localhost:3000" "$@"
+  rm -f "$J"
+}
+
+post "registered client"   --data-urlencode "client_id=$CLIENT_ID"
+post "no client_id"
+post "unknown client"      --data-urlencode "client_id=9999999999"
+post "trailing slash"      --data-urlencode "client_id=$CLIENT_ID" \
+                           --data-urlencode "post_logout_redirect_uri=http://localhost:3000/"
+```
+
+```
+registered client              status=302 loc=http://localhost:3000/
+no client_id                   status=200 loc=
+unknown client                 status=200 loc=
+trailing slash                 status=200 loc=
+```
+
+Three lessons in four lines:
+
+1. **No client means no registered set, and an empty set refuses everything.** That is not the server being
+   cautious — it is §3's own answer. A logout request that names nobody cannot be redirected anywhere.
+2. **A trailing slash is a different URI.** `http://localhost:3000/` is not `http://localhost:3000`. "Exactly"
+   really does mean byte-for-byte, and this is the single most common cause of a redirect-URI support ticket
+   in any OAuth deployment.
+3. **The comparison no longer parses anything.** Origin matching needed `new URL()` because it had to know
+   where the host ended; matching whole registered URIs needs a `===`. A check with no parser cannot have a
+   parser bug — which is worth remembering, because both of the payloads in rows 2 and 3 were parser
+   confusion.
+
+**Where the registry lives, and the vendor gap behind it.** This deployment holds the per-client list in a
+`POST_LOGOUT_REDIRECT_URIS` environment variable rather than in client metadata, and that is not laziness:
+**Authlete 3.0 has no field for it.** Its `Client` schema has 108 properties and not one of them is a
+post-logout redirect URI; its only client-level logout fields are `backchannelLogoutUri` and
+`backchannelLogoutSessionRequired`. Writing `postLogoutRedirectUris` through the client update API returns
+**`200` and silently discards it** — verified on all three clients.
+
+That is worth sitting with, because it is the most realistic thing in this exercise. **A specification's MUST
+can be unsatisfiable in the form the specification imagines, because your identity provider does not model the
+field.** The honest response is not to pretend, and not to give up: it is to implement the *property* the
+requirement exists to provide — per-client, exact — record precisely where your implementation departs and
+why, and make the departure a stored fact rather than folklore. Write that up. A finding that says "§3 is
+unmet" is worth much less than one that says "§3's security property is met; its registration model cannot be,
+for this reason, and here is the evidence."
+
+**Three findings, three fixes, and a sequencing lesson.** You have now seen the whole of this endpoint's
+history, and the parts are worth separating:
+
+| Finding | Spec | Fixed | What it cost the attacker |
+|---|---|---|---|
+| Prefix matching accepted attacker hosts | §3 (*"exactly match"*) | 2026-08-10 | The destination |
+| No confirmation, so a `GET` logged you out | §2 (*"MUST ask"*) | 2026-08-12 | The trigger |
+| One deployment-wide list, not a per-client one | §3 (*"previously registered"*) | 2026-08-12 | Borrowing another client's targets |
+
+Fixing only the first would have left `<img src="…/api/logout">` working as a forced logout — annoying rather
+than dangerous, but still a MUST violation. Fixing only the second would have left an open redirect that now
+needed a click. The third was invisible while the first two were open, and it is the one an origin-matching
+fix *looks* like it has already solved. **No fix subsumes another**, and an audit that reports one and stops
+has found a third of the defect. That is the shape to look for: a single endpoint failing three requirements
+of the same specification — two of them clauses of the same sentence — for unrelated reasons.
 
 ### 6c — Back-channel logout
 
@@ -799,10 +1038,21 @@ to actually end it, and which of the four logout specs (if any) covers it.
 - [ ] **B6 was accepted**, and you can explain why that is a correct validator and a broken configuration.
 - [ ] You saw `c_hash` in a hybrid ID token and can say what it binds and why the code flow does not need it.
 - [ ] `nonce` appeared in the ID token when sent and was absent when not.
-- [ ] `prompt=none` returned a 302 with an empty `Location`, you traced it to `NO_INTERACTION`, and you can
-      name the four errors it should have returned instead.
-- [ ] You obtained a 302 to a host nobody registered from the logout endpoint, and you can explain why
-      `NODE_ENV=production` does not fix it.
+- [ ] `prompt=none` returned one of the four §3.1.2.6 errors, you traced *why* it once returned an empty
+      `Location` to `NO_INTERACTION`, and you can name all four errors.
+- [ ] You can explain why fixing the empty `Location` **alone** would have been worse than leaving it, and
+      what "latent finding" means.
+- [ ] `max_age=0` against a two-second-old session was refused, and you can say which of `acr` and
+      `auth_time` the server is entitled to assert and on what evidence.
+- [ ] Every row of the **`GET`** loop returned `200` and logged nobody out, and you can state the §2
+      requirement that makes that correct and the CSRF consequence of the old behaviour.
+- [ ] The two attacker hosts were **refused** by the logout endpoint on the **`POST`**, and you can explain —
+      from the old code — why prefix matching accepted them and why `NODE_ENV=production` did not fix it.
+- [ ] You can say why the same CSRF token cannot log you out twice.
+- [ ] You can explain why the same URI redirects for one `client_id`, is refused with no `client_id`, and is
+      refused with a trailing slash — quoting the two clauses of §3 that each case exercises.
+- [ ] You can say where this deployment keeps its registered URIs, why they are not in Authlete, and what you
+      would write in a finding about a MUST the vendor gives you no way to satisfy.
 - [ ] You can list, from the code, two things the back-channel logout handler fails to validate.
 
 ## Clean up

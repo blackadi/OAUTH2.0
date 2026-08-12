@@ -17,13 +17,19 @@ import { useToken } from '@/context/TokenContext';
 import { CLIENT_ID, DEFAULT_SCOPES, PAR_ENDPOINT, AUTHORIZATION_ENDPOINT, USERINFO_ENDPOINT, TOKEN_ENDPOINT, getRedirectUri } from '@/config';
 import { createPkcePair } from '@/pkce';
 
+// Mirrors GET /api/fapi/config. Every field is read from the live Authlete service — six of these used
+// to be hardcoded server-side, and all six were the opposite of the real configuration.
 interface FapiConfig {
   mode: string;
+  /** The service's `dpopNonceRequired` flag, not "is DPoP available". */
   dpopEnabled: boolean;
-  requiredClientAuth: string;
-  senderConstrainedTokens: string;
+  /** What the service permits. Which method a client must use is pinned per client. */
+  supportedTokenAuthMethods: string[];
+  /** mTLS binding (`tlsClientCertificateBoundAccessTokens`). DPoP binding is per-client. */
+  certificateBoundAccessTokens: boolean;
   parRequired: boolean;
   pkceRequired: boolean;
+  /** Derived from `refreshTokenKept === false` — a kept token is one that is *not* rotated. */
   refreshTokenRotation: boolean;
   scopeRequired: boolean;
   cimdSupported: boolean;

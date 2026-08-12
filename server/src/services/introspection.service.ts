@@ -102,16 +102,19 @@ export class IntrospectionService {
       throw new Error("Introspection standard request body is empty");
     }
 
-    // Append client_id and client_secret from Basic auth
-    const { authorization } = req.headers;
-    if (authorization?.startsWith("Basic ")) {
-      const credentials = Buffer.from(authorization.slice(6), "base64").toString("utf-8");
-      const [clientId, clientSecret] = credentials.split(":");
-      log("StandardIntrospectionService: decoded Basic auth", { clientId });
-      const suffix = `&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`;
-      parameters += suffix;
-    }
-
+    // The `Authorization` header is deliberately NOT read here.
+    //
+    // Until 2026-08-12 this method decoded `Authorization: Basic` and appended the result to `parameters` as
+    // `client_id`/`client_secret`. Two things changed that. The endpoint now requires **admin** Basic auth
+    // (RFC 7662 §2.1, `introspection-standard.controller.ts`), so that header carries this deployment's
+    // management credentials — forwarding them to Authlete as a client identity would send our admin secret
+    // to the vendor labelled as somebody's client secret. And the decoder was hand-rolled with
+    // `credentials.split(":")`, which `AGENTS.md` forbids: it truncated any secret containing a colon and
+    // ignored the lowercase `basic` scheme that RFC 9110 §11.1 makes valid.
+    //
+    // Deleting it fixes both. A caller that needs to present *client* credentials still can — they belong in
+    // the request body, where `rawBody` carries them verbatim and the fallback rebuild above passes through
+    // every key not on the Authlete-specific exclusion list. One header, one meaning.
     log("StandardIntrospectionService: URL-encoded parameters length", {
       length: parameters.length,
     });

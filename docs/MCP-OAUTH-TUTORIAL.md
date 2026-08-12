@@ -1,6 +1,39 @@
 # MCP OAuth 2.1 — Testing & Configuration Guide
 
-**The short version:** MCP (Model Context Protocol) uses OAuth 2.1 for authorization. This server supports MCP flows out of the box — CIMD for client discovery, resource indicators for scoped access, and PKCE for public client security.
+**The short version:** MCP (Model Context Protocol) uses OAuth 2.1 for authorization, and this guide walks the
+discovery, registration, authorization and token steps end to end. **The code for all of it is here** — CIMD
+client discovery, resource indicators for scoped access, PKCE for public clients. What is *not* here is a
+service configured to let those steps succeed. Read the box below before you run anything, or you will debug
+your own request when the answer is a service flag.
+
+> ### ⚠️ MCP does not work end to end on the reference deployment — three preconditions fail
+>
+> This guide used to open by saying the server *"supports MCP flows out of the box"*. That was wrong, and it is
+> the kind of wrong that costs an afternoon: the wiring is complete, so the failures look like your bugs.
+> Verified against the live service on **2026-08-10** and against the full 62-member discovery document on
+> **2026-08-11**.
+>
+> | Precondition | What MCP requires | This deployment | Fix |
+> |---|---|---|---|
+> | **OAuth 2.1** | *"Authorization servers **MUST** implement OAuth 2.1"* (MCP Authorization, Overview) | `implicit` **and** `password` are in `supportedGrantTypes`, and PKCE is not required (`pkceRequired = false`, `pkceS256Required = false`). OAuth 2.1 removes the first two and requires the third | a differently-configured service, or scope the claim |
+> | **A self-consistent issuer** | RFC 8414 §3 — the metadata must be served from the `issuer` host, because that correspondence *is* the trust anchor discovery rests on | `issuer = https://blackadi.dev`, but the metadata is reachable only on an ephemeral tunnel host. So a client that follows §3 correctly cannot resolve this AS | pick one canonical host |
+> | **CIMD** | an HTTPS URL as `client_id`, with metadata auto-fetched | `clientIdMetadataDocumentSupported = false` — CIMD is **off**, so an HTTPS `client_id` is just an unknown client | one service flag |
+>
+> One more, because it changes what the wizard can do: **`registration_endpoint` is absent** from the discovery
+> document, so there is nothing for a client to discover and Dynamic Client Registration cannot be found the way
+> RFC 7591 clients find it. This repo's DCR routes are at `/api/client/dcr/*` behind admin Basic auth — use
+> those directly (see [DCR](API.md)).
+>
+> **The retired grants are enabled deliberately.** The curriculum uses `implicit` and `password` as the
+> *"here is what OAuth 2.1 removed, and why"* exhibit — see
+> [Module 07](curriculum/modules/07-oauth-2-1-and-security-bcp/README.md). That is a good reason to keep them
+> and an equally good reason not to claim MCP support on the same service: MCP's first MUST is precisely that
+> the server does not behave that way. **The two goals conflict on one service**, and choosing between them is
+> an open decision (`audit/05-decision-records.md` DR-05, DR-11).
+>
+> Everything below is still worth reading and running: the protocol description is accurate, the request shapes
+> are right, and each step tells you what a conformant AS would answer. Where this deployment answers something
+> else, that is noted at the step.
 
 ## What is MCP?
 
@@ -97,7 +130,7 @@ Your Authlete service must have **CIMD enabled** for MCP flows. In the Authlete 
 | `/.well-known/openid-configuration` | Fallback AS metadata | OIDC Discovery |
 | `/api/authorization` | Authorization endpoint | RFC 6749 §3.1 |
 | `/api/token` | Token exchange | RFC 6749 §3.2 |
-| `/api/introspection/standard` | Token validation | RFC 7662 |
+| `/api/introspection/standard` | Token validation | RFC 7662 — **admin Basic auth required** (§2.1) |
 | `/api/userinfo` | Token introspection | OIDC Core §5.3 |
 
 ## MCP Authorization Flow

@@ -235,15 +235,47 @@ curl -s "$API/fapi/status" | head -c 160; echo
 ```
 
 ```
+fapi/config -> 500
+{"error":"Internal Server Error","message":"Response validation failed", ...
+```
+
+**Both FAPI reporting endpoints fail.** The one thing in this deployment whose job is to answer *"are we
+FAPI conformant?"* cannot answer at all — you had to read the service configuration directly to learn
+anything in Exercises 3 and 4. Record that as a finding in Exercise 7: it is an **observability failure**,
+and it is why an audit reads configuration rather than trusting a status page.
+
+### The number that used to be there
+
+Run the same command against a copy of this repo from before **2026-08-11** and you get:
+
+```
 fapi/config -> 200
 {"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: ...
 ```
 
-**HTTP 200 with an error body.** Note which number that is. A monitoring system checking status codes reports
-this endpoint as healthy forever; a dashboard rendering the JSON shows a stack trace. Both FAPI introspection
-endpoints in this repo behave this way, so **the deployment cannot report its own FAPI posture** — you had to
-read the service configuration directly to learn anything. Record that as a finding in Exercise 7; it is an
-observability failure, and an unauthenticated stack-trace leak besides.
+**Read that carefully, because it is the more instructive failure.** A `200`, carrying an error body, that
+calls itself a Bad Request. Three mutually contradictory signals in one response. A monitoring system
+checking status codes reported this endpoint healthy **forever**, and a dashboard rendering the JSON showed
+a stack trace.
+
+**Predict where that came from before reading on.** It was not the SDK, and it was not FAPI. The global
+error handler derived the HTTP status from the thrown error object — and the Authlete SDK's `AuthleteError`
+subclasses set `statusCode` from the response they were *reading*. Authlete answered `200`; the SDK could
+not parse the body; the error carried `statusCode: 200`; the handler emitted it. **Every one of the 57 SDK
+call sites in this server had the same exposure**, not just these two endpoints.
+
+The fix was one clause — trust an error-supplied status only inside 400–599 — and it is worth naming what
+that fix did and did not do:
+
+| | Before | After |
+|---|---|---|
+| Does `service.get()` work? | No | **No** — that is the `SPIFFE_JWT` enum gap, still open |
+| Can a monitor tell? | **No** — 200 | Yes — 500 |
+
+**Two separable defects, one visible symptom.** The one that made the failure *silent* is fixed; the one
+that makes it *fail* is not. Being able to say which is which — before proposing a fix — is most of what
+this exercise is for. Note also which one was cheap: the status clamp had no dependency on the vendor, the
+SDK, or this curriculum.
 
 ---
 
@@ -345,7 +377,7 @@ curl -s -u "$CLIENT_ID:$CLIENT_SECRET" -d "grant_type=refresh_token&refresh_toke
   | python3 -c "import sys,json;d=json.load(sys.stdin);print('  ',d.get('error','ISSUED A TOKEN'),'|',d.get('error_description','')[:80])"
 
 echo "-- access token from the revoked grant (should be revoked) --"
-curl -s -X POST "$API/introspection/standard" -d "token=$AT" | python3 -c "
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$AT" | python3 -c "
 import sys,json,time;d=json.load(sys.stdin)
 print('   active:',d.get('active'),'| scope:',d.get('scope'))
 if d.get('exp'): print('   still valid for %.1f hours' % ((d['exp']-time.time())/3600))"
@@ -395,7 +427,8 @@ remediation — and cover at minimum:
 2. The numeric requirements, with measured values.
 3. The grant-management revocation gap, with its severity argued from the *interaction* rather than the
    modal verb.
-4. The FAPI introspection endpoints returning 200-with-error and a stack trace.
+4. The FAPI reporting endpoints failing, so the deployment cannot report its own posture — and, as a
+   separate finding with a separate fix, the 200-with-error status inversion that used to hide it.
 5. A remediation order, justified.
 
 Write it to `docs/curriculum/my-fapi-audit.md` (gitignored, like Module 07's).
@@ -472,7 +505,10 @@ Tick only what you ran and saw:
 - [ ] Measured `request_uri` `expires_in` = **600** and explained why that fails `< 600`
 - [ ] Recorded `authorizationCodeDuration: 0` as **NOT EVIDENCED** rather than as a pass or a fail
 - [ ] Read the advertised metadata as an attacker choosing the weakest permitted option
-- [ ] Saw both FAPI endpoints return **HTTP 200** with an error body and a stack trace
+- [ ] Saw both FAPI endpoints fail with **HTTP 500**, and can say why the deployment therefore cannot
+      report its own posture
+- [ ] Can explain what the **200** they used to return came from, and why the status inversion and the
+      SDK enum gap are two defects with two separate fixes
 - [ ] Ran create → query → revoke → query and got **200 / 401 / 404 / 204 / 404**
 - [ ] Confirmed the refresh token **is** revoked (MUST) and the access token **is not** (should)
 - [ ] Argued that finding's severity from the *interaction* with the 24-hour lifetime

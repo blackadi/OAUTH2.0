@@ -236,6 +236,9 @@ explicitly disallowed because it hides the reasoning.
    before (3) despite being less spec-flagrant.
 4. **(3) Unauthenticated introspection.** A genuine RFC 7662 §2.1 violation, but it is a token-scanning
    oracle rather than direct access, and its value to an attacker drops sharply once (2) is fixed.
+   *(Fixed on this deployment 2026-08-12 — both introspection endpoints now require admin Basic auth and are
+   rate-limited, and the gate runs before any Authlete call. The ranking argument is unaffected: it is about
+   how these findings relate to each other, not about which are open.)*
 
 **Marks:** 4 for a coherent order; 8 for the justifications. Award full marks for a different order that
 argues reachability and effort explicitly — for instance putting (4) first on impact grounds is entirely
