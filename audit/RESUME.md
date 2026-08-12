@@ -4,7 +4,7 @@
 the state so a new session resumes without re-reading the repo, re-fetching specifications, or re-probing
 Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` §5 second.
 
-- **Last updated:** 2026-08-12 (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1 and T1-7 (+T1-8) shipped**, see `04-remediation-plan.md` §1.2). **Three of the eight S1s remain open, none directly exploitable, and the latent one is retired.** Next in Tier 1: the ⚙️ configuration block **T1-2…T1-6**, which needs Authlete service writes and is worth batching
+- **Last updated:** 2026-08-12 (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1, T1-2, T1-3, T1-4 (partly), T1-6, T1-7 (+T1-8) shipped**, see `04-remediation-plan.md` §1.2). **Three of the eight S1s remain open, none directly exploitable, and the latent one is retired.** **The ⚙️ configuration block is done except T1-5**, which carries the `SPIFFE_JWT` decision (**DR-07**) and needs a ruling before it ships. **T1-4 is deliberately half-landed** — the 24-hour lifetime is kept on purpose (GM-W1/FAPI1-W3 open by decision) and `idTokenReissuable` is blocked by a new defect, **B1-W6**
 - **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `audit/phase3-and-tier0-fixes`
 - **Skill:** `.claude/skills/rfc-audit/SKILL.md` — invoke with `/rfc-audit` or follow it directly
 - **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **166 markdown files, 97 source refs, clean**
@@ -72,7 +72,20 @@ five Module 09a `UNVERIFIED` settings re-checked as **still unset on 2026-08-10*
 `client_attestation_pop_methods_supported` (work item **ATT-W5** — one call printing all 62 members).
 *(Closed in Phase 4 §2.2 — both ABSENT.)*
 
-**A fifth pass ran 2026-08-12, and it is the only one that wrote.** T0-4 read all three clients
+**A seventh pass ran 2026-08-12 (T1-4, T1-6) and wrote too** — `SERVICE-CONFIG-PROBE.md` §15–§16. Two
+results worth carrying beyond their work items. **`readOnly` in the vendored 3.0.16 schema does not mean
+read-only**: `supportedAcrs` carries `"readOnly": true` and the write was accepted and persisted — set that
+beside T0-4's opposite (a field *absent* from the schema, accepted with `200` and discarded) and the rule is
+that **the schema predicts neither storage nor rejection; only write-then-read-back does**. And
+**`NO_INTERACTION` is not only the `prompt=none` path** — `offline_access` without `prompt=consent` reaches
+it too, so T1-7 fixed a second live symptom of that S1 that nobody had noticed.
+
+**A sixth pass ran 2026-08-12 (T1-2, T1-3) and also wrote** — one `service/update`, one `client/create` and
+three `client/update`s, each read back and diffed key-by-key. Recorded in `SERVICE-CONFIG-PROBE.md` §11–§14.
+Its two durable facts: **one RSA key with no `alg` member changed four advertised algorithm lists**, and the
+**E2E suite mutates shared client state**, so every client snapshot in this audit has a shelf life.
+
+**A fifth pass ran 2026-08-12, and it was the first that wrote.** T0-4 read all three clients
 (`client/get/list`), attempted to register `postLogoutRedirectUris`, and re-read to verify. **Authlete accepted
 the write with `200` and silently discarded the field** — it does not exist in the 3.0 `Client` schema
 (`OIDC-RP-INITIATED-LOGOUT-1.0.md` **F-4**). Net effect on the service: **nothing but `modifiedAt`**, confirmed
@@ -127,8 +140,12 @@ nothing from it). **Still unverified:** RFC 8446 and RFC 9110 dates cited at `mo
 | *"this server supports MCP flows out of the box"* attributed to `docs/MCP-OAUTH-TUTORIAL.md` **and `README.md`** | `MCP-OAUTH-TUTORIAL.md:3` **only** — `README.md` mentions neither MCP nor CIMD. So **MCP-W3's `README.md` half is a no-op** and T0-5 closed the claim completely | `MCP-OAUTH.md` doc-delta row, corrected 2026-08-11 during T0-5 |
 | `04-remediation-plan.md` §7.2 — *"Tier 0 exits when **five** actions shipped"* | **Six** (T0-1…T0-6). The criterion predated T0-6 being split out | fixed 2026-08-11 during T0-6 |
 | `postLogoutRedirectUris` recorded as client metadata that is *unset* on all three clients | **It is not a field Authlete 3.0 has.** 0 of the `Client` schema's 108 properties; a write returns 200 and is discarded | `SERVICE-CONFIG-PROBE.md` §10 row withdrawn 2026-08-12; `OIDC-RP-INITIATED-LOGOUT-1.0.md` F-4 |
+| *"No client has `jwks` or `jwksUri`"* (`RFC7523-…` F-3, `RFC9101-…` F-3) | Client `1523514379` **does** have one — `kid: "e2e-test-key"`, written by `tests/e2e/e2e.test.ts:1169`, private half discarded per run. The substance holds (no *usable* client key) but the wording was falsified by a **test run**, not by an edit | found 2026-08-12 during T1-3; `SERVICE-CONFIG-PROBE.md` §14 |
+| *"Module 08's asymmetric validation branch remains unexercised"* — in `OIDC-CORE-1.0.md` F-2, the lab's own marker, and `04-remediation-plan.md` §6.2 | **Nothing was blocking it.** Only the confidential client is `HS256`; both public clients have been `ES256` throughout. Three documents inherited one lab marker nobody re-checked | corrected 2026-08-12 during T1-2, by running it |
+| *"`NO_INTERACTION` is the `prompt=none` path"* (`OIDC-CORE-1.0.md` F-1, `RFC9470-…` F-3) | **It is not the only one.** A request with no `prompt` at all reaches it whenever it asks for `offline_access` (OIDC Core §11). So the empty-`Location` S1 had a **second live symptom** nobody had looked for | found 2026-08-12 during T1-4; `SERVICE-CONFIG-PROBE.md` §16 |
+| *"the handled `ID_TOKEN_REISSUABLE` action is unreachable while the flag is `false`"* (probe §3.3, OIDC-W5) | True, and it hid a **defect**. Enabling the flag showed the branch requires a `ticket` Authlete does not send, so every refresh returned **400 with a valid token body**. *Handled*, *exercisable* and *correct* are three different claims | found 2026-08-12 during T1-4; **B1-W6** |
 | `backChannelLogoutUri` (capital `C`) cited as absent on all three clients | Authlete's field is **`backchannelLogoutUri`**. The conclusion survives — the correct key is also unset — but the probe was reading a key that cannot exist | `SERVICE-CONFIG-PROBE.md` §10, `OIDC-BACKCHANNEL-LOGOUT-1.0.md` ×2, fixed 2026-08-12 |
-| `03-curriculum-audit.md` citing `PROGRESS.md:1264` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:1327-1328` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
+| `03-curriculum-audit.md` citing `PROGRESS.md:1401` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:1464-1465` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
 
 **Calibration worth carrying into Phase 4:** five of Phase 3's findings correct the audit rather than the
 curriculum, and **every one arose where the audit reasoned from a grep or a recollection while the curriculum
@@ -196,7 +213,7 @@ Batch 3a opened a register Phase 4 must carry — correct labs that a recommende
 
 | Lab | Broken by | Mitigation |
 |---|---|---|
-| Module 00 Ex 2 expects `key count: 1`, EC key at `keys[0]` | **OIDC-W2** / **FAPI1A-W2** — registering an RSA key | Select by `kty === 'EC'` (**CUR-3a-W3**) |
+| ~~Module 00 Ex 2 expects `key count: 1`, EC key at `keys[0]`~~ | ~~**OIDC-W2** / **FAPI1A-W2**~~ | ✅ **both landed in one commit, 2026-08-12.** And the register was short by two — Module 08 §6d and `modules/11…/README.md` also asserted the pre-fix key set |
 | Module 01 Ex 3 + Module 07 §3b both hinge on ROPC succeeding | **FAPI2-W5** — enabling FAPI 2.0 reverses both transcripts | Name `fapiModes` in both (**CUR-3a-W5**) |
 | Module 10 Ex 4 teaches the 200-with-stack-trace | Dropping `SPIFFE_JWT` **retires** it; **EH-W1** alone does **not** | See `ERRORHANDLER-…` F-2's four-row table |
 
@@ -232,8 +249,8 @@ Four files decide security outcomes and are not on it: `routes/device.routes.ts`
 
 ### 5.4 Highest-leverage single changes
 
-- **One client with `private_key_jwt` + a JWKS** unblocks RFC 7523 §2.2, asymmetric JAR, and FAPI (**7523-W4**).
-- **One registered RSA key** satisfies OIDC Discovery §3's RS256 MUST and FAPI's PS256 (**OIDC-W2**).
+- ~~**One client with `private_key_jwt` + a JWKS**~~ ✅ **shipped 2026-08-12 (T1-3)** — RFC 7523 §2.2, asymmetric JAR and FAPI's prerequisite, from one `client/create` (**7523-W4** = **9101-W3**).
+- ~~**One registered RSA key**~~ ✅ **shipped 2026-08-12 (T1-2)** — RS256 *and* PS256, because the key carries no `alg` member (**OIDC-W2** = **FAPI1A-W2**).
 - **One clause in `errorHandler.ts`** stops every SDK validation failure being served as 2xx (**EH-W1**).
 - **One review of `supportedTokenAuthMethods`** subsumes the mTLS metadata fix, the attestation finding and the `SPIFFE_JWT` question (**ATT-W3**).
 

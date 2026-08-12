@@ -239,7 +239,10 @@ Brief, because they matter and neither is glamorous.
 every token header, verifiers select by `kid` and re-fetch on an unknown one, and **overlap old and new keys**
 across the longest token lifetime you issue. The most common rotation outage is removing the old key before
 the last token signed with it expires — which is a good reason to keep token lifetimes short beyond the
-security argument. (This deployment's JWKS has one EC P-256 key with `kid: "1"` — Module 00.)
+security argument. (This deployment's JWKS holds **two** keys since 2026-08-12 — EC P-256 `kid: "1"` and RSA
+`kid: "rsa-1"` — so Module 00's exercise selects by `kty` and Module 08's by `kid`. Note that publishing two
+keys is not itself a rotation: nothing here has been retired, and a real rotation is defined by the
+*overlap window* you leave, not by the key count.)
 
 **Conformance testing.** The OpenID Foundation runs conformance suites for FAPI, OIDC and CIBA. They test
 *protocol* behaviour and they are genuinely worth running. They will never find a BOLA, because they do not

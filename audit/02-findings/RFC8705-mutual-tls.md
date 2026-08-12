@@ -54,7 +54,7 @@ intact; only its one-line summary and its citations need work (F-2).
 | # | Requirement | Source | Status |
 |---|---|---|---|
 | 1 | Support `tls_client_auth` with one of the five expected-certificate metadata fields | §2.1.1–2.1.2 | ⊘ Authlete's; **advertised but unusable** — F-1. `tlsClientAuthSubjectDn` absent on all clients |
-| 2 | Support `self_signed_tls_client_auth` via `jwks`/`jwks_uri` with `x5c` | §2.2.1–2.2.2 | ⊘ Authlete's; advertised but unusable — F-1. No client has `jwks`/`jwksUri` |
+| 2 | Support `self_signed_tls_client_auth` via `jwks`/`jwks_uri` with `x5c` | §2.2.1–2.2.2 | ⊘ Authlete's; advertised but unusable — F-1. **Updated 2026-08-12 (T1-3):** one client now has a `jwks`, but it holds a bare EC signing key with **no `x5c`**, which is what §2.2.1 needs. Unusable for the same reason, for a more precise one |
 | 3 | Bind tokens with `cnf` `{"x5t#S256": …}` | §3.1 | ⊘ Authlete's; `tlsClientCertificateBoundAccessTokens = False` service-wide and per client |
 | 4 | A protected resource MUST obtain the certificate from its TLS layer and match it; mismatch → 401 `invalid_token` | §3.2 | ❌ **impossible in this deployment** — no TLS context. Basis of the decline |
 | 5 | Convey the binding in the introspection response | §3.3 | ❌ `IntrospectionResponse.certificateThumbprint` exists in the SDK and is never read — F-3 |

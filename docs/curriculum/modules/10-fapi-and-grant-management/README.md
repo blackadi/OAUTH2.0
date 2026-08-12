@@ -436,7 +436,7 @@ until it appears in a conformance report.
 | **FAPI enforcement** | **Off.** `fapiModes` and `supportedServiceProfiles` are absent; nothing is required |
 | **`/api/fapi/config`, `/api/fapi/status`** | **Both broken** — HTTP **500**, `service.get()` rejects on an SDK enum gap. Until 2026-08-11 they returned **200** with an error body; Exercise 4 takes that apart |
 | **mTLS** | Not implemented; `tlsClientCertificateBoundAccessTokens: false` |
-| **`private_key_jwt`** | Advertised by the service, but **neither client has a JWKS**, so it cannot be exercised |
+| **`private_key_jwt`** | **Usable since 2026-08-12** — one of the four clients is registered `PRIVATE_KEY_JWT` with a JWKS and authenticates with a real client assertion. Still not *required* of anyone, which is the FAPI gap; before that date no client had a key and it could not be exercised at all |
 | **Grant management** | **Fully working** — create, query, revoke all verified end to end. The one thing in this module that is complete |
 
 The lab is built around that gap. A deployment where every mechanism is available and none is mandatory is

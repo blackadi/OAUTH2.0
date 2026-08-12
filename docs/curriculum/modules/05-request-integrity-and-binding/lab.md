@@ -176,18 +176,20 @@ import crypto from "node:crypto"; import fs from "node:fs";
 const b64u = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 export const loadKey = () => crypto.createPrivateKey(fs.readFileSync("/tmp/jar-client-private.pem"));
 // A signed request object. `over` overrides any claim; alg:"none" drops the signature entirely.
-export function requestObject({ clientId, iss, over = {}, alg = "ES256", key }) {
+export function requestObject({ clientId, iss, over = {}, alg = "ES256", key, kid = "client-jar-1" }) {
   const claims = {
     iss: clientId, aud: iss, response_type: "code", client_id: clientId,
     redirect_uri: "http://localhost:3001/callback", scope: "profile", state: "JAR2",
     nbf: Math.floor(Date.now()/1000), exp: Math.floor(Date.now()/1000) + 50, ...over,
   };
   if (alg === "none") return `${b64u({ alg:"none", typ:"oauth-authz-req+jwt" })}.${b64u(claims)}.`;
-  const input = `${b64u({ alg, typ:"oauth-authz-req+jwt", kid:"client-jar-1" })}.${b64u(claims)}`;
+  const input = `${b64u({ alg, typ:"oauth-authz-req+jwt", kid })}.${b64u(claims)}`;
   const sig = crypto.sign("sha256", Buffer.from(input), { key: key ?? loadKey(), dsaEncoding: "ieee-p1363" });
   return `${input}.${sig.toString("base64url")}`;
 }
 export const throwawayKey = () => crypto.generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey;
+// The key from PKJWT_PRIVATE_JWK — a client key already registered on this service (Step 4b).
+export const registeredKey = () => crypto.createPrivateKey({ key: JSON.parse(process.env.PKJWT_PRIVATE_JWK), format: "jwk" });
 EOF
 
 jar() {   # jar '<js expression building the object>'  -> posts it to /api/jar/process
@@ -304,6 +306,47 @@ scopes: ["profile"] ticket: true
 **`INTERACTION` means accepted** — the AS verified your signature, unpacked the object, and is ready to ask the
 user to log in. Note `scopes: ["profile"]`: that came out of the **signed** JWT. Nothing on any URL said
 `profile`.
+
+### Step 4b — the same thing without the console, and the pinned-algorithm contrast
+
+Steps 2–4 are the exercise: you generated a key, registered it, and watched the error move. But the setup is
+throwaway — the key lives in `/tmp` and the registration lasts until someone edits that client again. Since
+**2026-08-12** this service also carries a client that is *permanently* registered for asymmetric JAR:
+`$PKJWT_CLIENT_ID`, with a JWKS **and** `requestSignAlg: ES256` pinned. Point the helper at it:
+
+```bash
+CID_SAVE="$CID"; export CID="$PKJWT_CLIENT_ID"
+KID=$(node -e 'process.stdout.write(JSON.parse(process.env.PKJWT_PRIVATE_JWK).kid)')
+
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", key: J.registeredKey(), kid: "'"$KID"'"})'
+```
+
+```
+action: INTERACTION
+[A004001] Authlete has successfully issued a ticket to the service (API Key = …) for the authorization request from the client (ID = …). [response_type=code, openid=false]
+scopes: ["profile"] ticket: true
+```
+
+No console step, no `/tmp` key. Now send the **unsigned** object to the *same* client and compare it with
+Step 1, which sent the identical object to `$CLIENT_ID`:
+
+```bash
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", alg: "none"})'
+export CID="$CID_SAVE"
+```
+
+```
+action: BAD_REQUEST
+[A005336] The request object passed by 'request' parameter is not signed but the registered value of
+'request_object_signing_alg' is neither 'none' nor null.
+```
+
+**`[A005336]`, not `[A008311]`** — and that is Step 3's second warning, no longer a warning but a transcript.
+Same object, same service, two clients, two different guards firing. The service-level check ("JAR must be
+signed") never runs for this client because the *client-level* check ("you promised `ES256`") rejects it
+first. Two lessons stacked: error codes identify a **guard**, not a **cause**; and pinning
+`request_object_signing_alg` per client is what makes a downgrade to `none` impossible for that client no
+matter how the service is configured.
 
 ### Break it — four ways to get a request object wrong
 

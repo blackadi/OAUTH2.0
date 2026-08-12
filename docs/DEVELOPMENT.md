@@ -83,6 +83,7 @@ that never exercised most of the suite.
 | `CID` + `SEC` | 14 blocks (auth code, refresh, CIBA, PAR, token management, …) | Must be a CONFIDENTIAL client using `CLIENT_SECRET_BASIC` — the tests authenticate via HTTP Basic |
 | `PUB_CID` | PKCE (RFC 7636), public-client PAR | Must be a PUBLIC client whose `idTokenSignAlg` is **asymmetric** (RS256/ES256). HS256 signs the ID token with the client secret and Authlete refuses with `[A406301]` |
 | `REDIR` | — | Must be registered on both clients above, or the auth-code and PAR blocks fail on `redirect_uri` mismatch |
+| `PKJWT_CID` + `PKJWT_PRIVATE_JWK` | RFC 7523 §2.2 client auth and asymmetric JAR (Module 06 Ex 4, Module 05 Ex 2) | A CONFIDENTIAL client with `tokenAuthMethod: PRIVATE_KEY_JWT` and a registered JWKS. `PKJWT_PRIVATE_JWK` is the **private** half as a single-line JWK — **single-quote it**, or the shell strips the JSON's double quotes and every assertion fails with `[A157326]`. It is a client credential: never commit it. The curriculum labs read the same pair as `PKJWT_CLIENT_ID` / `PKJWT_PRIVATE_JWK` (see `docs/curriculum/scripts/curriculum.env.example`) |
 | `BASE_URL` | — | Only for the standalone `tests/e2e/enable_ciba.ts` helper |
 
 ### Client (`client/.env`)

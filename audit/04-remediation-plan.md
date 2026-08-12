@@ -40,7 +40,7 @@ the target had reasoned from a primary source. The three found here:
 
 | The audit said | The working tree says | Where |
 |---|---|---|
-| "~120 work-item IDs" (`RESUME.md:290`) | **280** — 239 Phase 2 + 41 Phase 3 | §5.1 |
+| "~120 work-item IDs" (`RESUME.md:317`) | **280** — 239 Phase 2 + 41 Phase 3 | §5.1 |
 | Two of the four `AGENTS.md` surface additions are open | **One.** `controllers/logout.controller.ts` landed too — `AGENTS.md:230` | §6.4 |
 | EH-W3 and EH-W5 remain open | **Both closed.** All five EH items shipped 2026-08-11 | §1.2 |
 
@@ -191,7 +191,7 @@ Ten present members corroborate the rest:
 |---|---|---|
 | `issuer` | `https://blackadi.dev` — while **every** endpoint is on `…ngrok-free.dev` | **8414-W1**, AM-W1, 9207-W2, 8628-W5 |
 | `token_endpoint_auth_methods_supported` | nine methods incl. `spiffe_jwt`, `tls_client_auth`, `self_signed_tls_client_auth`, `attest_jwt_client_auth` | **ATT-W3**, 8705-W1 |
-| `id_token_signing_alg_values_supported` | `HS256, HS512, ES256, HS384` — **no RS256, no PS256** | OIDC-W2, FAPI1A-W2, CUR-3b-W9 |
+| `id_token_signing_alg_values_supported` | ~~`HS256, HS512, ES256, HS384` — **no RS256, no PS256**~~ → **since 2026-08-12 (T1-2)** also `RS256, RS384, RS512, PS256, PS384, PS512` | OIDC-W2 ✅, FAPI1A-W2 ✅, CUR-3b-W9 |
 | `response_modes_supported` | all four JARM modes present | JARM-W1, **JARM-W4** |
 | `code_challenge_methods_supported` | `plain`, `S256` | 7636-W3, 9700-W4 |
 | `grant_types_supported` | incl. `implicit`, `password`, `…pre-authorized_code` | 9700-W3, MCP-W5, VCI-W1 |
@@ -280,16 +280,19 @@ instances; the discovery document shows **eight**, plus two inverse cases.
 | Advertised | Blocked by | Item |
 |---|---|---|
 | All four JARM response modes | No client has `authorizationSignAlg` | JARM-W1 |
-| `private_key_jwt` | No client configured with it, no client JWKS | **7523-W4** |
+| ~~`private_key_jwt`~~ | ~~No client configured with it, no client JWKS~~ | **7523-W4 ✅ 2026-08-12** — the inverse case is now the interesting one: it is advertised, usable, and required of nobody |
 | `tls_client_auth`, `self_signed_tls_client_auth` | mTLS declined; `tls_client_certificate_bound_access_tokens: false` | 8705-W1 |
 | `attest_jwt_client_auth` (+ both attestation alg lists) | **`challenge_endpoint` absent** | ATT-W3 |
 | `spiffe_jwt` | Breaks `service.get()` in SDK 1.0.0 — the enum gap | ATT-W3 |
 | All five grant-management actions | Authorization-request side never exercised | GM-W2 |
 | All three CIBA delivery modes | No client has `bcDeliveryMode` | CIBA-W4 |
-| 14 request-object signing algorithms; `require_request_uri_registration: true` | No client has an asymmetric key or `requestUris` | 9101-W2, **9101-W3** |
+| 14 request-object signing algorithms; `require_request_uri_registration: true` | ~~No client has an asymmetric key~~ (**9101-W3 ✅ 2026-08-12** — one client signs `ES256` against a registered key) or `requestUris` | 9101-W2 |
 
-**Five of the nine advertised client-auth methods are unusable** — Phase 2 said four; `private_key_jwt` is the
-fifth, and it is the one worth fixing rather than withdrawing.
+**Five of the nine advertised client-auth methods were unusable** — Phase 2 said four; `private_key_jwt` was the
+fifth, and it was the one worth fixing rather than withdrawing. **Fixed 2026-08-12 (T1-3), so it is four again.**
+That leaves T1-5's review facing a cleaner question: of the four remaining, two are declined by decision (mTLS),
+one is blocked by an absent endpoint (attestation) and one breaks the SDK (`spiffe_jwt`) — **none is fixable by
+registering a client**, which is what separates them from the case just closed.
 
 **Two inverse cases, and they matter because they are the ones a reader of the metadata would never find:**
 
@@ -366,7 +369,7 @@ process change that makes the next audit cheaper.
 | Phase 3 — `03-curriculum-audit.md` batches 3a–3d | **41** |
 | **Total** | **280** |
 
-`RESUME.md:290` estimated *"~120"*. The estimate was low by a factor of 2.3 — recorded here because a plan
+`RESUME.md:317` estimated *"~120"*. The estimate was low by a factor of 2.3 — recorded here because a plan
 built for 120 items would have silently dropped half of them.
 
 **280 reduces to 55 numbered actions.** The reduction:
@@ -394,8 +397,8 @@ now scheduled — which is the same lesson as §1's calibration table, applied t
 | 1 | **GM-W1** = OIDC-W4 = FAPI1-W3 | `accessTokenDuration` (theme 4) |
 | 2 | ~~FAPI2-W1 = 7636-W1 = 9700-W4~~ | ✅ shipped |
 | 3 | ~~EH-W1 = FAPI2-W2~~ | ✅ shipped |
-| 4 | **7523-W4** = 9101-W3; prerequisite of FAPI2-W5, FAPI1-W4, MS-W5 | One client with `private_key_jwt` + a JWKS |
-| 5 | **OIDC-W2** = FAPI1A-W2 | One registered RSA key |
+| 4 | ~~**7523-W4** = 9101-W3~~ | ✅ shipped 2026-08-12 — the prerequisite FAPI2-W5, FAPI1-W4 and MS-W5 were waiting on is met |
+| 5 | ~~**OIDC-W2** = FAPI1A-W2~~ | ✅ shipped 2026-08-12 — one RSA key, both specifications, four advertised alg lists |
 | 6 | **FAPI1-W1** = FAPI1A-W3 ⊃ CUR-3b-W10 | The 60s/60min error, in `AGENTS.md` **and** Module 05 |
 | 7 | **ATT-W3** ⊃ 8705-W1 ⊃ CIMD-W3 ⊃ the `SPIFFE_JWT` question | One `supportedTokenAuthMethods` review |
 | 8 | **JOSE-W2** ⊃ MS-W3 | Drop `none` from both advertised alg lists |
@@ -446,9 +449,11 @@ now scheduled — which is the same lesson as §1's calibration table, applied t
 Unchanged from `RESUME.md` §5.4 except that one has shipped and one is re-pointed:
 
 1. **CUR-3c-W1** — the `UNVERIFIED` convention across nine tutorials. The aggregate behind six S2s. A writing task.
-2. **7523-W4** — one client with `private_key_jwt` + a JWKS. Unblocks RFC 7523 §2.2, asymmetric JAR, and FAPI.
+   **Sharpened by T1-2/T1-3:** two of the audit's own conclusions rested on unrefreshed `UNVERIFIED` markers and
+   one of them was false (§6.2), so the convention needs a *re-check date*, not just a marker.
+2. ~~**7523-W4**~~ ✅ **shipped 2026-08-12** — and it delivered what the row promised: §2.2, asymmetric JAR and FAPI's prerequisite, from one `client/create`.
 3. **ATT-W3** — one `supportedTokenAuthMethods` review. Subsumes the mTLS metadata fix, the attestation finding and `SPIFFE_JWT`.
-4. **OIDC-W2** — one registered RSA key. Satisfies OIDC Discovery §3's RS256 MUST and FAPI's PS256.
+4. ~~**OIDC-W2**~~ ✅ **shipped 2026-08-12** — one registered RSA key, RS256 *and* PS256.
 5. ~~**EH-W1**~~ ✅ → **9700-W1**. Two lines, an S1, and no curriculum impact.
 
 ---
@@ -462,7 +467,7 @@ columns must be checked before any Tier 1 configuration change ships.**
 
 | Lab | Broken by | Mitigation | State |
 |---|---|---|---|
-| Module 00 Ex 2 — expects `key count: 1`, EC key at `keys[0]` | **OIDC-W2** | **CUR-3a-W3** — select by `kty === 'EC'`, drop the count | ⬜ **must land first** |
+| Module 00 Ex 2 — expects `key count: 1`, EC key at `keys[0]` | **OIDC-W2** | **CUR-3a-W3** — select by `kty === 'EC'`, drop the count | ✅ **landed together 2026-08-12 (T1-2).** The register worked exactly as intended. Two further hits the register did not name were found by the §7.4 grep and fixed in the same commit: Module 08 §6d, whose *transcript inverts* (it printed the RS256-less list and reasoned about the violation), and `modules/11…/README.md`'s *"one EC P-256 key"* |
 | Module 04 introspection steps; Module 11 exercises using unauthenticated admin access as live exploits | **7662-W1** | `grep -rn "introspection" docs/curriculum/modules`; expected outputs go 200 → 401 | ⬜ **grep before, not after** |
 | Module 04 opaque-token exercises; `STEP-UP-AUTH-TUTORIAL.md` Part 4 | **9068-W1** | 9068-W3 (separate the two halves) and 9068-W4 (label the payload) first | ⬜ Tier 3 |
 | Module 10 Ex 4 — the 200-with-stack-trace | Dropping **`SPIFFE_JWT`** — **not** EH-W1 | **EH-W4 ✅** reframed it as *two defects, one symptom*; the 200 kept as a dated historical transcript | ✅ mitigated |
@@ -477,16 +482,27 @@ the argument for scheduling configuration before documentation.
 
 | Lab | Completed by | Retires |
 |---|---|---|
-| Module 09a Ex 2 / 2a — JARM | **JARM-W1** (`authorizationSignAlg = ES256`) | one `UNVERIFIED` marker; also makes JARM-W2 answerable |
-| Module 09a Ex 3 — CIBA delivery mode | **CIBA-W4** (`bcDeliveryMode`) | one marker |
-| Module 09a Ex 4 — the ACR *success* path | **9470-W5** (`supportedAcrs` → `acr_values_supported`) | one marker |
-| Module 09a Ex 5 — RAR | **9396-W1** (register one `authorization_details` type) | one marker; exercises the consent-render path for the first time |
-| Module 08 asymmetric ID-token validation (`lab.md:365-399`) | **OIDC-W2** | the branch has never run |
+| Module 09a Ex 2 / 2a — JARM | **JARM-W1** (`authorizationSignAlg = ES256`) | ✅ **2026-08-12** — marker retired with a live transcript; **JARM-W2 is now answerable** |
+| Module 09a Ex 3 — CIBA delivery mode | **CIBA-W4** (`bcDeliveryMode`) | ✅ **2026-08-12** — full poll sequence run; also answers Ex 3d's open question (`auth_req_id` is single-use) |
+| Module 09a Ex 4 — the ACR *success* path | **9470-W5** (`supportedAcrs` → `acr_values_supported`) | ✅ **2026-08-12** — *both* halves; the refusal half needed a second, deliberately unsatisfiable ACR |
+| Module 09a Ex 5 — RAR | **9396-W1** (register one `authorization_details` type) | ✅ **2026-08-12** — and it required **re-pointing Ex 5a's control**, which had used the very type now registered |
+| ~~Module 08 asymmetric ID-token validation (`lab.md:365-399`)~~ | ~~**OIDC-W2**~~ | ⚠️ **This row was wrong, and it is the most instructive correction in the register.** The branch was **never blocked**: only the *confidential* client is `HS256`, and the two public clients have been `ES256` throughout — a fact `OIDC-CORE-1.0.md` F-2 states two paragraphs above the clause that says otherwise. The lab's marker said *"Both clients here are still `HS256`"*, this register believed it, and **nobody ran the two-command check that would have falsified it**. Retired 2026-08-12 by *running the branch* (all thirteen steps `PASS`), not by OIDC-W2. The lesson: an `UNVERIFIED` marker is a claim about the deployment, and it decays like any other |
 | Module 09b — SD-JWT | **CUR-3c-W3** + **CUR-3c-W5** (trailing tilde + a test file) | fixes a wrong ACCEPT |
 
-**One change appears in both columns.** **OIDC-W2** breaks Module 00 Ex 2 *and* completes Module 08's
-asymmetric branch. That is the clearest argument for keeping the register bidirectional: judged from column one
-alone, OIDC-W2 looks like a cost.
+**One change appeared in both columns — and half of that turned out to be false.** **OIDC-W2** does break
+Module 00 Ex 2, and it was recorded as also completing Module 08's asymmetric branch, which made it look like
+a wash. Executing it (2026-08-12) showed the second half was never true: nothing blocked that branch. So the
+bidirectional argument survives in a **weaker and more useful form**. OIDC-W2 is not a cost offset by a
+benefit; it is a cost, offset by a *different* benefit the register missed entirely — with two keys published,
+Module 08's `kid` selection stops being decorative. Its validator carries
+`?? (jwks.keys.length === 1 ? jwks.keys[0] : undefined)`, a fallback that silently rescued any broken `kid`
+lookup while there was one key. **A fallback that always fires is a check you are not running**, and the
+second key is what turns that line into a real test.
+
+**The register's real failure mode is not asymmetry, it is staleness.** Both entries in this column that
+proved wrong (this one, and §6.1's Module 08 row) were wrong because a *lab's own `UNVERIFIED` marker* was
+taken as evidence about the deployment. Before trusting a row here, re-run the check the marker describes —
+`CUR-3b-W14` already exists to refresh Module 09a's four markers and should be read as the general rule.
 
 ### 6.3 Live drift — the register's third category
 
@@ -507,9 +523,9 @@ this exposed, all worth carrying:
 1. **The drift was not uniform.** Refs above the second hunk moved by 69, refs below it by 77. Arithmetic
    applied blanket would have "fixed" nine refs into new wrong positions. Each of the 20 was re-resolved by
    matching its **content** across three revisions (`b5e60d4~1`, `HEAD`, working tree).
-2. **Two refs were not drift at all.** `MCP-OAUTH.md:70` and `03-curriculum-audit.md:146` cite the *same*
-   `PROGRESS.md:951-952` for **different content**, because one was written before `b5e60d4` and one after —
-   they resolve to `:1060-1061` and `:983-984`. And `03-curriculum-audit.md`'s `PROGRESS.md:1264` matched
+2. **Two refs were not drift at all.** `MCP-OAUTH.md:70` and `03-curriculum-audit.md:153` cite the *same*
+   `PROGRESS.md:1088-1089` for **different content**, because one was written before `b5e60d4` and one after —
+   they resolve to `:1060-1061` and `:983-984`. And `03-curriculum-audit.md`'s `PROGRESS.md:1401` matched
    *neither* baseline: it was **wrong when written** (correct target `:1327-1328`).
 3. **One citation could not be renumbered.** `OIDC-RP-INITIATED-LOGOUT-1.0.md` quoted `PROGRESS.md:401`'s
    *"Fix is one line — exact comparison against a registered set"*, and `b5e60d4` **deleted that sentence**
@@ -590,11 +606,11 @@ and both shipped 2026-08-11; **this is what remains.**
 | # | Action | Items | Notes |
 |---|---|---|---|
 | **T1-1** | ✅ **SHIPPED 2026-08-12.** **Require caller authentication on both introspection endpoints**, plus a rate limiter | 7662-W1 ✅(=9701-W2), 7662-W2 ✅(=7009-W2 in part), 7662-W3 ✅, 7662-W4 ✅, 7662-W5 ✅ | 📋 🔍 Planned under plan mode. **Admin Basic on both, not client auth** — nothing here can validate a client secret, and whether Authlete's `standardProcess` rejects bad ones is unestablished, so demanding one would look like protection and provide none (**new: 7662-W6**). The gate runs **before** any Authlete call, which is what closes the oracle. `parseBasicAuth` was *not* adopted: the header read was **deleted**, because that header now carries admin credentials and forwarding them would ship our management secret to Authlete as a client secret. Suite 589 → **612** / 57 files. Curriculum: **21 call sites** across six module labs, both root scripts, three tutorials and two exam files; **Module 04's "Break it" and Module 07's Exercise 5a both inverted** and were reframed. **7009-W2's revocation limiter is not covered here** — revocation already requires client auth, so only its limiter remains, in T1-19 |
-| **T1-2** | **Register one RSA key** on the service | OIDC-W2 (=FAPI1A-W2) | ⚙️ 🔍 **CUR-3a-W3 must land in the same commit** (§6.1). Completes Module 08's asymmetric branch (§6.2) |
-| **T1-3** | **Register one client with `private_key_jwt` + a JWKS** | 7523-W4 (=9101-W3) | ⚙️ Unblocks RFC 7523 §2.2, asymmetric JAR, and every FAPI option |
-| **T1-4** | **Shorten `accessTokenDuration`** (and review `idTokenDuration`, `refreshTokenDuration`). In the same pass, apply or retire the two divergent flags `idTokenAudType` and `idTokenReissuable` | GM-W1 = OIDC-W4 = FAPI1-W3; OIDC-W5 | ⚙️ Theme 4. One change, four findings. OIDC-W5 rides here because it is the same console screen — note the handled `ID_TOKEN_REISSUABLE` action is **unreachable** while the flag is `false` |
+| **T1-2** | ✅ **SHIPPED 2026-08-12.** **Register one RSA key** on the service | OIDC-W2 ✅ (=FAPI1A-W2 ✅) | ⚙️ 🔍 RSA-2048, `kid: "rsa-1"`, **no `alg` member** — which is what yields RS256 *and* PS256 from one key, and the acceptance criteria did not say so. Diff: `jwks` + `modifiedAt` out of 129 fields; **four** advertised alg lists changed, not one. Verified from the discovery document per §7.2, then verified *usable* by issuing an RS256 ID token — Theme 1 applies to the audit's own fixes. **CUR-3a-W3 landed in the same commit.** §6.2's Module 08 row was **wrong**: that branch was never blocked (see §6.2) |
+| **T1-3** | ✅ **SHIPPED 2026-08-12.** **Register one client with `private_key_jwt` + a JWKS** | 7523-W4 ✅ (=9101-W3 ✅) | ⚙️ Client `2176571218` **created**, not converted — the other three carry labs, the SPA and 14 E2E blocks. `requestSignAlg: ES256` in the same call. Both halves exercised live, with negative controls: a tampered request-object signature → `[A005328]`, a wrong `aud` → `[A157318]`. Two behaviours established that no work item asked for — this deployment accepts **either** the issuer or the token endpoint as `aud`, and **`jti` replay is not enforced** (conformant; §3/§6 make it OPTIONAL). Private key in `server/.env` (gitignored) so the labs repeat. 9101-W3's *"Step 3 becomes 'here is the registered key'"* was **deliberately not followed** — see its work-item row |
+| **T1-4** | ⚠️ **PARTLY SHIPPED 2026-08-12 — and the lifetime change was deliberately reverted.** | OIDC-W4 ✅(recorded), GM-W1 ⬜, FAPI1-W3 ⬜, OIDC-W5 ⚠️ | ⚙️ Theme 4. **The shortening was applied, verified (`expires_in: 3600`) and reverted**: the blast radius is ~55 deployment-specific references, and two are arguments rather than transcripts — **Module 07's audit lab** ranks the 24-hour lifetime as finding (iv), **Module 10's thesis** uses it as its worked example. OIDC-W4 closes on its *"record it"* branch; GM-W1 and FAPI1-W3 stay **open by decision**, in `PROGRESS.md`. `idTokenAudType = "string"` ✅ kept. **`idTokenReissuable` exposed a defect and was reverted** — the handled action requires a `ticket` Authlete does not send, so every refresh returned 400 with a valid body: **new work item B1-W6**, 📋 security-critical |
 | **T1-5** | **Review all nine `supportedTokenAuthMethods` together** | ATT-W3 ⊃ 8705-W1 ⊃ CIMD-W3 ⊃ `SPIFFE_JWT` | ⚙️ **DR-07.** Five of nine are unusable (§4 theme 1). Dropping `SPIFFE_JWT` retires Module 10 Ex 4 — see §6.1 |
-| **T1-6** | **The four lab-completing settings**: `authorizationSignAlg = ES256`; `bcDeliveryMode`; one `authorization_details` type; `supportedAcrs` incl. `pwd` | JARM-W1, CIBA-W4, 9396-W1, 9470-W5 | ⚙️ §6.2 — retires four `UNVERIFIED` markers in Module 09a |
+| **T1-6** | ✅ **SHIPPED 2026-08-12.** **The four lab-completing settings** | JARM-W1 ✅, CIBA-W4 ✅, 9396-W1 ✅, 9470-W5 ✅ | ⚙️ §6.2 — **all four `UNVERIFIED` markers in Module 09a retired, each by running the success path**, not by asserting it. Discovery 62 → **64** members. `supportedAcrs` also took `mfa`, deliberately unsatisfiable, because that is what makes the essential-ACR *refusal* reachable. Three findings fell out: RAR introspection returns Authlete's `{elements, otherFields}` envelope rather than RFC 9396's shape (theme 3, → T2-15); `supportedAcrs` is `readOnly` in the 3.0.16 schema and was **written anyway**; and **CUR-3b-W14 is closed outright** rather than shrunk |
 | **T1-7** | ✅ **SHIPPED 2026-08-12.** **Fix `prompt=none` and the fabricated event together** | OIDC-W1 ✅ = 9470-W3 ✅ | 📋 Planned under plan mode. **The latent S1 is retired, not downgraded** — the activation route was built correctly rather than built at all. `NO_INTERACTION` now follows Authlete's contract (`decideWithoutInteraction`): `NOT_LOGGED_IN` → `CONSENT_REQUIRED` → step-up → issue. The fabrication block is **deleted**; the decision runs through **`utils/step-up.ts`**, a pure function shared with the login path whose rule is that **absence is answered as "no"**. The dead `INTERACTION` branch **delegates** rather than being removed, so the two cannot drift. Suite 613 → **635** / 58 files. Verified live incl. `max_age=0` refused against a 2-second-old session — **the first time `EXCEEDS_MAX_AGE` has been reachable**. Curriculum: Module 08 Ex 5c/5d reframed around the *trap* (fixing the visible bug alone would have armed the latent one), plus its README, quiz, quiz-answers and `AUDIT-PASS-A` row 7 |
 | **T1-8** | ⚠️ **SUBSUMED by T1-7, 2026-08-12 — and the framing was wrong.** The login-path check is vacuous because `authTime` is set immediately before it is read, but that is **correct**: the End-User has just actively authenticated, so any `max_age` is satisfied by construction. **The path where `max_age` can genuinely fail is `prompt=none`, which did not exist until T1-7 built it.** `EXCEEDS_MAX_AGE` is now reachable and tested | 9470-W2 ⚠️ | No code change owed. Recorded in the entry rather than closed silently |
 | **T1-9** | **Route every DPoP `htu` through `dpopHttpTarget()`**; stop reading `targetUri` from the introspection body | 9449-W1 ⊃ 9126-W4, 9449-W2 | 📋 Retires CUR-3b-W11 |
@@ -631,7 +647,7 @@ and both shipped 2026-08-11; **this is what remains.**
 | **T2-14** | **The five citation and section-number fixes** | CUR-3b-W3, CUR-3b-W12, CUR-3b-W13(=NSSO-W3), CUR-3b-W15, CUR-3b-W16, 9470-W4, 9449-W5, 8252-W1 | CUR-3b-W15 is now evidenced (§2.3). CUR-3b-W12 and 8252-W1 each need one fetch (§2.4) |
 | **T2-15** | **The wire-format gaps, stated until Tier 3 closes them** | 9126-W6, CIBA-W5, 8628-W5, 9101-W4, 7592-W3 | Theme 3's honest interim. Style: `modules/04…/lab.md:340` |
 | **T2-16** | **The vendor-feature documentation pass** — HSK endpoints, `attributes`, parameterized scopes, all labelled *vendor feature, not a specification* | HSK-W1, HSK-W2, ATTR-W2, ATTR-W4, PS-W1, PS-W2 | One `docs/API.md` + `SPEC-INVENTORY.md` edit for all three |
-| **T2-17** | **Remaining documentation items** | 6749-W2, 7521-W2, 8705-W2, 8705-W3, 8707-W2, 9068-W3, 9068-W4, 9207-W2, 9701-W3, 9701-W5, 9728-W3, 8414-W3, 8414-W4, 9396-W2, 8693-W1, 8693-W2, JOSE-W4, JOSE-W5, CIMD-W4, GM-W3 ⚙️, GM-W5, MDL-W2, MCP-W1, 7591-W2, 7662-W4, 7662-W5, 9700-W3, 9700-W5, 8707-W1, 8707-W3, CUR-3a-W6, CUR-3c-W8, CUR-3c-W9, CUR-3c-W13, CUR-3c-W14, JARM-W2, JARM-W4, JARM-W5, JARM-W6, 7523-W2 (= JOSE-W3), 7523-W3 📋, 7523-W5, 9449-W6, 9449-W7 ⚙️, FAPI1A-W4, FAPI1A-W5, MS-W2, FCL-W3, BCL-W4, BCL-W5, **RPL-W5**, **B1-W5**, **CUR-3b-W14** | Independent; batch by file. **BCL-W5 is unblocked** — T0-2 shipped 2026-08-11. **RPL-W5 ✅ shipped with T0-4 (2026-08-12)** — remove it from this batch. The departure it names changed shape in the process: not *"we match origins, not registered values"* but *"we match registered values, held here because Authlete models none"*. CUR-3b-W14 refreshes Module 09a's four `UNVERIFIED` dates to 2026-08-10, and **four of them are retired outright by T1-6** — do T1-6 first and the item shrinks |
+| **T2-17** | **Remaining documentation items** | 6749-W2, 7521-W2, 8705-W2, 8705-W3, 8707-W2, 9068-W3, 9068-W4, 9207-W2, 9701-W3, 9701-W5, 9728-W3, 8414-W3, 8414-W4, 9396-W2, 8693-W1, 8693-W2, JOSE-W4, JOSE-W5, CIMD-W4, GM-W3 ⚙️, GM-W5, MDL-W2, MCP-W1, 7591-W2, 7662-W4, 7662-W5, 9700-W3, 9700-W5, 8707-W1, 8707-W3, CUR-3a-W6, CUR-3c-W8, CUR-3c-W9, CUR-3c-W13, CUR-3c-W14, JARM-W2, JARM-W4, JARM-W5, JARM-W6, 7523-W2 (= JOSE-W3), 7523-W3 📋, 7523-W5, 9449-W6, 9449-W7 ⚙️, FAPI1A-W4, FAPI1A-W5, MS-W2, FCL-W3, BCL-W4, BCL-W5, **RPL-W5**, **B1-W5**, **CUR-3b-W14** | Independent; batch by file. **BCL-W5 is unblocked** — T0-2 shipped 2026-08-11. **RPL-W5 ✅ shipped with T0-4 (2026-08-12)** — remove it from this batch. The departure it names changed shape in the process: not *"we match origins, not registered values"* but *"we match registered values, held here because Authlete models none"*. ~~CUR-3b-W14~~ ✅ **closed by T1-6 (2026-08-12)** — all four markers deleted rather than re-dated; remove it from this batch |
 
 ### Tier 3 — Gate 4 decisions
 

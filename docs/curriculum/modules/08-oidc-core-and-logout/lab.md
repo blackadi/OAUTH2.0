@@ -153,7 +153,7 @@ payload:
 {
   "iss": "https://…",
   "sub": "admin",
-  "aud": ["…your client_id…"],
+  "aud": "…your client_id…",
   "exp": …,
   "iat": …,
   "auth_time": …,
@@ -189,11 +189,24 @@ Before validating anything, make sure you can say *why each claim is there*. Fil
 
 Two things to notice and write down.
 
-**`aud` is an array here.** `["<your-client-id>"]`, not `"<your-client-id>"`. Both are legal — `aud` is defined as
-*"Audience(s)"* — but a validator written as `claims.aud === clientId` fails against this server and passes
-against one that emits a string. `AGENTS.md`'s own recommended-flag table lists `idTokenAudType: "string"`
-(following a FAPI WG decision of November 2024) and this service does not set it. **Handle both shapes; you
-do not control which one a provider sends.**
+**`aud` is a bare string here — and it was an array until 2026-08-12.** Both are legal: `aud` is defined as
+*"Audience(s)"*, so a single value may be sent either as `"<your-client-id>"` or as `["<your-client-id>"]`.
+The service now sets `idTokenAudType: "string"` (following a FAPI WG decision of November 2024, which
+`AGENTS.md`'s recommended-flag table has always listed); before that it emitted the array form.
+
+**This is the most useful thing in the exercise, so do not skim it.** A validator written
+`claims.aud === clientId` was *broken* against this server a fortnight ago and *works* today — and one
+written `claims.aud.includes(clientId)` was fine then and **throws `TypeError: claims.aud.includes is not a
+function` now.** Nothing about the specification changed. One console flag flipped, and each naive validator
+broke in the opposite direction from the other. That is why step 3 of the validator you are about to write
+normalises first:
+
+```js
+const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+```
+
+**Handle both shapes; you do not control which one a provider sends, and you may not control when it
+changes.**
 
 **`s_hash` is present and `at_hash` is not.** `s_hash` binds `state`; `at_hash` would bind an access token,
 and is only required when the access token travels through the front channel — which, in the code flow, it
@@ -305,7 +318,7 @@ ISSUER="$ISSUER" CLIENT_ID="$CLIENT_ID" CLIENT_SECRET="$CLIENT_SECRET" EXPECT_NO
 ```
 PASS  step  1  not encrypted (3 parts, JWS)
 PASS  step  2  iss matches expected issuer — https://…
-PASS  step  3  aud contains client_id — ["…"]
+PASS  step  3  aud contains client_id — "…"
 PASS  step  5  azp absent (single audience) — n/a
 PASS  step  7  alg is the registered algorithm (HS256) — header says HS256
 PASS  step  6  signature verifies — HMAC with client_secret (step 8)
@@ -350,7 +363,7 @@ https://<your-callback>/#state=h1&code=REDACTED&id_token=REDACTED&iss=https%3A%2
 Both artefacts, in the **fragment**. Decode that ID token and you will find:
 
 ```json
-{"iss":"…","sub":"admin","aud":["…"],"exp":…,"iat":…,"auth_time":…,
+{"iss":"…","sub":"admin","aud":"…","exp":…,"iat":…,"auth_time":…,
  "nonce":"hn1","acr":"pwd","c_hash":"BgRKDAMjHi43C3By_ZB_Ww","s_hash":"…"}
 ```
 
@@ -364,36 +377,57 @@ computing it is the same left-half-of-a-SHA-256 construction as `at_hash`.
 
 ### 3d — Validating against JWKS instead of a shared secret
 
-Everything above verified the signature with the **client secret**, because this deployment's clients are
-registered with `idTokenSignAlg: HS256`. That is the branch OIDC Core step 8 describes, and Exercise 4 will
-show you why it is the wrong choice.
+Everything above verified the signature with the **client secret**, because `$CLIENT_ID` — the confidential
+client the labs use — is registered with `idTokenSignAlg: HS256`. That is the branch OIDC Core step 8
+describes, and Exercise 4 will show you why it is the wrong choice.
 
-To switch to asymmetric validation: in the Authlete Console, set each client's **ID token signature
-algorithm** to `ES256`, then re-run 3b with the JWKS branch instead of the secret:
+You do not need to change any console setting to see the other branch. **`$PUB_CLIENT_ID` already signs
+`ES256`**, so run the flow against it and re-run the validator with the JWKS branch instead of the secret — a
+public client takes no secret, hence the empty fourth argument:
 
 ```bash
-JWKS_URI="$API/.well-known/jwks.json" ISSUER="$ISSUER" CLIENT_ID="$CLIENT_ID" \
+NONCE="NONCE-$(openssl rand -hex 6)"
+IDT=$(/tmp/flow.sh "$PUB_CLIENT_ID" "$REDIRECT_URI" "scope=openid%20profile&state=v1&nonce=$NONCE" "" \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).id_token))')
+
+JWKS_URI="$API/.well-known/jwks.json" ISSUER="$ISSUER" CLIENT_ID="$PUB_CLIENT_ID" \
   EXPECT_ALG=ES256 EXPECT_NONCE="$NONCE" node /tmp/validate-id-token.mjs "$IDT"
 ```
 
-The header will then carry a `kid`, the script will select the matching key from
+The header now carries a `kid`, and the script selects the matching key from
 
 ```bash
 curl -s "$API/.well-known/jwks.json"
 ```
 
 ```json
-{"keys":[{"kty":"EC","use":"sig","crv":"P-256","kid":"1","alg":"ES256","x":"…","y":"…"}]}
+{"keys":[{"kty":"EC","use":"sig","crv":"P-256","kid":"1","x":"…","y":"…","alg":"ES256"},
+         {"kty":"RSA","e":"AQAB","use":"sig","kid":"rsa-1","n":"…"}]}
 ```
 
-…and verify against the public key. **This is the path that matters in production**, because it is the only
-one that lets a party verify without also being able to forge.
+```
+PASS  step  7  alg is the registered algorithm (ES256) — header says ES256
+PASS  step  6  signature verifies — JWKS key kid=1 (ES256)
 
-> **`UNVERIFIED` on this deployment as of 2026-07-28.** Both clients here are still `HS256`, so the ES256
-> branch of the script has not been exercised end to end and no transcript for it is shown above. The script
-> is written and the JWKS is real (one EC P-256 key, `kid: "1"`, shown above, fetched live); what has not
-> been observed is an ES256-signed ID token from this server passing through it. Everything in 3a–3c *is*
-> verified. Flip the flag and this becomes a two-minute exercise.
+ACCEPT — all checks passed
+```
+
+…verified against the public key. **This is the path that matters in production**, because it is the only one
+that lets a party verify without also being able to forge.
+
+> **Two keys, and that is what makes step 6 honest.** Until 2026-08-12 this JWKS held a single key, so the
+> script's fallback — `?? (jwks.keys.length === 1 ? jwks.keys[0] : undefined)` in 3a — quietly rescued a
+> `kid` lookup that found nothing, and a broken selector would still have printed `ACCEPT`. It no longer can.
+> Re-read that line now that it cannot fire: **a fallback that is never exercised is a test you are not
+> running.** The RSA key arrived to satisfy the Discovery §3 `MUST` you will meet in 6d.
+
+> **Verified end to end, 2026-08-12** — `$PUB_CLIENT_ID`, `kid: "1"`, all thirteen applicable steps `PASS`.
+> The previous note here said *"both clients here are still `HS256`"* and marked this branch `UNVERIFIED as
+> of 2026-07-28`. **That was wrong when written and got wronger:** only the confidential client is `HS256`;
+> the two public clients have been `ES256` throughout, so the branch was runnable the whole time and nobody
+> ran it. The lesson is the one this module keeps teaching — *"the console said so"* is not evidence, and an
+> `UNVERIFIED` marker whose premise nobody re-checked is worse than no marker, because it looks like
+> diligence.
 
 ---
 
@@ -1001,12 +1035,41 @@ curl -s "$API/.well-known/openid-configuration" | node -e 'let s="";process.stdi
 ```
 
 ```
+[
+  'PS384', 'RS384',
+  'HS256', 'HS512',
+  'ES256', 'RS256',
+  'HS384', 'PS256',
+  'PS512', 'RS512'
+]
+```
+
+OpenID Connect Discovery 1.0 §3, on `id_token_signing_alg_values_supported`: *"The algorithm RS256 **MUST**
+be included."* It is — and it only started being on **2026-08-12**. Until then this endpoint returned:
+
+```
 [ 'HS256', 'HS512', 'ES256', 'HS384' ]
 ```
 
-OpenID Connect Discovery 1.0 §3, on `id_token_signing_alg_values_supported`: *"The algorithm RS256 MUST be
-included."* It is not. A conformance defect, low severity — RS256 is not otherwise needed here — but exactly
-the kind of thing an interop test suite fails you on, and a one-line addition to your Module 07 report.
+**Read that pair of transcripts as one exercise, because the fix is more interesting than the defect.** No
+code changed. Nobody edited a list of algorithm names. One **RSA key** was registered in the service's JWK
+Set, and Authlete recomputed *four* metadata members from the key material it now holds — this one,
+`userinfo_signing_alg_values_supported`, `introspection_signing_alg_values_supported` and
+`authorization_signing_alg_values_supported` all gained the same six entries. That is the shape worth
+learning: **this document is derived, not authored.** The `HS*` entries come from client secrets, the `ES256`
+from the EC key, and all six `RS*`/`PS*` from one 2048-bit RSA key with **no `alg` member** — RFC 7517 §4.4
+makes `alg` OPTIONAL, and omitting it is what lets a single key back every algorithm it can compute.
+
+Two follow-ups, and the second is the point:
+
+- **Discovery §3's `MUST` was failing for a year of this deployment's life**, and it is exactly the kind of
+  thing an interop test suite fails you on while every hand-written test passes. It belonged in your Module
+  07 report.
+- **Advertised is not the same as usable** — the rule this curriculum applies to grant types, response modes
+  and client-auth methods applies to algorithms too. Checking took one flow: a client set to `RS256` was
+  issued an ID token with `{"kid":"rsa-1","alg":"RS256"}` in the header, and 3d's validator returned `ACCEPT`
+  against the published key. Ten advertised algorithms, one of them now actually exercised. **Nine to go** —
+  and `PS256`, the one FAPI 1.0 Advanced §5.2.2 requires, is among the nine.
 
 ---
 

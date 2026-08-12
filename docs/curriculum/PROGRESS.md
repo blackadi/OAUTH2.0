@@ -98,6 +98,143 @@ against it before calling the capstone complete._
 - [x] **2026-08-12 — T0-4: §3 per-client matching, and the Authlete field that does not exist. TIER 0 COMPLETE** (below)
 - [x] **2026-08-12 — T1-1: both introspection endpoints protected; the last easily-exploitable S1 is closed** (below)
 - [x] **2026-08-12 — T1-7: `prompt=none` answers properly, and the latent step-up S1 is retired** (below)
+- [x] **2026-08-12 — T1-2 + T1-3: one RSA key and one `private_key_jwt` client; three specs unblocked, no code changed** (below)
+- [x] **2026-08-12 — T1-4 + T1-6: four Module 09a markers retired; the 24-hour lifetime kept on purpose** (below)
+
+### 2026-08-12 — T1-4 + T1-6: four labs completed, and two changes deliberately not kept
+
+**Why this matters to a future session:** **Module 09a has no `UNVERIFIED` markers left**, and each was
+retired by *running the success path*, not by asserting it. Two intended changes were applied, verified and
+then **reverted on purpose** — both reversions are the finding, not a failure.
+
+**Service configuration now** (`supportedAcrs` and the RAR type are new; discovery went 62 → **64** members):
+
+| Field | Value | Note |
+|---|---|---|
+| `accessTokenDuration` / `idTokenDuration` | **86400** | shortened to 3600, verified, **reverted** — see below |
+| `refreshTokenDuration` | 864000 | untouched |
+| `idTokenAudType` | **`"string"`** | new. ID-token `aud` is a bare string where it was `["…"]` |
+| `idTokenReissuable` | **false** | set true, **broke the refresh grant**, reverted — see below |
+| `supportedAcrs` | **`["pwd","mfa"]`** | new |
+| `supportedAuthorizationDetailsTypes` | **`["payment_initiation"]`** | new |
+| client `1523514379` | `authorizationSignAlg: ES256`, `bcDeliveryMode: POLL`, `authorizationDetailsTypes: [payment_initiation]` | new; 48 → 51 fields, no collateral change |
+
+**The four labs, each with a live transcript now in `modules/09a…/lab.md`:**
+
+- **JARM** — `response_mode=query.jwt` returns **one** query parameter carrying `{aud, state, code, iss, exp}`,
+  ES256, signed with the service's `kid: "1"` and verified against the published JWKS. Its `exp` is **600 s**,
+  not the deployment's 86400: the response JWT is a transport wrapper and is bounded like one.
+- **CIBA** — the whole poll sequence. `NO_ACTION` **is** success in poll mode; `authorization_pending` is a
+  **400**, so a polling loop must not treat 400 as terminal; and the `auth_req_id` is **single-use**, which
+  answers Exercise 3d's standing question.
+- **ACR** — both halves. `acr_values=pwd` succeeds and reaches the ID token *and* introspection; an
+  **essential** `mfa` is refused with `unmet_authentication_requirements` `[A060305]` and **no code issued**.
+  `mfa` was registered *because* nothing can satisfy it — an unregistered value fails earlier, for a different
+  reason, and would demonstrate a different lesson.
+- **RAR** — the round trip works, and **Exercise 5a's control had to be re-pointed**: its "unknown type" case
+  used `payment_initiation`, the very type 5b now registers, so it would have quietly become a success. A
+  control that has stopped being a control is worse than no control. It now uses `account_information`.
+
+**Two reversions, and why each is the right outcome:**
+
+1. **The 24-hour lifetime stays, deliberately.** `accessTokenDuration` → 3600 was applied and verified
+   (`expires_in: 3600`, ID-token life 3600). Then the blast radius was enumerated: **~55** deployment-specific
+   references, and two of them are *arguments*, not transcripts — **Module 07's audit lab** ranks the 24-hour
+   lifetime as finding (iv), and **Module 10's thesis** (*individually acceptable settings combine into a
+   defect*) uses the 24-hour token × the grant-revocation SHOULD-gap as its worked example. At one hour both
+   largely evaporate. So **GM-W1 and FAPI1-W3 stay open by decision**, recorded here rather than silently, and
+   OIDC-W4 closes on its *"record it as a deliberate teaching choice"* branch. The write is proven and
+   reversible; re-doing it is one field plus the documentation pass.
+2. **`idTokenReissuable` uncovered a broken handler.** Setting it `true` made the `ID_TOKEN_REISSUABLE` action
+   reachable for the first time — and the branch is wrong. Authlete sends that action with `subject` and a
+   complete `responseContent` but **no `ticket`**; `token.controller.ts:157-163` guards on `if (!ticket)` and
+   falls through to `res.status(400).send(result.responseContent)`. **Every refresh request returned HTTP 400
+   carrying a valid token response**, and no ID token was ever reissued. Reverted within the session. New work
+   item **B1-W6**, which needs plan mode — it is token issuance.
+
+   The general lesson is worth more than the bug: the probe entry had already recorded this branch as *"dead
+   code on this service"* and noted that **handled ≠ exercisable**. There is a third claim: **handled,
+   exercisable, and *correct*.** A config flag was the only thing hiding a defect, and turning it on is the
+   only way that was ever going to surface.
+
+**One more finding, from a failed test rather than a passing one.** `NO_INTERACTION` is **not** only the
+`prompt=none` path: a request with *no* `prompt` parameter reaches it whenever it asks for `offline_access`,
+because OIDC Core §11 requires explicit consent (verified across all four combinations). So **before T1-7,
+every `offline_access` request without `prompt=consent` also got the empty-`Location` 302** — a second live
+symptom of that S1, on a request shape nobody was looking at. T1-7 fixed both; only one was known. The audit's
+own framing in `OIDC-CORE-1.0.md` F-1 and `RFC9470-…` F-3 is corrected accordingly.
+
+**`aud` changed shape**, so Module 08's lesson inverted: it taught *"`aud` is an array here, and `AGENTS.md`
+recommends a string"*. Both are legal, and the pair now teaches something better — a validator written
+`claims.aud === clientId` was broken a fortnight ago and works today, while `claims.aud.includes(...)` was
+fine then and **throws now**. One console flag, two naive validators broken in opposite directions, no
+specification changed.
+
+### 2026-08-12 — T1-2 + T1-3: two configuration writes, and an `UNVERIFIED` marker that was wrong for a fortnight
+
+**Why this matters to a future session:** **no source file changed.** Two Authlete writes closed four work
+items (**OIDC-W2 = FAPI1A-W2**, **7523-W4 = 9101-W3**) and made three specifications runnable that previously
+had no path at all. The suite is untouched at **635 tests / 58 files**; that number staying still is the
+evidence that this was configuration, not code.
+
+**What was written.** Both through raw HTTP, because `service.get()` throws on this service (the `SPIFFE_JWT`
+enum gap) and the SDK's outbound schemas strip fields they do not model:
+
+| | Change | Read-back diff |
+|---|---|---|
+| **T1-2** | one RSA-2048 key (`kid: "rsa-1"`, `use: "sig"`, **no `alg`**) appended to the service JWK Set | 129 fields round-tripped; **`jwks` + `modifiedAt`, nothing else** |
+| **T1-3** | a fourth client, `2176571218` — CONFIDENTIAL, `tokenAuthMethod: PRIVATE_KEY_JWT`, EC P-256 public JWKS, `requestSignAlg: ES256` | created `201`, all 12 sent fields present on read-back |
+
+**Three things worth carrying:**
+
+1. **Omitting `alg` is the whole trick.** RFC 7517 §4.4 makes `alg` OPTIONAL (fetched and verified), so
+   Authlete offered every algorithm the key supports: `id_token_signing_alg_values_supported` went from four
+   entries to ten, gaining RS256 *and* PS256 — one key, OIDC Discovery §3's `MUST` **and** FAPI §5.2.2's
+   requirement. Pinning `alg: RS256` would have satisfied only the first. **Four** advertised lists changed,
+   not one, because all four are derived from the same key set. The cost: the FAPI-discouraged `RS256` comes
+   along and cannot be separated.
+2. **Advertised was checked against usable.** The audit's Theme 1 is *"advertised but unusable"*, so shipping
+   six new algorithm names and calling it done would have been the audit committing its own finding. RS256
+   was proved by issuing an ID token (`{"kid":"rsa-1","alg":"RS256"}`) and validating it; `private_key_jwt`
+   by authenticating on two grant types; the request-object signature by **flipping one byte** and getting
+   `[A005328]`. **PS256 is still only advertised**, and that is stated rather than glossed.
+3. **An `UNVERIFIED` marker was wrong, and three documents inherited it.** Module 08 §3d said *"Both clients
+   here are still `HS256`"* and marked its asymmetric branch unverified since 2026-07-28. Only the
+   *confidential* client is HS256 — both public clients have been ES256 the whole time, a fact recorded in
+   the audit's own `OIDC-CORE-1.0.md` F-2 two paragraphs above the clause that contradicted it. The
+   remediation plan's §6.2 then listed the branch as "completed by OIDC-W2". **Nothing was blocking it; the
+   two-command check had simply never been run.** It runs now — all thirteen `§3.1.3.7` steps `PASS`. The
+   marker is retired by *running the branch*, not by the RSA key.
+
+**Curriculum, in the same commit** (the §7.4 grep found two hits the lab-breakage register had missed):
+
+- **Module 00 Ex 2** — CUR-3a-W3. Selects by `kty === "EC"`, no `keys[0]`, no `key count: 1`, plus two
+  sentences on why you never index into a JWKS.
+- **Module 08 §3d** — real ES256 transcript; the marker retired; a new note that the validator's
+  `keys.length === 1` fallback can no longer fire, so `kid` selection is finally load-bearing. *A fallback
+  that always fires is a check you are not running.*
+- **Module 08 §6d** — **the transcript inverted.** It printed the RS256-less list and reasoned about the
+  violation; both transcripts are now shown, dated, as one exercise about metadata being *derived*.
+- **Module 05** — new **Step 4b**: asymmetric JAR against the pre-registered client, and the
+  `[A005336]` vs `[A008311]` contrast Step 3 had only described in prose. Step 3 was **kept** — generating a
+  key and checking `d` is absent is the exercise, and 9101-W3's *"replace it"* wording would have deleted the
+  teaching to satisfy the work item.
+- **Module 06 Ex 4** — §2.2 for real, where the lab previously stopped at *"That is Module 10's territory."*
+  Two behaviours established while writing it: this deployment accepts **either** the issuer or the token
+  endpoint as `aud` (anything else → `[A157318]`), and **`jti` replay is not enforced** — the same assertion
+  authenticates twice, which RFC 7523 §3/§6 permit.
+- **Module 10**, **Module 11**, `docs/DEVELOPMENT.md`, `curriculum.env.example` — the "neither client has a
+  JWKS" claim, the "one EC P-256 key" claim, and the two new env variables.
+
+**Two live-drift findings.** Client `1523514379` had acquired a JWKS between the 2026-08-10 probe and now —
+written by `tests/e2e/e2e.test.ts:1169`, which registers a public key whose private half it then discards. It
+is inert, it is **left in place**, and it means the **E2E suite mutates shared service state**: no client
+snapshot in the audit survives a test run. And the first `PKJWT_PRIVATE_JWK` was echoed to a terminal by an
+unquoted `.env` value, so **the client key was rotated** (`pkjwt-1` → `pkjwt-2`) rather than kept.
+
+**Open, deliberately.** PS256 unexercised; `none` still advertised for UserInfo (T1-13); by-reference JAR
+still unreachable (9101-W2); `private_key_jwt` available but required of nobody, which is the FAPI gap and
+not this item's job.
 
 ### 2026-08-12 — T1-7: `prompt=none` gives a real answer, and the trap behind the obvious fix
 
@@ -359,7 +496,7 @@ cited line moved** — the parameter read stayed two lines and both new blocks w
 cited. `logout.controller.ts` shifted uniformly by +19 below the new export, which was *verified line by line
 rather than assumed*: 13 citations across `00-inventory.md`, `OIDC-BACKCHANNEL-LOGOUT-1.0.md`,
 `JOSE-rfc7515-7517-7519.md` and this file. **Two were already wrong before this change** —
-`RESUME.md:243` still carried the pre-2026-08-10 range `:33-63`, and `JOSE:145` pointed at a `jwt.decode` in
+`RESUME.md`'s §6 S1 table (then at `:243`) still carried the pre-2026-08-10 range `:33-63`, and `JOSE:145` pointed at a `jwt.decode` in
 `logout.service.ts` that T0-2 deleted. Both fixed. `check-docs.mjs` sees neither class: it validates only that
 a `server/`|`client/` ref is not past EOF.
 

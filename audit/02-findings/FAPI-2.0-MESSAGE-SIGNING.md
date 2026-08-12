@@ -53,7 +53,7 @@ independently:
 
 | Clause | Blocker | Recorded in |
 |---|---|---|
-| **support** signed request objects | Available in Authlete — but **no client has `jwks`, `jwksUri` or `requestSignAlg`**, so only the confidential client's HS256 secret can sign one, and Message Signing exists for non-repudiation, which a shared secret cannot provide | `RFC9101-…` F-3 |
+| **support** signed request objects | ~~no client has `jwks`, `jwksUri` or `requestSignAlg`~~ → **satisfied 2026-08-12 (T1-3)**: one client signs request objects with `ES256` against a registered key, verified live, so the non-repudiation objection no longer applies to *this* clause. Still ❌ on **require** — `requestObjectRequired` is false everywhere | `RFC9101-…` F-3 |
 | **require use of** | `requestObjectRequired = false` service-wide and on every client; `require_signed_request_object = false` | `RFC9101-…` requirement 8 |
 | **at the PAR endpoint** | PAR is optional (`parRequired = false`) — and the advertised PAR endpoint cannot accept a conformant PAR request at all, because it requires an Authlete-shaped JSON body | `RFC9126-…` F-1 |
 

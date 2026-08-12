@@ -447,7 +447,7 @@ required mechanism is available and none is mandatory.**
 |---|---|
 | Confidential clients only | **FAIL** — a public client exists and works |
 | Sender-constrained access tokens only | **FAIL** — plain Bearer issued (Ex 2) |
-| MTLS or `private_key_jwt` client auth | **FAIL** — `client_secret_basic` accepted; `none` advertised |
+| MTLS or `private_key_jwt` client auth | **FAIL** — `client_secret_basic` accepted; `none` advertised. Note the failure is *enforcement*, not capability: since 2026-08-12 one client does authenticate with `private_key_jwt`, and the service still permits every other method |
 | Reject requests without PAR | **FAIL** — `require_pushed_authorization_requests: false` |
 | Require PKCE S256 | **FAIL** — `plain` advertised; Module 03 got a token with no PKCE at all |
 | `response_type` must be `code` | **FAIL** — implicit response types advertised and working |

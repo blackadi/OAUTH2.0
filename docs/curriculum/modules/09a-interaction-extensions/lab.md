@@ -31,11 +31,20 @@ cli () { curl -s -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" \
   "$AUTHLETE_BASE_URL/api/$AUTHLETE_SERVICE_ID/client/get/${1:-$CLIENT_ID}"; }
 ```
 
-> **How this lab is verified, and what is not.** Every **refusal** below was executed against the live server
-> and is reproduced verbatim. The **"now enable it"** steps require console changes to your own Authlete
-> service; where a post-enablement transcript is not shown, it is marked `UNVERIFIED` and you should treat the
-> described output as the specification's promise rather than an observation. That distinction is deliberate —
-> this curriculum does not print outputs it has not seen.
+> **How this lab is verified.** Every **refusal** below was executed against the live server and is
+> reproduced verbatim. So, as of **2026-08-12**, is every **success** — the four "now enable it" steps
+> (JARM, CIBA delivery mode, ACRs, and a RAR type) were applied to this deployment and each success path was
+> run end to end, so the transcripts below are observations rather than the specification's promise.
+>
+> **The convention that got them there is worth more than the transcripts.** For roughly a fortnight this lab
+> carried four `UNVERIFIED` markers naming the exact setting responsible for each gap. That is why closing
+> them was a checklist rather than an investigation: each marker said what to change and what would then be
+> observable. If you write a lab against a deployment you do not fully control, mark what you have not seen —
+> and **date the marker**, because a marker whose premise has silently changed is worse than none at all.
+> Module 08 had one that was wrong for a fortnight and three documents inherited it.
+>
+> If you are running this against **your own** Authlete service, these four settings are almost certainly
+> still unset; each step says which one it needs.
 
 > **Vendor behavior.** Bracketed codes (`[A012305]`, `[A249302]`, …) are Authlete's. HTTP statuses, `error`
 > values, claim names and parameter names are spec-defined.
@@ -282,10 +291,26 @@ CLIENT_ID="$CLIENT_ID" JWKS_URI="$API/.well-known/jwks.json" EXPECT_STATE=jarm1 
 Expect the payload to contain `iss`, `aud`, `exp`, plus `code` and `state` — **one parameter in the URL instead
 of three or four**, with everything inside a signature.
 
-> **`UNVERIFIED` — as of 2026-07-28 this client's `authorizationSignAlg` is still unset**, so no JARM success
-> transcript is shown above. The refusals in 2a and the vendor anomaly in 2b **are** verified. `verify-jarm.mjs`
-> is a direct adaptation of Module 08's ID-token validator, whose asymmetric branch was likewise not exercised
-> for the same reason; treat both as reviewed code rather than observed output until you run them.
+```
+query parameters : response          <- one parameter, not four
+JWT header       : {"kid":"1","alg":"ES256"}
+JWT claims       : ["aud","state","code","iss","exp"]
+iss / aud        : https://blackadi.dev / <your client_id>
+carries code     : true | state: jarm1 | expires in 600 s
+signature verifies against jwks kid=1: true
+```
+
+**Verified end to end 2026-08-12**, after `authorizationSignAlg = ES256` was set on `$CLIENT_ID`. Three
+things in that transcript are worth stopping on:
+
+- **One query parameter.** `code`, `state` and `iss` are all *inside* the JWT. A shoulder-surfer, a proxy log
+  or a `Referer` header now sees one opaque blob instead of a usable authorization code.
+- **`exp` is 600 seconds**, not the 24 hours everything else on this deployment gets. The response JWT is a
+  transport wrapper, and it is bounded like one.
+- **The signature is the service's `kid: "1"` EC key** — the same key Module 08 verifies ID tokens against,
+  and the same one Module 00 read out of the JWKS. JARM does not introduce new key material; it reuses the
+  OP's signing key for a different envelope. Which is why `verify-jarm.mjs` is an adaptation of Module 08's
+  validator rather than a new program.
 
 ### 2d — Reason about it without running it
 
@@ -438,9 +463,30 @@ curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
 Expect `authorization_pending` at step 3 and an access token plus ID token at step 5. Then try step 5 a third
 time, and reason about whether an `auth_req_id` should be single-use.
 
-> **`UNVERIFIED` — `bcDeliveryMode` was unset as of 2026-07-28**, so this sequence has not been run end to end.
-> Everything in 3a and 3c **is** verified, including all four error shapes. The sequence follows
-> [`docs/CIBA-TUTORIAL.md`](../../../CIBA-TUTORIAL.md) and the endpoint contracts in `AGENTS.md`.
+```
+1 authentication -> 200 | action: USER_IDENTIFICATION | hint: admin | deliveryMode: POLL
+2 issue          -> 200 | authReqId: issued | expiresIn: 600 | interval: 5
+3 poll (early)   -> 400 | authorization_pending
+4 complete       -> 200 | action: NO_ACTION
+5 poll (after)   -> 200 | access_token + id_token, expires_in=86400
+6 poll (replay)  -> 400 | invalid_grant
+```
+
+**Verified end to end 2026-08-12**, after `bcDeliveryMode = POLL` was set on `$CLIENT_ID`. Four observations,
+and the last one answers the question posed above:
+
+- **`action: NO_ACTION` at step 4 is success, not a no-op.** In poll mode the AS has nowhere to push the
+  result, so "no action" means *"I have recorded the authorization; the device will find out when it next
+  polls."* `AGENTS.md` documents this mapping; a reader who assumed `NO_ACTION` meant failure would give up
+  one step from the token.
+- **`interval: 5` and `expiresIn: 600` are the service's `backchannelPollingInterval` and
+  `backchannelAuthReqIdDuration`.** Poll faster than the interval and you are supposed to get `slow_down`.
+- **`authorization_pending` is a 400.** A pending CIBA request is an *error* response by RFC design, which is
+  the same shape Module 09a's device-flow sibling uses. Do not treat 400 as terminal in a polling loop.
+- **The `auth_req_id` is single-use.** Step 6 replays a request that worked at step 5 and gets
+  `invalid_grant`. That is the right answer to 3d's question: it is an authorization-code-shaped artefact and
+  it inherits the code's one-shot rule, for the same reason — a replayable one would let anyone who read it
+  from a log mint tokens for the user who approved it.
 
 ### 3e — The threat that has no analogue in a redirect flow
 
@@ -530,9 +576,31 @@ Then check what this repo does with it: `introspection.controller.ts:47` parses 
 for `insufficient_user_authentication` and re-shapes it into JSON carrying `acr_values`/`max_age`, so a
 browser client can read the requirement without parsing an HTTP header.
 
-> **`UNVERIFIED` — `supportedAcrs` was unset as of 2026-07-28.** Neither half of 4b has been observed. The
-> `[A021303]` refusals in 4a **are** verified, as is the ACR-theatre observation, which was established by
-> reading `supportedAcrs` (absent) alongside a live ID token containing `acr: "pwd"` — both verified facts.
+```
+half one — acr_values=pwd
+  id_token acr       : "pwd"
+  id_token auth_time : present, 0 s ago
+  introspection      : 200 | acr: "pwd"
+
+half two — claims={"id_token":{"acr":{"essential":true,"values":["mfa"]}}}
+  error              : unmet_authentication_requirements
+  error_description  : [A060305] The authorization request requests 'acr' as essential, but the
+                       authentication performed for the request does not satisfy it
+  code issued        : no
+```
+
+**Both halves verified end to end 2026-08-12**, after `supportedAcrs = ["pwd","mfa"]` was set. The pair is
+the point:
+
+- **Half one succeeds** because the login handler really does satisfy `pwd`, and the value reaches both the
+  ID token and introspection — so a resource server can act on it.
+- **Half two refuses.** `unmet_authentication_requirements` is OIDC Core §5.5.1.1's error, and refusing is
+  the *only* correct answer: the alternative is issuing a token that claims `acr: "pwd"` to a client that
+  said `mfa` was essential, which is exactly the fabricated-assurance failure `utils/step-up.ts` exists to
+  prevent. **An AS that cannot meet an essential requirement must say so, not approximate it.**
+- **`mfa` had to be registered in `supportedAcrs` for half two to fail *this* way.** An unregistered value
+  fails earlier and for a different reason, which would demonstrate a different lesson. Registering an ACR
+  the deployment cannot satisfy is deliberate here — it is what makes the refusal path reachable.
 
 ### 4c — Design the challenge
 
@@ -551,7 +619,7 @@ Write the exact `WWW-Authenticate` header a payments API should return for a tra
 ### 5a — Four ways to get it wrong, and four different errors
 
 ```bash
-echo "unknown type:";   autherr --data-urlencode 'authorization_details=[{"type":"payment_initiation","actions":["initiate"]}]'
+echo "unknown type:";   autherr --data-urlencode 'authorization_details=[{"type":"account_information","actions":["list"]}]'
 echo "missing type:";   autherr --data-urlencode 'authorization_details=[{"actions":["initiate"]}]'
 echo "malformed JSON:"; autherr --data-urlencode 'authorization_details=not-json'
 echo "not an array:";   autherr --data-urlencode 'authorization_details={"type":"payment_initiation"}'
@@ -581,9 +649,20 @@ missing required fields"* — five failure classes that a string cannot distingu
 Note also that `[A249302]` and `[A249301]` are different: *unsupported* type versus *absent* type. The first
 means "not registered on this AS," the second "you sent an object without a schema selector." Different fixes.
 
+> **Why `account_information` here, and not `payment_initiation`.** Since **2026-08-12** this service
+> registers `payment_initiation` — 5b needs it — so sending *that* type no longer produces `[A249302]`; it
+> succeeds. The refusal needs a type nobody has registered. If you register more types later, move this
+> example to a fresh name: **a control that has quietly become a success is worse than no control**, because
+> the exercise still prints four cases and one of them is now lying. The "not an array" case below keeps
+> `payment_initiation` deliberately — its `[A249304]` is a *format* rejection that happens before the type is
+> ever looked at, which you can prove by swapping the name and watching the error stay the same.
+
 ### 5b — Register a type, then send a real one
 
-Console → **Service** → Supported Authorization Details Types → add `payment_initiation` → Save.
+**Already done on this deployment** (2026-08-12) — `payment_initiation` is registered on the service *and*
+on `$CLIENT_ID`. Both are needed: the service decides which types exist, the client decides which of them it
+may request. On a service where it is not yet registered: Console → **Service** → Supported Authorization
+Details Types → add `payment_initiation` → Save, then the same on the client.
 
 ```bash
 svc | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("types =",JSON.parse(s).supportedAuthorizationDetailsTypes))'
@@ -607,8 +686,42 @@ in the token response and the introspection response. That round trip is the who
 the structure, the consent screen could render it, and the resource server receives structure to compare
 against rather than a string to parse.
 
-> **`UNVERIFIED` — `supportedAuthorizationDetailsTypes` was unset as of 2026-07-28.** The four refusals in 5a
-> **are** verified; the success path is not.
+```
+(none)
+```
+
+Then complete the flow and look at what came back:
+
+```
+token response  authorization_details:
+[{"instructedAmount":{"currency":"EUR","amount":"123.50"},
+  "creditorAccount":{"iban":"DE02100100109307118603"},
+  "type":"payment_initiation",
+  "locations":["https://api.example.com/payments"],
+  "actions":["initiate","status"]}]
+
+introspection   authorizationDetails:
+{"elements":[{"type":"payment_initiation",
+              "locations":["https://api.example.com/payments"],
+              "actions":["initiate","status"],
+              "otherFields":"{\"instructedAmount\":{...},\"creditorAccount\":{...}}"}]}
+```
+
+**Verified end to end 2026-08-12.** The round trip is real: the AS validated the structure, and the granted
+details came back on both the token response and introspection.
+
+**Now compare those two blocks, because they are not the same document.** The token response is
+RFC 9396-shaped — a JSON array named `authorization_details`, your fields at the top level. The introspection
+response is **Authlete's internal shape**: an object with an `elements` array, and every field the RFC calls
+*common data* that Authlete does not model natively — `instructedAmount`, `creditorAccount` — flattened into
+a **string** called `otherFields`. A resource server that parsed `authorization_details` from the token
+response and then tried the same parser on the introspection response would fail, and the fields it needs
+most are the ones inside that string.
+
+That is this repo's third systemic theme in one artefact: **the vendor's envelope crossing a boundary the
+specification defines.** You met it at PAR and at CIBA; here it is again, on the same feature, in one of two
+responses and not the other. Write it up the way Module 07 taught you: *which* response, *which* fields, and
+what a conforming client would have expected instead.
 
 ### 5c — Judge when to use it
 
