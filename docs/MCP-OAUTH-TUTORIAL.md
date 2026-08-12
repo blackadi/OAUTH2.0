@@ -130,7 +130,7 @@ Your Authlete service must have **CIMD enabled** for MCP flows. In the Authlete 
 | `/.well-known/openid-configuration` | Fallback AS metadata | OIDC Discovery |
 | `/api/authorization` | Authorization endpoint | RFC 6749 §3.1 |
 | `/api/token` | Token exchange | RFC 6749 §3.2 |
-| `/api/introspection/standard` | Token validation | RFC 7662 |
+| `/api/introspection/standard` | Token validation | RFC 7662 — **admin Basic auth required** (§2.1) |
 | `/api/userinfo` | Token introspection | OIDC Core §5.3 |
 
 ## MCP Authorization Flow

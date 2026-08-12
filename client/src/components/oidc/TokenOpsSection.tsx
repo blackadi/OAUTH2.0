@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { AdminAuth } from '@/components/layout/AdminAuth';
 
 type TokenOp = 'userinfo' | 'introspect' | 'introspect-std' | 'revoke';
 
@@ -37,6 +38,11 @@ function TokenOpsSection() {
   // RFC 9470: Step-up auth validation inputs for Authlete introspection
   const [introspectAcrValues, setIntrospectAcrValues] = useState('');
   const [introspectMaxAge, setIntrospectMaxAge] = useState('');
+
+  // RFC 7662 §2.1 requires the introspection endpoint to be protected. Both endpoints take this
+  // deployment's admin credentials — see the note in services/token.service.ts.
+  const [adminId, setAdminId] = useState('');
+  const [adminSecret, setAdminSecret] = useState('');
 
   const doc = activeOp ? getDoc('token-ops', activeOp) : undefined;
 
@@ -91,10 +97,10 @@ function TokenOpsSection() {
                     const opts: { acrValues?: string; maxAge?: number } = {};
                     if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();
                     if (introspectMaxAge.trim()) opts.maxAge = Number(introspectMaxAge.trim());
-                    return tokenService.introspection(at!, at!, Object.keys(opts).length ? opts : undefined);
+                    return tokenService.introspection(at!, adminId, adminSecret, Object.keys(opts).length ? opts : undefined);
                   }
                   case 'introspect-std':
-                    return tokenService.introspectionStandard(at!);
+                    return tokenService.introspectionStandard(at!, adminId, adminSecret);
                   case 'revoke':
                     return tokenService.revocation(at!, revClientId || undefined, revClientSecret || undefined, 'access_token');
                 }
@@ -112,6 +118,22 @@ function TokenOpsSection() {
         <div className="space-y-3">
           <Input label="Revocation Client ID" value={revClientId} onChange={(e) => setRevClientId(e.target.value)} placeholder="The client the token belongs to" />
           <Input label="Revocation Client Secret" type="password" value={revClientSecret} onChange={(e) => setRevClientSecret(e.target.value)} placeholder="Client secret for revocation auth" />
+        </div>
+      )}
+
+      {(activeOp === 'introspect' || activeOp === 'introspect-std') && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints take this
+            deployment&apos;s admin credentials. Without them the server answers <code>401</code> and never
+            reaches Authlete.
+          </p>
+          <AdminAuth
+            clientId={adminId}
+            clientSecret={adminSecret}
+            onClientIdChange={setAdminId}
+            onClientSecretChange={setAdminSecret}
+          />
         </div>
       )}
 

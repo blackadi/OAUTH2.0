@@ -117,28 +117,41 @@ async function userInfoWithDpop(
   return { data, dpopNonce };
 }
 
+/**
+ * Both introspection endpoints require this deployment's admin Basic credentials.
+ *
+ * RFC 7662 §2.1 requires the endpoint to be protected, and until 2026-08-12 neither was — anyone could post
+ * a string and learn whether it was a live token. The `Authorization` header therefore carries the admin
+ * credentials now; it previously carried `Bearer <access token>`, which the server never read.
+ */
 async function introspection(
   token: string,
-  accessToken?: string,
+  adminClientId: string,
+  adminClientSecret: string,
   options?: { acrValues?: string; maxAge?: number },
 ): Promise<unknown> {
   const params: Record<string, string> = { token };
   if (options?.acrValues) params.acrValues = options.acrValues;
   if (options?.maxAge !== undefined) params.maxAge = String(options.maxAge);
-  const urlParams = new URLSearchParams(params);
-  const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
-  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-  const response = await fetch(INTROSPECTION_ENDPOINT, {
-    method: 'POST',
-    headers,
-    body: urlParams.toString(),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
+  return http.postBasicAuth(
+    INTROSPECTION_ENDPOINT,
+    new URLSearchParams(params),
+    adminClientId,
+    adminClientSecret,
+  );
 }
 
-async function introspectionStandard(token: string): Promise<unknown> {
-  return http.postForm(INTROSPECTION_STANDARD_ENDPOINT, new URLSearchParams({ token }));
+async function introspectionStandard(
+  token: string,
+  adminClientId: string,
+  adminClientSecret: string,
+): Promise<unknown> {
+  return http.postBasicAuth(
+    INTROSPECTION_STANDARD_ENDPOINT,
+    new URLSearchParams({ token }),
+    adminClientId,
+    adminClientSecret,
+  );
 }
 
 async function revocation(

@@ -209,7 +209,12 @@ const ROUTES: RouteEntry[] = [
   {
     method: "GET",
     path: "/api/logout",
-    description: "RP-initiated logout — requires ?client_id and ?post_logout_redirect_uri (add &backchannel=true to deliver backchannel logout tokens to all clients)",
+    description: "RP-initiated logout, step 1 — renders the confirmation page required by RP-Initiated Logout 1.0 §2. Destroys nothing; accepts ?client_id, ?post_logout_redirect_uri, ?id_token_hint, ?state, ?backchannel and replays them as hidden fields",
+  },
+  {
+    method: "POST",
+    path: "/api/logout",
+    description: "RP-initiated logout, step 2 — ends the session. Requires the _csrf token from the confirmation page (add backchannel=true to deliver backchannel logout tokens to all clients)",
   },
   {
     method: "POST",

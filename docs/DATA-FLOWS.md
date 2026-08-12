@@ -157,17 +157,37 @@ sequenceDiagram
     participant AL as Authlete
     
     U->>AS: GET /api/logout?post_logout_redirect_uri=...&id_token_hint=...&client_id=...&state=...&backchannel=...
-    AS->>AS: Validate post_logout_redirect_uri against ALLOWED_ORIGINS, LOGOUT_REDIRECT_URI, and localhost
+    AS->>U: 200 Show logout confirmation page (EJS) with a CSRF token — nothing is destroyed yet
+    U->>AS: POST /api/logout (_csrf + the same parameters as hidden fields)
+    AS->>AS: Verify id_token_hint against the OP's JWKS (if supplied) — yields the subject and the client
+    
+    opt backchannel=true and a subject was identified
+        AS->>AL: Issue and deliver logout tokens to every client with a backchannel_logout_uri
+    end
+    
+    AS->>AS: Destroy session, clear cookie
+    AS->>AS: Match post_logout_redirect_uri exactly against the client's registered set (§3)
     
     alt Valid redirect
-        AS->>U: Show logout confirmation page (EJS)
-        U->>AS: POST /api/logout (confirmed)
-        AS->>AS: Destroy session
-        AS->>U: 302 Redirect to post_logout_redirect_uri
-    else Invalid redirect
-        AS-->>U: 400 "Invalid post_logout_redirect_uri"
+        AS->>U: 302 Redirect to post_logout_redirect_uri (state echoed)
+    else Invalid or absent redirect
+        AS-->>U: 200 Signed-out page (EJS) — the session is gone either way
     end
 ```
+
+> **Why logout is two requests.** OpenID Connect RP-Initiated Logout 1.0 §2 requires the OP to ask the
+> End-User before ending the session. It is also what stops the endpoint being CSRF-able: logout is
+> state-changing, so while a bare `GET` did the work, `<img src="…/api/logout">` on any page the user visited
+> logged them out. The `GET` now only renders the question.
+>
+> Note that an **invalid** `post_logout_redirect_uri` does not fail the logout — the session is destroyed
+> either way, and the user lands on the signed-out page instead of being sent anywhere. Refusing to redirect
+> is the requirement (§3); refusing to log out is not.
+>
+> **§3 matches per client, not per deployment.** The client comes from `client_id`, or from the `aud` of a
+> verified `id_token_hint` when `client_id` is absent; a request that identifies no client has an empty
+> registered set and is never redirected. The registry is the `POST_LOGOUT_REDIRECT_URIS` env var, because
+> Authlete 3.0 has no client field for post-logout redirect URIs.
 
 ### Backchannel Logout (Receiving)
 

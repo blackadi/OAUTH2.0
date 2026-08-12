@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
+import { AdminAuth } from '@/components/layout/AdminAuth';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ShieldAlert, ArrowUpCircle } from 'lucide-react';
 
@@ -48,13 +49,18 @@ function StepUpSection() {
   const [maxAge, setMaxAge] = useState('');
   const [challenge, setChallenge] = useState<StepUpChallenge | null>(null);
 
+  // The introspection endpoint is protected (RFC 7662 §2.1) — this flow drives it, so it needs the
+  // deployment's admin credentials.
+  const [adminId, setAdminId] = useState('');
+  const [adminSecret, setAdminSecret] = useState('');
+
   const handleIntrospect = async () => {
     setChallenge(null);
     const { data, error: err } = await call(async () => {
       const opts: { acrValues?: string; maxAge?: number } = {};
       if (requiredAcrs.trim()) opts.acrValues = requiredAcrs.trim();
       if (maxAge.trim()) opts.maxAge = Number(maxAge.trim());
-      return tokenService.introspection(at!, at!, Object.keys(opts).length ? opts : undefined);
+      return tokenService.introspection(at!, adminId, adminSecret, Object.keys(opts).length ? opts : undefined);
     });
 
     if (data) {
@@ -135,6 +141,19 @@ function StepUpSection() {
         {at && (
           <>
             <div className="space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                Introspection Credentials
+              </p>
+              <p className="text-xs text-muted-foreground">
+                RFC 7662 §2.1 requires the introspection endpoint to be protected, so this flow needs the
+                deployment&apos;s admin credentials. Without them the server answers <code>401</code>.
+              </p>
+              <AdminAuth
+                clientId={adminId}
+                clientSecret={adminSecret}
+                onClientIdChange={setAdminId}
+                onClientSecretChange={setAdminSecret}
+              />
               <p className="text-xs font-medium text-muted-foreground">
                 Protected Resource Requirements
               </p>

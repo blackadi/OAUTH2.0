@@ -198,25 +198,39 @@ Expected: new `access_token` and `refresh_token`.
 
 Check whether a token is still active and inspect its metadata.
 
+> **Both endpoints require admin Basic auth** (`MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`), and are rate-limited
+> at 60/min. RFC 7662 §2.1 requires the introspection endpoint to be protected; until 2026-08-12 neither was,
+> which made them token-validity oracles. Without credentials you get `401` and **no Authlete call is made**.
+
 ### Standard introspection (RFC 7662)
 
 ```bash
 curl -s -X POST "${BASE}/api/introspection/standard" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=${AT2}" | jq
 ```
 
 Expected: `active: true`, `scope: openid profile`, `sub: admin`, `client_id`, `token_type: Bearer`.
+An unknown or revoked token gives `{"active":false}` with **200** — RFC 7662 §2.2 makes an inactive token a
+result, not an error.
 
 ### Non-standard introspection (Authlete-specific — more detail)
 
 ```bash
 curl -s -X POST "${BASE}/api/introspection" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=${AT2}" | jq
 ```
 
 Expected: `action: OK`, `existent: true`, `usable: true`, `subject: admin`.
+
+> **Two different 401s, and it is worth learning to tell them apart.** A missing or wrong admin credential
+> gives `WWW-Authenticate: Basic realm="introspection"` with `{"error":"invalid_client"}` — that is this
+> server's gate. An *authenticated* call with a bad token gives
+> `WWW-Authenticate: Bearer error="invalid_token"` from Authlete. The first means "you may not ask"; the
+> second means "the answer is no".
 
 ---
 
@@ -355,14 +369,42 @@ curl -s -X POST "${BASE}/api/token/reissue" \
 
 ## 11. RP-Initiated Logout (OIDC)
 
-> **Auth method:** None (browser redirect).
+> **Auth method:** None (browser session cookie). **Two requests** — RP-Initiated Logout 1.0 §2 requires the
+> OP to ask before ending the session, so the `GET` only renders the confirmation page.
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" \
+curl -s -o /dev/null -w "%{http_code}\n" \
   "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}"
 ```
 
-Expected: `200` (renders logout confirmation page) or `302` (redirect immediately).
+Expected: `200` — the confirmation page. Nothing has been signed out.
+
+To actually log out, submit that page: read its `_csrf` token, keep the session cookie, and POST.
+
+```bash
+J=$(mktemp)
+CSRF=$(curl -s -c "$J" "${BASE}/api/logout" | sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+
+curl -s -b "$J" -o /dev/null -w "%{http_code} %{redirect_url}\n" -X POST "${BASE}/api/logout" \
+  --data-urlencode "_csrf=${CSRF}" \
+  --data-urlencode "client_id=${CID}" \
+  --data-urlencode "post_logout_redirect_uri=${REDIR}" \
+  --data-urlencode "state=xyz"
+rm -f "$J"
+```
+
+Expected: `302` plus the redirect URL with `state` echoed, when `${REDIR}` is registered **for `${CID}`**;
+`200` (the signed-out page) when it is not — the session is destroyed either way. A POST with no `_csrf`, or
+one carrying a token from a different session, is `403` and leaves the session untouched.
+
+> **`client_id` is load-bearing.** RP-Initiated Logout §3 matches against the *client's* registered
+> `post_logout_redirect_uris`, so dropping it leaves nothing to match and you get a `200`. Without an explicit
+> `client_id` the server falls back to the `aud` of a verified `id_token_hint`. Registration lives in the
+> server's `POST_LOGOUT_REDIRECT_URIS` env var — Authlete 3.0 has no client field for it. Matching is exact:
+> a trailing slash is a different URI.
+
+> The CSRF token is single-use, and a successful logout destroys the session holding it — so each POST needs
+> its own preceding `GET`.
 
 ---
 
@@ -461,14 +503,24 @@ Expected: JSON array of delivery results, one per client with `backchannelLogout
 
 ### 13d. Automatic deliver-all via RP-Initiated Logout
 
-Add `&backchannel=true` to the normal RP-Initiated Logout URL to automatically issue and deliver backchannel logout tokens to all clients after the session is destroyed.
+Carry `backchannel=true` through the normal RP-Initiated Logout to automatically issue and deliver backchannel logout tokens to all clients after the session is destroyed.
 
 ```bash
-curl -s -o /dev/null -w "HTTP %{http_code}" \
-  "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}&backchannel=true"
+J=$(mktemp)
+CSRF=$(curl -s -c "$J" "${BASE}/api/logout?backchannel=true" | sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+
+curl -s -b "$J" -o /dev/null -w "HTTP %{http_code}\n" -X POST "${BASE}/api/logout" \
+  --data-urlencode "_csrf=${CSRF}" \
+  --data-urlencode "client_id=${CID}" \
+  --data-urlencode "post_logout_redirect_uri=${REDIR}" \
+  --data-urlencode "backchannel=true"
+rm -f "$J"
 ```
 
 Expected: `200` or `302` (same as normal logout — delivery happens server-side before the redirect).
+`backchannel=true` rides on the **POST**; on the `GET` it is only replayed into the confirmation form. Note
+that delivery needs a subject, which comes from the session cookie or a verified `id_token_hint` — an
+anonymous logout delivers nothing.
 
 ---
 
@@ -801,8 +853,8 @@ RF_RESP=$(curl -s -X POST "${BASE}/api/token" -u "${CID}:${SEC}" -H "Content-Typ
 AT2=$(echo "$RF_RESP" | jq -r '.access_token')
 echo "$RF_RESP" | jq -r '.token_type'
 echo "=== 7. Introspection ==="
-curl -s -X POST "${BASE}/api/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" -d "token=${AT2}" | jq -r '.active'
-curl -s -X POST "${BASE}/api/introspection" -H "Content-Type: application/x-www-form-urlencoded" -d "token=${AT2}" | jq -r '.action'
+curl -s -X POST "${BASE}/api/introspection/standard" -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" -H "Content-Type: application/x-www-form-urlencoded" -d "token=${AT2}" | jq -r '.active'
+curl -s -X POST "${BASE}/api/introspection" -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" -H "Content-Type: application/x-www-form-urlencoded" -d "token=${AT2}" | jq -r '.action'
 echo "=== 8. Revocation (confidential client) ==="
 curl -s -o /dev/null -w "HTTP %{http_code}\n" -X POST "${BASE}/api/revocation" -u "${CID}:${SEC}" -H "Content-Type: application/x-www-form-urlencoded" -d "token=${AT2}"
 echo "=== 9. PKCE ==="
@@ -821,7 +873,7 @@ AT_CREATED=$(echo "$CREATE_RESP" | jq -r '.accessToken')
 curl -s -X PATCH "${BASE}/api/token/update" -H "Content-Type: application/x-www-form-urlencoded" -d "accessToken=${AT_CREATED}&scopes=openid" | jq -r '.resultCode'
 curl -s -X POST "${BASE}/api/token/revoke" -H "Content-Type: application/x-www-form-urlencoded" -d "accessTokenIdentifier=${AT_CREATED}" | jq '.resultCode'
 echo "=== 11. Logout ==="
-curl -s -o /dev/null -w "HTTP %{http_code}\n" "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}"
+curl -s -o /dev/null -w "HTTP %{http_code}\n" "${BASE}/api/logout?client_id=${CID}&post_logout_redirect_uri=${REDIR}"  # 200 = confirmation page
 echo "=== 15. DCR Register ==="
 # Add -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" if MGMT_CLIENT_ID/MGMT_CLIENT_SECRET are set in your .env
 curl -s -X POST "${BASE}/api/client/dcr/register" -H "Content-Type: application/json" -d '{"json": "{\"client_name\":\"Smoke Test\",\"redirect_uris\":[\"http://localhost:3001/callback\"],\"grant_types\":[\"AUTHORIZATION_CODE\"]}"}' | jq -r '.action'

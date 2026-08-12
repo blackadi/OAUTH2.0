@@ -453,13 +453,17 @@ button.approve {
   font-weight: 600;
   cursor: pointer;
 }
-button.deny {
+/* `.deny` is also used on an <a> (the logout confirmation's "stay signed in"), so it needs the same
+   anchor-friendly declarations `button.primary, .primary` already carries. */
+button.deny, .deny {
   background: transparent;
   border: 1px solid var(--border);
   padding: 9px 12px;
   border-radius: var(--radius-sm);
   color: var(--muted);
   cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
 }
 .buttons {
   display: flex;

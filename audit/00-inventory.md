@@ -164,7 +164,8 @@ Login and consent: `GET|POST /api/session/login` (`routes/session.routes.ts:8,9`
 `POST /api/session/login` carries `loginLimiter` (5/min) **plus** an independent in-process
 brute-force limiter at `controllers/session.controller.ts:14-39` (5 attempts, 60 s ban, 429 at `:21`).
 
-`GET /api/logout` (`routes/logout.routes.ts:7` → `controllers/logout.controller.ts:9`) and
+`GET /api/logout` (`routes/logout.routes.ts:21` → `controllers/logout.controller.ts:28`, the confirmation
+page) and `POST /api/logout` (`routes/logout.routes.ts:22` → `controllers/logout.controller.ts:9`) and
 `POST /api/backchannel_logout` (`:10` → `:21`) carry **no middleware at all**.
 
 Ops: `GET /api/health{,/all,/authlete}` (`routes/health.routes.ts:6-8`), `GET /api/metrics`,
@@ -291,7 +292,7 @@ response with 200 regardless of `action`**, `controllers/protected-resource-meta
 | `request` / `request_uri` (JAR/PAR) | `services/jar.service.ts:10`; `controllers/jar.controller.ts:9`; `utils/validate.ts:19,21` |
 | Client attestation headers | `services/token.service.ts:86-89`; `services/revocation.service.ts:33-34,73-74` |
 | `access_token` in form body (RFC 6750 §2.2) | `utils/dpop.ts:126`; §2.3 query param deliberately unsupported `:100-102` |
-| `logout_token`, back-channel event URI | `controllers/logout.controller.ts:23,26,40`; `services/backchannel-logout.service.ts:95` |
+| `logout_token`, back-channel event URI | `controllers/logout.controller.ts:42,45,59`; `services/backchannel-logout.service.ts:95` |
 | `grantId` / `gmAction` (`"QUERY"`/`"REVOKE"`) | `services/grant-management.service.ts:20-21,38-39`; `middleware/require-grant-ownership.ts:44,112-115` |
 
 ### Documentation-only (present in `openapi.routes.ts` / `routes-list.routes.ts`, not in a code path)
@@ -335,14 +336,18 @@ Optional in `config/`: `PROTECTED_RESOURCE_IDENTIFIER` (`app.config.ts:17`),
 `PROTECTED_RESOURCE_DOCUMENTATION` (`:18`), `PORT` (`:22`), `NODE_ENV` (`:23,28`),
 `MORGAN_FORMAT` (`:24`), `LOG_LEVEL` (`:27`), `REDIS_URL` (`:29`), `JWT_PRIVATE_KEY_PEM` /
 `JWT_PUBLIC_KEY_PEM` / `JWT_ISSUER` (`authlete.config.ts:10-12`), `JWKS_URI` (`:16` — but
-`controllers/logout.controller.ts:45-47` **throws** if unset when verifying a logout token).
+`controllers/logout.controller.ts:64-66` **throws** if unset when verifying a logout token).
 
-Read outside `config/`: `ALLOWED_ORIGINS` (`app.ts:78`, `services/logout.service.ts:107`),
+Read outside `config/`: `ALLOWED_ORIGINS` (`app.ts:78` — **CORS only since 2026-08-12**; the logout service
+no longer reads it),
 `MGMT_CLIENT_ID` / `MGMT_CLIENT_SECRET` (`middleware/require-basic-auth.ts:27,46,47`),
 `AUTH_USERS` (`services/login.service.ts:4`, falls back to `admin:password` with a warning at `:7-8`),
-`LOGOUT_REDIRECT_URI` (`services/logout.service.ts:213`), `LOGOUT_CLIENT_ID` (`:238`),
-`NODE_ENV` (`services/logout.service.ts:124` — non-prod allows any `http://localhost:` post-logout
-redirect).
+`LOGOUT_REDIRECT_URI` (`services/logout.service.ts:235`) and `LOGOUT_CLIENT_ID` (`:263`) — **both display
+only since 2026-08-12**: the first is the "Return to application" link on the signed-out page, the second the
+client shown on it. Neither authorises a redirect.
+**`POST_LOGOUT_REDIRECT_URIS`** (`services/logout.service.ts:91`) is what does — a JSON `clientId → string[]`
+registry, per RP-Initiated Logout §3. `NODE_ENV` is **no longer read** by the logout service; its non-production
+`http://localhost:` clause was removed with RPL-W1.
 
 `configDotenv()` is invoked once, at `config/app.config.ts:1-2`.
 

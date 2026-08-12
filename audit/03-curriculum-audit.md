@@ -602,7 +602,7 @@ The two S1 findings this audit rated *exploitable now* have both been remediated
 
 | S1 | Fix in the working tree |
 |---|---|
-| `OIDC-RP-INITIATED-LOGOUT-1.0.md` — open redirect | `logout.service.ts:90-127` — `isAllowedPostLogoutRedirectUri()` now parses with `new URL()` and compares **origins exactly**; unparseable or non-http(s) fails closed |
+| `OIDC-RP-INITIATED-LOGOUT-1.0.md` — open redirect | `logout.service.ts:131-138` — `isAllowedPostLogoutRedirectUri()` compared **origins exactly** from 2026-08-10; since 2026-08-12 it matches the identified client's registered set with `===` (`registeredPostLogoutRedirectUris`, `:91`) |
 | `RFC8628-device-authorization-grant.md` — unauthenticated `POST /api/device/complete` | `middleware/development-only.ts` (new) + `routes/device.routes.ts:27` — flat 404 outside development, plus `deviceCodeLimiter` |
 
 The remediation was thorough on the documentation side — `AGENTS.md`, `docs/API.md`,

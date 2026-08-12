@@ -39,7 +39,7 @@ You are the resource server now. You hold 43 characters and know nothing.
 **The RFC 7662 shape:**
 
 ```bash
-curl -s -X POST "$API/introspection/standard" \
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=$AT" -d "token_type_hint=access_token"
 ```
@@ -52,7 +52,7 @@ curl -s -X POST "$API/introspection/standard" \
 **Authlete's own shape** — same token, much more detail:
 
 ```bash
-curl -s -X POST "$API/introspection" -H "Content-Type: application/x-www-form-urlencoded" -d "token=$AT" \
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection" -H "Content-Type: application/x-www-form-urlencoded" -d "token=$AT" \
  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);console.log("fields:",Object.keys(j).join(", "));console.log({subject:j.subject,clientId:j.clientId,scopes:j.scopes,existent:j.existent,usable:j.usable,sufficient:j.sufficient,refreshable:j.refreshable,grantType:j.grantType})})'
 ```
 
@@ -93,7 +93,7 @@ Module 11; note that now.
 curl -s -o /dev/null -w 'revoke → %{http_code}\n' -X POST "$API/revocation" \
   -H "Content-Type: application/x-www-form-urlencoded" -d "token=$AT" -d "client_id=$PUB_CLIENT_ID"
 
-curl -s -X POST "$API/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" -d "token=$AT"
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" -d "token=$AT"
 ```
 
 ```
@@ -109,7 +109,7 @@ Now the two behaviours that look like bugs and are not:
 curl -s -o /dev/null -w 'revoke a string that was never a token → %{http_code}\n' -X POST "$API/revocation" \
   -H "Content-Type: application/x-www-form-urlencoded" -d "token=not-a-real-token-at-all" -d "client_id=$PUB_CLIENT_ID"
 
-curl -s -X POST "$API/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" \
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=not-a-real-token-at-all" -w '  ← status %{http_code}\n'
 ```
 
@@ -130,26 +130,56 @@ indistinguishability *is* the control.
 endpoint, such as client authentication… or a separate OAuth 2.0 access token."* Look back at every
 introspection command you have run in this lab. What credentials did you send?
 
+You sent `-u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET"` every time. Take it away and see what happens:
+
 ```bash
 # No -u, no Authorization header, no client_secret. Nothing.
 curl -s -X POST "$API/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=$AT" -w '\nstatus=%{http_code}\n'
 ```
 
-**Observe:** it answers. It has answered every time. **This deployment's introspection endpoint is
-unauthenticated**, which does not meet RFC 7662 §2.1.
+```
+{"error":"invalid_client","error_description":"Client authentication required"}
+status=401
+```
 
-**Explain the gap.** With an open introspection endpoint an attacker can (1) test any string to learn whether
-it is a live token — a validity oracle for anything scraped from a log, a referrer header, or browser
-history — and (2) for the hits, harvest `sub`, `scope`, `client_id`, and `exp`, which is a user-enumeration
-and reconnaissance primitive on top of the token check. The anti-oracle design of Exercise 3 is defeated,
-because the attacker is not guessing *which* invalid token is which — they are asking about tokens that are
-real.
+**Observe:** a `401`, with `WWW-Authenticate: Basic realm="introspection"`. Check the response header
+yourself with `-D-`. And note what did **not** happen — no Authlete call was made at all. The gate runs
+before the token is looked at, so an unauthenticated caller learns nothing, not even whether the token was
+well-formed.
 
-**The fix** is client authentication (or a required bearer token) on the endpoint, exactly as §2.1 says. Note
-what is *not* a fix: the endpoint being "internal only" — that is a network control, and it evaporates the
-moment anything untrusted can reach the AS. Write this up as you would a real finding: severity, exploit
-path, fix.
+> **This exercise used to reproduce a live finding, and until 2026-08-12 it did.** Both introspection
+> endpoints carried **no middleware at all** — no authentication, no rate limiter — and the transcript here
+> was `status=200` with the full token record. The `-u` on every introspection command in this lab is what
+> the fix cost, and that cost is the point §2.1 is making.
+
+**Explain the gap that used to exist.** With an open introspection endpoint an attacker can (1) test any
+string to learn whether it is a live token — a validity oracle for anything scraped from a log, a referrer
+header, or browser history — and (2) for the hits, harvest `sub`, `scope`, `client_id`, and `exp`, which is a
+user-enumeration and reconnaissance primitive on top of the token check. The anti-oracle design of Exercise 3
+is defeated, because the attacker is not guessing *which* invalid token is which — they are asking about
+tokens that are real.
+
+**Now audit the fix, because "it returns 401" is not the end of the analysis.** Three questions worth asking
+of any endpoint someone has just protected:
+
+1. **Does the check run before the work?** Here, yes — Authlete is never called on a rejected request. A gate
+   that authenticates *after* doing the lookup closes the response but not the oracle: timing and error
+   shape still leak. Verify this by reading the handler, not by reading the status code.
+2. **Does it fail closed?** `requireBasicAuth` rejects every request when `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`
+   are unset. The earlier version of that helper returned "allow" in the same situation, which meant an unset
+   environment variable silently disabled authentication across every admin route. Unset your local
+   `MGMT_CLIENT_SECRET` and confirm you get `401` rather than `200`.
+3. **Is it the *right* credential?** This is the interesting one. §2.1's examples are client authentication
+   and a separate access token; this deployment uses its **admin** credential instead. That satisfies "some
+   form of authorization", and it is a defensible choice here — but in a real architecture a resource server
+   is not an administrator, and handing every RS the deployment's management password is a different problem
+   wearing a fix's clothing. Write down what you would do instead, and what you would need to know about your
+   IdP before you could.
+
+Note what is *not* a fix: the endpoint being "internal only" — that is a network control, and it evaporates
+the moment anything untrusted can reach the AS. Write the whole thing up as you would a real finding:
+severity, exploit path, fix, and residual risk.
 
 ## Exercise 4 — Pin the audience with `resource` (RFC 8707)
 
@@ -169,7 +199,7 @@ curl -s -X POST "$API/token" -H "Content-Type: application/x-www-form-urlencoded
   --data-urlencode "resource=https://api.example.com/orders" > /tmp/m04r.json
 
 AT2=$(node -e 'process.stdout.write(require("/tmp/m04r.json").access_token)')
-curl -s -X POST "$API/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" -d "token=$AT2"
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" -d "token=$AT2"
 ```
 
 ```json
@@ -318,8 +348,11 @@ client so you do not leave test registrations lying around.
       ever answer.
 - [ ] Revocation flips `active` to `false` immediately, and you can explain why the same 200 is returned for a
       token that never existed.
-- [ ] You demonstrated that this deployment's introspection endpoint accepts **unauthenticated** calls, can
-      cite RFC 7662 §2.1 against it, and can describe the exploit in two sentences.
+- [ ] You demonstrated that this deployment's introspection endpoint **refuses** unauthenticated calls, can
+      cite RFC 7662 §2.1 for why it must, and can describe in two sentences the exploit it used to allow.
+- [ ] You checked the fix rather than trusting it: the gate runs before Authlete is called, it fails closed
+      when the management credentials are unset, and you can say why an admin credential is a defensible but
+      imperfect answer to §2.1.
 - [ ] Adding `resource` puts `aud` in the introspection response, and you can state RFC 8707's two constraints
       and the error code for violating them.
 - [ ] You can name all three metadata documents, their paths on this server, and who consumes each.
@@ -328,11 +361,13 @@ client so you do not leave test registrations lying around.
 
 ## What was real vs. simulated
 
-- Every request and response above is **real**, including the unauthenticated introspection and the
-  `aud` restriction.
+- Every request and response above is **real**, including the `401` from the unauthenticated introspection
+  and the `aud` restriction.
 - **You are simulating the resource server.** This repo has no dedicated RS, so UserInfo and introspection
-  stand in for one. In production the introspecting party would be a separate service with its **own**
-  credentials — which is exactly the missing piece the Break in Exercise 3 is about.
+  stand in for one — and since 2026-08-12 you are simulating it with the deployment's *administrator*
+  credentials, because that is the credential the endpoint takes. In production the introspecting party would
+  be a separate service with its **own** credentials, and that gap is exactly what the third audit question in
+  Exercise 3's Break is about.
 - **Access tokens are opaque here** (service configuration). RFC 9068 `at+jwt` access tokens are taught in the
   lesson but cannot be produced on this deployment without changing the AS's access-token signing settings, so
   no lab step claims to show one.

@@ -40,7 +40,7 @@
 | 2 | `auth_time` REQUIRED when `max_age` is used | §2 | ✅ **verified live** — `auth_time = iat`, delta 0 with `max_age=0` (`lab.md:520-536`) |
 | 3 | `nonce` echoed when sent, absent when not | §2 | ✅ **verified live, both directions** (`lab.md:498-518`) |
 | 4 | `scope` MUST contain `openid` for an OIDC request | §3.1.2.1 | ✅ Authlete's — verified by contrast (`lab.md:83-107`: no ID token without `openid`) |
-| 5 | With `prompt=none`, no UI, and an error if no user is authenticated | §3.1.2.1 | ❌ **302 with an empty `Location`** — F-1 |
+| 5 | With `prompt=none`, no UI, and an error if no user is authenticated | §3.1.2.1 | ✅ **fixed 2026-08-12** (was ❌ 302 with an empty `Location`) — `NO_INTERACTION` decides and returns a code or a §3.1.2.6 error. **`OIDC-W1`**, F-1 |
 | 6 | The error MUST be one of `interaction_required`, `login_required`, `account_selection_required`, `consent_required` | §3.1.2.6 | ❌ none is ever returned — F-1 |
 | 7 | UserInfo `sub` equals the ID Token `sub` | §5.3.2 | ✅ OP side correct (both `admin`, verified `lab.md:620-637`); ❌ the repo's own client never checks it — F-4 |
 | 8 | Scope-requested claims come from UserInfo when the AT is issued from the token endpoint | §5.4 | ✅ `claimShortcutRestrictive = true` live — matches `AGENTS.md`'s recommendation |
@@ -63,7 +63,19 @@
 | Action → HTTP mapping, incl. `NO_INTERACTION` | **This server** | `controllers/authorization.controller.ts:32-144` — **F-1** |
 | The thirteen validation steps | **The client** | `modules/08…/lab.md:204-399` (lab script); **not** in the SPA |
 
-## Finding F-1 — `prompt=none` returns a dead redirect instead of one of §3.1.2.6's four errors (S2)
+## Finding F-1 — `prompt=none` returns a dead redirect instead of one of §3.1.2.6's four errors (S2) — ✅ **FIXED 2026-08-12 (T1-7)**
+
+> **Status:** closed, **together with `RFC9470-…` F-3**, which is the only safe way to close it.
+> `case "NO_INTERACTION"` now calls `decideWithoutInteraction` — Authlete's documented contract: decide
+> without UI, then issue or fail. Order: `NOT_LOGGED_IN` → `CONSENT_REQUIRED` →
+> `checkStepUpRequirements` (`utils/step-up.ts`) → issue.
+>
+> Verified live: `prompt=none` with no session now returns
+> `302 …?error=login_required&…&state=p1&iss=…`; with a session and stored consent it returns a real code;
+> with `max_age=0` against a two-second-old session it refuses. The empty `Location` is gone.
+>
+> **The dead `INTERACTION` + `prompt=none` branch was not deleted — it delegates to the same function**, so
+> the two cannot diverge if Authlete's action ever changes. The finding text below is the historical record.
 
 Reproduced in the repo's own lab (`modules/08…/lab.md:538-560`):
 
@@ -158,7 +170,7 @@ All three land in the same file, `client/src/pages/CallbackPage.tsx`, and should
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| OIDC-W1 | Handle `NO_INTERACTION` per Authlete's contract | M | **Same change as 9470-W3 — do not split.** `prompt=none` returns one of §3.1.2.6's four errors via `authorization.fail`, or issues silently when a real session and consent exist; the fabricated `acr`/`auth_time` fallback is deleted; `acrs`/`acrEssential`/`maxAge` are honoured on this path. Unit tests per outcome. |
+| OIDC-W1 | Handle `NO_INTERACTION` per Authlete's contract | M | ✅ **DONE 2026-08-12 (T1-7), shipped with 9470-W3 as one change.** **Same change as 9470-W3 — do not split.** `prompt=none` returns one of §3.1.2.6's four errors via `authorization.fail`, or issues silently when a real session and consent exist; the fabricated `acr`/`auth_time` fallback is deleted; `acrs`/`acrEssential`/`maxAge` are honoured on this path. Unit tests per outcome. |
 | OIDC-W2 | Register an RSA key so `id_token_signing_alg_values_supported` includes RS256 | S | Discovery lists RS256. Console change. Also unblocks Module 08's asymmetric validation branch (`lab.md:365-399`) and pairs with **7523-W4**. |
 | OIDC-W3 | Implement the three client-side checks the curriculum teaches | M | `CallbackPage.tsx` validates `iss` (RFC 9207 §2.4), compares UserInfo `sub` to the ID Token `sub` (§5.3.2), and — if JARM is enabled — verifies the `response` JWT. One work item covering **9207-W1**, this, and **JARM-W3**. |
 | OIDC-W4 | Review the three 24-hour lifetimes | S | `idTokenDuration`, `accessTokenDuration` (both 86400) and `refreshTokenDuration` (864000) either shortened or recorded as a deliberate teaching choice in `PROGRESS.md`'s service-configuration section. |

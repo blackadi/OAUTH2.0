@@ -652,14 +652,15 @@ const spec: Record<string, unknown> = {
     },
     "/logout": {
       get: {
-        summary: "RP-initiated logout",
+        summary: "RP-initiated logout — confirmation page",
         description:
-          "Initiates RP-initiated logout (OIDC Session Management). Requires client_id and post_logout_redirect_uri.",
+          "Renders the logout confirmation page required by OpenID Connect RP-Initiated Logout 1.0 §2. " +
+          "This request destroys nothing: it returns an HTML form carrying a CSRF token and the supplied " +
+          "parameters as hidden fields. Submitting that form (POST /logout) is what ends the session.",
         parameters: [
           {
             name: "client_id",
             in: "query",
-            required: true,
             schema: { type: "string" },
           },
           {
@@ -676,7 +677,7 @@ const spec: Record<string, unknown> = {
             name: "backchannel",
             in: "query",
             schema: { type: "string", enum: ["true"] },
-            description: "Trigger backchannel logout delivery",
+            description: "Trigger backchannel logout delivery on the subsequent POST",
           },
           {
             name: "state",
@@ -685,7 +686,48 @@ const spec: Record<string, unknown> = {
           },
         ],
         responses: {
-          "302": { description: "Redirect to post_logout_redirect_uri" },
+          "200": {
+            description: "HTML confirmation page containing the _csrf token",
+            content: { "text/html": { schema: { type: "string" } } },
+          },
+        },
+      },
+      post: {
+        summary: "RP-initiated logout — end the session",
+        description:
+          "Ends the session: verifies any id_token_hint against the OP's JWKS, optionally delivers " +
+          "backchannel logout tokens, destroys the session and clears the cookie, then redirects if " +
+          "post_logout_redirect_uri is allowed. Requires the _csrf token issued by GET /logout.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/x-www-form-urlencoded": {
+              schema: {
+                type: "object",
+                properties: {
+                  _csrf: {
+                    type: "string",
+                    description: "CSRF token from the GET /logout confirmation page",
+                  },
+                  client_id: { type: "string" },
+                  post_logout_redirect_uri: { type: "string", format: "uri" },
+                  id_token_hint: { type: "string" },
+                  state: { type: "string" },
+                  backchannel: { type: "string", enum: ["true"] },
+                },
+                required: ["_csrf"],
+              },
+            },
+          },
+        },
+        responses: {
+          "302": { description: "Session ended; redirect to post_logout_redirect_uri" },
+          "200": {
+            description:
+              "Session ended; signed-out page rendered because no allowed redirect target was supplied",
+            content: { "text/html": { schema: { type: "string" } } },
+          },
+          "403": { description: "CSRF token missing or mismatched — the session is untouched" },
         },
       },
     },

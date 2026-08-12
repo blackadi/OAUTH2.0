@@ -185,7 +185,8 @@ does *not* fix it: adding more validation steps. The validator was already right
 
 ---
 
-**Q13 — The client receives `HTTP 302` with `Location: ` empty.**
+**Q13 — The client receives `HTTP 302` with `Location: ` empty.** *(This repo's behaviour until 2026-08-12;
+see the note at the end of this answer.)*
 
 `res.redirect(null ?? "")` sends an empty `Location` header. Not a success, not one of §3.1.2.6's four errors —
 a dead redirect.
@@ -203,6 +204,27 @@ So: determine whether the current session satisfies the request (authenticated? 
 no, call the authorization-fail API with the reason that maps to the correct §3.1.2.6 error — `login_required`
 when unauthenticated, `consent_required` when consent is missing, `account_selection_required` when the subject
 is ambiguous, `interaction_required` otherwise.
+
+**Award a bonus mark for spotting the trap**, because it is the more valuable half of this question and the
+lab covers it. Routing `NO_INTERACTION` into the existing dead `prompt=none` block would not have been a fix:
+that block **invented** the authentication context it was supposed to check —
+
+```js
+if (!req.session.stepUp) {
+  req.session.stepUp = { acr: "pwd", authTime: Math.floor(Date.now() / 1000) };
+}
+```
+
+— asserting `acr: "pwd"` with no evidence and `auth_time: now` for an event at an unknown earlier time, then
+passing both to the AS to be stamped on the tokens, with no `max_age` or essential-`acr` check anywhere on
+that path. A resource server enforcing step-up would then have accepted fabricated freshness: a security
+control silently not applied, which is worse than the visible bug it was meant to repair. An answer that says
+*"and check `acr`/`max_age` against what was actually recorded, refusing when nothing was"* has the whole
+thing.
+
+> **Both were fixed in this repo on 2026-08-12** (`utils/step-up.ts` plus a real `NO_INTERACTION` branch).
+> The rule that landed: an authentication the OP did not observe is one it will not assert — an unknown `acr`
+> does not satisfy an essential `acr` request, and an unknown `auth_time` does not satisfy a `max_age`.
 
 ---
 

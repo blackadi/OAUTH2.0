@@ -72,7 +72,7 @@ CC=$(curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
   -d "grant_type=client_credentials" -d "scope=profile" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).access_token))')
 
-curl -s -X POST "$API/introspection/standard" -d "token=$CC"
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$CC"
 ```
 
 ```json
@@ -179,7 +179,7 @@ USER_AT=$(curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
   --data-urlencode "redirect_uri=$REDIRECT_URI" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).access_token))')
 
-curl -s -X POST "$API/introspection/standard" -d "token=$USER_AT"
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$USER_AT"
 ```
 
 ```json
@@ -261,7 +261,7 @@ AT=$(curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
   --data-urlencode "assertion=$ASSERTION" -d "scope=profile" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).access_token||""))')
 
-curl -s -X POST "$API/introspection/standard" -d "token=$AT"
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$AT"
 ```
 
 ```json
@@ -515,7 +515,7 @@ NEW=$(curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
   -d "resource=https://api.example.com/orders" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).access_token))')
 
-curl -s -X POST "$API/introspection/standard" -d "token=$NEW"
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$NEW"
 ```
 
 ```json
@@ -551,7 +551,7 @@ NEW=$(curl -s -X POST "$API/token" -u "$CLIENT_ID:$CLIENT_SECRET" \
   -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).access_token))')
 
-SUB=$(curl -s -X POST "$API/introspection/standard" -d "token=$NEW" \
+SUB=$(curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$NEW" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).sub))')
 
 [ "$SUB" = "$CC0" ] && echo "sub IS the subject token" || echo "different"
@@ -564,7 +564,7 @@ sub IS the subject token
 And it is not an inert copy:
 
 ```bash
-curl -s -X POST "$API/introspection/standard" -d "token=$SUB" \
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$SUB" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("active =",JSON.parse(s).active))'
 ```
 

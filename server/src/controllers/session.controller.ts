@@ -7,6 +7,7 @@ import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
 import { sendAuthorizationIssueResponse } from "./authorization-response.handler";
 import { sendAuthorizationFailResponse } from "./authorization-fail-response.handler";
+import { checkStepUpRequirements } from "../utils/step-up";
 import { validateOrThrow, loginSchema } from "../utils/validation";
 import consentStore from "../services/consent-store.service";
 import { claimsFromScopes, claimLabel } from "../utils/scope-claims";
@@ -115,45 +116,29 @@ export function createSessionController(
         req.session.authorization.authTime = authTimeNow;
       }
 
-      // RFC 9470 §2: Check if the authorization request requires specific ACRs.
-      // Authlete returns `acrs` (requested ACR values) and `acrEssential`
-      // (whether the `acr` claim was requested as essential).
-      if (authz?.acrs && authz.acrs.length > 0) {
-        const acrMatched = authz.acrs.includes(satisfiedAcr);
-
-        // If ACR is essential and none of the requested ACRs match, fail.
-        if (authz.acrEssential && !acrMatched) {
-          req.logger("RFC 9470: ACR not satisfied", {
-            requested: authz.acrs,
-            satisfied: satisfiedAcr,
-            essential: true,
-          });
-          const failResponse = await authorizationServiceInstance.fail(
-            authz.authorizationIssueRequest?.ticket ?? "",
-            "ACR_NOT_SATISFIED"
-          );
-          delete req.session.authorization;
-          return sendAuthorizationFailResponse(res, failResponse);
-        }
-      }
-
-      // RFC 9470 §3: Check maxAge. If the client specified max_age and
-      // the previous authentication is too old, re-authentication is required.
-      // On first login there is no previous authTime, so this always passes.
-      if (authz?.maxAge && authz.authTime) {
-        const elapsed = authTimeNow - authz.authTime;
-        if (elapsed > authz.maxAge) {
-          req.logger("RFC 9470: max_age exceeded", {
-            elapsed,
-            maxAge: authz.maxAge,
-          });
-          const failResponse = await authorizationServiceInstance.fail(
-            authz.authorizationIssueRequest?.ticket ?? "",
-            "EXCEEDS_MAX_AGE"
-          );
-          delete req.session.authorization;
-          return sendAuthorizationFailResponse(res, failResponse);
-        }
+      // RFC 9470 §2 / OIDC Core §3.1.2.1 — the same check the non-interactive `prompt=none` path runs, from
+      // the same function (`utils/step-up.ts`), so the two cannot drift. The authentication event here is the
+      // one that just happened, which is why `max_age` passes by construction on this path: the End-User has
+      // actively re-authenticated, and that satisfies any maximum age. The place `max_age` can genuinely fail
+      // is `authorization.controller.ts`'s `decideWithoutInteraction`, where nobody re-authenticated.
+      const stepUpFailure = checkStepUpRequirements(
+        { acrs: authz?.acrs, acrEssential: authz?.acrEssential, maxAge: authz?.maxAge },
+        { acr: satisfiedAcr, authTime: authTimeNow },
+        authTimeNow
+      );
+      if (stepUpFailure) {
+        req.logger("RFC 9470: step-up requirements not satisfied at login", {
+          reason: stepUpFailure,
+          requested: authz?.acrs,
+          satisfied: satisfiedAcr,
+          maxAge: authz?.maxAge,
+        });
+        const failResponse = await authorizationServiceInstance.fail(
+          authz?.authorizationIssueRequest?.ticket ?? "",
+          stepUpFailure
+        );
+        delete req.session.authorization;
+        return sendAuthorizationFailResponse(res, failResponse);
       }
 
       // RFC 9470: Bind authentication context to the session so

@@ -440,10 +440,12 @@ test_introspection() {
 
   # Standard
   api_call "POST" "/api/introspection/standard" "RFC 7662"
-  show_curl "curl -s -X POST \"\${BASE}/api/introspection/standard\" -d \"token=...\""
+  show_curl "curl -s -u \"\${MGMT_CLIENT_ID}:\${MGMT_CLIENT_SECRET}\" -X POST \"\${BASE}/api/introspection/standard\" -d \"token=...\""
 
   local std_resp
+  # RFC 7662 §2.1 — both introspection endpoints require this deployment's admin Basic auth since 2026-08-12.
   std_resp=$(curl -sS -X POST "${BASE}/api/introspection/standard" \
+    -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "token=${token}" 2>&1) || true
   show_json "$std_resp"
@@ -462,10 +464,11 @@ test_introspection() {
 
   # Authlete-specific
   api_call "POST" "/api/introspection" "Authlete-specific (extended)"
-  show_curl "curl -s -X POST \"\${BASE}/api/introspection\" -d \"token=...\""
+  show_curl "curl -s -u \"\${MGMT_CLIENT_ID}:\${MGMT_CLIENT_SECRET}\" -X POST \"\${BASE}/api/introspection\" -d \"token=...\""
 
   local ns_resp
   ns_resp=$(curl -sS -X POST "${BASE}/api/introspection" \
+    -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "token=${token}" 2>&1) || true
   show_json "$ns_resp"
@@ -723,7 +726,10 @@ test_token_management() {
 test_logout() {
   header "11. RP-Initiated Logout (OIDC)"
 
-  api_call "GET" "/api/logout" "RP-Initiated Logout"
+  # RP-Initiated Logout 1.0 §2 requires the OP to ask before ending the session, so the GET renders a
+  # confirmation page and destroys nothing. 200 is the only correct answer here; a 302 would mean the
+  # confirmation step had been removed.
+  api_call "GET" "/api/logout" "RP-Initiated Logout (confirmation page)"
   show_curl "curl -s \"\${BASE}/api/logout?client_id=\${CID}&post_logout_redirect_uri=\${REDIR}\""
 
   local http_code
@@ -733,10 +739,36 @@ test_logout() {
   echo -e "  ${BOLD}${WHITE}│${NC}  ${DIM}HTTP ${http_code}${NC}"
   box_end
 
-  if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
-    check "RP-Initiated Logout" 0 "HTTP ${http_code}"
+  if [ "$http_code" = "200" ]; then
+    check "RP-Initiated Logout (confirmation page)" 0 "HTTP ${http_code}"
   else
-    check "RP-Initiated Logout" 1 "expected 200 or 302, got ${http_code}"
+    check "RP-Initiated Logout (confirmation page)" 1 "expected 200, got ${http_code}"
+  fi
+
+  # Step 2: submit the confirmation form. The CSRF token is single-use and the logout destroys the session
+  # holding it, so this needs its own cookie jar. `client_id` is required for a 302: RP-Initiated Logout §3
+  # matches against that client's registered post_logout_redirect_uris, so without it there is nothing to
+  # match and the answer is a 200.
+  api_call "POST" "/api/logout" "RP-Initiated Logout (confirmed)"
+  show_curl "CSRF=\$(curl -s -c jar \"\${BASE}/api/logout\" | grep -o '_csrf\" value=\"[^\"]*' | cut -d'\"' -f3); curl -s -b jar -X POST \"\${BASE}/api/logout\" -d \"_csrf=\${CSRF}\" -d \"client_id=\${CID}\" -d \"post_logout_redirect_uri=\${REDIR}\""
+
+  local jar csrf
+  jar=$(mktemp)
+  csrf=$(curl -sS -c "$jar" "${BASE}/api/logout" 2>/dev/null |
+    sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+  http_code=$(curl -sS -b "$jar" -o /dev/null -w "%{http_code}" -X POST "${BASE}/api/logout" \
+    --data-urlencode "_csrf=${csrf}" \
+    --data-urlencode "client_id=${CID}" \
+    --data-urlencode "post_logout_redirect_uri=${REDIR}" 2>&1) || http_code="000"
+  rm -f "$jar"
+
+  echo -e "  ${BOLD}${WHITE}│${NC}  ${DIM}HTTP ${http_code}${NC}"
+  box_end
+
+  if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
+    check "RP-Initiated Logout (confirmed)" 0 "HTTP ${http_code}"
+  else
+    check "RP-Initiated Logout (confirmed)" 1 "expected 200 or 302, got ${http_code}"
   fi
 }
 

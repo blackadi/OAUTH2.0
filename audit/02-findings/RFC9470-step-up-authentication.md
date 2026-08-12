@@ -1,7 +1,7 @@
 # RFC 9470 — OAuth 2.0 Step Up Authentication Challenge Protocol
 
 - **Verdict:** `PARTIAL`
-- **Severity:** **S2** — with one latent **S1** that activates if an unrelated open finding is fixed alone (F-3)
+- **Severity:** **S3** — was S2 with a latent **S1** (F-3). **The latent S1 is retired**, not downgraded: the change that would have activated it (`OIDC-W1`) was built correctly instead, on 2026-08-12. What remains is documentation (F-4's citations, 9470-W1/W4/W6)
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/STEP-UP-AUTH-TUTORIAL.md` (esp. Parts 4–6), `docs/curriculum/modules/09a-interaction-extensions/README.md:304`, `AGENTS.md` RFC 9470 paragraph, `docs/curriculum/SPEC-INVENTORY.md`
 
@@ -120,7 +120,23 @@ enforcement is decorative: the branch exists, is tested by no test, is documente
 cannot fire. The moment session reuse is introduced — which F-3 is about — it is the only thing standing
 between a stale authentication and a token that claims freshness, and it will not stand.
 
-## Finding F-3 — the `prompt=none` path fabricates the authentication event, and fixing an unrelated open finding activates it (S2 now, **S1 if activated**)
+## Finding F-3 — the `prompt=none` path fabricates the authentication event, and fixing an unrelated open finding activates it (S2 now, **S1 if activated**) — ✅ **FIXED 2026-08-12 (T1-7)**
+
+> **Status:** closed, and the latent S1 is **retired rather than downgraded** — the activation route
+> (`OIDC-W1`) was built correctly instead of being built at all. The two shipped as one change, exactly as
+> this finding demanded.
+>
+> The fabrication block is **deleted**. The decision now runs through `checkStepUpRequirements`
+> (`server/src/utils/step-up.ts`), a pure function shared with the login path, whose rule is that **absence
+> is answered as "no"**: an unknown `acr` does not satisfy an essential `acrs`, and an unknown `authTime`
+> does not satisfy a `maxAge`. A `prompt=none` request that depends on neither is issued *without*
+> `acr`/`authTime`, so Authlete stamps nothing it was not given.
+>
+> Verified live: `max_age=0` against a two-second-old session is refused; `max_age=3600` succeeds. **That is
+> the first time `EXCEEDS_MAX_AGE` has been reachable on this deployment** — see the 9470-W2 note below.
+> 15 unit tests on the checker plus 8 controller cases.
+>
+> The finding text below is the historical record.
 
 `authorization.controller.ts:96-131` handles `prompt=none` with an existing session, and at `:107-112`:
 
@@ -222,8 +238,8 @@ aware; this parser is not.
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | 9470-W1 | Correct the challenge status in the tutorial, and separate AS-to-RS from RS-to-client | S | Part 5 shows the introspection response (403, Authlete's `FORBIDDEN`) and, separately, the **401** challenge an RS must send its client, quoting §3. The "What the client learns" table hangs off the 401. |
-| 9470-W2 | Make the `max_age` check able to fail | M | Compare against the authentication time *before* it is overwritten — capture the prior `authTime` first, or move the check ahead of `:115`. A unit test drives `EXCEEDS_MAX_AGE`, which no test does today. |
-| 9470-W3 | **Fix the `prompt=none` handling and the fabricated event together** | M | `NO_INTERACTION` is handled per Authlete's contract (decide, then issue or fail; OIDC Core §3.1.2.6 errors — `login_required` / `consent_required` / `interaction_required` / `account_selection_required`), **and** the `stepUp` fallback is deleted rather than carried over: no session context ⇒ `login_required`, never an invented `acr`/`auth_time`. `acrs`/`acrEssential`/`maxAge` are checked on this path too. **Do not ship the first half alone.** |
+| 9470-W2 | Make the `max_age` check able to fail | M | Compare against the authentication time *before* it is overwritten — capture the prior `authTime` first, or move the check ahead of `:115`. A unit test drives `EXCEEDS_MAX_AGE`, which no test does today. | **⚠️ Framing corrected 2026-08-12 (T1-7).** The login-path check is vacuous — `authTime` is set to `authTimeNow` immediately before it is read — but on inspection that is **correct, not broken**: this is the login POST, where the End-User has just actively authenticated, and a fresh authentication satisfies any `max_age` by construction. **The path where `max_age` must be able to fail is `prompt=none`, which did not exist until T1-7 built it.** So this item is subsumed: `EXCEEDS_MAX_AGE` is now reachable and tested (`authorization.controller.test.ts`). No further code change is owed. |
+| 9470-W3 | **Fix the `prompt=none` handling and the fabricated event together** | M | ✅ **DONE 2026-08-12 (T1-7), with OIDC-W1 as one change.** `NO_INTERACTION` is handled per Authlete's contract (decide, then issue or fail; OIDC Core §3.1.2.6 errors — `login_required` / `consent_required` / `interaction_required` / `account_selection_required`), **and** the `stepUp` fallback is deleted rather than carried over: no session context ⇒ `login_required`, never an invented `acr`/`auth_time`. `acrs`/`acrEssential`/`maxAge` are checked on this path too. **Do not ship the first half alone.** |
 | 9470-W4 | Fix the six section citations | S | §4 for request handling, §6 for claim conveyance, §3 only where a challenge is emitted. Two in `session.controller.ts`, two in the tutorial, plus the stale `AGENTS.md` line reference. |
 | 9470-W5 | Set `supportedAcrs` and advertise `acr_values_supported` | S | At minimum `pwd`; the tutorial's `urn:mace:incommon:iap:silver` examples then have a discoverable counterpart, and the ACR *success* path becomes demonstrable. |
 | 9470-W6 | Make `parseBearerError` quoted-string aware | S | An `error_description` containing a comma survives intact; test covers it. |

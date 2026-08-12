@@ -365,7 +365,7 @@ When ACR can't be satisfied, the server calls `/auth/authorization/fail` with `r
 | `src/services/authorization.service.ts:59` | Passes `acr`/`authTime` from `session.stepUp` to Authlete |
 | `src/controllers/authorization.controller.ts:55` | Stores `acrs`, `acrEssential`, `maxAge` from Authlete in session |
 | `src/controllers/session.controller.ts:59` | Checks ACR/maxAge requirements on login; sets `stepUp` in session |
-| `src/controllers/introspection.controller.ts:47` | Parses `insufficient_user_authentication` into structured JSON |
+| `src/controllers/introspection.controller.ts:114` | Parses `insufficient_user_authentication` into structured JSON (`parseBearerError`, defined at `:45`) |
 | `src/services/introspection.service.ts:38` | Passes `acrValues`/`maxAge` to Authlete introspection API |
 | `src/controllers/device.controller.ts:87` | Passes `acr`/`authTime` to device flow complete |
 | `src/controllers/ciba.controller.ts:106` | Passes `acr`/`authTime` to CIBA complete |
@@ -375,7 +375,7 @@ When ACR can't be satisfied, the server calls `/auth/authorization/fail` with `r
 
 | File | What it does |
 |------|-------------|
-| `src/services/token.service.ts:117` | `introspection()` accepts `acrValues`/`maxAge` options |
+| `src/services/token.service.ts:127` | `introspection()` accepts `acrValues`/`maxAge` options — and, since 2026-08-12, the admin credentials the endpoint requires |
 | `src/components/oidc/TokenOpsSection.tsx` | ACR/maxAge inputs for Authlete introspection |
 | `src/components/oidc/StepUpSection.tsx` | Dedicated step-up auth testing UI |
 | `src/App.tsx` | Registers Step-Up Auth section in sidebar |
@@ -385,8 +385,8 @@ When ACR can't be satisfied, the server calls `/auth/authorization/fail` with `r
 | File | Tests |
 |------|-------|
 | `tests/unit/utils/createLocalJWT.test.ts` | JWT with `acr`/`auth_time` claims (8 tests) |
-| `tests/unit/services/introspection.service.test.ts` | `acrValues`/`maxAge` pass-through (5 tests) |
-| `tests/unit/controllers/introspection.controller.test.ts` | Step-up challenge parsing (6 tests) |
+| `tests/unit/services/introspection.service.test.ts` | `acrValues`/`maxAge` pass-through (4 tests) |
+| `tests/unit/controllers/introspection.controller.test.ts` | Step-up challenge parsing, plus the §2.1 auth gate (7 tests) |
 
 ### Standards
 

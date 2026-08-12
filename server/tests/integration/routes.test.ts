@@ -41,6 +41,9 @@ vi.mock("../../src/services/authlete.service", () => ({
 describe("Integration: all API routes", () => {
   let app: ReturnType<typeof createApp>
 
+  // Matches the credentials stubbed in beforeEach below.
+  const ADMIN_BASIC = `Basic ${Buffer.from("test-admin:test-secret").toString("base64")}`
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.unstubAllEnvs()
@@ -194,11 +197,40 @@ describe("Integration: all API routes", () => {
     })
   })
 
+  // T1-1 / RFC 7662 §2.1 — both introspection endpoints require this deployment's admin Basic auth.
   describe("POST /api/introspection", () => {
     it("returns result with action OK", async () => {
       mockApi.introspection.process.mockResolvedValue({ action: "OK", active: true })
-      const res = await request(app).post("/api/introspection").send({ token: "at-1" }).expect(200)
+      const res = await request(app).post("/api/introspection")
+        .set("Authorization", ADMIN_BASIC)
+        .send({ token: "at-1" }).expect(200)
       expect(res.body.action).toBe("OK")
+    })
+
+    it("rejects an unauthenticated caller without calling Authlete", async () => {
+      mockApi.introspection.process.mockClear()
+      await request(app).post("/api/introspection").send({ token: "at-1" }).expect(401)
+      expect(mockApi.introspection.process).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("POST /api/introspection/standard", () => {
+    it("returns the RFC 7662 body for an authenticated caller", async () => {
+      mockApi.introspection.standardProcess.mockResolvedValue({
+        action: "OK",
+        responseContent: '{"active":true}',
+      })
+      const res = await request(app).post("/api/introspection/standard")
+        .set("Authorization", ADMIN_BASIC)
+        .type("form").send("token=at-1").expect(200)
+      expect(res.text).toContain('"active":true')
+    })
+
+    it("rejects an unauthenticated caller without calling Authlete", async () => {
+      mockApi.introspection.standardProcess.mockClear()
+      await request(app).post("/api/introspection/standard")
+        .type("form").send("token=at-1").expect(401)
+      expect(mockApi.introspection.standardProcess).not.toHaveBeenCalled()
     })
   })
 
@@ -516,6 +548,7 @@ describe("Integration: all API routes", () => {
         dpopNonce: "introspect-nonce-1",
       } as any)
       const res = await request(app).post("/api/introspection")
+        .set("Authorization", ADMIN_BASIC)
         .set("dpop", "dpop-proof-jwt")
         .send({ token: "at-dpop-1" })
         .expect(200)

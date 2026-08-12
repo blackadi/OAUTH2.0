@@ -479,7 +479,7 @@ const {privateKey, publicKey} = M.makeKey();
 const dpop = M.proof({privateKey, publicKey, htm:"POST", htu:`${API}/token`});
 const tok = JSON.parse(sh(`curl -s -X POST "${API}/token" -H "Content-Type: application/x-www-form-urlencoded" -H "DPoP: ${dpop}" -d "grant_type=authorization_code" -d "code=${code}" --data-urlencode "redirect_uri=${PRU}" -d "client_id=${PCID}" -d "code_verifier=${v}"`));
 console.log("token_type:", tok.token_type, "| error:", tok.error || "none");
-const intro = JSON.parse(sh(`curl -s -X POST "${API}/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" -d "token=${tok.access_token}"`));
+const intro = JSON.parse(sh(`curl -s -u "${process.env.MGMT_CLIENT_ID}:${process.env.MGMT_CLIENT_SECRET}" -X POST "${API}/introspection/standard" -H "Content-Type: application/x-www-form-urlencoded" -d "token=${tok.access_token}"`));
 console.log("cnf from introspection:", JSON.stringify(intro.cnf));
 const jwk = M.publicJwk(publicKey);
 const canonical = JSON.stringify({crv:jwk.crv, kty:jwk.kty, x:jwk.x, y:jwk.y});   // RFC 7638: lexicographic, no whitespace

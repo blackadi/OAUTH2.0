@@ -433,20 +433,37 @@ curl -X POST http://localhost:3000/api/backchannel_logout/deliver-all \
 
 ### RP-Initiated Logout with Backchannel
 
+Logout is **two requests**. The `GET` renders the confirmation page RP-Initiated Logout 1.0 §2 requires;
+the `POST` it submits is what delivers the Logout Tokens.
+
 ```bash
-curl "http://localhost:3000/api/logout?\
-id_token_hint=eyJhbGciOiJSUzI1NiIs...\
-&post_logout_redirect_uri=http://localhost:3000/logged-out\
-&state=xyz123\
-&client_id=YOUR_CLIENT_ID\
-&backchannel=true"
+# Step 1 — get the confirmation page, keeping its cookie, and read the CSRF token out of it.
+J=$(mktemp)
+CSRF=$(curl -s -c "$J" "http://localhost:3000/api/logout" |
+  sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p')
+
+# Step 2 — submit it. This is the request that actually logs anybody out.
+curl -s -b "$J" -X POST "http://localhost:3000/api/logout" \
+  --data-urlencode "_csrf=${CSRF}" \
+  --data-urlencode "id_token_hint=eyJhbGciOiJSUzI1NiIs..." \
+  --data-urlencode "post_logout_redirect_uri=http://localhost:3000/logged-out" \
+  --data-urlencode "state=xyz123" \
+  --data-urlencode "client_id=YOUR_CLIENT_ID" \
+  --data-urlencode "backchannel=true"
+rm -f "$J"
 ```
 
-This:
+The POST:
 1. **Verifies** `id_token_hint` → gets `sub`
 2. Delivers Logout Tokens to all RPs
 3. Destroys local session
 4. Redirects to `post_logout_redirect_uri`
+
+> **Why the extra round trip (changed 2026-08-12).** §2 requires the OP to ask the End-User before ending
+> the session, and asking is also what keeps a state-changing operation off a bare `GET` — while the `GET`
+> did the work, an `<img src="…/api/logout">` on any page logged the viewer out, which is a *forced* logout
+> rather than an RP-initiated one. The CSRF token is single-use and the logout destroys the session holding
+> it, so each POST needs its own preceding GET.
 
 > **Why "verifies" and not "decodes" (changed 2026-08-11).** An `id_token_hint` is an ID Token — a *signed*
 > assertion — so it says nothing about who the user is until the signature is checked. The server used to
@@ -620,7 +637,8 @@ POST /api/backchannel_logout/issue      → Issue Logout Token
 POST /api/backchannel_logout/deliver    → Issue + deliver to one RP
 POST /api/backchannel_logout/deliver-all → Issue + deliver to all RPs
 POST /api/backchannel_logout            → Receive incoming Logout Token
-GET  /api/logout?backchannel=true       → RP-Initiated Logout with backchannel
+GET  /api/logout                        → RP-Initiated Logout, confirmation page (§2)
+POST /api/logout  (backchannel=true)    → RP-Initiated Logout with backchannel
 ```
 
 ### Files

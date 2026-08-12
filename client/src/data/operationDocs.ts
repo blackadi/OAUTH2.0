@@ -69,8 +69,9 @@ const docs: Record<string, Record<string, OpDoc>> = {
       description: 'Introspects an access token using Authlete\'s internal endpoint. Returns full token details including scopes, subject, expiration, and Authlete-specific metadata. This is richer than the standard RFC 7662 introspection.',
       params: [
         { name: 'Token', desc: 'The access token to inspect. Pre-filled from the current session.' },
+        { name: 'Admin Client ID / Secret', desc: 'MGMT_CLIENT_ID / MGMT_CLIENT_SECRET. RFC 7662 §2.1 requires the introspection endpoint to be protected; without these the server answers 401 and never calls Authlete.' },
       ],
-      returns: 'JSON with token details: active (boolean), sub, scopes, token_type, exp, iat, client_id, and Authlete-specific fields.',
+      returns: 'JSON with token details: active (boolean), sub, scopes, token_type, exp, iat, client_id, and Authlete-specific fields. An unknown token gives 401 with a Bearer invalid_token challenge — which is Authlete answering, not the auth gate.',
       tips: 'Use this when you need detailed token metadata. The standard introspection is more portable if you need to switch providers.',
     },
     'introspect-std': {
@@ -78,9 +79,10 @@ const docs: Record<string, Record<string, OpDoc>> = {
       description: 'Introspects an access token following the OAuth 2.0 Token Introspection standard (RFC 7662). Returns a standardized response that is provider-agnostic.',
       params: [
         { name: 'Token', desc: 'The access token to inspect. Pre-filled from the current session.' },
+        { name: 'Admin Client ID / Secret', desc: 'MGMT_CLIENT_ID / MGMT_CLIENT_SECRET. RFC 7662 §2.1 requires the endpoint to be protected, to prevent token scanning.' },
       ],
-      returns: 'JSON with active (boolean), sub, scope, client_id, token_type, exp, iat, and other standard fields per RFC 7662.',
-      tips: 'Use this for interoperability or when you need a provider-agnostic response.',
+      returns: 'JSON with active (boolean), sub, scope, client_id, token_type, exp, iat, and other standard fields per RFC 7662. An unknown or revoked token gives 200 with {"active":false} — §2.2 makes an inactive token a result, not an error.',
+      tips: 'Use this for interoperability or when you need a provider-agnostic response. Compare its 200 {"active":false} for an unknown token with the Authlete endpoint\'s 401 for the same input: two correct answers to different questions.',
     },
     'revoke': {
       title: 'Revoke Token',
@@ -341,14 +343,14 @@ const docs: Record<string, Record<string, OpDoc>> = {
   'logout': {
     'logout': {
       title: 'RP-Initiated Logout',
-      description: 'Implements OpenID Connect RP-Initiated Logout (spec: OpenID Connect RP-Initiated Logout 1.0). Ends the session and optionally redirects the user back to your application. The id_token_hint identifies which session to log out.',
+      description: 'Implements OpenID Connect RP-Initiated Logout (spec: OpenID Connect RP-Initiated Logout 1.0). This is two requests: the GET renders the server\'s confirmation page and destroys nothing, and the POST that page submits is what ends the session and optionally redirects you back. §2 requires the OP to ask before logging anyone out. The id_token_hint identifies which session to log out — and, when client_id is absent, which client is asking, which decides where you may be redirected (§3).',
       params: [
-        { name: 'ID Token Hint', desc: 'The ID token of the session to log out. Pre-filled from the current session.' },
-        { name: 'Post-Logout Redirect URI', desc: 'Where to send the user after logout. Must be in the service\'s allowed origins list.' },
+        { name: 'ID Token Hint', desc: 'The ID token of the session to log out. Pre-filled from the current session. It is verified against the OP\'s JWKS — an unverifiable hint identifies nobody rather than whoever it names.' },
+        { name: 'Post-Logout Redirect URI', desc: 'Where to send the user after logout. Must exactly match \u2014 byte for byte \u2014 a URI registered for this client; a trailing slash makes it a different URI. If no client can be identified, from client_id or the id_token_hint\'s aud, there is no registered set and no redirect happens.' },
         { name: 'State', desc: 'A random value to maintain state between logout request and callback. Helps prevent CSRF on the redirect back.' },
       ],
-      returns: 'Redirects to the server logout page, which destroys the session and redirects back to the post-logout URI with the state parameter echoed back.',
-      tips: 'Tokens are cleared client-side before redirect. The server also destroys the server-side session. The post-logout redirect must be pre-registered or allowed.',
+      returns: 'The server\'s confirmation page. Confirming there destroys the session and redirects back to the post-logout URI with the state parameter echoed back; if that URI is not allowed, you land on the signed-out page instead and the session is still gone.',
+      tips: 'Tokens are cleared client-side before you leave, so the confirmation page is the point of no return only for the server session. The confirmation form carries a CSRF token, which is why a bare GET — including an <img> tag pointing at the logout URL — no longer logs anybody out.',
     },
   },
   'backchannel-logout': {
@@ -388,7 +390,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
         { name: 'Session ID', desc: 'Optional session identifier (alternative to subject).' },
       ],
       returns: 'JSON array of delivery results, one per client with a backchannelLogoutUri. Each result has clientId, clientName, success, and statusCode or error.',
-      tips: 'This can also be triggered automatically by adding &backchannel=true to the RP-Initiated Logout URL (GET /api/logout?backchannel=true).',
+      tips: 'This can also be triggered automatically by carrying backchannel=true through RP-Initiated Logout. It rides on the confirming POST (POST /api/logout), not the GET — the GET only renders the confirmation page.',
     },
   },
   'dcr': {

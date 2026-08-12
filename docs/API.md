@@ -60,8 +60,30 @@ UserInfo endpoint. Bearer token required.
 ### `POST /api/userinfo`
 UserInfo via POST. Token in body or Authorization header.
 
+> **This server exposes two introspection endpoints, and only one of them is RFC 7662.** They are not
+> alternatives — they answer different questions for different callers.
+>
+> | | `/api/introspection` | `/api/introspection/standard` |
+> |---|---|---|
+> | Specification | **Authlete-proprietary** | **RFC 7662** |
+> | Built for | a resource server holding an Authlete service token; richer diagnostics | any RFC 7662 client |
+> | Response | Authlete's `action`/`existent`/`usable` envelope | the spec's `{"active": …}` body |
+> | Extras | RFC 9470 step-up (`acr`, `auth_time`, challenge), DPoP binding checks | — |
+> | Unknown token | `401` + `WWW-Authenticate: Bearer error="invalid_token"` | `200 {"active":false}` (§2.2) |
+>
+> **Both require admin Basic auth** (`MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`) and carry a 60/min rate limiter.
+> RFC 7662 §2.1 requires the endpoint to be protected *"to prevent token scanning attacks"*; until
+> 2026-08-12 neither endpoint had any middleware at all. **Authentication fails closed** — with either
+> variable unset, every request is rejected — and the check runs **before** any Authlete call, so a rejected
+> caller learns nothing about the token.
+>
+> Note the credential is this deployment's *administrator*, not a client. §2.1 requires "some form of
+> authorization" and names client authentication only as an example; a real resource server should not hold
+> management credentials, which is recorded as a follow-up in
+> `audit/02-findings/RFC7662-token-introspection.md`.
+
 ### `POST /api/introspection`
-Authlete-specific token introspection (non-standard).
+Authlete-specific token introspection (non-standard). **Admin Basic auth required.**
 
 **Body Parameters:**
 
@@ -79,7 +101,13 @@ Authlete-specific token introspection (non-standard).
 **Response:** 200 with token info, or 403 with `insufficient_user_authentication` error (RFC 9470) including `acr_values`/`max_age` challenge.
 
 ### `POST /api/introspection/standard`
-RFC 7662 standard token introspection.
+RFC 7662 standard token introspection. **Admin Basic auth required.**
+
+**Body:** `token` (required), plus any other RFC 7662 parameter. Client credentials, if a caller sends any,
+belong in the **body** — the `Authorization` header carries the admin credential.
+
+**Response:** 200 with the RFC 7662 body (`{"active":false}` for an unknown or revoked token — §2.2 makes an
+inactive token a result, not an error), 400, 401 (missing/invalid admin credentials), 500.
 
 ### `POST /api/revocation`
 RFC 7009 token revocation.
@@ -351,10 +379,23 @@ Revoke all tokens for a session. No admin auth — client auth via body `clientI
 
 ## Logout & Backchannel Logout
 
-### `GET /api/logout`
-RP-Initiated Logout (OIDC Session Management).
+RP-Initiated Logout is **two requests**. OpenID Connect RP-Initiated Logout 1.0 §2 requires the OP to ask the End-User before ending the session, and asking is also what keeps a state-changing operation off a bare `GET`.
 
-**Query Params:** `client_id`, `post_logout_redirect_uri`, `id_token_hint`, `state`, `backchannel` (set to `true` to trigger deliver-all)
+### `GET /api/logout`
+Renders the logout confirmation page. **Destroys nothing.**
+
+**Query Params:** `client_id`, `post_logout_redirect_uri`, `id_token_hint`, `state`, `backchannel` (all optional)
+
+**Response:** 200 — an HTML form carrying a `_csrf` token plus every supplied parameter as a hidden field. The destination is shown to the user only when it would actually be honoured.
+
+### `POST /api/logout`
+Ends the session. Verifies any `id_token_hint` against the OP's JWKS, optionally delivers backchannel logout tokens, destroys the session and clears the cookie, then redirects if `post_logout_redirect_uri` is allowed.
+
+**Body (form-encoded):** `_csrf` (**required** — from the confirmation page), then `client_id`, `post_logout_redirect_uri`, `id_token_hint`, `state`, `backchannel` (set to `true` to trigger deliver-all). Query-string values are read as a fallback; the body wins.
+
+**Response:** 302 (redirect to `post_logout_redirect_uri`), 200 (signed-out page, when no allowed redirect target was supplied — the session is gone either way), 403 (CSRF mismatch — the session is untouched)
+
+**Redirect rule (RP-Initiated Logout 1.0 §3).** The URI must **exactly match** one registered for *that client*. The client is taken from `client_id`, or from the `aud` of a verified `id_token_hint` when `client_id` is absent. **No identified client ⇒ no redirect**, since an unidentified client has an empty registered set. Matching is byte-for-byte: `http://localhost:3000` does not match `http://localhost:3000/`. The registry is the `POST_LOGOUT_REDIRECT_URIS` env var (`{"<clientId>": ["<uri>", …]}`) because Authlete 3.0 has no client field for it. `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` do **not** authorise redirects.
 
 ### `POST /api/backchannel_logout`
 Receive incoming logout tokens from other OPs.

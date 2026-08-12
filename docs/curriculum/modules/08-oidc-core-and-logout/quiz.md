@@ -48,7 +48,7 @@ Which two of the thirteen steps most urgently need adding, and what attack does 
 when, and why is keying on `email` worse rather than better?
 
 **Q9.** Your SPA's silent-renewal iframe calls the AS with `prompt=none` every ten minutes. The AS starts
-returning a 302 with an empty `Location`. Describe what the SPA experiences, why its error handling almost
+returning a 302 with an empty `Location` (this repo's behaviour until 2026-08-12). Describe what the SPA experiences, why its error handling almost
 certainly does not cover it, and what the user sees.
 
 **Q10.** An RP validates ID tokens by reading `alg` from the header and selecting a key accordingly. Describe
@@ -77,7 +77,8 @@ Three required validation steps are missing. Name them, and for each give the at
 …and the token was minted by an attacker, not by `op.example.com`. Every claim is correct and the signature
 verifies. Explain how this is possible and name the single configuration decision responsible.
 
-**Q13.** A server handles the authorization endpoint like this:
+**Q13.** A server handles the authorization endpoint like this (this was this repo's code until
+2026-08-12; answer it as it stood):
 
 ```js
 case "NO_INTERACTION":

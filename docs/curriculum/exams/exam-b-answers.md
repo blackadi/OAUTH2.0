@@ -183,8 +183,13 @@ deleted, and it is the **default** if you omit one optional parameter.
 
 **Example of a divergence (4):** any real one. The strongest from this curriculum: the discovery document
 advertises an **empty** `revocation_endpoint_auth_methods_supported`, while an observed request shows
-revocation **requires** client credentials and introspection requires **none** — so the metadata misdescribes
-both endpoints in opposite directions, and only advertised-versus-observed catches it. Another: metadata says
+revocation **requires** client credentials — so the metadata misdescribes the endpoint, and only
+advertised-versus-observed catches it. *(Until 2026-08-12 the sibling case was sharper still: introspection
+advertised an empty array and required **nothing**, so the two endpoints diverged in opposite directions. It
+now requires the deployment's admin credentials — RFC 7662 §2.1 — and its empty array stayed empty, since no
+**client** authentication method is supported there. Accept either version; the second is the better answer,
+because it shows metadata can be accurate about a capability and silent about a control. See Module 07
+Exercise 5a.)* Another: metadata says
 `require_pushed_authorization_requests: false`, configuration says `fapiModes` is unset, and observation
 confirms a non-PAR request succeeds — three sources agreeing is also a result worth recording.
 

@@ -367,7 +367,7 @@ Audience restriction first — and check more than one path, because Module 06 t
 
 ```bash
 aud_of () {
-  curl -s -X POST "$API/introspection/standard" -d "token=$1" \
+  curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$1" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);
       console.log("aud:", JSON.stringify(j.aud ?? null), " exp-in:", j.exp - Math.floor(Date.now()/1000))})'
 }
@@ -419,16 +419,23 @@ echo "--- introspection, no credentials ---"
 curl -s -o /dev/null -w 'status=%{http_code}  ' -X POST "$API/introspection/standard" -d "token=$CC"
 curl -s -X POST "$API/introspection/standard" -d "token=$CC"; echo
 
+echo "--- introspection, admin credentials ---"
+curl -s -o /dev/null -w 'status=%{http_code}  ' -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" \
+  -X POST "$API/introspection/standard" -d "token=$CC"
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$CC"; echo
+
 echo "--- revocation, no credentials ---"
 curl -s -X POST "$API/revocation" -d "token=$CC"; echo
 
 echo "--- revocation, full credentials ---"
 curl -s -o /dev/null -w 'status=%{http_code}\n' -X POST "$API/revocation" -u "$CLIENT_ID:$CLIENT_SECRET" -d "token=$CC"
-curl -s -X POST "$API/introspection/standard" -d "token=$CC"; echo
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$CC"; echo
 ```
 
 ```
 --- introspection, no credentials ---
+status=401  {"error":"invalid_client","error_description":"Client authentication required"}
+--- introspection, admin credentials ---
 status=200  {"active":true,"scope":"profile","client_id":"…","token_type":"Bearer","exp":…,"iss":"…"}
 --- revocation, no credentials ---
 {"error":"invalid_client","error_description":"[A116302] The revocation request does not contain
@@ -439,12 +446,34 @@ status=200
 {"active":false}
 ```
 
-**Two sibling endpoints, opposite postures, and the metadata described neither.**
+> **This exercise used to find an unauthenticated introspection endpoint. It was fixed on 2026-08-12** —
+> RFC 7662 §2.1 — and the transcript above is the post-fix output. The first block is the finding it used to
+> reproduce, preserved because the *reasoning* is the exercise. Keep reading: the metadata question it raised
+> has not gone away, it has changed shape.
 
-- **Revocation requires client authentication.** Correct, and the empty metadata array is simply wrong.
-- **Introspection requires nothing.** RFC 7662 §2.1: *"To prevent token scanning attacks, the endpoint MUST
-  also require some form of authorization to access this endpoint."* Here the empty array is accurate — and
-  what it accurately describes is a defect.
+**Two sibling endpoints, and the metadata still describes neither.**
+
+- **Revocation requires client authentication.** Correct, and the empty
+  `revocation_endpoint_auth_methods_supported` array is simply wrong.
+- **Introspection now requires authentication too** — RFC 7662 §2.1: *"To prevent token scanning attacks, the
+  endpoint MUST also require some form of authorization to access this endpoint."* Until 2026-08-12 it
+  required nothing, and the `401` above is the fix.
+
+**But look carefully at *which* credential it takes, because this is the subtle part.** The introspection
+endpoint accepts this deployment's **admin** credentials — `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` — not a
+*client's* credentials. So `introspection_endpoint_auth_methods_supported: []` is *still* accurate in the
+narrow sense: no **client** authentication method is supported there. The endpoint is protected; it is just
+not protected by anything OAuth metadata has vocabulary for.
+
+Two lessons, and the second is the one worth carrying:
+
+1. **§2.1 says "some form of authorization", not "client authentication".** It offers client authentication
+   and a separate access token as *examples*. An admin credential satisfies the MUST.
+2. **"Metadata is accurate" and "the deployment is well-configured" are independent claims.** You started this
+   exercise expecting the empty array to be a documentation bug. It was a documentation bug *and* a security
+   bug, and fixing the security bug left the documentation bug standing — for a new reason. When you audit
+   metadata, always ask what the empty value would look like in each case: absent capability, undocumented
+   capability, or a capability the vocabulary cannot express.
 
 That is three findings from one exercise, and only one of them is about a protocol behaviour:
 

@@ -34,7 +34,7 @@
 | 2 | Token contains `sub` or `sid` (or both) | OP | §2.4 | ⊘ Authlete's; the AS supplies `subject` / `sessionId` (`services/backchannel-logout.service.ts`) |
 | 3 | A `nonce` claim **MUST NOT** be present | OP | §2.4 | ⊘ Authlete's |
 | 4 | POST to `backchannel_logout_uri`, `application/x-www-form-urlencoded`, `logout_token` parameter | OP | §2.5 | ✅ **correct** — `services/backchannel-logout.service.ts:89-96` |
-| 5 | Validate the signature; reject `alg: none` | RP | §2.6 (2,3) | ✅ `controllers/logout.controller.ts:57,63` — `algorithms: ["RS256","ES256"]` excludes `none` |
+| 5 | Validate the signature; reject `alg: none` | RP | §2.6 (2,3) | ✅ `controllers/logout.controller.ts:76,82` — `algorithms: ["RS256","ES256"]` excludes `none` |
 | 6 | Validate `iss` | RP | §2.6 (4) | ❌ **never checked** — F-1 |
 | 7 | Validate `aud` | RP | §2.6 (4) | ❌ **never checked** — F-1 |
 | 8 | Validate `iat` | RP | §2.6 (4) | ❌ not checked (`exp` **is**, by `jwt.verify`'s default) — F-1 |
@@ -53,12 +53,12 @@
 | Minting the logout token | Authlete, via hand-rolled `fetch()` | `services/backchannel-logout.service.ts:28,34` — justified: the SDK has no wrapper (`01-spec-matrix.md` §5.2) |
 | Enumerating clients to deliver to | **This server** | `:122-171` — a second `fetch()` that **duplicates `authleteApi.client.list`** and is *not* justified (B1/Phase 1 finding) |
 | Delivering the token | **This server** | `:89-96` — conformant |
-| Receiving and validating a token | **This server** | `controllers/logout.controller.ts:21-89` — F-1 |
+| Receiving and validating a token | **This server** | `controllers/logout.controller.ts:40-108` — F-1 |
 | Terminating the user's session on receipt | **This server** | `:76-81` — wrong session, F-5 |
 
 ## Finding F-1 — four of §2.6's validation steps are missing (S2)
 
-`controllers/logout.controller.ts:30-71` verifies the signature against `JWKS_URI` and checks the `events` claim.
+`controllers/logout.controller.ts:49-90` verifies the signature against `JWKS_URI` and checks the `events` claim.
 It does not check `iss`, `aud`, `iat`, `sub`-or-`sid`, or the absence of `nonce`:
 
 ```ts
@@ -108,7 +108,7 @@ conclusion about the code.
 `backchannelLogoutUri`, returns per-client success/failure, and handles the no-URI case explicitly
 (*"Client has no backchannelLogoutUri configured"*). `issueAndDeliverToAll` paginates every client at 100/page.
 
-Probe 3: **no client has `backChannelLogoutUri`.** So `deliver-all` iterates all three clients and returns three
+Probe 3: **no client has `backchannelLogoutUri`.** So `deliver-all` iterates all three clients and returns three
 "no URI configured" results. The best-implemented part of this specification has never delivered a token.
 
 **Sequencing note that matters.** Registering a `backchannel_logout_uri` is the obvious way to make this
@@ -118,7 +118,7 @@ demonstrable — and it is what turns `OIDC-RP-INITIATED-LOGOUT-1.0.md` F-3 (an 
 ## Finding F-5 — the receiver destroys the wrong session (S2)
 
 ```ts
-// controllers/logout.controller.ts:74-81
+// controllers/logout.controller.ts:93-100
 const subject = payload.sub;
 if (subject) {
   if (req.session) {
@@ -141,6 +141,14 @@ and destroy those; with the in-memory store that means an index, and with Redis 
 incoming logout tokens from other OPs — properly destroys `req.session`."* The word "properly" is doing the
 damage: destroying `req.session` is not merely insufficient, it is the wrong object.
 
+> **Field-name correction, 2026-08-12.** This entry cited **`backChannelLogoutUri`** (capital `C`) in 2
+> places; Authlete's field is **`backchannelLogoutUri`**, confirmed against `docs/openapi-spec.json` 3.0.16,
+> which defines exactly two client-level logout properties: `backchannelLogoutUri` and
+> `backchannelLogoutSessionRequired`. All occurrences are corrected above. **The findings are unaffected** —
+> the correctly-spelled key is also unset on all three clients — but the probe that established "absent"
+> was reading a key that cannot exist, so it could not have returned anything else. Found while establishing
+> `OIDC-RP-INITIATED-LOGOUT-1.0.md` F-4.
+
 ## Documentation delta
 
 | Doc claim | Location | Reality | Verdict |
@@ -157,9 +165,9 @@ damage: destroying `req.session` is not merely insufficient, it is the wrong obj
 ## Sources consulted
 
 - OpenID Connect Back-Channel Logout 1.0 incorporating errata set 1 §§2.4, 2.5, 2.6, 2.8, and the OP/client metadata definitions — `https://openid.net/specs/openid-connect-backchannel-1_0.html`, fetched this session. §2.4's `nonce` prohibition and §2.6's eleven validation steps quoted.
-- Live probe 3 (2026-08-10): `backchannel_logout_supported`, `backchannel_logout_session_supported`, per-client `backChannelLogoutUri` — `SERVICE-CONFIG-PROBE.md` §8, §10
+- Live probe 3 (2026-08-10): `backchannel_logout_supported`, `backchannel_logout_session_supported`, per-client `backchannelLogoutUri` — `SERVICE-CONFIG-PROBE.md` §8, §10
 - Repo-sourced live evidence: `PROGRESS.md:548-553`
-- Code: `controllers/logout.controller.ts:21-89`, `services/backchannel-logout.service.ts:28,34,64-111,122-171`, `utils/jwksClient.ts:30`, `config/authlete.config.ts:16`
+- Code: `controllers/logout.controller.ts:40-108`, `services/backchannel-logout.service.ts:28,34,64-111,122-171`, `utils/jwksClient.ts:30`, `config/authlete.config.ts:16`
 - Phase 1: `01-spec-matrix.md` §5.2 (the SDK-gap confirmation)
 
 ## Proposed work items

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import type { NextFunction, Request, Response } from "express"
 
 const mocks = vi.hoisted(() => ({
@@ -15,10 +15,15 @@ vi.mock("../../../src/utils/validate", () => ({
 
 import { introspectionController } from "../../../src/controllers/introspection.controller"
 
+// T1-1 / 7662-W1: both introspection endpoints now require this deployment's admin Basic auth before any
+// Authlete call. These cases exercise the RFC 9470 step-up mapping, so they authenticate and move on; the
+// gate itself is covered by tests/unit/routes/introspection.routes.test.ts.
+const ADMIN_HEADER = `Basic ${Buffer.from("mgmt-id:mgmt-secret").toString("base64")}`
+
 function mockReq(overrides: Partial<Request> = {}): Request {
   return {
     body: { token: "test-token" },
-    headers: {},
+    headers: { authorization: ADMIN_HEADER },
     logger: vi.fn(),
     ...overrides,
   } as unknown as Request
@@ -38,8 +43,31 @@ function mockNext(): NextFunction {
 }
 
 describe("IntrospectionController — RFC 9470 step-up", () => {
+  const ORIGINAL_ID = process.env.MGMT_CLIENT_ID
+  const ORIGINAL_SECRET = process.env.MGMT_CLIENT_SECRET
+
   beforeEach(() => {
     vi.clearAllMocks()
+    process.env.MGMT_CLIENT_ID = "mgmt-id"
+    process.env.MGMT_CLIENT_SECRET = "mgmt-secret"
+  })
+
+  afterEach(() => {
+    process.env.MGMT_CLIENT_ID = ORIGINAL_ID
+    process.env.MGMT_CLIENT_SECRET = ORIGINAL_SECRET
+  })
+
+  // The gate must run before anything else, including request validation: an unauthenticated caller must not
+  // be able to tell "malformed request" from "no such token".
+  it("rejects an unauthenticated call without reaching Authlete", async () => {
+    const req = mockReq({ headers: {} } as Partial<Request>)
+    const res = mockRes()
+
+    await introspectionController.handleIntrospection(req, res, mockNext())
+
+    expect(res.status).toHaveBeenCalledWith(401)
+    expect(res.setHeader).toHaveBeenCalledWith("WWW-Authenticate", expect.stringContaining("Basic"))
+    expect(mocks.mockProcess).not.toHaveBeenCalled()
   })
 
   it("returns 200 on OK with full result", async () => {

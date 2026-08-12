@@ -4,7 +4,7 @@
 the state so a new session resumes without re-reading the repo, re-fetching specifications, or re-probing
 Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` §5 second.
 
-- **Last updated:** 2026-08-11 (Gate 4 approved; **Phase 5 started — T0-1 shipped**, see `04-remediation-plan.md` §1.2)
+- **Last updated:** 2026-08-12 (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1 and T1-7 (+T1-8) shipped**, see `04-remediation-plan.md` §1.2). **Three of the eight S1s remain open, none directly exploitable, and the latent one is retired.** Next in Tier 1: the ⚙️ configuration block **T1-2…T1-6**, which needs Authlete service writes and is worth batching
 - **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `audit/phase3-and-tier0-fixes`
 - **Skill:** `.claude/skills/rfc-audit/SKILL.md` — invoke with `/rfc-audit` or follow it directly
 - **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **166 markdown files, 97 source refs, clean**
@@ -20,7 +20,7 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 | 2 — per-spec deep audit | `audit/02-findings/` — **55 files** | ✅ **complete**, all batches B1–B7 approved at Gate 2 |
 | 3 — curriculum audit | `audit/03-curriculum-audit.md` | ✅ **complete** — 3a, 3b, 3c, 3d all written |
 | 4 — synthesis + remediation plan | `audit/04-remediation-plan.md`, `audit/05-decision-records.md` | ✅ **complete** — awaiting Gate 4. **§8 below is superseded by those two files** |
-| 5 — execution | code + docs | 🔨 **in progress** — Gate 4 approved. **T0-1, T0-2, T0-5, T0-6 ✅ shipped 2026-08-11.** RFC 9700 S1 closed; `id_token_hint` verified so **BCL-W5 is unblocked**. Next: **T0-3** (logout confirmation), then **T0-4** (needs `postLogoutRedirectUris` registered in the console first) |
+| 5 — execution | code + docs | 🔨 **in progress** — Gate 4 approved. **Tier 0 complete: T0-1, T0-2, T0-5, T0-6 (2026-08-11), T0-3, T0-4 (2026-08-12). Tier 1: T1-1, T1-7 (+T1-8) (2026-08-12).** RFC 9700 S1 closed; `id_token_hint` verified so **BCL-W5 is unblocked**; §2's confirmation MUST met; §3's per-client matching shipped as far as the vendor permits. The logout entry is **S1 → S4** and all five RPL items are closed. **T1-1 closed the last easily-exploitable open S1**; **T1-7 retired the latent one.** Three S1s remain, all non-exploitable: `FAPI-2.0-…` (false attestation), `RFC7636-pkce.md` (PKCE not required), `RFC9700-…` (implicit + password grants), |
 
 > **Phase 4 output, and what it settled.** Read [`04-remediation-plan.md`](04-remediation-plan.md) first — its
 > §1.1 supersedes §6 below, and its §2 supersedes §8.3.
@@ -70,6 +70,14 @@ five Module 09a `UNVERIFIED` settings re-checked as **still unset on 2026-08-10*
 
 **Only one fact remains unprobed:** whether the discovery document advertises `challenge_endpoint` or
 `client_attestation_pop_methods_supported` (work item **ATT-W5** — one call printing all 62 members).
+*(Closed in Phase 4 §2.2 — both ABSENT.)*
+
+**A fifth pass ran 2026-08-12, and it is the only one that wrote.** T0-4 read all three clients
+(`client/get/list`), attempted to register `postLogoutRedirectUris`, and re-read to verify. **Authlete accepted
+the write with `200` and silently discarded the field** — it does not exist in the 3.0 `Client` schema
+(`OIDC-RP-INITIATED-LOGOUT-1.0.md` **F-4**). Net effect on the service: **nothing but `modifiedAt`**, confirmed
+by a before/after key-by-key diff. Two corrections came out of it: `postLogoutRedirectUris` was never a client
+field, and the field this audit spelled `backChannelLogoutUri` is actually **`backchannelLogoutUri`**.
 
 ### 2.2 The `service.get()` 200-status mechanism — verified empirically
 
@@ -118,6 +126,8 @@ nothing from it). **Still unverified:** RFC 8446 and RFC 9110 dates cited at `mo
 | Deferred item 4: *"Module 09b's **two** `UNVERIFIED` markers and the VCI **tutorials**"* | **One** marker; there is **no** separate VCI tutorial | 3c, deferred-items table (**CUR-3c-W13**) |
 | *"this server supports MCP flows out of the box"* attributed to `docs/MCP-OAUTH-TUTORIAL.md` **and `README.md`** | `MCP-OAUTH-TUTORIAL.md:3` **only** — `README.md` mentions neither MCP nor CIMD. So **MCP-W3's `README.md` half is a no-op** and T0-5 closed the claim completely | `MCP-OAUTH.md` doc-delta row, corrected 2026-08-11 during T0-5 |
 | `04-remediation-plan.md` §7.2 — *"Tier 0 exits when **five** actions shipped"* | **Six** (T0-1…T0-6). The criterion predated T0-6 being split out | fixed 2026-08-11 during T0-6 |
+| `postLogoutRedirectUris` recorded as client metadata that is *unset* on all three clients | **It is not a field Authlete 3.0 has.** 0 of the `Client` schema's 108 properties; a write returns 200 and is discarded | `SERVICE-CONFIG-PROBE.md` §10 row withdrawn 2026-08-12; `OIDC-RP-INITIATED-LOGOUT-1.0.md` F-4 |
+| `backChannelLogoutUri` (capital `C`) cited as absent on all three clients | Authlete's field is **`backchannelLogoutUri`**. The conclusion survives — the correct key is also unset — but the probe was reading a key that cannot exist | `SERVICE-CONFIG-PROBE.md` §10, `OIDC-BACKCHANNEL-LOGOUT-1.0.md` ×2, fixed 2026-08-12 |
 | `03-curriculum-audit.md` citing `PROGRESS.md:1264` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:1327-1328` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
 
 **Calibration worth carrying into Phase 4:** five of Phase 3's findings correct the audit rather than the
@@ -240,13 +250,13 @@ Four files decide security outcomes and are not on it: `routes/device.routes.ts`
 | Entry | Verdict | Exploitable now? |
 |---|---|---|
 | `RFC8628-device-authorization-grant.md` | `PARTIAL` | ~~YES~~ → **fixed 2026-08-10.** `POST /api/device/complete` is now gated by `middleware/development-only.ts` (flat 404 outside development) plus `deviceCodeLimiter`, at `routes/device.routes.ts:27`; asserted by `tests/unit/routes/device.routes.test.ts`. **Still unauthenticated *within* development.** The wire-format and rate-limit findings in the entry are unaffected |
-| `OIDC-RP-INITIATED-LOGOUT-1.0.md` | `PARTIAL` | ~~YES~~ → **fixed 2026-08-10.** `isAllowedPostLogoutRedirectUri` (`services/logout.service.ts:33-63`) now parses with `new URL()` and compares **origins exactly**; both verified payloads are refused. **The fix is not RPL-W1** — RP-Initiated Logout §3 wants exact matching against per-client registered `post_logout_redirect_uris`, no client registers any, so the deployment kept an env-driven allowlist and recorded the departure in `AGENTS.md`. **RPL-W2 (verify `id_token_hint`), RPL-W3 (the §2 confirmation MUST) and RPL-W4 are untouched** |
+| `OIDC-RP-INITIATED-LOGOUT-1.0.md` | `PARTIAL` | ~~YES~~ → **fixed 2026-08-10.** `isAllowedPostLogoutRedirectUri` (`services/logout.service.ts:131-138`) refused both verified payloads — first by comparing **origins exactly** (2026-08-10), and since 2026-08-12 by matching the identified client's registered set with `===`, no parsing at all. **The fix is not RPL-W1** — RP-Initiated Logout §3 wants exact matching against per-client registered `post_logout_redirect_uris`, no client registers any, so the deployment kept an env-driven allowlist and recorded the departure in `AGENTS.md`. **RPL-W2 ✅ (2026-08-11, T0-2) and RPL-W3 ✅ (2026-08-12, T0-3) have since landed; RPL-W1 and RPL-W4 remain, as T0-4.** Severity S1 → S2 → **S3** |
 | `ERRORHANDLER-STATUS-INVERSION.md` | `PARTIAL` | No — silent failure, not a breach. Systemic across 57 call sites |
 | `FAPI-2.0-SECURITY-PROFILE.md` | `MISCONFIGURED` | No — false attestation (five literals opposite to live values) |
 | `RFC7636-pkce.md` | `MISCONFIGURED` | No — PKCE not required and falsely reported as required |
-| `RFC7662-token-introspection.md` | `PARTIAL` | No — unauthenticated introspection (RFC 7662 §2.1 MUST) |
+| `RFC7662-token-introspection.md` | `PARTIAL` | ~~No — unauthenticated introspection (RFC 7662 §2.1 MUST)~~ → **fixed 2026-08-12 (T1-1).** Both endpoints require admin Basic auth and carry `generalLimiter`; the gate runs **before** any Authlete call. **S1 → S3.** The residue is architectural: it is not *client* authentication, and whether it could be depends on an unestablished Authlete behaviour (**7662-W6**) |
 | `RFC9700-security-bcp.md` | `PARTIAL` | No — implicit + password grants enabled, no PKCE requirement |
-| `RFC9470-step-up-authentication.md` | `PARTIAL` (latent S1) | Not yet — fabricated `acr`/`auth_time` activates if the `prompt=none` fix ships alone (**must pair OIDC-W1 with 9470-W3**) |
+| `RFC9470-step-up-authentication.md` | `PARTIAL` | ~~Not yet — fabricated `acr`/`auth_time`~~ → **retired 2026-08-12 (T1-7).** OIDC-W1 and 9470-W3 shipped as one change, so the activation route was built correctly rather than built at all. The fabrication block is deleted; `utils/step-up.ts` answers absence as "no". **S2+latent-S1 → S3** |
 
 **Recommendation on record:** the first two should be fixed ahead of Gate 4 rather than waiting for the plan.
 Both need plan mode per `CLAUDE.md` (Security-critical surfaces — and note both files are among the four
@@ -302,8 +312,9 @@ Phase 4 is **synthesis and a remediation plan**, written to `audit/04-remediatio
 ### 8.4 Recommended sequencing for the plan itself
 
 **Tier 0 — ship before Gate 4** (no curriculum dependency, false reporting or exposure):
-~~**EH-W1**~~ ✅ · ~~**FAPI2-W1**~~ ✅ — **both shipped 2026-08-11**, see below · **RPL-W2/W3/W4** (the
-untouched half of the logout S1) · **CUR-3c-W2** (the MCP sentence). The last two are what remains of Tier 0.
+~~**EH-W1**~~ ✅ · ~~**FAPI2-W1**~~ ✅ · ~~**RPL-W2**~~ ✅ · ~~**RPL-W3**~~ ✅ · ~~**RPL-W1/W4/W5**~~ ✅ ·
+~~**CUR-3c-W2**~~ ✅ — **Tier 0 is complete as of 2026-08-12.** RPL-W4 did not land as written: there is no
+Authlete field to register into, so the registry is the deployment's own (F-4).
 
 > **Shipped 2026-08-11 — do not re-plan these.** `middleware/errorHandler.ts` now clamps an error-supplied
 > status to 400–599 (`errorStatusFrom()`), so no SDK validation failure is served as 2xx across any of the

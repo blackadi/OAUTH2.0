@@ -1,0 +1,45 @@
+<%#
+  The confirmation page required by OpenID Connect RP-Initiated Logout 1.0 §2. `GET /api/logout` renders this
+  and does nothing else; the session is destroyed only when this form is submitted. Every RP-supplied
+  parameter is replayed as a hidden field so the POST carries exactly what the GET was given.
+
+  `csrfToken` comes from `res.locals`, set by `middleware/csrf.ts`.
+-%>
+<%- include('partials/head', { title: 'Confirm Sign Out' }) %>
+<body>
+  <main>
+  <div class="card logout-card">
+    <h1>Sign out?</h1>
+    <% if (subject) { %>
+    <p class="lead">You are signed in as <strong><%= subject %></strong>.</p>
+    <% } else { %>
+    <p class="lead">This will end your session with this authorization server.</p>
+    <% } %>
+
+    <% if (client_id) { %>
+    <p class="base"><strong><%= client_id %></strong> asked to sign you out.</p>
+    <% } %>
+
+    <% if (redirectShown) { %>
+    <p class="base">You will be returned to <strong><%= redirectShown %></strong>.</p>
+    <% } %>
+
+    <form method="post" action="/api/logout">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <% if (id_token_hint) { %><input type="hidden" name="id_token_hint" value="<%= id_token_hint %>" /><% } %>
+      <% if (post_logout_redirect_uri) { %><input type="hidden" name="post_logout_redirect_uri" value="<%= post_logout_redirect_uri %>" /><% } %>
+      <% if (state) { %><input type="hidden" name="state" value="<%= state %>" /><% } %>
+      <% if (client_id) { %><input type="hidden" name="client_id" value="<%= client_id %>" /><% } %>
+      <% if (backchannel) { %><input type="hidden" name="backchannel" value="<%= backchannel %>" /><% } %>
+      <div class="buttons device-actions">
+        <button type="submit" class="approve">Sign out</button>
+        <a href="/" class="deny">Stay signed in</a>
+      </div>
+    </form>
+
+    <div class="foot">Nothing has been signed out yet.</div>
+  </div>
+  </main>
+  <%- include('partials/footer') %>
+</body>
+</html>

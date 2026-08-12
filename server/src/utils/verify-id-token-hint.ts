@@ -73,6 +73,18 @@ export interface VerifyIdTokenHintResult {
   reason?: string;
   /** True when the hint verified but is past its `exp`. Accepted deliberately — see below. */
   expired?: boolean;
+  /**
+   * The verified `aud`, when it names exactly one client.
+   *
+   * RP-Initiated Logout §2 makes `client_id` OPTIONAL, so a conformant request may identify its client only
+   * through the hint — and the OP needs that identity to know whose registered `post_logout_redirect_uris`
+   * to match against (§3). This is only ever set on a hint whose signature and `iss` verified, so it is an
+   * assertion by the OP that the token was issued to this client, not a caller-supplied claim.
+   *
+   * An `aud` array with more than one entry yields `undefined`: which client is being named is ambiguous,
+   * and the redirect decision fails closed rather than picking one.
+   */
+  audience?: string;
 }
 
 export function verifyIdTokenHint(
@@ -154,7 +166,19 @@ export function verifyIdTokenHint(
       const exp = typeof payload.exp === "number" ? payload.exp : undefined;
       const expired = exp !== undefined && exp * 1000 < Date.now();
 
-      return { subject: sub, expired };
+      // `aud` is a string or an array of them (RFC 7519 §4.1.3). A single-entry array is unambiguous and is
+      // treated as the string form; anything longer names several clients and is left undefined.
+      // Named `verifiedAudience`, not `audience`: the latter is the *expected* value destructured from
+      // `options` above and used by `jwt.verify`, and shadowing it here is a temporal-dead-zone error.
+      const rawAud = payload.aud;
+      const verifiedAudience =
+        typeof rawAud === "string"
+          ? rawAud
+          : Array.isArray(rawAud) && rawAud.length === 1 && typeof rawAud[0] === "string"
+            ? rawAud[0]
+            : undefined;
+
+      return { subject: sub, expired, audience: verifiedAudience };
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }

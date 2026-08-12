@@ -341,9 +341,9 @@ Every one of the following is **absent on all three clients**:
 |---|---|
 | `bcDeliveryMode` | CIBA Core §4 makes it **REQUIRED** client metadata. All three clients hold the `CIBA` grant type, so all three are non-conformantly registered and no CIBA flow can complete. `CIBA-core-1.0.md` F-4 |
 | `bcNotificationEndpoint`, `bcRequestSignAlg` | ping/push modes unavailable |
-| `backChannelLogoutUri` | **the repo's `deliver-all` has zero recipients** — carried to the logout batch |
+| `backchannelLogoutUri` | **the repo's `deliver-all` has zero recipients** — carried to the logout batch. **⚠️ Casing corrected 2026-08-12:** this row and `OIDC-BACKCHANNEL-LOGOUT-1.0.md` said `backChannelLogoutUri` (capital `C`). Authlete's field is `backchannelLogoutUri`. The **conclusion holds** — the correctly-spelled key is also unset on all three — but the probe was testing a key that cannot exist, so it would have read "absent" whatever the truth was. Same class as the audit's other self-corrections; see `RESUME.md` §2.5 |
 | `frontChannelLogoutUri` | front-channel logout unavailable |
-| `postLogoutRedirectUris` | RP-Initiated Logout has no registered redirect targets, which is *why* `logout.service.ts` validates against `ALLOWED_ORIGINS` instead — carried to the logout batch, where the open-redirect finding lives |
+| ~~`postLogoutRedirectUris`~~ | **⚠️ Withdrawn 2026-08-12 — this row tested a field Authlete does not define.** It was never client metadata that happened to be unset: the `Client` schema has no post-logout property at all (0 of 108), and a write is accepted with `200` and discarded. The inference drawn from it — *"which is why `logout.service.ts` validates against `ALLOWED_ORIGINS` instead"* — was accidentally right for the wrong reason. See `OIDC-RP-INITIATED-LOGOUT-1.0.md` **F-4** |
 | `authorizationDetailsTypes` | RAR unavailable per client as well as per service. `RFC9396-…` F-1 |
 | `defaultAcrs` | no default ACR; with `supportedAcrs` absent too, `acr` is asserted by this server alone |
 

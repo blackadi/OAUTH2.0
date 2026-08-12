@@ -377,7 +377,7 @@ curl -s -u "$CLIENT_ID:$CLIENT_SECRET" -d "grant_type=refresh_token&refresh_toke
   | python3 -c "import sys,json;d=json.load(sys.stdin);print('  ',d.get('error','ISSUED A TOKEN'),'|',d.get('error_description','')[:80])"
 
 echo "-- access token from the revoked grant (should be revoked) --"
-curl -s -X POST "$API/introspection/standard" -d "token=$AT" | python3 -c "
+curl -s -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -X POST "$API/introspection/standard" -d "token=$AT" | python3 -c "
 import sys,json,time;d=json.load(sys.stdin)
 print('   active:',d.get('active'),'| scope:',d.get('scope'))
 if d.get('exp'): print('   still valid for %.1f hours' % ((d['exp']-time.time())/3600))"
