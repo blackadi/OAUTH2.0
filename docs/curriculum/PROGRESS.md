@@ -100,6 +100,154 @@ against it before calling the capstone complete._
 - [x] **2026-08-12 — T1-7: `prompt=none` answers properly, and the latent step-up S1 is retired** (below)
 - [x] **2026-08-12 — T1-2 + T1-3: one RSA key and one `private_key_jwt` client; three specs unblocked, no code changed** (below)
 - [x] **2026-08-12 — T1-4 + T1-6: four Module 09a markers retired; the 24-hour lifetime kept on purpose** (below)
+- [x] **2026-08-12 — T1-5: `service.get()` works after six days down; T1-13 has no knob to turn** (below)
+- [x] **2026-08-12 — B1-W6: the refresh flow reissues ID tokens again, via the API that exists for it** (below)
+
+### 2026-08-12 — B1-W6: the `ID_TOKEN_REISSUABLE` branch was calling the wrong API
+
+**Why this matters to a future session:** **`idTokenReissuable` is now `true` and it stays true.** A refresh
+request carrying `openid` returns **200 with a reissued `id_token`**, where until today it returned **400
+carrying a valid token body**. `token.controller.ts` and `token.operations.service.ts` are both on the
+Security-critical surfaces list, so this went through plan mode.
+
+**The finding is about the work item, not just the code.** B1-W6 was written from the symptom — *"it requires a
+`ticket` Authlete does not send"* — and its acceptance criteria followed: *"the branch issues from the fields
+Authlete actually sends."* That reads as *call `/auth/token/issue` with better arguments*, and **no arrangement
+of arguments to that API would ever have worked**, because it is the ticket-consuming API and this action has no
+ticket. There is a dedicated one, and the vendored 3.0.16 spec is explicit: `POST /idtoken/reissue`, *"expected
+to be called only when the value of the `action` parameter in a response from the `/auth/token` API is
+ID_TOKEN_REISSUABLE"*. **The repo already wrapped it** — `TokenManagementService.reissueIdToken()`, written for
+the admin route — so the fix reached for an existing method and widened its signature rather than adding one.
+
+Set this beside probe §15's lesson. *Handled*, *exercisable* and *correct* were three different claims; so were
+***the fields are wrong*** and ***the API is wrong***. A symptom-derived work item can name a remedy that
+cannot work, and the tell was available all along: the acceptance criteria never said which endpoint.
+
+**What `/auth/token` actually sends on this action**, read directly from Authlete rather than through the
+server, because that is the only way to be sure what the branch has to work with:
+
+| Field | Value |
+|---|---|
+| `ticket` | **ABSENT** — the whole defect |
+| `subject` | `"admin"` |
+| `accessToken`, `refreshToken` | present |
+| `jwtAccessToken`, `idToken` | ABSENT |
+| `responseContent` | `access_token`, `token_type`, `expires_in`, `scope`, `refresh_token` — **no `id_token`** |
+
+**Three decisions worth knowing, in descending order of how easily they are undone.**
+
+**1. `idTokenAudType` had to be sent, and it is a trap.** The reissue *request* has its own, and the spec says
+it *"takes precedence over the `idTokenAudType` property of Service"* and **defaults to `"array"` on
+omission**. T1-4 set the service to `"string"` deliberately (Mistake #7 / FAPI WG Nov 2024). Omitting the
+parameter would have produced array-`aud` ID tokens **on exactly one code path** while every other ID token
+here stayed a string — a configuration decision silently reversed for one call site, and nothing would have
+failed. It is sent from a named constant that says it must move with the service flag. Verified live: string.
+
+**2. A failed reissue returns 200 with the tokens Authlete already issued**, logged at `error`. The access and
+refresh tokens exist by the time this action arrives, and no specification requires an `id_token` on a refresh,
+so enabling a flag must not break a refreshing client on a server-side fault. This is safe *because*
+`responseContent` carries no `id_token` — the degrade path cannot return a stale one, which is the fact that
+had to be checked before choosing it. Deliberately different from `token.management.controller.ts`'s 400/500
+mapping, where the caller asked to reissue and has no tokens riding on the answer.
+
+**3. Every field is server-derived.** `sub` comes from `result.subject`, the tokens from the Authlete response,
+and **nothing from `req.body`** — a client able to set `sub` could name any subject in an ID token this OP
+signs, and `claims`/`idtHeaderParams` would let it choose the payload and the JWS header. Locked by a test that
+puts an attacker's `sub`, tokens and claims in the body and asserts none of them reach the call.
+
+**Verified live, and one claim deliberately left open.** Authorization-code flow with `openid offline_access`,
+then a refresh: 200, `id_token` present, `aud` a **string**, `sub`/`iss`/`acr` unchanged, `iat` and `exp`
+advancing — checked against a deliberate **4-second gap**, because a same-second refresh proves nothing about
+freshness — and `auth_time` correctly holding the **original** authentication time. The reissued token **drops
+`nonce` and `s_hash`**. Whether dropping `nonce` conforms to **OIDC Core §12.2 is `UNVERIFIED`**: that section
+was not fetched for this change, and the behaviour is Authlete's either way. Named next action rather than a
+guess — and note that ROPC is a dead end for testing this, because Authlete strips `openid` from the password
+grant, so the action is only reachable through a real code flow.
+
+**Verification.** `typecheck` clean · `lint` 0 errors / 4 pre-existing warnings · **644 tests / 58 files**
+(was 635) — six controller cases including the body-injection regression, three service cases covering both
+argument shapes. `check-docs.mjs` clean. Consumers updated in the same commit: `AGENTS.md` (the action-coverage
+table row was wrong, plus a new note), `docs/DATA-FLOWS.md`'s flow diagram (it named `/auth/token/issue` with a
+ticket), `B1-authlete-boundary.md` (**F-9**, new), `SERVICE-CONFIG-PROBE.md` §2/§3.3/§20, `OIDC-CORE-1.0.md`
+(**OIDC-W5 closed**), the plan's T1-4 row and `RESUME.md`.
+
+### 2026-08-12 — T1-5: the enum gap is closed, and T1-13 turned out to have no knob
+
+**Why this matters to a future session:** **`authleteApi.service.get()` works.** `GET /api/fapi/config` and
+`GET /api/fapi/status` return **200** with live values for the first time since 2026-08-06 — so the two
+`fapi.controller.ts` call sites, Module 10 Exercise 4, and every document describing them have all changed
+together. And **T1-13 is closed as unachievable rather than shipped**: `none` cannot be withdrawn from the
+UserInfo or introspection signing-algorithm lists, because no Authlete 3.0 service field controls either one.
+
+**The ruling that gated this.** DR-07 asked whether to drop `SPIFFE_JWT`, whose only cost was retiring a
+working exercise. It was **approved with the curriculum rebuilt in the same commit**, and approved *after* a
+read-only proof rather than on the mechanism — which is the part worth copying. The proof: one raw-HTTP
+`service/get`, then filter the member out **in memory** and run the SDK's own
+`Service$inboundSchema.safeParse` in-process. No write, no curriculum edit, and a definite answer.
+
+**Four things the proof established that six documents had wrong or missing.**
+
+| | Recorded belief | Measured |
+|---|---|---|
+| how many fields | "the whole **129**-field response" | **132** — the Tier 1 writes added three, and nine documents still said 129 |
+| how many Zod issues | never captured; only `message: "Response validation failed"` | **exactly one**, at `supportedTokenAuthMethods.8`. Zod aggregates issues, so *one* is itself proof that nothing else in 132 fields fails |
+| which fields carry the gap | `supportedTokenAuthMethods` | **three** — `supportedRevocationAuthMethods` and `supportedIntrospectionAuthMethods` share the enum. Both absent here, so the drop was one field; set either and it breaks again |
+| is anything else waiting to break | unknown | **no.** Of 16 enum-typed fields reachable from `Service`, the other 15 match Authlete 3.0.16 member-for-member, and no field is Authlete-nullable while the SDK refuses null |
+
+**The write, and the surprise in it.** `supportedTokenAuthMethods` went from nine members to five —
+`SPIFFE_JWT` plus the three the ruling withdrew (`TLS_CLIENT_AUTH`, `SELF_SIGNED_TLS_CLIENT_AUTH`,
+`ATTEST_JWT_CLIENT_AUTH`). Written by read → patch → write-all → read-back → key-by-key diff, as every write
+in this audit is: **132 → 132 fields, two keys moved** (`supportedTokenAuthMethods`, `modifiedAt`). The
+surprise was downstream: discovery went **64 → 62 members**, because withdrawing attestation also removed
+`client_attestation_signing_alg_values_supported` and its `_pop_` sibling. **One withdrawal removed three
+advertisements** — those two members exist only to describe that method. Note the 62 is not the audit's
+earlier 62: that one lacked `acr_values_supported` and `authorization_details_types_supported`, which T1-6
+added and which are still there.
+
+**The asymmetry worth carrying into any SDK work.** The schema models **185** of Authlete's **193** service
+properties and *silently strips* the 8 it does not know (`z.object` default, no `.strict()`), while one
+unknown **value** in a modelled field is fatal. Tolerant of new fields, brittle about new values — so any
+client-auth method Authlete ships is a breaking change for every TypeScript SDK caller whose service enables
+it. Authlete's own OpenAPI document declares `SPIFFE_JWT`: **the vendor's specification is ahead of the
+vendor's SDK**, so nothing was misconfigured. The authorization server was asked to stop advertising a real
+capability so a client library could read its configuration, and that cost belongs in the report.
+
+**CIMD-W3's premise was false, and that is a one-line fix.** `fapi.controller.ts` read
+`clientIdMetadataDocumentSupported` through `(service as Record<string, unknown>)`, recorded as an SDK gap.
+SDK 1.0.0 models the field in **both** the `Service` type and `Service$inboundSchema`. Typed access now, with
+a comment saying so.
+
+**T1-13: `none` is fixed vendor output.** The work item said *"drop `none` from
+`userinfo_signing_alg_values_supported` and `introspection_signing_alg_values_supported` — console change"*.
+There is no such console setting: **no Authlete 3.0 `Service` property lists either set of algorithms.** They
+are derived from the service JWK Set, and `none` is unconditional — Authlete's own `service/configuration`
+example in `docs/openapi-spec.json` carries it too. Established by *writing* the only candidates
+(`userInfoSignatureKeyId`, `introspectionSignatureKeyId` → `rsa-1`) rather than by reading the schema: both
+lists changed, losing `ES256` because pinning the RSA key drops the EC key as a candidate, and **`none`
+survived both**. Reverted; only `modifiedAt` moved. This is **RPL-W4's shape a second time** — a work item
+naming a knob the vendor does not have — and the sharper reading is that the advertisement is *accurate*:
+`Client.userInfoSignAlg` accepts `NONE`, so an unsigned UserInfo response is a real selectable outcome, and
+for introspection there is no client-side field at all, so the list describes the default unsigned response.
+**JOSE-W2 and MS-W3 become documentation items.**
+
+**Curriculum and docs, in the same commit** (`AGENTS.md`'s rule, and DR-07 said so explicitly): Module 10
+Exercise 4 **rebuilt, not retired** — it now walks *three* answers to one request (invisible 200 → honest 500
+→ live data) and lands on the closed-enum lesson, with the withdrawal verifiable in one `curl`; Exercise 7's
+finding 4 changed from *"the endpoints fail"* to *"they under-report"* (six of eight §5.3.2.1 requirements,
+and `dpopEnabled` is really `dpopNonceRequired`); the module README's capability table; `quiz-answers.md` Q12
+(the two defects now have two dates); `AGENTS.md` (the `service.get()` note, a new bullet on the five
+advertised methods, the PAR attestation gap, and the T1-13 finding); `docs/FAPI-TUTORIAL.md` Part 5 and
+Part 7. **`AGENTS.md`'s claim that this is "an SDK enum gap, not a config error" was true and is now
+historical.**
+
+**One drift found by the §7.4 grep.** `FAPI-TUTORIAL.md`'s Part 7 troubleshooting entry still said the
+endpoints *"return HTTP 200 with that error body"* — stale since the 2026-08-11 status clamp, which updated
+Part 5 and missed Part 7. Same class as the Module 10 miss that produced CUR-3b-W2: **the fix updated the
+place that explained the defect and not the place that helped you diagnose it.**
+
+**Verification.** `typecheck` clean · `lint` 0 errors / 4 pre-existing warnings · **635 tests / 58 files,
+unchanged** — no test asserts the broken shape, because `fapi.routes.test.ts` mocks `service.get()` and has
+always exercised the working path. `check-docs.mjs` clean. Endpoints confirmed live, not inferred.
 
 ### 2026-08-12 — T1-4 + T1-6: four labs completed, and two changes deliberately not kept
 
@@ -893,17 +1041,17 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   fail-open design is itself the defect (a missing security config should refuse to start). Taught as
   Module 11's Lab 1.
 
-- **Both FAPI introspection endpoints return HTTP 200 with an error body and a stack trace.**
-  `GET /api/fapi/config` **and** `GET /api/fapi/status` respond **200** with
-  `{"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}` —
-  an SDK `ResponseValidationError` from `serviceGet`, surfaced verbatim. Three defects in one response, and
-  the status code is the worst of them: a monitor checking status codes reports these endpoints healthy
-  forever. The `stack` field leaks absolute filesystem paths on unauthenticated endpoints. And the practical
-  consequence is that **the deployment cannot report its own FAPI posture** — Module 10's lab had to read the
-  Authlete service configuration directly to establish anything. This supersedes the earlier PROGRESS note
-  that "only `/api/fapi/config`" was affected and that its status code "may be a second bug": both endpoints
-  are affected and the 200 is confirmed. **Fourth instance of "a server-side failure reported as a caller
-  error"** after Modules 06, 08 and 09b.
+- ~~**Both FAPI reporting endpoints return HTTP 200 with an error body and a stack trace.**~~
+  **RESOLVED in two halves — 2026-08-11 (EH-W1) and 2026-08-12 (T1-5).** Both `GET /api/fapi/config` and
+  `GET /api/fapi/status` answered **200** with
+  `{"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}` — an
+  SDK `ResponseValidationError` from `serviceGet`, surfaced verbatim. Three defects in one response: a
+  monitor checking status codes reported them healthy forever, `stack` leaked absolute filesystem paths on
+  unauthenticated endpoints, and **the deployment could not report its own FAPI posture**, so Module 10's lab
+  had to read the Authlete service configuration directly. The status clamp fixed the *invisibility*; the
+  `SPIFFE_JWT` withdrawal fixed the *failure*. Both now return **200** with live values (`mode: "disabled"`).
+  It was the **fourth instance of "a server-side failure reported as a caller error"** after Modules 06, 08
+  and 09b, and Module 10 Exercise 4 keeps all three states as its subject.
 - **Grant revocation leaves access tokens alive for 24 hours.** Verified end to end in Module 10: after
   `DELETE /api/gm/<grant_id>` → **204**, the grant's refresh token is correctly gone
   (`[A053305] The refresh token … does not exist.`) but its access token still introspects `active: true`
@@ -947,15 +1095,19 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   `allowedOrigins.some(o => uri.startsWith(o))` clause was not — so with `ALLOWED_ORIGINS=https://app.example.com`,
   `https://app.example.com.evil.net/` also passed. RFC 9700 §2.1 forbids exactly this. Note the contrast: the
   *authorization* endpoint got exact matching right all along (400, no `Location`).
-  **Fix:** `isAllowedPostLogoutRedirectUri` (same file) now parses the value with `new URL()` and compares
-  **origins exactly** — `LOGOUT_REDIRECT_URI` by full-URI equality, `ALLOWED_ORIGINS` entries by origin, plus a
-  non-production `hostname === "localhost"` clause so the labs keep working. Unparseable values and non-http(s)
-  schemes are refused; `new URL()` *throws* on the first payload and returns a foreign origin for the second.
-  14 regression tests in `tests/unit/services/logout.service.test.ts`. Module 08 Exercise 6b was rewritten
-  around the fix rather than deleted — it now teaches the defect, the parse-don't-prefix rule, and the row that
-  still redirects in dev. **Still open, and deliberately:** RP-Initiated Logout §3 wants exact matching against
-  per-client **registered** `post_logout_redirect_uris`, and no client registers any, so the allowlist remains
-  environment-driven. Recorded in `audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` (work items RPL-W2/W3/W4).
+  **First fix (2026-08-10):** `isAllowedPostLogoutRedirectUri` parsed the value with `new URL()` and compared
+  **origins exactly** — `LOGOUT_REDIRECT_URI` by full URI, `ALLOWED_ORIGINS` by origin, plus a non-production
+  `hostname === "localhost"` clause. Both payloads refused. 14 regression tests in
+  `tests/unit/services/logout.service.test.ts`; Module 08 Exercise 6b rewritten around the defect and the
+  parse-don't-prefix rule rather than deleted.
+  **Superseded 2026-08-12 by T0-4, and this bullet said otherwise until 2026-08-12** — found while re-anchoring
+  a citation, which is what that checklist step is for. §3 wants exact matching against the client's
+  **registered** `post_logout_redirect_uris`; Authlete 3.0 has no field to hold them (a write returns 200 and is
+  discarded), so the registry is the deployment's own `POST_LOGOUT_REDIRECT_URIS` and matching is `===` against
+  the identified client's set. **No `new URL()` parsing, no origin comparison and no `localhost` clause remain**,
+  and `ALLOWED_ORIGINS`/`LOGOUT_REDIRECT_URI` no longer authorise anything. Both payloads are still refused —
+  now because nobody registered them. See `audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` (RPL-W1…W5, all
+  closed) and the T0-3 / T0-4 entries above.
 - **Back-channel logout receipt cannot work, and misreports why.** `JWKS_URI` is unset, so
   `logout.controller.ts:64` throws and the `catch` returns `{"error":"invalid_request","error_description":
   "Invalid logout token"}` — blaming the caller's input for a server configuration problem. Confirmed against
@@ -1089,11 +1241,11 @@ end of that turn none had landed. Each unblocks exactly one thing:
   `ceo@example.com` and re-signed with the client secret passed all thirteen validation steps. **Flipping both
   clients to `ES256` unblocks lab 3d and public-client OIDC, and removes the forgery capability.** Module 09a
   does not depend on it; Module 10 (FAPI) does.
-- `GET /api/fapi/config` still fails: the body is an SDK `ResponseValidationError` from `serviceGet`
-  (`{"error":"Bad Request","message":"Response validation failed",…}`). Pre-existing and unrelated to the
-  curriculum; it affects Module 10. Two notes: the earlier guess that `fapiModes` caused it is **disproven**
-  — the field is cleared and the failure persists; and the endpoint returned that error body under HTTP
-  **200** on the last check (400 earlier), so the status code itself may be a second, separate bug.
+- ~~`GET /api/fapi/config` still fails~~ **FIXED 2026-08-12.** The body was an SDK `ResponseValidationError`
+  from `serviceGet`. Two guesses recorded here were wrong and one was right: `fapiModes` did **not** cause it
+  (cleared, failure persisted); the HTTP **200** *was* "a second, separate bug" (the error handler's status
+  derivation, EH-W1); and the cause was one unrecognised `supportedTokenAuthMethods` member, `SPIFFE_JWT`,
+  withdrawn from the service by T1-5. Both endpoints now answer 200 with live values.
 
 Nothing on the Authlete service was changed by the curriculum build; the repo owner made the console change.
 

@@ -1,7 +1,7 @@
 # RFC 8705 — OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens
 
-- **Verdict:** `OUT_OF_SCOPE` (inherited decline, upheld) **+ `MISCONFIGURED`** for the advertised metadata
-- **Severity:** **S2** (the metadata finding; the decline itself is sound)
+- **Verdict:** `OUT_OF_SCOPE` (inherited decline, upheld) ~~**+ `MISCONFIGURED`** for the advertised metadata~~ → **metadata half RESOLVED 2026-08-12 (T1-5)**
+- **Severity:** ~~**S2**~~ → **S4** (8705-W1 shipped; the decline itself was always sound)
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/curriculum/modules/05-request-integrity-and-binding/README.md:367-425` (the decision record), `docs/curriculum/SPEC-INVENTORY.md:136,246`, `docs/curriculum/modules/10-fapi-and-grant-management/`
 
@@ -107,6 +107,20 @@ is what breaks `authleteApi.service.get()` and therefore both FAPI reporting end
 fix F-1 is one console action away from also retiring Module 10 Exercise 4, which teaches the
 200-with-a-stack-trace as a finding (`AGENTS.md`, Deliberate defects). Sequence the two deliberately at Gate 4;
 do not let one arrive as a side effect of the other.
+
+> **✅ F-1 CLOSED 2026-08-12 (T1-5) — and the caution above was answered, not ignored.** Both methods are gone
+> from `supportedTokenAuthMethods`; `token_endpoint_auth_methods_supported` now reads
+> `[none, client_secret_basic, client_secret_post, client_secret_jwt, private_key_jwt]`. **8705-W1 ✅.**
+>
+> The coupling this section warned about was handled by **ruling on it first**: DR-07 was approved as one
+> decision covering all four withdrawals, and Module 10 Exercise 4 was **rebuilt in the same commit** — it
+> teaches the closed-enum mechanism rather than the 200, so nothing was retired as a side effect. Evidence:
+> `SERVICE-CONFIG-PROBE.md` §18.
+>
+> **§5 stays unused and that is now correct.** With the methods withdrawn there is nothing to isolate, so
+> `mtls_endpoint_aliases` remaining absent is consistent rather than contradictory — which is what makes the
+> decline (DR-01) legible from the metadata alone. **The metadata half of this entry's verdict is discharged;
+> the decline itself was never a defect.** Severity **S2 → S4** (8705-W2/W3 are documentation).
 
 ## Finding F-2 — the decision record's one-line rationale overstates, and cites vendor headers rather than the RFC (S3)
 

@@ -155,7 +155,7 @@ password was used, and `auth_time = now` for an authentication that happened at 
 the tokens. On this path there is **no** `maxAge` check and **no** `acrs`/`acrEssential` check — those live only
 in `session.controller.ts`, on the login POST, which `prompt=none` bypasses entirely.
 
-**It is unreachable today, for a reason recorded elsewhere in the repo.** `docs/curriculum/PROGRESS.md:659-668`
+**It is unreachable today, for a reason recorded elsewhere in the repo.** `docs/curriculum/PROGRESS.md:807-816`
 reports, from live testing, that Authlete answers `prompt=none` with `NO_INTERACTION` and
 `responseContent: null` plus a ticket, that `authorization.controller.ts:50-53` mishandles that as a redirect
 (emitting `Location:` empty), and that *"the controller does contain `prompt === "none"` handling at line 96 —
@@ -221,7 +221,7 @@ aware; this parser is not.
 | `acr` and `auth_time` visible on introspection | `modules/04…/lab.md:180-184` | **Verified live** — §6.2 satisfied | **Accurate** |
 | "Where do `acr` and `auth_time` come from? … For a JWT access token they are claims in the token; for [an opaque one, introspection]" | `modules/09a…/README.md:304` | Correct, and the clearest statement of §6.1 vs §6.2 in the repo | **Accurate** |
 | `AGENTS.md`'s RFC 9470 paragraph: ACR/`auth_time` binding, `ACR_NOT_SATISFIED`, `EXCEEDS_MAX_AGE`, `introspection.controller.ts:47` parsing | `AGENTS.md` | Behaviour described correctly, but `EXCEEDS_MAX_AGE` is unreachable (F-2) and the line reference is stale — `parseBearerError` is at `:20-36`, the FORBIDDEN branch at `:76` | `DOC_INCORRECT` / S3 |
-| Nothing anywhere notes that the `prompt=none` step-up path fabricates the authentication event | all docs; `PROGRESS.md:659-668` records the dead code but not what it *does* | F-3 | **Omission** / **S2**, latent S1 |
+| Nothing anywhere notes that the `prompt=none` step-up path fabricates the authentication event | all docs; `PROGRESS.md:807-816` records the dead code but not what it *does* | F-3 | **Omission** / **S2**, latent S1 |
 
 ## Sources consulted
 
@@ -229,7 +229,7 @@ aware; this parser is not.
 - RFC 9068 §2.2.1 (`auth_time`, `acr`, `amr`) — `https://www.rfc-editor.org/rfc/rfc9068.txt`
 - RFC 6750 §3.1 (the 403/`insufficient_scope` pairing that §3 deliberately departs from) — via `RFC6750-bearer-token-usage.md`
 - Vendored Authlete API spec: `docs/openapi-spec.json`, `NO_INTERACTION` action description
-- Repo-sourced live evidence: `docs/curriculum/PROGRESS.md:659-668` (`NO_INTERACTION` returns `responseContent: null` + ticket; the `:96` branch is unreachable)
+- Repo-sourced live evidence: `docs/curriculum/PROGRESS.md:807-816` (`NO_INTERACTION` returns `responseContent: null` + ticket; the `:96` branch is unreachable)
 - Live probe 1 (2026-08-10): `supportedAcrs` absent — `SERVICE-CONFIG-PROBE.md` §3.5
 - Code: `controllers/session.controller.ts:70,108-164`, `controllers/authorization.controller.ts:50-53,90-92,96-131,107-112`, `services/authorization.service.ts:100-107`, `controllers/introspection.controller.ts:20-36,76-101`, `services/introspection.service.ts:38-43`
 

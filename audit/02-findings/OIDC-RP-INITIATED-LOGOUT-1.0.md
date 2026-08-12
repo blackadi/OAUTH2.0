@@ -129,7 +129,7 @@ The third clause is `startsWith` against each allowed **origin**, and it is **no
 | `http://localhost:3000.evil.example.com/bye` | `startsWith("http://localhost:3000")` — the attacker's host merely *begins* with the allowed origin | **302 to the attacker** |
 | `http://localhost:3001@evil.example.com/` | `startsWith("http://localhost:3001")`; everything before `@` is userinfo, so the real host is `evil.example.com` | **302 to the attacker** |
 
-Both were **verified live** by the repo (`PROGRESS.md:669-684`, `modules/08…/lab.md:638-660`). With
+Both were **verified live** by the repo (`PROGRESS.md:817-832`, `modules/08…/lab.md:638-660`). With
 `ALLOWED_ORIGINS=https://app.example.com` in production, `https://app.example.com.evil.net/` passes identically.
 
 **Against the specification this is not a hardening gap, it is a MUST violation twice over.** §3:
@@ -145,7 +145,7 @@ Two aggravating factors:
 1. **`GET /api/logout` carries no middleware at all** — no CSRF, no rate limiter, no authentication (`00-inventory.md` §3.5). So the redirect is reachable by any third-party page. *(Half closed 2026-08-12: `csrfProtection` now runs on both methods and the redirect is reachable only from a submitted confirmation form. **The rate limiter is still absent** — see F-2's banner.)*
 2. **`AGENTS.md` presents this as working validation**: *"Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars."* True as a description of the mechanism, and it reads as an assurance.
 
-**The fix is small and the repo already knew it.** The `PROGRESS.md` entry as it stood on 2026-08-10 read *"Fix is one line — exact comparison against a registered set."* **That sentence no longer exists**: the entry was rewritten when the fix shipped, and now records the fix instead (`PROGRESS.md:669-684`, with the `**Fix:**` sentence at `:502`). Quoted here from the pre-fix revision (`git show b5e60d4~1:docs/curriculum/PROGRESS.md`, line 401) because the prediction is part of the finding's evidence. Note the contrast that same entry draws, which survives the rewrite at `PROGRESS.md:674-675`: the **authorization** endpoint gets exact matching right (400, no `Location`). Two redirect-validating code paths, one correct.
+**The fix is small and the repo already knew it.** The `PROGRESS.md` entry as it stood on 2026-08-10 read *"Fix is one line — exact comparison against a registered set."* **That sentence no longer exists**: the entry was rewritten when the fix shipped, and now records the fix instead (`PROGRESS.md:817-832`, with both fixes recorded at `:1098` — the 2026-08-10 origin comparison and its supersession by T0-4). Quoted here from the pre-fix revision (`git show b5e60d4~1:docs/curriculum/PROGRESS.md`, line 401) because the prediction is part of the finding's evidence. Note the contrast that same entry draws, which survives the rewrite at `PROGRESS.md:822-823`: the **authorization** endpoint gets exact matching right (400, no `Location`). Two redirect-validating code paths, one correct.
 
 ## Finding F-2 — the OP never asks the user to confirm logout (S2) — ✅ **FIXED 2026-08-12 (T0-3 / RPL-W3)**
 
@@ -285,7 +285,7 @@ to an OP that models it. Recorded so the next person does not spend the afternoo
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
 | Title, Final, **12 Sep 2022** | `SPEC-INVENTORY.md:183` | **Confirmed** against `openid.net/specs/openid-connect-rpinitiated-1_0.html` this session | **Accurate** |
-| Open redirect found, two payloads, "survives `NODE_ENV=production`", "Fix is one line — exact comparison against a registered set" | `PROGRESS.md:669-684`; `modules/08…/lab.md:638-660` | Confirmed by reading the code; matches §3 | **Accurate — and the analysis is better than the code** |
+| Open redirect found, two payloads, "survives `NODE_ENV=production`", "Fix is one line — exact comparison against a registered set" | `PROGRESS.md:817-832`; `modules/08…/lab.md:638-660` | Confirmed by reading the code; matches §3 | **Accurate — and the analysis is better than the code** |
 | "Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars" | `AGENTS.md` | Describes the mechanism; reads as assurance, and the mechanism is the defect | `DOC_INCORRECT` / **S1** |
 | Nothing states that §3 requires matching against **registered client metadata**, not an env allowlist | all docs | F-1 — this is the design error beneath the string-matching bug | **Omission** / **S1** — ✅ **closed 2026-08-12**: stated in `AGENTS.md`, `docs/API.md`, `docs/DATA-FLOWS.md`, `server/.env.example`, `client/README.md`, `CURL-TEST.md` and Module 08 (README + lab Ex 6b) |
 | Nothing states that Authlete cannot store `post_logout_redirect_uris` at all | all docs, and this entry until now | F-4 — the audit assumed the field existed and was merely unset. It does not exist | **Omission** / S3 — ✅ **closed 2026-08-12** |
@@ -297,7 +297,7 @@ to an OP that models it. Recorded so the next person does not spend the afternoo
 
 - OpenID Connect RP-Initiated Logout 1.0 §§2, 2.1, 3, 6 — `https://openid.net/specs/openid-connect-rpinitiated-1_0.html`, fetched this session. §3's exact-match MUST NOT and §2's confirmation MUST quoted verbatim.
 - Live probe 3 (2026-08-10): `end_session_endpoint`, per-client `postLogoutRedirectUris` (absent on all three) — `SERVICE-CONFIG-PROBE.md` §8, §10
-- Repo-sourced live evidence: `PROGRESS.md:669-684` (both bypass payloads, verified), `modules/08…/lab.md:638-660`
+- Repo-sourced live evidence: `PROGRESS.md:817-832` (both bypass payloads, verified), `modules/08…/lab.md:638-660`
 - Code: `services/logout.service.ts` (whole file, esp. `:16-17,22-32,44-46,56-59,62-71,75-77`), `controllers/logout.controller.ts:9-19,28-38`, `routes/logout.routes.ts:21-22`
 
 ## Proposed work items

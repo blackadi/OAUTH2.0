@@ -14,11 +14,20 @@ import { sendTokenIssueResponse } from "./token-issue-response.handler";
 import { validateTokenParams } from "../utils/validate";
 import { parseProperties } from "../utils/properties";
 import { JwtVerificationService } from "../services/jwt-verification.service";
+import { TokenManagementService } from "../services/token.operations.service";
 import { setDpopNonce } from "../utils/dpop";
 
 const tokenService = new TokenService();
 const loginService = new LoginService();
 const jwtVerificationService = new JwtVerificationService();
+const tokenManagementService = new TokenManagementService();
+
+/**
+ * The `aud` claim type asked of `POST /idtoken/reissue`. It must track the service's
+ * `idTokenAudType`, because the request parameter takes precedence over the service property and
+ * defaults to `"array"` when omitted — see the comment in the `ID_TOKEN_REISSUABLE` branch.
+ */
+const ID_TOKEN_AUD_TYPE = "string";
 
 export const tokenController = {
   handleToken: async (
@@ -151,30 +160,67 @@ export const tokenController = {
           return handleNativeSso(req, res, result, next);
 
         case "ID_TOKEN_REISSUABLE": {
-          // Refresh token flow with openid scope — Authlete can reissue
-          // an ID token. Requires a follow-up call to /auth/token/issue
-          // with the ticket and subject from the response.
-          const ticket = result.ticket;
-          if (!ticket) {
-            res.setHeader("Content-Type", "application/json");
-            res.setHeader("Cache-Control", "no-store");
-            res.setHeader("Pragma", "no-cache");
-            return res.status(400).send(result.responseContent ?? result);
+          // Refresh-token flow with `openid` scope. Authlete has ALREADY issued the access and
+          // refresh tokens — `responseContent` is a complete, returnable token response — and is
+          // telling us an ID token may additionally be reissued.
+          //
+          // This action has its own API: `POST /idtoken/reissue`, which the vendored 3.0.16 spec
+          // says is "expected to be called only when the value of the `action` parameter in a
+          // response from the `/auth/token` API is ID_TOKEN_REISSUABLE". It is NOT
+          // `/auth/token/issue`: that one takes a `ticket`, and Authlete sends no ticket with this
+          // action. This branch used to demand one and fell through to a 400 carrying a valid token
+          // body, so every refresh failed while `idTokenReissuable` was on (audit B1-W6).
+          const log3 = req.logger || logger;
+
+          // Spec's own precedence: "(a) the value of `jwtAccessToken` … when available, or (b) the
+          // value of `accessToken` … when `jwtAccessToken` is not available". `jwtAccessToken` is
+          // absent while JWT access tokens are off, so today this always takes (b) — it is here so
+          // the call stays correct if that is ever enabled.
+          const accessToken = result.jwtAccessToken ?? result.accessToken;
+          const refreshToken = result.refreshToken;
+
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("Pragma", "no-cache");
+
+          if (!accessToken || !refreshToken) {
+            // Both are REQUIRED by the reissue API. Return the tokens Authlete already issued
+            // rather than inventing anything or failing a valid refresh.
+            log3.error("ID_TOKEN_REISSUABLE without the tokens the reissue API requires", {
+              hasAccessToken: !!accessToken,
+              hasRefreshToken: !!refreshToken,
+            });
+            return res.status(200).send(result.responseContent ?? result);
           }
-          const subject = result.subject;
-          if (!subject) {
-            res.setHeader("Content-Type", "application/json");
-            res.setHeader("Cache-Control", "no-store");
-            res.setHeader("Pragma", "no-cache");
-            return res.status(400).send({ error: "invalid_request", error_description: "Missing subject for ID token reissuance" });
+
+          // Every field is server-derived, from Authlete's response. Nothing here comes from
+          // `req.body`: a client able to set `sub` could name any subject in an ID token this OP
+          // signs, and `claims`/`idtHeaderParams` would let it choose the payload and JWS header.
+          const reissueResp = await tokenManagementService.reissueIdToken({
+            accessToken,
+            refreshToken,
+            sub: result.subject,
+            // The reissue request's own `idTokenAudType` DEFAULTS TO "array" ON OMISSION and, per
+            // the spec, "takes precedence over the `idTokenAudType` property of Service". The
+            // service is deliberately set to "string" (AGENTS.md, Mistake #7 / FAPI WG Nov 2024),
+            // so omitting this would give reissued ID tokens an array `aud` while every other ID
+            // token from this service carries a string. Keep in step with the service flag.
+            idTokenAudType: ID_TOKEN_AUD_TYPE,
+          });
+
+          if (reissueResp.action === "OK") {
+            return res.status(200).send(reissueResp.responseContent ?? result.responseContent);
           }
-          const issueReq: TokenIssueRequest = {
-            ticket,
-            subject,
-            ...(req.body.properties ? { properties: parseProperties(req.body.properties) } : {}),
-          };
-          const issueResp = await tokenService.issue(issueReq);
-          return sendTokenIssueResponse(res, issueResp);
+
+          // The reissue failed, but the access and refresh tokens are already live and no
+          // specification requires an ID token on a refresh (OIDC Core §12.2 is a SHOULD). Return
+          // what Authlete already issued, so enabling `idTokenReissuable` cannot break a refreshing
+          // client on a server-side fault. The operator learns from this log, not the client.
+          log3.error("ID token reissuance failed; returning the token response without a new ID token", {
+            action: reissueResp.action,
+            resultCode: reissueResp.resultCode,
+          });
+          return res.status(200).send(result.responseContent ?? result);
         }
 
         default: {

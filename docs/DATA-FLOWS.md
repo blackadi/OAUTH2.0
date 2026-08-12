@@ -97,7 +97,7 @@ flowchart TD
     VAL -->|Success| ISSUE["/auth/token/issue"]
     VAL -->|Fail| FAIL["/auth/token/fail"]
     
-    IDT --> IDT_ISSUE["/auth/token/issue with ticket + subject"]
+    IDT --> IDT_ISSUE["/idtoken/reissue with accessToken + refreshToken + sub"]
     
     style REQ fill:#3b82f6,color:#fff
     style OK fill:#10b981,color:#fff

@@ -30,6 +30,15 @@
 > the `SPIFFE_JWT` enum gap. That residue is **S2**, so the header reads S2 — the same basis on which
 > `FAPI-2.0-SECURITY-PROFILE.md` went S1→S2. The verdict stays `PARTIAL`: §2.4 is still deliberately unmet.
 >
+> **⚠️ The residue is gone as of 2026-08-12 (T1-5).** `SPIFFE_JWT` was withdrawn, `service.get()` parses, and
+> `GET /api/fapi/config` reports the live posture — including `pkceRequired: false` and `scopeRequired: false`,
+> the two §2.1.1/§2.2 controls this entry could not observe. **So the F-4/F-4a residue drops from S2 to S4**
+> (documentation only) and the entry's severity now rests on **F-2 alone — S3**, which is deliberate curriculum
+> material. §2.4 remains unmet by decision; the verdict stays `PARTIAL`. The `<thinking>` item 6 below — *"whether
+> `pkceRequired` is actually set on the live service. Cannot observe it"* — was answered by the 2026-08-10 probe
+> and is now answerable **through the repo's own endpoint**, which is the difference between a probe and an
+> operable deployment.
+>
 > **One other part of this entry is now stale.** F-4a's *"`/api/fapi/config` **hardcodes**
 > `pkceRequired: true`"* was fixed by **FAPI2-W1** on 2026-08-11 — all six posture fields are read live at
 > `controllers/fapi.controller.ts:51-64`. The endpoint still fails, but it no longer fabricates. **9700-W4's

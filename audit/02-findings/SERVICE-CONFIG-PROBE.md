@@ -9,6 +9,11 @@ findings, recorded once here rather than duplicated.
 
 ## 1. `SPIFFE_JWT` — the SDK enum gap, now observed rather than inferred
 
+> **⚠️ FIXED 2026-08-12 (T1-5). This section records the state on 2026-08-10 and its field count has since
+> drifted.** The member was withdrawn and `service.get()` works; both FAPI endpoints return `200`. Two numbers
+> below are superseded: the response carries **132** fields, not 129 (the Tier 1 writes added three), and the
+> enum types **three** service fields, not the one named here. **§17–§19 are the current record.**
+
 ```
 supportedTokenAuthMethods = ['NONE', 'CLIENT_SECRET_BASIC', 'CLIENT_SECRET_POST',
   'CLIENT_SECRET_JWT', 'PRIVATE_KEY_JWT', 'TLS_CLIENT_AUTH',
@@ -46,7 +51,7 @@ defect. It matters because `GET /api/fapi/config` reports several of these as fa
 | `traditionalRequestObjectProcessingApplied` | `false` | `False` | ✓ |
 | `nbfOptional` | `false` | `False` | ✓ |
 | `unauthorizedOnClientConfigSupported` | `true` | `True` | ✓ |
-| `idTokenReissuable` | `true` | **`False`** — and it **must stay false** until **B1-W6** lands | ✗ |
+| `idTokenReissuable` | `true` | ~~**`False`**~~ → **`True`** (B1-W6, 2026-08-12) — the flag was the only thing hiding a broken branch | ✓ |
 | `clientIdMetadataDocumentSupported` | `false` | `False` | ✓ |
 | `dpopNonceRequired` | *(not tabulated)* | `False` | — |
 | `parRequired` | *(not tabulated)* | `False` | — |
@@ -94,6 +99,14 @@ code on this service**. `AGENTS.md`'s token-action coverage table lists it witho
 Not a defect — the branch is correct and would work if the flag were on. Recorded because "handled" and
 "exercisable" are different claims, and the curriculum should not conflate them.
 
+> **⚠️ The last sentence of that paragraph was wrong, and finding out cost two work items.** *"The branch is
+> correct and would work if the flag were on"* was an inference from reading it, never a test. T1-4 turned the
+> flag on and **every refresh returned 400 carrying a valid token body** (B1-W6); the branch demanded a
+> `ticket` Authlete does not send, and it was calling `/auth/token/issue` when this action's API is
+> `/idtoken/reissue`. So the count is **three** claims, not two: *handled*, *exercisable* and **correct**.
+> Fixed 2026-08-12 — `idTokenReissuable` is now `True` and kept; §20 records the write and
+> `B1-authlete-boundary.md` F-9 the mechanism.
+
 ### 3.4 FAPI is off, confirming the build log
 
 `fapiModes` and `supportedServiceProfiles` are both **absent**, so `computeFapiMode`
@@ -107,7 +120,7 @@ being enforced.** Now observed, not just reported.
 |---|---|---|
 | `supportedAcrs` | `UNVERIFIED` — `modules/09a…/lab.md:533` | **absent** — confirmed unset |
 | `supportedAuthorizationDetailsTypes` | `UNVERIFIED` — `modules/09a…/lab.md:610` | **absent** — confirmed unset |
-| `authorizationCodeDuration: 0` | "NOT EVIDENCED" — `PROGRESS.md:1012` | **`0`** — confirmed |
+| `authorizationCodeDuration: 0` | "NOT EVIDENCED" — `PROGRESS.md:1164` | **`0`** — confirmed |
 
 The five Module 09a console settings were indeed never applied. Those lab exercises remain correctly
 marked `UNVERIFIED`; the probe converts "we could not check" into "we checked, and it is unset."
@@ -309,7 +322,7 @@ Four of these are load-bearing for later verdicts:
 1. **`id_token_signing_alg_values_supported` omits RS256**, which OIDC Discovery §3 makes a MUST (*"The algorithm RS256 MUST be included."*). See `OIDC-CORE-1.0.md` F-2 — and note B3's discovery entry does not mention it.
 2. **`backchannel_logout_supported` and `frontchannel_logout_supported` are both absent** while the repo implements three back-channel logout endpoints plus a receiver. Carried to the logout batch.
 3. **`registration_endpoint` is absent** while four DCR endpoints exist. Carried to the DCR entry for a follow-up.
-4. **`introspection_endpoint_auth_methods_supported` is an empty array** — independent corroboration of the unauthenticated-introspection finding in B2, and the *"three-source divergence"* `PROGRESS.md:1239-1242` records for revocation.
+4. **`introspection_endpoint_auth_methods_supported` is an empty array** — independent corroboration of the unauthenticated-introspection finding in B2, and the *"three-source divergence"* `PROGRESS.md:1391-1394` records for revocation.
 
 ## 9. CIBA, device flow, RAR and grant management — service side
 
@@ -489,12 +502,159 @@ errors.
 a second live symptom of that S1 that nobody had noticed, on a request shape with no `prompt` parameter in it.
 T1-7 fixed both; only one was known.
 
+---
+
+# Probe 8 — T1-5 and T1-13, 2026-08-12
+
+Same discipline: read the whole object, patch, write, re-read, diff key-by-key. **The read-only half ran
+first and on purpose** — T1-5's cost was retiring a working exercise, so the mechanism was *proved* before
+anything was written.
+
+## 17. `service.get()` works, and the proof cost nothing
+
+**The offline half.** SDK 1.0.0's `Service$inboundSchema` diffed against `docs/openapi-spec.json` (3.0.16),
+which settles the question the six-day outage never answered — *is `SPIFFE_JWT` the only thing wrong?*
+
+| Failure class | Result |
+|---|---|
+| unknown keys | harmless — plain `z.object`, no `.strict()`/`.passthrough()`. The SDK models **185** of Authlete's **193** `Service` properties and **strips** the other 8 |
+| enum member gaps | **`ClientAuthMethod` is the only one.** 16 enum-typed fields reachable from `Service`; the other 15 match member-for-member (`GrantType` 10=10, `ResponseType` 8=8, `JwsAlg` 15=15, `FapiMode` 6=6, `Prompt` 5=5, `DeliveryMode` 3=3, …). `TrustAnchor` is two optional strings |
+| nullability | **zero** fields Authlete declares `nullable: true` while the SDK refuses null |
+
+**The gap sits in three fields, not one** — `ClientAuthMethod` types `supportedTokenAuthMethods`,
+`supportedRevocationAuthMethods` **and** `supportedIntrospectionAuthMethods`. Every document in this repo
+named only the first.
+
+**The live half — one `service/get`, then all parsing in memory.** No write.
+
+```
+HTTP 200 · 132 fields          ← nine documents said "129"; the Tier 1 writes added three
+supportedTokenAuthMethods         [… 9 members, "SPIFFE_JWT" last]
+supportedRevocationAuthMethods     ABSENT
+supportedIntrospectionAuthMethods  ABSENT
+
+as-is:              PARSE FAILED — 1 issue
+   · supportedTokenAuthMethods.8: invalid_enum_value — received 'SPIFFE_JWT'
+without SPIFFE_JWT: PARSE OK
+```
+
+**Zod aggregates issues, so *exactly one* is itself the proof** that nothing else in 132 fields fails — the
+offline diff and the live parse agree. The 2026-08-10 run had captured only `message: "Response validation
+failed"`, which is why this was six days of inference. Both siblings being absent collapsed the three-field
+hazard to a single-field write.
+
+## 18. What was written, and the withdrawal that removed three advertisements
+
+| # | Change | Outcome |
+|---|---|---|
+| T1-5 | `supportedTokenAuthMethods` 9 members → **5** (`NONE`, `CLIENT_SECRET_BASIC`, `CLIENT_SECRET_POST`, `CLIENT_SECRET_JWT`, `PRIVATE_KEY_JWT`) | ✅ `200`, persisted. Diff: **132 → 132 fields, 2 keys** — that field and `modifiedAt` |
+| T1-5 | verify the SDK now parses the live response | ✅ `Service$inboundSchema.safeParse` OK; `GET /api/fapi/config` and `/api/fapi/status` both **200** with live values, confirmed against the running server |
+| T1-13 | `userInfoSignatureKeyId`, `introspectionSignatureKeyId` → `rsa-1` | ⚠️ applied, **did not achieve the goal**, reverted — see below |
+
+**Discovery went 64 → 62 members, and two of the three losses were not asked for:**
+
+```
+token_endpoint_auth_methods_supported
+  before [none, client_secret_basic, client_secret_post, client_secret_jwt, private_key_jwt,
+          tls_client_auth, self_signed_tls_client_auth, attest_jwt_client_auth, spiffe_jwt]
+  after  [none, client_secret_basic, client_secret_post, client_secret_jwt, private_key_jwt]
+
+client_attestation_signing_alg_values_supported      14 algorithms → ABSENT
+client_attestation_pop_signing_alg_values_supported  11 algorithms → ABSENT
+```
+
+**Withdrawing one auth method removed three advertisements.** Both attestation algorithm lists exist only to
+describe `attest_jwt_client_auth`; they are derived, not independently configured — which also settles what
+`ATTESTATION-BASED-CLIENT-AUTH.md` F-1 could only list. **Do not read the new 62 as the audit's earlier 62:**
+that one lacked `acr_values_supported` and `authorization_details_types_supported`, which T1-6 added and which
+are still present. Two different 62s.
+
+## 19. T1-13 — `none` is fixed vendor output, and the write is what proves it
+
+The work item said *"drop `none` from `userinfo_signing_alg_values_supported` and
+`introspection_signing_alg_values_supported` — console change"*. **There is no such setting.** No Authlete 3.0
+`Service` property lists either set: of 193 properties, the only related ones are the key *selectors*
+`userInfoSignatureKeyId` and `introspectionSignatureKeyId`. Both lists are derived from the service JWK Set,
+and Authlete's own `service/configuration` example inside `docs/openapi-spec.json` carries `"none"` too.
+
+Establishing that by *reading the schema* would repeat the mistake this audit has made five times, so the only
+candidates were written:
+
+```
+userInfoSignatureKeyId = introspectionSignatureKeyId = "rsa-1"   → 200, persisted (132 → 134 fields)
+
+userinfo_signing_alg_values_supported
+  before [PS384, RS384, HS256, HS512, ES256, RS256, HS384, none, PS256, PS512, RS512]
+  after  [PS384, RS384, HS256, HS512,        RS256, HS384, none, PS256, PS512, RS512]
+```
+
+**Both lists changed and `none` survived both.** `ES256` left because pinning the RSA key drops the EC key as
+a candidate — so the write *did* reach the lists, which is what makes the negative result evidence rather than
+an assumption. Reverted; the diff against the pre-write snapshot moved **only `modifiedAt`**.
+
+**Two consequences.** This is **RPL-W4's shape a second time** — a work item naming a knob the vendor does not
+have (`OIDC-RP-INITIATED-LOGOUT-1.0.md` F-4). And the advertisement is *accurate*: `Client.userInfoSignAlg`
+accepts `NONE`, so an unsigned UserInfo response is a real selectable outcome; for introspection the `Client`
+schema has **no** signing property at all, so the list describes the default unsigned response and nothing on
+either side can narrow it. **JOSE-W2 and MS-W3 become documentation items** (`JOSE-rfc7515-7517-7519.md`,
+`FAPI-2.0-MESSAGE-SIGNING.md`).
+
+---
+
+# Probe 9 — B1-W6, 2026-08-12
+
+## 20. `idTokenReissuable` is on, and this time it stays on
+
+| # | Change | Outcome |
+|---|---|---|
+| B1-W6 | `idTokenReissuable` false → **true** | ✅ `200`, persisted. Diff: **132 → 132 fields, 2 keys** — that flag and `modifiedAt` |
+
+Discovery is unchanged at 62 members: the flag governs an action on `/auth/token`, not an advertisement.
+**T1-4 made this same write and reverted it**; the difference is that the branch it exercises now works
+(`B1-authlete-boundary.md` F-9).
+
+**What `/auth/token` returns on this action**, read directly rather than through the server — the field set is
+the whole finding:
+
+```
+action        : ID_TOKEN_REISSUABLE
+ticket       : ABSENT          <-- the defect: the branch demanded one
+subject      : "admin"
+accessToken  : present         refreshToken : present
+jwtAccessToken: ABSENT         idToken      : ABSENT
+responseContent keys: [access_token, token_type, expires_in, scope, refresh_token]   <-- NO id_token
+```
+
+**Live end-to-end** (authorization-code flow with `openid offline_access`, then `grant_type=refresh_token`
+through this server): **200** with a reissued `id_token`, where B1-W6's report was a **400** carrying a valid
+token body.
+
+| Claim | ID token before refresh | Reissued | Verdict |
+|---|---|---|---|
+| `aud` type | `"1523514379"` (string) | `"1523514379"` (**string**) | ✅ and it is not free — see below |
+| `iat` | 1786539229 | **1786539233** | ✅ advances; checked against a deliberate 4-second gap, because a same-second refresh proves nothing |
+| `auth_time` | 1786539229 | **1786539229** | ✅ holds the *original* authentication time |
+| `sub` / `iss` / `acr` | `admin` / `https://blackadi.dev` / `pwd` | unchanged | ✅ |
+| `nonce`, `s_hash` | present | **dropped** | ⚠️ `UNVERIFIED` against OIDC Core §12.2 — not fetched for this change |
+
+**The `aud` row is the trap worth carrying.** The reissue request has its **own** `idTokenAudType`, which
+*"takes precedence over the `idTokenAudType` property of Service"* and **defaults to `"array"` on omission**.
+T1-4 set the service to `"string"` on purpose, so a naive fix that omitted the parameter would have produced
+array-`aud` ID tokens on exactly one code path while every other ID token stayed a string. **A vendor default
+can silently reverse a configuration decision for a single call site** — set this beside §15's `readOnly`
+surprise and T0-4's silent discard: three different ways the vendor's shape does not match its documentation's
+implication.
+
+---
+
 ## Sources
 
 - Live probe 1: `GET /api/{serviceId}/service/get` — HTTP 200, 129 fields, 2026-08-10, authorised, read-only
 - Live probe 2, 2026-08-10, authorised, read-only: `service/get`, `service/configuration` (62 members), `client/get/list` (3 clients)
 - Live probe 3, 2026-08-10, authorised, read-only: the same three endpoints, printing the OIDC / CIBA / device / RAR / logout fields above
 - Live probe 6, 2026-08-12, authorised, **read-write** (T1-2, T1-3): `service/get`, `service/update`, `service/configuration`, `client/get/list`, `client/create`, `client/get`, `client/update`, plus live OAuth flows against the local server. Pre-write snapshots of `service/get`, `service/configuration` and `client/get/list` were taken first. **No key material or secret is recorded in this file**; the RSA key is identified by `kid` only
+- Live probe 9, 2026-08-12, authorised, **read-write** (B1-W6): `service/get` ×2, `service/update` ×1, one direct `POST /auth/token` with a refresh token to read the raw `ID_TOKEN_REISSUABLE` response, plus three authorization-code flows and their refreshes against the local server. Pre-write snapshot taken first. Tokens appear truncated or by length only; no `client_secret` or key material is recorded
+- Live probe 8, 2026-08-12, authorised, **read-write** (T1-5, T1-13): `service/get` ×5, `service/configuration` ×4, `service/update` ×3 (one of them a revert), plus `GET /api/fapi/config` and `GET /api/fapi/status` against the running server. The read-only proof ran **before** any write. Pre-write snapshots of `service/get` and `service/configuration` taken first; all schema parsing done locally against `Service$inboundSchema`. **No key material or secret is recorded here** — keys appear by `kid` only
 - `RFC 7517` §4.4 — `https://www.rfc-editor.org/rfc/rfc7517.html` — *"Use of this member is OPTIONAL"* (JSON Web Key, Standards Track, May 2015), fetched 2026-08-12
 - SDK 1.0.0: `models/clientauthmethod.ts`, `models/service.ts:634-642`, `models/granttype.ts`
 - Authlete flags page — `https://developers.authlete.com/configuration-reference/error-handling-debugging/flags-supported-in-authlete.md`

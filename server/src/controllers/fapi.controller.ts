@@ -31,9 +31,9 @@ export const fapiController = {
       // `dpopEnabled: false` does not mean DPoP is off. Whether DPoP is *required* is per-client
       // (`dpopRequired`) and is out of this endpoint's reach — see FAPI2-W4.
       const dpopEnabled = service.dpopNonceRequired ?? false;
-      const cimdSupported =
-        (service as Record<string, unknown>)
-          .clientIdMetadataDocumentSupported === true;
+      // Typed access, not a cast: SDK 1.0.0 models `clientIdMetadataDocumentSupported` in both the
+      // `Service` type and `Service$inboundSchema`. CIMD-W3 assumed an SDK gap and there is none.
+      const cimdSupported = service.clientIdMetadataDocumentSupported === true;
 
       // Every field below is read from the live service. This endpoint reports the deployment's own
       // security posture, so it must never assert a control it has not checked — six of these values
@@ -94,8 +94,7 @@ export const fapiController = {
         pkceRequired: service.pkceRequired,
         parRequired: service.parRequired,
         clientIdMetadataDocumentSupported:
-          (service as Record<string, unknown>)
-            .clientIdMetadataDocumentSupported ?? false,
+          service.clientIdMetadataDocumentSupported ?? false,
       });
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));

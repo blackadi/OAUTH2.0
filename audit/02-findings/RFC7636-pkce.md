@@ -1,7 +1,23 @@
 # RFC 7636 — Proof Key for Code Exchange by OAuth Public Clients
 
+> ## ✅ F-1 CLOSED IN BOTH HALVES — 2026-08-11 (FAPI2-W1) and 2026-08-12 (T1-5)
+>
+> F-1 had two independent defects and both are gone. The hardcoded `pkceRequired: true` literal was replaced
+> with a live read (FAPI2-W1); the `service.get()` failure that made the live read unobservable was closed by
+> withdrawing `SPIFFE_JWT` (T1-5). **`GET /api/fapi/config` now answers `"pkceRequired": false` — confirmed
+> against the running server, not inferred.** So the "conformance theatre" this finding described is not merely
+> corrected, it is **reversed**: the endpoint now reports the deployment's own failing control.
+>
+> **F-2 is closed as an observability matter too.** `pkceS256Required` is readable the same way; both flags are
+> `false` (probe §2).
+>
+> **What remains is the substance, unchanged:** PKCE is **not required** on this service, which is what
+> `RFC9700-security-bcp.md` F-1 and §2.1.1 turn on. **The severity ruling is Gate 4's question 1**, and its
+> premise has now moved twice — the entry no longer contains any false claim, only an unenforced control. This
+> banner deliberately does **not** downgrade the S1; that is the reviewer's call.
+
 - **Verdict:** `MISCONFIGURED` *(was `IMPLEMENTED_UNVERIFIED`; changed by the live service probe, 2026-08-10 — see `SERVICE-CONFIG-PROBE.md`)*
-- **Severity:** **S1** *(was S2)*
+- **Severity:** **S1** *(was S2)* — **F-1 closed; open on the unenforced control alone, pending Gate 4 Q1**
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/PKCE-TUTORIAL.md`, `docs/curriculum/modules/03-pkce-and-public-clients/`, `README.md`, `docs/curriculum/SPEC-INVENTORY.md:92`
 

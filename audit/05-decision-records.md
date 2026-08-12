@@ -9,8 +9,9 @@ position to take, and where taking a different position would have been defensib
 obvious fix is a work item, not a decision. That distinction is why RFC 9901 gets no record (DR-19) and why
 `accessTokenDuration` does not either: shortening it is simply correct.
 
-**Nineteen records.** Eleven are open rulings Gate 4 must make; seven confirm standing declines with their
-rationale corrected; one is the meta-decision to write no record.
+**Nineteen records.** ~~Eleven are open rulings Gate 4 must make~~ — **ten**, since **DR-07 was ruled and
+executed on 2026-08-12**; seven confirm standing declines with their rationale corrected; one is the
+meta-decision to write no record. DR-01's metadata half shipped with DR-07 without needing a re-ruling.
 
 Each record carries a **revisit trigger** — the condition under which the decision should be reopened. A
 decline with no trigger is a dead end rather than a decision.
@@ -23,7 +24,7 @@ decline with no trigger is a dead end rather than a decision.
 | [DR-04](#dr-04--native-sso) | Native SSO | ⬜ open — recommend do not enable | `NATIVE-SSO-TUTORIAL.md`, Module 09a |
 | [DR-05](#dr-05--cimd-and-the-mcp-claim) | CIMD / MCP | ⬜ open — recommend enable CIMD, qualify MCP | `MCP-OAUTH-TUTORIAL.md` |
 | [DR-06](#dr-06--fapi-10-baseline-and-advanced) | FAPI 1.0 | ⬜ open — recommend document-only | Module 10 |
-| [DR-07](#dr-07--spiffe_jwt-and-the-nine-advertised-client-auth-methods) | `SPIFFE_JWT` | ⬜ **open — recommend drop, with Module 10 Ex 4 rebuilt** | **Module 10 Exercise 4** |
+| [DR-07](#dr-07--spiffe_jwt-and-the-nine-advertised-client-auth-methods) | `SPIFFE_JWT` | ✅ **DECIDED + EXECUTED 2026-08-12 — dropped; Ex 4 rebuilt, not retired** | **Module 10 Exercise 4** |
 | [DR-08](#dr-08--session-management-and-front-channel-logout) | Session Management + Front-Channel Logout | ⬜ open — recommend decline | Module 08 |
 | [DR-09](#dr-09--jwt-access-tokens-rfc-9068) | JWT access tokens | ⬜ open — recommend defer | Module 04, `STEP-UP-AUTH-TUTORIAL.md` Part 4 |
 | [DR-10](#dr-10--the-three-deliberate-token-exchange-defects) | Token-exchange defects | ⬜ open — **recommend keep** | Module 06 Ex 6a/6b/6c |
@@ -56,10 +57,16 @@ is a header a client can forge if the proxy does not strip it.
 **Evidence, now measured rather than inferred** (`04-remediation-plan.md` §2.2):
 
 - `tls_client_certificate_bound_access_tokens: false`
-- `token_endpoint_auth_methods_supported` **advertises `tls_client_auth` and `self_signed_tls_client_auth`**
+- `token_endpoint_auth_methods_supported` ~~**advertises `tls_client_auth` and `self_signed_tls_client_auth`**~~ → **both withdrawn 2026-08-12 (T1-5)**
 
 So the deployment currently advertises two authentication methods it cannot honour — theme 1, and the reason
 8705-W1 is a real action rather than tidying.
+
+> **✅ 8705-W1 shipped 2026-08-12, inside DR-07's single console pass.** The decline is now visible from the
+> metadata alone: `token_endpoint_auth_methods_supported` no longer offers either method, and
+> `mtls_endpoint_aliases` remaining absent is consistent rather than contradictory. **The decline did not
+> change; what changed is that the deployment stopped claiming otherwise.** DR-01 needed no re-ruling — this was
+> its metadata half executing.
 
 **Consequences.** FAPI 1.0 Part 2 is document-only **by inheritance** (DR-06). FAPI 2.0's mTLS branch is closed,
 leaving `private_key_jwt` + DPoP as the only viable route (DR-02).
@@ -223,7 +230,32 @@ and Module 05 (FAPI1-W1 = FAPI1A-W3 ⊃ CUR-3b-W10). §5.2.2's bound is 60 **min
 
 ## DR-07 — `SPIFFE_JWT` and the nine advertised client-auth methods
 
-**Status: ⬜ open. Recommendation: drop `SPIFFE_JWT`, and rebuild Module 10 Exercise 4 in the same commit.**
+**Status: ✅ DECIDED AND EXECUTED 2026-08-12 — drop, with Module 10 Exercise 4 rebuilt in the same commit.**
+Approved as recommended, plus the mTLS pair and `ATTEST_JWT_CLIENT_AUTH`: **nine advertised methods → five.**
+`service.get()` parses, and `GET /api/fapi/config` / `GET /api/fapi/status` answer **200** with live values.
+
+> **The procedural point is the transferable one.** The ruling was taken *after* a **read-only proof**, not on
+> the mechanism recorded below. One raw-HTTP `service/get`, the member filtered **in memory**, and the SDK's own
+> `Service$inboundSchema.safeParse` run in-process — no write, no curriculum edit, and a definite answer before
+> a working exercise was spent. It found three things the mechanism section had wrong or unexamined: the
+> response is **132** fields (not 129), the enum types **three** service fields (not one), and the failing parse
+> yields **exactly one** Zod issue — which, because Zod aggregates, is itself the proof that nothing else in the
+> response fails. **Establishing the fix works is cheaper than the cheapest thing the fix costs.** Full evidence:
+> `SERVICE-CONFIG-PROBE.md` §17–§18.
+>
+> **The predicted cost did not materialise.** Module 10 Exercise 4 was **rebuilt, not retired** — it now walks
+> three dated states (invisible 200 → honest 500 → live data) and lands on the closed-enum lesson, which is
+> only legible after the fix. The rebuild being *better material* was this record's own prediction; what it did
+> not anticipate is that a mechanism-based lab **gains** a data point from the fix. See
+> `04-remediation-plan.md` §6.1.
+>
+> **A fourth escape route existed and nobody found it, because it is not available.** The general fragility
+> stands: `ClientAuthMethod` is still closed, and the *class* is unfixed. But it is now measured — of 16
+> enum-typed `Service` fields it was the only gap, and the schema strips the 8 of 193 properties it does not
+> model rather than failing on them. **Tolerant of new fields, brittle about new values.**
+>
+> **Revisit trigger, unchanged:** an SDK release whose `ClientAuthMethod` tolerates unknown members, at which
+> point the member could return. Recorded in `AGENTS.md` alongside the five surviving methods.
 
 **This is the highest-consequence record**, because it is the only route that retires a working exercise.
 
