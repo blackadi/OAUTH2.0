@@ -1,20 +1,3 @@
 {
-  "unreferenced": [
-    "DELETE /hsk/delete/:handle",
-    "DELETE /token/delete/:accessTokenIdentifier",
-    "GET /.well-known/openid-federation",
-    "GET /federation/configuration",
-    "GET /health/all",
-    "GET /hsk/get/:handle",
-    "GET /hsk/list",
-    "GET /routes.json",
-    "GET /token/createLocalToken",
-    "PATCH /token/update",
-    "POST /device/consent",
-    "POST /federation/registration",
-    "POST /hsk/create",
-    "POST /jar/process",
-    "POST /token/reissue",
-    "POST /token/revoke"
-  ]
+  "unreferenced": []
 }
