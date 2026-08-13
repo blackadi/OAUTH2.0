@@ -106,6 +106,47 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — T1-9 + T1-10 + 6749-W1: grant management became a real protected resource** (below)
 - [x] **2026-08-13 — B1-W1 + B1-W2 + MS-W1: a debugging endpoint stopped handing out tickets** (below)
 - [x] **2026-08-13 — T1-14 + T1-15: back-channel logout logged nobody out** (below)
+- [x] **2026-08-13 — T1-16 + T1-18: one line, an honest 500, and a work item that could not do what it said** (below)
+
+### 2026-08-13 — T1-16, T1-18: the fifth work item whose criteria named an unreachable outcome
+
+**Why this matters to a future session:** `GET /.well-known/openid-federation` answered **400**, blaming the
+caller for a fault that was entirely ours. It now answers **500 naming the missing configuration.** The fix is
+one line. **What it does not do is make federation work**, and the work item said it would. **713 tests /
+62 files.**
+
+**The probe came before the code, and it is the reason this entry is not wrong.** FED-W1's acceptance criteria
+read: *"Both `GET /.well-known/openid-federation` and `GET /api/federation/configuration` return 200 with
+`application/entity-statement+jwt`."* Two calls to Authlete settled what actually happens:
+
+| Call | Result |
+|---|---|
+| no `requestBody` — the old behaviour | **400** `[A258201] … Content-Type header is not specified.` The SDK sends no `Content-Type` when there is no body, so the SDK throws and the caller wears a 400 |
+| `requestBody: {}` — the fix | **200 HTTP**, `action: INTERNAL_SERVER_ERROR` — `[A316201] Because a JWK Set for federation has not been set up, this service cannot generate entity configuration.` |
+
+So the fix **changes the failure rather than removing it**. That is still worth shipping: an error that names
+the missing setting sends an operator to the right place, and an error that says *"your request is malformed"*
+sends them to inspect a request that was fine. Verified live at both routes.
+
+**Two consequences worth carrying.**
+
+**FED-W5 closed without its own change.** It existed as a fallback — *"report the failure as a server error
+until W1 ships"*. Once the SDK stopped throwing, Authlete's `INTERNAL_SERVER_ERROR` reached the controller,
+whose action mapping was **already correct**. Compare with **BCL-W3**, the same defect shape in the logout
+receiver, which *did* need real work because the throw happened in our own code. **Same symptom, same rule,
+different fix — the location of the throw is what decides which.**
+
+**FED-W2 is blocked, and now precisely.** There is no entity statement to verify against §3 and there will not
+be until a **federation JWK Set** is configured on the service. No work item schedules that, and it is feature
+*enablement* rather than a fix, so it is not taken unilaterally — it belongs with the Theme 2 / Tier 3 family.
+`README.md` makes no federation claim, so nothing is currently false.
+
+**A coverage gap behind the coverage gap.** `federation.service.ts` had no tests — and *could not* have had
+any, because `tests/helpers/mock-authlete.ts` had no `federation` member. `AGENTS.md` describes that helper as
+covering *"every SDK method"*; it did not. Both are fixed. That is now the third untested surface found in
+three batches (`/api/gm`'s middleware had partial coverage, `/api/backchannel_logout` had none, federation had
+none and was unmockable). **When a defect has survived a long time, the useful question is not "how was this
+missed" but "what was supposed to have caught it".**
 
 ### 2026-08-13 — T1-14, T1-15 (+BCL-W3, BCL-W7): back-channel logout logged nobody out
 

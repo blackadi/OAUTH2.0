@@ -120,7 +120,7 @@ being enforced.** Now observed, not just reported.
 |---|---|---|
 | `supportedAcrs` | `UNVERIFIED` — `modules/09a…/lab.md:533` | **absent** — confirmed unset |
 | `supportedAuthorizationDetailsTypes` | `UNVERIFIED` — `modules/09a…/lab.md:610` | **absent** — confirmed unset |
-| `authorizationCodeDuration: 0` | "NOT EVIDENCED" — `PROGRESS.md:1558` | **`0`** — confirmed |
+| `authorizationCodeDuration: 0` | "NOT EVIDENCED" — `PROGRESS.md:1599` | **`0`** — confirmed |
 
 The five Module 09a console settings were indeed never applied. Those lab exercises remain correctly
 marked `UNVERIFIED`; the probe converts "we could not check" into "we checked, and it is unset."
@@ -322,7 +322,7 @@ Four of these are load-bearing for later verdicts:
 1. **`id_token_signing_alg_values_supported` omits RS256**, which OIDC Discovery §3 makes a MUST (*"The algorithm RS256 MUST be included."*). See `OIDC-CORE-1.0.md` F-2 — and note B3's discovery entry does not mention it.
 2. **`backchannel_logout_supported` and `frontchannel_logout_supported` are both absent** while the repo implements three back-channel logout endpoints plus a receiver. Carried to the logout batch.
 3. **`registration_endpoint` is absent** while four DCR endpoints exist. Carried to the DCR entry for a follow-up.
-4. **`introspection_endpoint_auth_methods_supported` is an empty array** — independent corroboration of the unauthenticated-introspection finding in B2, and the *"three-source divergence"* `PROGRESS.md:1785-1788` records for revocation.
+4. **`introspection_endpoint_auth_methods_supported` is an empty array** — independent corroboration of the unauthenticated-introspection finding in B2, and the *"three-source divergence"* `PROGRESS.md:1826-1829` records for revocation.
 
 ## 9. CIBA, device flow, RAR and grant management — service side
 
