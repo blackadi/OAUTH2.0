@@ -109,6 +109,55 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — T1-16 + T1-18: one line, an honest 500, and a work item that could not do what it said** (below)
 - [x] **2026-08-13 — T1-20 + the three S1 residues: CIBA could not authenticate its recommended client, and CI was not checking the client at all** (below)
 - [x] **2026-08-13 — PKCE is enforced; the last open S1 is closed** (below)
+- [x] **2026-08-13 — the two process findings became mechanisms** (below)
+
+### 2026-08-13 — turning the two process findings into things that cannot be forgotten
+
+**Why this matters to a future session:** Phase 5 produced two observations that were worth more than any
+individual fix. Both are now **mechanisms rather than advice**, because advice in a retrospective is read
+once.
+
+**Finding 1 — six work items prescribed remedies that could not achieve their stated outcome.** B1-W6 named
+the wrong Authlete API; T1-13 a service knob that does not exist; 9449-W3 one of the **two** calls the
+endpoint makes; 9701-W1 omitted both `rsUri` prerequisites; FED-W1 promised an entity statement needing
+unmentioned configuration; 6749-W1 offered an escape clause that did not apply. **Every one was disproved by
+a read-only probe in under a minute, before any code was written.**
+
+The shared tell: **none of them named an endpoint.** A criterion phrased as *"issue from the fields Authlete
+actually sends"* or *"return 200 with `application/entity-statement+jwt`"* describes a **result**, and
+results do not tell you which call produces them. The convention is now recorded in two places a session
+actually reads — `RESUME.md` §7 (working conventions) and `04-remediation-plan.md` §7.4 as **step 0**, ahead
+of "plan first" — with the three questions that catch the class: *which call changes? is that the only call?
+does the outcome need configuration nobody scheduled?*
+
+**Finding 2 — a green suite proved nothing, four times.** `POST /api/backchannel_logout`, `POST
+/api/jar/process` and `federation.service.ts` each had **no test naming them**; the third was *unmockable*,
+because `tests/helpers/mock-authlete.ts` had no `federation` member while `AGENTS.md` described it as
+covering every SDK method. And the client's 16 test files plus its `typecheck` script were never invoked by
+CI at all, because `vite build` does not typecheck.
+
+Reading code found those one at a time. **`scripts/check-route-coverage.mjs` asks the question that finds
+them as a list**: which of the 91 routes does no test mention? Answer today: **47**.
+
+It **ratchets** rather than failing red on day one, which is how a check survives contact:
+
+```
+✅ route coverage: 91 routes, no regressions. 47 carried as known debt (baseline), 2 exempt.
+```
+
+`scripts/route-coverage-baseline.json` records the debt; the check fails only for a route *outside* it, so
+adding an endpoint without a test breaks the build while the backlog stays visible and shrinkable
+(`--update-baseline` banks progress). **It was self-tested**: a throwaway route added to `health.routes.ts`
+made it exit 1, and reverting made it exit 0 — a check never observed failing is not a check.
+
+**What it deliberately does not claim.** A route *named* by a test is not a *tested* route; this measures
+reference, not assertion quality. It is crude for the same reason `check-docs.mjs` only validates
+mechanically-checkable drift: **a cheap check that is always right about a narrow thing beats a clever one
+that is sometimes wrong.**
+
+**Both checks are now in CI**, alongside the client `typecheck` and `test` gates added earlier the same day.
+Five gates where there were two.
+
 
 ### 2026-08-13 — PKCE enforced, and the last open S1 closes
 

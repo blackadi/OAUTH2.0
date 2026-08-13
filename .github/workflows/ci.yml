@@ -52,6 +52,13 @@ jobs:
         if: github.event_name == 'schedule'
         run: node scripts/check-docs.mjs --links
 
+      # Added 2026-08-13. Ratchets against scripts/route-coverage-baseline.json: a NEW route with no test
+      # naming it fails the build; the 47 already uncovered are carried as visible, shrinkable debt. This
+      # is the mechanical form of "what was supposed to have caught this?" — the question that found more
+      # real defects during the Phase 5 remediation than reading code did.
+      - name: Check route coverage (no new untested endpoints)
+        run: node scripts/check-route-coverage.mjs
+
   client:
     runs-on: ubuntu-latest
 

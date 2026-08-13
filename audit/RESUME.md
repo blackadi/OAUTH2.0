@@ -157,7 +157,7 @@ nothing from it). **Still unverified:** RFC 8446 and RFC 9110 dates cited at `mo
 | *"`NO_INTERACTION` is the `prompt=none` path"* (`OIDC-CORE-1.0.md` F-1, `RFC9470-…` F-3) | **It is not the only one.** A request with no `prompt` at all reaches it whenever it asks for `offline_access` (OIDC Core §11). So the empty-`Location` S1 had a **second live symptom** nobody had looked for | found 2026-08-12 during T1-4; `SERVICE-CONFIG-PROBE.md` §16 |
 | *"the handled `ID_TOKEN_REISSUABLE` action is unreachable while the flag is `false`"* (probe §3.3, OIDC-W5) | True, and it hid a **defect**. Enabling the flag showed the branch requires a `ticket` Authlete does not send, so every refresh returned **400 with a valid token body**. *Handled*, *exercisable* and *correct* are three different claims. **And the work item written from that symptom named the wrong remedy** — the branch was calling `/auth/token/issue` when this action has its own API, `POST /idtoken/reissue`; no arrangement of arguments to the first would have worked | found 2026-08-12 during T1-4; **B1-W6 ✅ fixed the same day** |
 | `backChannelLogoutUri` (capital `C`) cited as absent on all three clients | Authlete's field is **`backchannelLogoutUri`**. The conclusion survives — the correct key is also unset — but the probe was reading a key that cannot exist | `SERVICE-CONFIG-PROBE.md` §10, `OIDC-BACKCHANNEL-LOGOUT-1.0.md` ×2, fixed 2026-08-12 |
-| `03-curriculum-audit.md` citing `PROGRESS.md:1401` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:2177-2178` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
+| `03-curriculum-audit.md` citing `PROGRESS.md:1401` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:2226-2227` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
 
 **Calibration worth carrying into Phase 4:** five of Phase 3's findings correct the audit rather than the
 curriculum, and **every one arose where the audit reasoned from a grep or a recollection while the curriculum
@@ -307,6 +307,17 @@ string. Work items **CUR-3b-W1** (fix Module 10) and **CUR-3b-W2** (fix the rule
 - Findings live one-file-per-spec in `audit/02-findings/`, with the schema from the skill's `<one_shot_example>`: verdict header → `<thinking>` → normative table → Authlete boundary table → findings → documentation delta → sources → work items.
 - Cross-reference sibling findings rather than restating them; never count one defect twice.
 - Work-item IDs are per-entry prefixes (`9126-W1`, `EH-W1`, `CUR-3a-W3`). Phase 4 reconciles them.
+- **An acceptance criterion must name the call it expects to change** — added 2026-08-13. Six work items in
+  Phase 5 prescribed remedies that could not reach their stated outcome, and the shared tell was that none
+  named an endpoint: a criterion phrased as *"issue from the fields Authlete actually sends"* or *"return 200
+  with an entity statement"* describes a **result**, and results do not tell you which call produces them.
+  Write *"call `POST /idtoken/reissue` instead of `/auth/token/issue`"*. If you cannot, you have not finished
+  the finding — **probe first**; see `04-remediation-plan.md` §7.4 step 0.
+- **Ask "what was supposed to have caught this?" before asking "how do I fix it?"** — added 2026-08-13. In
+  Phase 5 that question found more real defects than reading code did: four surfaces with no test naming them
+  at all, one of them *unmockable* because the shared Authlete mock lacked a member, and the client's entire
+  test suite plus its `typecheck` script, which CI never invoked because `vite build` does not typecheck. It
+  is now partly mechanical — `node scripts/check-route-coverage.mjs` ratchets against a recorded baseline.
 - Run `node scripts/check-docs.mjs` after writing — it validates `file.ts:NNN` refs, relative links and anchors across `audit/` too. **Three known detection gaps**, all found by this audit and all to be scoped as one change: bare paths with no line number (**CUR-3a-W1**), prose refs of the form `Line ~89` (**CUR-3b-W5**), and endpoint paths inside fenced blocks (**CUR-3c-W11**).
 
 ---

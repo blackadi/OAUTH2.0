@@ -263,12 +263,35 @@ Log.
 **After any change to server behaviour**, grep the curriculum for the symptom you changed —
 `grep -rn "<the error string>" docs/curriculum/modules` — before assuming nothing else is affected.
 
-### Documentation drift check
+### Two mechanical checks — run both, and know what each cannot see
 
 ```bash
 node scripts/check-docs.mjs           # offline: source refs, relative links, anchors. CI runs this on every push
 node scripts/check-docs.mjs --links   # also fetches external URLs. CI runs this weekly, not per-push
+node scripts/check-route-coverage.mjs # every route is named by some test. CI runs this on every push
 ```
+
+**`check-route-coverage.mjs` exists because a green test suite proved nothing four times running.** During
+the Phase 5 remediation, `POST /api/backchannel_logout` validated 5 of Back-Channel Logout §2.6's 11 required
+steps and terminated nobody's session; `POST /api/jar/process` returned Authlete **tickets** — credentials —
+to anonymous callers; `federation.service.ts` had no tests and *could not* have had any, because the shared
+`tests/helpers/mock-authlete.ts` had no `federation` member while claiming to cover every SDK method. Each
+was found by reading code, one at a time. **The question that finds them as a list is *"which routes does no
+test mention?"***, and that is all this script asks.
+
+It **ratchets**: today's 47 uncovered routes are recorded in `scripts/route-coverage-baseline.json`, and the
+check fails only when a route *outside* that file is unreferenced — so adding an endpoint without a test
+breaks the build while the existing debt stays visible and shrinkable. Bank progress with
+`--update-baseline`; never regenerate it to silence a failure, which is the one move the design cannot
+defend against. And note what it does **not** claim: a route *named* by a test is not a *tested* route. It
+measures reference, not assertion quality — a smoke detector, not a fire inspection.
+
+**The client had the same shape of hole at the CI level**: `ci.yml` ran `npm run build` alone, and `vite
+build` does not typecheck, so `npm run typecheck` was never invoked and 16 client test files never ran. Both
+are now gated. **When something has survived a long time, ask what was supposed to have caught it before
+asking how to fix it.**
+
+### Documentation drift check
 
 Covers 104 markdown files. It catches the mechanically detectable drift only — `file.ts:NNN` references
 past the end of the file, broken relative links, anchors matching no heading, and dead external links.

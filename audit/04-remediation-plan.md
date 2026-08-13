@@ -731,6 +731,22 @@ a defect *before* the audit did.
 
 `RESUME.md` §6 asked for this as a checklist step rather than a habit. Six steps:
 
+0. **Probe the remedy before writing it, and name the call.** *Added 2026-08-13, after **six** work items in
+   this phase prescribed remedies that could not achieve their stated outcome:* B1-W6 named the wrong Authlete
+   API; T1-13 named a service knob that does not exist; 9449-W3 described one of the **two** Authlete calls the
+   endpoint makes; 9701-W1 omitted both prerequisites (`rsUri`, and that it must *not* be sent otherwise);
+   FED-W1 promised an entity statement that needs unmentioned configuration; 6749-W1 offered an escape clause
+   (*"no code change if Authlete already rejects"*) that did not apply. **Every one was disproved in under a
+   minute by a read-only probe, before any code.** Three cheap questions catch this class:
+   - **Which Authlete call changes?** If the criteria never name an endpoint, that is the tell — find out which
+     one. B1-W6's *"issue from the fields Authlete actually sends"* read as *call the same API better*; the
+     answer was a different API entirely.
+   - **Is that the only call?** `/api/gm` makes two, and both check the DPoP binding independently.
+   - **Does the outcome need configuration nobody scheduled?** FED-W1's did.
+
+   The general rule this yields, and it is the phase's most reusable: **establishing that a fix works is
+   cheaper than the cheapest thing the fix costs** (first stated in T1-5, `SERVICE-CONFIG-PROBE.md` §17).
+
 1. **Plan first** if the file is on the Security-critical surfaces list (or is a DR-12 candidate) — the trigger
    is the concern, not the diff size.
 2. **Grep the curriculum for the *phrase*** naming the defect, not only the error string (CUR-3b-W2).

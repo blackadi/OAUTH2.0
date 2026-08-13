@@ -150,7 +150,7 @@ It then cross-links Module 07 §3c, whose verification block closes the loop: *"
 recorded the opposite result."*
 
 **The flag is `fapiModes`**, and the audit can now say so with evidence: FAPI mode forbids ROPC, `fapiModes` is
-absent on this service (probe 1 §3.4), and `PROGRESS.md:1833-1834` records the live success transcript. Neither
+absent on this service (probe 1 §3.4), and `PROGRESS.md:1882-1883` records the live success transcript. Neither
 module names the flag — that is the one improvement available, and it is an addition rather than a correction.
 
 **Forward dependency:** `FAPI-2.0-SECURITY-PROFILE.md` FAPI2-W5 contemplates enabling FAPI 2.0. Doing so would
@@ -1366,7 +1366,7 @@ the part that matters for Phase 4.
    if it is wrong, every downstream citation it redirects is wrong too. That is a different risk class from
    3a-F4's *"is Aug 2018 the right date?"*, which is how batch 3a framed it.
 3. **The curriculum does not follow the instruction.** `modules/00…/README.md:87` and `:250` still cite RFC
-   8446, and `PROGRESS.md:2177-2178` records RFC 8446 as *"verified against primary sources"*. So `SPEC-INVENTORY.md`
+   8446, and `PROGRESS.md:2226-2227` records RFC 8446 as *"verified against primary sources"*. So `SPEC-INVENTORY.md`
    says one thing and the module it governs says another, with no note reconciling them.
 
 Same treatment for **RFC 9864** (`SPEC-INVENTORY.md:62,73-75`), at S4: unfetched, but the annotation is
@@ -1393,7 +1393,7 @@ set"* — RP-Initiated Logout §3 wants exactly that, no client registers any `p
 deployment kept an env-driven **origin** allowlist with the departure recorded in `AGENTS.md`.
 
 **This is the more interesting half of the finding.** The answer key's estimate was the audit's own
-(**RPL-W1**), and reality disagreed with both: the "one-line fix" framing appears in `PROGRESS.md:1341-1356`, in
+(**RPL-W1**), and reality disagreed with both: the "one-line fix" framing appears in `PROGRESS.md:1390-1405`, in
 `RPL-W1`, and here. A remediation that turns out to be 150 lines and a documented spec departure is a better
 exam answer than the one currently marked correct — *"name the fix you would ship, and the gap it leaves"* is
 the question the shipped change actually poses.

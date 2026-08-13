@@ -74,7 +74,7 @@ grant, so machine-to-machine grant management is refused — is documented in bo
 
 ## Finding F-1 — revocation leaves access tokens alive for 24 hours (S2, confirmed from the repo's own evidence)
 
-`PROGRESS.md:1306-1314` records this from a live Module 10 run: after `DELETE /api/gm/<grant_id>` → 204, the
+`PROGRESS.md:1355-1363` records this from a live Module 10 run: after `DELETE /api/gm/<grant_id>` → 204, the
 grant's refresh token is gone (`[A053305]`) but its access token still introspects `active: true` with ~24 hours
 remaining.
 
@@ -152,7 +152,7 @@ change. Note that neither accepts the `DPoP` scheme, which is the substance of `
 | Draft revision `-03`, 9 May 2023 | `SPEC-INVENTORY.md`, `01-spec-matrix.md` §2 | **Confirmed** against `openid.net/specs/oauth-v2-grant-management-03.html` this session | **Accurate** |
 | `requireGrantOwnership` runs first, introspects, requires the grant to match, 403 otherwise; Authlete validates the token but not ownership | `AGENTS.md` | Matches the code exactly, including the reasoning | **Accurate — exemplary** |
 | "deliberately stricter than Grant Management for OAuth 2.0: a client-credentials token has no grant, so machine-to-machine grant management is not supported" | `AGENTS.md` | Correct, and correctly labelled as a departure | **Accurate** |
-| Revocation leaves access tokens alive 24 h; MUST satisfied, should not | `PROGRESS.md:1306-1314` | **Confirmed** against §6.5 verbatim | **Accurate — the most precisely-stated finding in the register** |
+| Revocation leaves access tokens alive 24 h; MUST satisfied, should not | `PROGRESS.md:1355-1363` | **Confirmed** against §6.5 verbatim | **Accurate — the most precisely-stated finding in the register** |
 | Grant Management listed as **"Working"** | `README.md:92-130` | True of the half that is implemented; the AS advertises five actions and three are unexercised | **Accurate but incomplete** / S3 — F-2 |
 | Nothing states that §5.1 restricts grant management to confidential clients | `docs/GRANT-MANAGEMENT.md`, `AGENTS.md`, Module 10 | F-3 | **Omission** / S3 |
 | Nothing states that `create`/`replace`/`merge` need no AS code and may already work | Module 10, `GRANT-MANAGEMENT.md` | F-2 | **Omission** / S3 |
@@ -162,7 +162,7 @@ change. Note that neither accepts the `DPoP` scheme, which is the substance of `
 - Grant Management for OAuth 2.0, `oauth-v2-grant-management-03`, 9 May 2023 — `https://openid.net/specs/oauth-v2-grant-management-03.html`, fetched this session. Quoted verbatim: §5.2's three actions, §5.5's `grant_id` obligation, §6.4's query shape, **§6.5's MUST/should sentence**, §7.1's three metadata parameters, §5.1's confidential-client restriction.
 - Live probes 2 and 3 (2026-08-10): `grant_management_endpoint`, `grant_management_actions_supported`, `grant_management_action_required`, `scopes_supported`, `accessTokenDuration`, per-client `clientType` — `SERVICE-CONFIG-PROBE.md` §6–§8
 - SDK 1.0.0: `GMResponseAction` (7 members), `GrantManagementAction` (`CREATE, QUERY, REPLACE, REVOKE, MERGE`) — `01-spec-matrix.md` §6
-- Repo-sourced live evidence: `PROGRESS.md:1306-1314` (revocation transcript, `[A053305]`)
+- Repo-sourced live evidence: `PROGRESS.md:1355-1363` (revocation transcript, `[A053305]`)
 - Code: `middleware/require-grant-ownership.ts` (whole file), `services/grant-management.service.ts:16-53`, `controllers/grant-management.controller.ts:15-55,77-100`, `routes/grant-management.routes.ts:11,16`
 
 ## Proposed work items
