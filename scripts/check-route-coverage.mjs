@@ -90,9 +90,25 @@ function referenceMatcher(path) {
   return new RegExp(withParams);
 }
 
+/**
+ * Comment lines are stripped before matching, and the reason is a live false positive: a test written for
+ * `/api/nativesso` carried a comment citing `/api/jar/process` as the defect it was modelled on, and that
+ * prose mention alone moved `/jar/process` out of the backlog. A route "covered" by someone else's comment
+ * is the one failure mode this check cannot afford — the whole point is to be crude but never wrong about
+ * the narrow thing it asserts.
+ *
+ * Only whole-line comments are removed (`// …`, and ` * …` inside a block). Trailing comments are left
+ * alone deliberately: stripping from the first `//` on a line would also eat the tail of any line
+ * containing a URL.
+ */
+const WHOLE_LINE_COMMENT = /^[ \t]*(?:\/\/|\/\*|\*).*$/gm;
+
 const testSources = TEST_DIRS.flatMap((d) => {
   try {
-    return walk(d).map((f) => ({ file: relative(REPO, f), text: readFileSync(f, "utf8") }));
+    return walk(d).map((f) => ({
+      file: relative(REPO, f),
+      text: readFileSync(f, "utf8").replace(WHOLE_LINE_COMMENT, ""),
+    }));
   } catch {
     return [];
   }
