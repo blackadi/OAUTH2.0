@@ -115,6 +115,50 @@ for (const r of routes) {
 const BASELINE_FILE = join(REPO, "scripts/route-coverage-baseline.json");
 const keyOf = (r) => `${r.method} ${r.path}`;
 
+/**
+ * `--triage` splits the backlog by *how blind* it is, because "47 uncovered routes" is not one problem:
+ *
+ *   A. no test anywhere for the module  — nothing asserts this code at all
+ *   B. module has unit tests, but no test drives the route  — the CONTROLLER is covered and the
+ *      **middleware wiring is not**
+ *
+ * B is the larger group and the one with history: `/api/jar/process` had a controller test and no auth
+ * middleware; `/api/device/complete` was ungated outside development; both introspection endpoints were
+ * unauthenticated. Every one of those is a wiring defect a route-level test catches and a controller test
+ * cannot. Work B by module, asserting the auth posture first.
+ */
+if (process.argv.includes("--triage")) {
+  const testFiles = TEST_DIRS.flatMap((d) => {
+    try { return walk(d).map((f) => f.split("/").pop()); } catch { return []; }
+  });
+  const stemOf = (file) => file.replace(/^server\/src\/routes\//, "").replace(/\.routes\.ts$/, "");
+  const groups = new Map();
+  for (const r of unreferenced) {
+    const stem = stemOf(r.file);
+    const hasModuleTest = testFiles.some((t) => t.startsWith(stem.split("-")[0]) || t.includes(stem));
+    const bucket = hasModuleTest ? "B" : "A";
+    if (!groups.has(bucket)) groups.set(bucket, new Map());
+    const byStem = groups.get(bucket);
+    byStem.set(stem, [...(byStem.get(stem) ?? []), keyOf(r)]);
+  }
+  const a = groups.get("A") ?? new Map();
+  const b = groups.get("B") ?? new Map();
+  const count = (m) => [...m.values()].reduce((n, v) => n + v.length, 0);
+
+  console.log(`A. NO test anywhere for the module — ${count(a)} route(s), highest risk`);
+  for (const [stem, keys] of a) for (const k of keys) console.log(`     ${k.padEnd(46)} (${stem})`);
+  console.log(`\nB. module has unit tests, route+middleware undriven — ${count(b)} route(s) in ${b.size} modules`);
+  for (const [stem, keys] of [...b].sort((x, y) => y[1].length - x[1].length)) {
+    console.log(`     ${String(keys.length).padStart(2)} routes  ${stem}`);
+  }
+  console.log(
+    "\nWork B by module, one integration block each, asserting the AUTH POSTURE first — that is the\n" +
+      "defect class this repo actually shipped (jar unauthenticated, device/complete ungated,\n" +
+      "introspection unauthenticated). A controller test cannot see any of them.",
+  );
+  process.exit(0);
+}
+
 if (process.argv.includes("--update-baseline")) {
   const entries = unreferenced.map(keyOf).sort();
   writeFileSync(BASELINE_FILE, `${JSON.stringify({ unreferenced: entries }, null, 2)}\n`);

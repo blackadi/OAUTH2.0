@@ -11,6 +11,51 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 
 ---
 
+## 0. START HERE — the next piece of work, and why it is that one
+
+*(Added 2026-08-13, after Phase 5's Tier 1 code batches. Read this before §1.)*
+
+**Phase 5's Tier 1 is essentially done; Tier 2 is documentation; Tier 3 is decisions. The highest
+defect-per-hour work in this repo is none of those — it is the route-coverage backlog**, because every code
+defect found on 2026-08-13 came out of that population and the population is not yet exhausted.
+
+```bash
+node scripts/check-route-coverage.mjs           # gate: fails only on NEW uncovered routes
+node scripts/check-route-coverage.mjs --triage  # the backlog, split by how blind it is
+```
+
+**"47 uncovered routes" is two different problems, and the split is what makes it tractable:**
+
+| | Count | What it means |
+|---|---|---|
+| **A** | **4** | No test anywhere for the module — nothing asserts this code at all |
+| **B** | **43**, in **10 modules** | The controller *is* unit-tested; **nothing drives the route with its middleware** |
+
+**B is the group with history.** `/api/jar/process` had a controller test and no auth middleware — it handed
+Authlete **tickets** to anonymous callers. `/api/device/complete` was ungated outside development. Both
+introspection endpoints were unauthenticated. **A controller test cannot see any of those**: it calls the
+handler directly and never touches the route's middleware chain. That is the defect class, and one
+integration block per module catches it.
+
+**So the work is 10 blocks, not 43 tests**, and the first assertion in each is *does this endpoint enforce
+the auth posture it claims?* — `401` without credentials, and **Authlete not called**. Order by blast radius:
+`client` (14 routes, admin surface returning secrets), `vci` (10), `token` (5, admin token management),
+`hsk` (4), then the rest.
+
+**Group A is ~30 minutes** and two of its four are `nativesso`, which is `nativeSsoSupported: false` — assert
+the honest failure rather than inventing a happy path.
+
+**Bank progress with `--update-baseline`** and commit the diff; never regenerate the baseline to silence a
+failure. `tests/integration/routes.test.ts` is the pattern to copy (`vi.hoisted()` + `vi.mock()` on
+`authlete.service`, `createApp()` factory).
+
+**After that**, in descending value: **T1-11's three spec-shaped endpoints** (PAR/Device/DCR return
+Authlete's camelCase envelope instead of the RFC body — probe-confirmed, but it breaks `ParSection.tsx:112`
+and `DeviceSection.tsx:159-160`, so server + SPA + lab transcripts belong in **one** batch); **T1-19**'s
+remaining small items; then **Tier 2** documentation and **Tier 3** decisions.
+
+---
+
 ## 1. Phase status
 
 | Phase | Output | Status |

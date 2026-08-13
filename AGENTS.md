@@ -279,6 +279,13 @@ to anonymous callers; `federation.service.ts` had no tests and *could not* have 
 was found by reading code, one at a time. **The question that finds them as a list is *"which routes does no
 test mention?"***, and that is all this script asks.
 
+**`--triage` splits the backlog by how blind it is**, which is what makes it workable: **4** routes have no
+test anywhere, and **43 across 10 modules** have a unit-tested controller but **nothing driving the route with
+its middleware**. The second group is the one with history — `/api/jar/process` had a controller test *and* no
+auth middleware; `/api/device/complete` was ungated outside development; both introspection endpoints were
+unauthenticated. **A controller test calls the handler directly and never touches the middleware chain**, so
+it cannot see any of that. Work it as one integration block per module, asserting the auth posture first.
+
 It **ratchets**: today's 47 uncovered routes are recorded in `scripts/route-coverage-baseline.json`, and the
 check fails only when a route *outside* that file is unreferenced — so adding an endpoint without a test
 breaks the build while the existing debt stays visible and shrinkable. Bank progress with
