@@ -6,6 +6,7 @@ import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
 import { parseBasicAuth } from "../utils/basic-auth";
 import { dpopHttpTarget } from "../utils/dpop";
+import { appendToParams } from "../utils/params";
 
 export class ParService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -44,12 +45,12 @@ export class ParService {
       requestBody.clientId = basic.clientId;
       requestBody.clientSecret = basic.clientSecret;
     } else if (clientId && clientSecret) {
-      requestBody.parameters = this.appendToParams(parameters, [
+      requestBody.parameters = appendToParams(parameters, [
         { key: "client_id", value: clientId },
         { key: "client_secret", value: clientSecret },
       ]);
     } else if (clientId) {
-      requestBody.parameters = this.appendToParams(parameters, [
+      requestBody.parameters = appendToParams(parameters, [
         { key: "client_id", value: clientId },
       ]);
     }
@@ -77,14 +78,4 @@ export class ParService {
     return response;
   }
 
-  private appendToParams(
-    params: string,
-    fields: Array<{ key: string; value: string }>
-  ): string {
-    const searchParams = new URLSearchParams(params);
-    for (const { key, value } of fields) {
-      searchParams.set(key, value);
-    }
-    return searchParams.toString();
-  }
 }

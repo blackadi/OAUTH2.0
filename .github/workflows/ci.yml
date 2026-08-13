@@ -70,4 +70,12 @@ jobs:
 
       - run: npm ci
 
+      # Added 2026-08-13. CI ran `build` alone, and `vite build` does not typecheck — so `npm run typecheck`
+      # existed in package.json and was never invoked, while 4 real type errors sat unnoticed, and the 16
+      # client test files never ran in CI at all. The server job has gated all three from the start; the
+      # client job gating only the bundler was the asymmetry that hid them.
+      - run: npm run typecheck
+
+      - run: npm run test
+
       - run: npm run build

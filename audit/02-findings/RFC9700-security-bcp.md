@@ -53,6 +53,13 @@
 > hypothetical exercise that **recommends this fix** and makes no claim about the code. 9700-W1/W2 appear in
 > neither direction of the lab-breakage register (`04-remediation-plan.md` §6.1, §6.2).
 
+> **✅ F-2's framing residue closed 2026-08-13.** The entry rested on `README.md` presenting a deliberately
+> unhardened teaching deployment as production guidance. It now opens with a *"Read this before you copy
+> anything"* block that tabulates all four departures — ROPC/implicit enabled, PKCE not required, 24-hour
+> tokens, the three deliberate token-exchange defects — each against what production would do, and says
+> plainly to copy the request handling rather than the service configuration. **§2.4 remains unmet by
+> decision, which is the point of the lab; it is no longer unmet *silently*.**
+
 - **Verdict:** `PARTIAL`
 - **Severity:** **S2** — was S1; see the banner above
 - **Original severity:** **S1** (F-1, fixed 2026-08-11)

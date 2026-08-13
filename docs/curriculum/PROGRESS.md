@@ -107,6 +107,58 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — B1-W1 + B1-W2 + MS-W1: a debugging endpoint stopped handing out tickets** (below)
 - [x] **2026-08-13 — T1-14 + T1-15: back-channel logout logged nobody out** (below)
 - [x] **2026-08-13 — T1-16 + T1-18: one line, an honest 500, and a work item that could not do what it said** (below)
+- [x] **2026-08-13 — T1-20 + the three S1 residues: CIBA could not authenticate its recommended client, and CI was not checking the client at all** (below)
+
+### 2026-08-13 — T1-20, the S1 residues, and a CI gate that never fired
+
+**Why this matters to a future session:** three things, and the third was found by accident while verifying
+the first. **721 server tests / 63 files, 109 client tests / 16 files.**
+
+**1. CIBA could not authenticate the client `AGENTS.md` tells you to configure.** That file recommends
+`CLIENT_SECRET_BASIC` for CIBA, citing Authlete's own guide. `ciba.service.ts` read `clientId`/`clientSecret`
+from the JSON body and **never looked at `Authorization: Basic`**, so that configuration could not work. The
+guide and the code had disagreed since the endpoint was written.
+
+It now uses the same three channels as `par.service.ts`, and **the negative control is the more interesting
+half of the verification**:
+
+| Presentation | Before | Now |
+|---|---|---|
+| `Authorization: Basic` | ignored — request failed as unauthenticated | **`USER_IDENTIFICATION`** |
+| body `clientId`+`clientSecret`, `CLIENT_SECRET_BASIC` client | **succeeded** | **`401 [A157357]`** |
+
+That second row is a fix, not a regression. The old code sent top-level credentials *regardless of how the
+caller supplied them*, so it **silently converted** a `client_secret_post`-shaped request onto the
+`client_secret_basic` channel — exactly the guessing `par.service.ts`'s comment forbids, and the reason
+Authlete's error names *where* it expected the credentials. `appendToParams` moved to `utils/params.ts` so
+the two services share one implementation; a second subtly-different copy is how this repo ended up with
+**four** bearer parsers.
+
+**2. The three open S1 residues are closed as documentation.** `README.md` now opens with *"Read this before
+you copy anything"* — a table of the four deliberate departures (ROPC and implicit enabled, PKCE not
+required, 24-hour tokens, the three token-exchange defects) each against what production would do. The
+feature tables gained honest statuses: FAPI 2.0 **Not enabled** (`fapiModes` unset), Native SSO **Not
+enabled**, Federation **Not enabled**, Backchannel Logout **Partial**, and a PKCE row stating plainly that it
+is supported but not required, with the RFC 9700 §2.1.1 citation. **"Working" used to mean two different
+things** — *the code path runs* and *the security control is on* — and the table conflated them.
+
+**What is still genuinely open, and it is one thing:** `pkceRequired` is `false` on every client. The
+configuration change was attempted on the two clients that are **not** load-bearing for teaching — `4277838306`
+(the SPA's, which uses `pkce.ts`) and `2176571218` (T1-3's) — and was **blocked by this environment's write
+policy**, not by any technical obstacle. `1523514379` and `1678274156` must keep PKCE optional: Module 02
+teaches the plain code flow and Module 03 shows what it costs, which needs both states to exist.
+
+**3. The CI gap, which is the finding with the longest reach.** Verifying the SPA change meant running
+`tsc` on `client/`, which reported **4 pre-existing type errors**. They had survived because
+**`.github/workflows/ci.yml`'s client job ran `npm run build` and nothing else** — and `vite build` does not
+typecheck. So `client/package.json` had a `typecheck` script CI never invoked, and **16 client test files
+that CI never ran**. The server job has gated typecheck, lint and test from the start; the client job gating
+only the bundler is the asymmetry that hid them.
+
+All four errors are fixed (`JsonWebKey & { kid?: string }` instead of a `Record` a real JWK cannot satisfy;
+a body type that admits the optional keys the auth channel legitimately omits) and **both gates are now in
+CI**. This is the fourth "what was supposed to have caught it" answer in five batches, and the first one
+that was not about a missing test file but about a **gate that existed and was never wired**.
 
 ### 2026-08-13 — T1-16, T1-18: the fifth work item whose criteria named an unreachable outcome
 

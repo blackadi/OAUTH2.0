@@ -44,12 +44,16 @@ function generateTemplate(clientId: string): string {
 }
 
 async function createRequestObject(
-  privateKeyJwk: Record<string, unknown>,
+  // `JsonWebKey` rather than `Record<string, unknown>`: a JWK has no index signature, so callers holding a
+  // real key could not pass it. `crypto.subtle.importKey` wants exactly this type anyway.
+  // `JsonWebKey` is what `crypto.subtle.importKey` wants; `kid` is a registered JWK member (RFC 7517 §4.5)
+  // that the DOM lib's type happens to omit, so it is spelled out here rather than cast away.
+  privateKeyJwk: JsonWebKey & { kid?: string },
   payload: Record<string, unknown>,
 ): Promise<string> {
   const privateKey = await crypto.subtle.importKey(
     'jwk',
-    privateKeyJwk as any,
+    privateKeyJwk,
     { name: 'ECDSA', namedCurve: 'P-256' },
     true,
     ['sign'],

@@ -16,6 +16,26 @@
 
 This project implements a complete OAuth 2.0 and OpenID Connect authorization server using [Express](https://expressjs.com/) and the [Authlete TypeScript SDK](https://github.com/authlete/authlete-typescript-sdk). Here's the key insight: **all the complex OAuth logic is handled by Authlete's cloud API**. This server is the "last mile" — the HTTP layer, session management, and user-facing pages that sit in front of Authlete.
 
+> ### Read this before you copy anything
+>
+> **The code is production-shaped. This *deployment* is deliberately not hardened, because it teaches.**
+> Several settings here are the opposite of what you would ship:
+>
+> | Here | In production |
+> |---|---|
+> | ROPC and implicit grants **enabled** | both retired — OAuth 2.1, RFC 9700 §2.4 and §2.1.2 |
+> | PKCE **not required** | required for every client (RFC 9700 §2.1.1) |
+> | Access tokens live **24 hours** | minutes |
+> | Three token-exchange defects **left in on purpose** | fixed — see `AGENTS.md` → *Deliberate defects* |
+>
+> None of these is an oversight; each is a lab. They are listed in the feature tables below with an honest
+> status, recorded in [`AGENTS.md`](AGENTS.md), and taught in the [curriculum](docs/curriculum/) — the whole
+> point is that you find them yourself, and the modules show you how. **What you should copy is the request
+> handling, not the service configuration.**
+>
+> The conformance evidence behind every status in this README lives in [`audit/`](audit/): 55 per-specification
+> findings, each citing the RFC clause and the live response it was checked against.
+
 ```mermaid
 %%{init: {'theme': 'dark'}}%%
 flowchart LR
@@ -89,9 +109,10 @@ npm --prefix client run dev    # SPA on :3001 (proxies /api → :3000)
 
 | Feature | Status | Documentation |
 |---------|--------|---------------|
-| Authorization Code (+ PKCE) | Working | [PKCE Tutorial](docs/PKCE-TUTORIAL.md) |
+| Authorization Code | Working | [API Reference](docs/API.md) |
+| PKCE (RFC 7636) | **Supported, not required** — `pkceRequired` is `false` on every client, so a code flow *without* PKCE still succeeds. RFC 9700 §2.1.1 says clients MUST use it. Deliberate: Module 02 teaches the plain flow and Module 03 shows what it costs, which needs both states to exist | [PKCE Tutorial](docs/PKCE-TUTORIAL.md) |
 | Client Credentials | Working | [API Reference](docs/API.md) |
-| Resource Owner Password | Working | [API Reference](docs/API.md) |
+| Resource Owner Password (ROPC) | **Working, and deliberately so** — the grant is retired by OAuth 2.1 and RFC 9700 §2.4. It is enabled here *because* Modules 01 and 07 teach why it was removed, using a live transcript. Do not copy this into a real deployment | [API Reference](docs/API.md) |
 | Refresh Tokens | Working | [API Reference](docs/API.md) |
 | OIDC Discovery | Working | [API Reference](docs/API.md) |
 | ID Tokens (signed JWT) | Working | [API Reference](docs/API.md) |
@@ -112,12 +133,20 @@ npm --prefix client run dev    # SPA on :3001 (proxies /api → :3000)
 
 ### Security & Logout
 
+> **"Working" means the code path is exercised on this deployment** — not that the corresponding security
+> control is switched on. Those are different claims, and this table used to conflate them. Three statuses
+> are used below and they mean exactly what they say. **Verify any of them yourself** against the live
+> service; the [curriculum](docs/curriculum/) teaches you how, and Module 09a gives you the vocabulary
+> (*advertised*, *permitted but not configured*, *declined*).
+
 | Feature | Status | Documentation |
 |---------|--------|---------------|
-| FAPI 2.0 + DPoP | Working | [FAPI Tutorial](docs/FAPI-TUTORIAL.md) |
-| Backchannel Logout | Working | [Backchannel Logout Tutorial](docs/BACKCHANNEL-LOGOUT-TUTORIAL.md) |
-| Native SSO | Working | [Native SSO Tutorial](docs/NATIVE-SSO-TUTORIAL.md) |
-| Grant Management | Working | [Grant Management](docs/GRANT-MANAGEMENT.md) |
+| DPoP (RFC 9449) | **Working** — sender-constrained tokens issued and verified at both protected resources | [FAPI Tutorial](docs/FAPI-TUTORIAL.md) |
+| FAPI 2.0 profile | **Not enabled** — `fapiModes` is unset on the service, so none of the profile's constraints are enforced. The code supports it; the deployment does not claim conformance | [FAPI Tutorial](docs/FAPI-TUTORIAL.md) |
+| Backchannel Logout | **Partial** — *receiving* is fully validated (all 11 of §2.6's steps) and terminates the subject's sessions. *Delivery* is unexercised: no client registers a `backchannel_logout_uri` | [Backchannel Logout Tutorial](docs/BACKCHANNEL-LOGOUT-TUTORIAL.md) |
+| Native SSO | **Not enabled** — `nativeSsoSupported` is `false` on the service | [Native SSO Tutorial](docs/NATIVE-SSO-TUTORIAL.md) |
+| Grant Management | **Working** — both halves verified end to end, including `grant_management_action=create` on the authorization request | [Grant Management](docs/GRANT-MANAGEMENT.md) |
+| OpenID Federation | **Not enabled** — no federation JWK Set is configured, so the entity statement cannot be generated | — |
 
 ### Operations
 

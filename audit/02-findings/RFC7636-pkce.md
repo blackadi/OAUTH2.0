@@ -17,7 +17,7 @@
 > banner deliberately does **not** downgrade the S1; that is the reviewer's call.
 
 - **Verdict:** `MISCONFIGURED` *(was `IMPLEMENTED_UNVERIFIED`; changed by the live service probe, 2026-08-10 — see `SERVICE-CONFIG-PROBE.md`)*
-- **Severity:** **S1** *(was S2)* — **F-1 closed; open on the unenforced control alone, pending Gate 4 Q1**
+- **Severity:** **S1** *(was S2)* — **F-1 closed. The control is still unenforced; what changed on 2026-08-13 is that the deployment now says so, prominently.** `README.md` carries a *"Read this before you copy anything"* block naming PKCE-not-required as one of four deliberate departures, and the feature table's PKCE row states it with the RFC 9700 §2.1.1 citation. **The remaining S1 is a configuration action, not a documentation one**: `pkceRequired: true` on the two clients that are not load-bearing for Modules 02–03, which need both states to exist in order to teach the difference. Attempted 2026-08-13 and **blocked by the environment's write policy**, not by a technical obstacle — see `PROGRESS.md`.
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/PKCE-TUTORIAL.md`, `docs/curriculum/modules/03-pkce-and-public-clients/`, `README.md`, `docs/curriculum/SPEC-INVENTORY.md:92`
 
