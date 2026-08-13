@@ -322,20 +322,44 @@ flowchart TB
 %%{init: {'theme': 'dark'}}%%
 flowchart TB
     Receive["Receive POST /api/backchannel_logout"]
+    Config{"JWKS_URI + expected<br/>iss and aud configured?"}
+    Cfg500["500 server_error<br/>(our fault, not the sender's)"]
     Extract["Extract logout_token"]
     Decode["Decode JWT header → get kid"]
     JWKS["Fetch OP's JWKS<br/>(cached 5 min)"]
-    Verify["Verify JWT signature<br/>(RS256 or ES256)"]
-    Validate["Validate events claim"]
-    Session["Extract sub → destroy session"]
+    Verify["Verify signature + iss + aud + exp<br/>(RS256 or ES256; never none)"]
+    Claims["Check iat window, events claim,<br/>sub-or-sid present, NO nonce"]
+    Bad400["400 invalid_request<br/>(the sender's fault)"]
+    Session["Look up sessions by sub<br/>in the session store → destroy"]
     OK["Return 200"]
 
-    Receive --> Extract --> Decode --> JWKS --> Verify --> Validate --> Session --> OK
+    Receive --> Config
+    Config -- no --> Cfg500
+    Config -- yes --> Extract --> Decode --> JWKS --> Verify --> Claims
+    Claims -- fails --> Bad400
+    Claims -- passes --> Session --> OK
 ```
+
+**Three things in that diagram are worth pausing on.**
+
+**The configuration gate comes first.** If this server cannot check a signature, it must not render any
+verdict on the token — not even a true one about a missing claim. Answering "your token is malformed" while
+unable to accept a well-formed one would be an accident of ordering, not an assessment. So unconfigured is a
+`500`, and it is `500` before the token is read at all.
+
+**`iss` and `aud` are not free.** `jwt.verify` checks `exp` by default but checks neither `iss` nor `aud`
+unless you pass them. A signature answers *who signed this*; it never answers *were they allowed to say it*
+or *was this addressed to me*. Until 2026-08-13 this endpoint passed only `algorithms`, so any OP whose key
+sat in the configured JWKS could log out any subject.
+
+**Sessions are found by `sub`, not by the request.** A back-channel logout is a server-to-server POST with no
+browser cookie, so `req.session` belongs to the *sending OP's* server. Destroying it — which is what this code
+did — ends nothing and still returns `200`, so the OP believes the user was logged out. That is the worst
+shape a security bug can take: silent success.
 
 ### Important: Raw Fetch (Not SDK)
 
-The Authlete TypeScript SDK v1.1.6 **does not** expose the Back-Channel Logout API. The server uses raw `fetch()` — one of only 3 services that do this.
+The Authlete TypeScript SDK (pinned to **v1.0.0** — see `AGENTS.md` on why the numerically-higher 1.1.x releases are *older* code) **does not** expose the Back-Channel Logout API. The server uses raw `fetch()`; it is now the **only** service that does, since `health.service.ts` moved to the SDK.
 
 **Two different auth methods are in play:**
 
@@ -343,6 +367,18 @@ The Authlete TypeScript SDK v1.1.6 **does not** expose the Back-Channel Logout A
 |-------|-------------|-------------|
 | **Our server's endpoints** (`/api/backchannel_logout/*`) | Basic auth | `MGMT_CLIENT_ID` / `MGMT_CLIENT_SECRET` |
 | **Authlete API** (`/api/{serviceId}/backchannel/logout/token`) | Bearer token | Service Access Token |
+
+**And the receiving endpoint needs three settings of its own**, because there this server is the RP:
+
+| Variable | Meaning |
+|---|---|
+| `JWKS_URI` | where the *other* OP publishes the keys its logout tokens are signed with |
+| `BACKCHANNEL_LOGOUT_ISSUER` | that OP's issuer identifier — the expected `iss` |
+| `BACKCHANNEL_LOGOUT_AUDIENCE` | **this** deployment's `client_id` at that OP — the expected `aud` |
+
+Not `JWT_ISSUER`: that describes tokens this server mints itself, and comparing an incoming token against our
+own identity would pass nothing legitimate. None of the three is set in this deployment, so the endpoint
+answers `500` — honestly, rather than pretending every token is malformed.
 
 ---
 

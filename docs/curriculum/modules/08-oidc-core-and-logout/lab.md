@@ -982,31 +982,59 @@ echo -n "missing logout_token     : "; curl -s -X POST "$API/backchannel_logout"
 ```
 
 ```
-well-formed logout token : {"error":"invalid_request","error_description":"Invalid logout token"}
-no events claim          : {"error":"invalid_request","error_description":"Token is not a backchannel logout token"}
+well-formed logout token : {"error":"server_error"}
+no events claim          : {"error":"server_error"}
 missing logout_token     : {"error":"invalid_request","error_description":"Missing logout_token"}
 ```
 
-The middle and last messages are precise and useful. The first is neither — and the difference is the
-exercise. Look at the server's own log:
+**Read those three answers carefully, because the first two changed on 2026-08-13 and the change is the
+lesson.** They used to be:
 
 ```
-error: Backchannel logout error JWKS_URI must be configured to verify backchannel logout tokens
+well-formed logout token : {"error":"invalid_request","error_description":"Invalid logout token"}
+no events claim          : {"error":"invalid_request","error_description":"Token is not a backchannel logout token"}
 ```
 
-**`JWKS_URI` is not set in `server/.env`, so the receiving endpoint cannot work at all** — and the failure is
-reported to the caller as *"Invalid logout token"*, blaming the input for a server configuration problem. An
-operator debugging this reads the error, checks their token, finds nothing wrong, and loses an afternoon.
+`400 invalid_request` means *"your token is bad"*. But `JWKS_URI` is not set in `server/.env`, so this server
+**cannot check any signature at all**. It was not judging the token; it could not. An operator debugging that
+reads the error, inspects their perfectly good token, finds nothing wrong, and loses an afternoon.
 
-Two structural observations about `logout.controller.ts` that matter more than the config:
+`500 server_error` means *"my fault, not yours"* — and the server's log now says which knob is missing.
+**Notice that even the "no events claim" case became a 500**, and that is deliberate rather than sloppy: if
+the server cannot verify a signature, it must not render *any* verdict on the token, not even a true one about
+a missing claim. Declaring "this token is malformed" while unable to accept a well-formed one would be an
+accident of check ordering, not an assessment.
 
-1. **`jwt.verify(logoutToken, publicKey, { algorithms: [...] })` checks the signature and nothing else.** No
-   `issuer`, no `audience`, no `exp`. OIDC Back-Channel Logout requires validating `iss`, `aud`, `iat`, and
-   the `events` claim, and requires rejecting a token containing `nonce`. Only the `events` check is present.
-2. **It destroys `req.session`** — the session of whoever sent the POST. A back-channel logout is a
-   server-to-server call carrying no browser cookie, so `req.session` is not the user's session. To act on a
-   logout token you need a session store queryable by `sub`/`sid`. As written, a successfully verified logout
-   token would destroy nothing.
+The last line still answers 400, because "you sent no `logout_token`" is a fact about the *request* that holds
+regardless of our configuration.
+
+> **The rule.** Map a failure to the party that can fix it. `4xx` is the caller's problem, `5xx` is yours. A
+> server that reports its own misconfiguration as client error sends people to debug the wrong machine — and
+> it is the single most common way a correct client is blamed for a broken deployment.
+
+### What else was wrong here, and what it took to see it
+
+Two structural defects sat in `logout.controller.ts` alongside the status-code bug. Both were fixed on
+2026-08-13; read them as a worked example of how to audit a validation routine.
+
+1. **`jwt.verify(logoutToken, publicKey, { algorithms: [...] })` checked the signature and almost nothing
+   else.** No `issuer`, no `audience`, no `iat` bound, no `sub`/`sid` presence, no rejection of `nonce` —
+   five of §2.6's eleven steps missing. `exp` *was* checked, because `jsonwebtoken` enforces it by default;
+   knowing which checks a library gives you free and which it does not is the whole skill here. The gap
+   meant any OP whose key happened to be in the configured JWKS could log out any subject, and a token
+   addressed to a different `aud` was accepted.
+2. **It destroyed `req.session`** — the session of whoever sent the POST. A back-channel logout is a
+   server-to-server call carrying no browser cookie, so `req.session` was never the user's session. The
+   endpoint therefore destroyed nothing, returned `200`, and the sending OP believed the user had been
+   logged out. **A security feature that silently does nothing is worse than one that visibly fails**, and
+   this one had `AGENTS.md` describing it as working correctly.
+
+The fix looks sessions up by `sub` in the session store (`utils/session-store.ts`). One detail there is worth
+your attention because it is the kind of thing that ships broken: the two session stores this server supports
+return **different shapes** from `Store.all()` — an object keyed by session id for the in-memory store, an
+array for Redis. Handle only one and the feature silently terminates nothing on the other, which is exactly
+the failure mode being fixed. The test suite runs the real in-memory store rather than trusting a reading of
+its source.
 
 Also check what discovery says about all this:
 

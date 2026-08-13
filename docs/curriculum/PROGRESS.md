@@ -105,6 +105,94 @@ against it before calling the capstone complete._
 - [x] **2026-08-12 — T1-17: five unprobed behaviours, five answers, and no code owed** (below)
 - [x] **2026-08-13 — T1-9 + T1-10 + 6749-W1: grant management became a real protected resource** (below)
 - [x] **2026-08-13 — B1-W1 + B1-W2 + MS-W1: a debugging endpoint stopped handing out tickets** (below)
+- [x] **2026-08-13 — T1-14 + T1-15: back-channel logout logged nobody out** (below)
+
+### 2026-08-13 — T1-14, T1-15 (+BCL-W3, BCL-W7): back-channel logout logged nobody out
+
+**Why this matters to a future session:** `POST /api/backchannel_logout` performed **five of OIDC
+Back-Channel Logout §2.6's eleven validation steps**, and then destroyed the **wrong session**. Both are
+fixed and both were verified live against a locally-served JWKS, not only in tests. **709 tests / 61 files.**
+
+**Start with the coverage fact, because it explains how this survived.** The endpoint had **no unit and no
+integration tests at all** — two E2E assertions, in the suite that is never run locally because it burns
+Authlete quota. So every green run of the suite said precisely nothing about it. It now has 16 unit tests
+plus 9 for the session helper. **When you find an old defect, ask what was supposed to have caught it.**
+
+**Defect 1 — `jwt.verify` was called with `{ algorithms }` and nothing else.** No `issuer`, no `audience`, no
+`iat` bound, no `sub`/`sid` presence check, no rejection of the forbidden `nonce`. Any OP whose key happened
+to sit in the configured JWKS could log out any subject, and a token addressed to a different `aud` was
+accepted. All five are now checked; each rejection was driven live:
+
+| Token | Result |
+|---|---|
+| conformant | **200**, subject's sessions terminated |
+| `iss` = someone else | 400 — *"jwt issuer invalid. expected: …"* |
+| `aud` = someone else | 400 — *"jwt audience invalid. expected: …"* |
+| no `sub` and no `sid` | 400 |
+| carries `nonce` | 400 |
+| `iat` 4000s old | 400 |
+| `sid` only, no `sub` | **200**, acts on nothing (see below) |
+
+**The generalised rule is in `AGENTS.md`, and its second clause is the one that gets skipped.** Pass `issuer`
+and `audience` on every `jwt.verify` — *and* refuse the request when those expectations are unconfigured.
+Omitting an option because its value is empty silently downgrades the check to "any issuer, any audience",
+and looks identical in the code and in the logs. That is exactly why T0-2 declined to fall back to an unset
+`JWT_ISSUER`. Two new settings carry the expectations, and they are **not** `JWT_ISSUER`: on this endpoint the
+server is an **RP**, so `BACKCHANNEL_LOGOUT_ISSUER` is the *other* OP's issuer and `BACKCHANNEL_LOGOUT_AUDIENCE`
+is our `client_id` **there**. Comparing an incoming token against our own identity would pass nothing
+legitimate.
+
+**Defect 2, and the more instructive one — it destroyed `req.session`.** That is the session of *the caller*.
+A back-channel logout is a server-to-server POST carrying no browser cookie, so `req.session` was never the
+user's session. The endpoint therefore **destroyed nothing, returned 200, and the sending OP believed the
+user had been logged out.** `AGENTS.md` described this as *"properly destroys `req.session`"* — an accurate
+description of the code and a perfect description of the bug. **A security feature that silently does nothing
+is worse than one that visibly fails**, because nothing ever prompts anyone to look.
+
+Sessions are now found by `sub` in the session store (`utils/session-store.ts`). **The detail that would have
+shipped broken:** the two supported stores return **different shapes** from `Store.all()` —
+
+| Store | `all(cb)` yields |
+|---|---|
+| express-session MemoryStore | an **object keyed by session id**; the values carry no `id` |
+| connect-redis | an **array**, each element with `sess.id` attached |
+
+— so a handler written against one silently terminates nothing against the other, which is the very failure
+being fixed. Both were read rather than assumed, both are normalised, and a test drives the **real**
+MemoryStore rather than a mock of it.
+
+**What live verification could and could not reach, stated plainly.** No client registers a
+`backchannel_logout_uri` and there is no second OP, so *delivery* stays unexercised. Receipt was proven by
+standing up a local JWKS and driving all seven cases through the running server. The termination wiring was
+proven by the log line `terminated sessions for subject {"destroyed":0,…}` — **`0`, not `null`**, which is
+what shows `req.sessionStore` was reachable and enumerable in the real server; `null` is the code's signal
+that the store could not be enumerated at all. That a *logged-in* session dies is covered by the real
+MemoryStore test, not by the live run.
+
+**A `sid`-only token is accepted and acts on nothing.** §2.6 step 5 asks only that `sub` *or* `sid` be
+present, so rejecting it would be wrong. But this OP issues no `sid` into its own sessions (Session
+Management is declined), so there is nothing to match. That is a gap in what can be acted on, logged at
+`error`, not a reason to refuse a conformant token.
+
+**Two adjacent fixes, same function.** **BCL-W3**: an unset `JWKS_URI` threw into the catch-all that answered
+`400 invalid_request`, blaming the sender for our misconfiguration. It is now **500**, and the check runs
+*before the token is read* — stronger than the work item asked, and deliberately: **a server that cannot
+verify a signature must not render any verdict on the token, not even a true one.** So the "no events claim"
+case became a 500 too, which is honest rather than sloppy. **BCL-W7**: `Cache-Control: no-store` (§2.8),
+set before any branch so it is on the 400 and 500 paths as well.
+
+**Curriculum — Module 08 Exercise 6c was already teaching all three of these defects**, so it was rebuilt
+rather than patched: the transcript now shows the fixed statuses, and the prose walks the before/after and
+the rule (*map a failure to the party that can fix it*). **It also carried a spec error that is now
+corrected** — it claimed `jwt.verify` checks "no `issuer`, no `audience`, no `exp`". It checks `exp` by
+default; the audit's own normative table said so and the lab contradicted it. Knowing which checks a library
+gives you free and which it does not is the entire skill the exercise is teaching.
+
+**Recorded, not fixed.** `JWT_ISSUER` is set to `https://blackadi.dev/` — **with a trailing slash** — while
+the live issuer is `https://blackadi.dev` without one. It feeds `reqBody.iss` at
+`token.management.controller.ts:266` (the dev JWT), so a consumer comparing that `iss` against the discovery
+document would fail. It belongs with **9068-W2** in T1-19. It also sharpens T0-2's note, which recorded
+`JWT_ISSUER` as merely *unset*: it is set, and wrong.
 
 ### 2026-08-13 — B1-W1, B1-W2, MS-W1 (= 9701-W1): the ticket leak and the last live 500
 

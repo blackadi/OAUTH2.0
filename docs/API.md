@@ -419,11 +419,23 @@ Ends the session. Verifies any `id_token_hint` against the OP's JWKS, optionally
 **Redirect rule (RP-Initiated Logout 1.0 §3).** The URI must **exactly match** one registered for *that client*. The client is taken from `client_id`, or from the `aud` of a verified `id_token_hint` when `client_id` is absent. **No identified client ⇒ no redirect**, since an unidentified client has an empty registered set. Matching is byte-for-byte: `http://localhost:3000` does not match `http://localhost:3000/`. The registry is the `POST_LOGOUT_REDIRECT_URIS` env var (`{"<clientId>": ["<uri>", …]}`) because Authlete 3.0 has no client field for it. `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` do **not** authorise redirects.
 
 ### `POST /api/backchannel_logout`
-Receive incoming logout tokens from other OPs.
+Receive incoming logout tokens from other OPs. Here this server is the **RP**, not the OP.
 
 **Body:** `logout_token`
 
-**Response:** 200 (processed), 400 (invalid token)
+**Validation (OIDC Back-Channel Logout §2.6, all eleven steps).** Signature against `JWKS_URI`; `alg` from an
+allowlist that excludes `none`; `iss` equal to `BACKCHANNEL_LOGOUT_ISSUER`; `aud` equal to
+`BACKCHANNEL_LOGOUT_AUDIENCE`; `exp` unexpired; `iat` within five minutes; the backchannel-logout `events`
+claim present; `sub` or `sid` present; and **no** `nonce` claim. On success the **subject's** sessions are
+terminated — not the caller's, which is another server and has no browser session.
+
+**Configuration is required, and its absence is a 500.** With any of `JWKS_URI`,
+`BACKCHANNEL_LOGOUT_ISSUER` or `BACKCHANNEL_LOGOUT_AUDIENCE` unset the endpoint answers
+`500 server_error` without examining the token. Omitting an `iss`/`aud` check rather than refusing would
+silently downgrade it to "any issuer, any audience".
+
+**Response:** 200 (processed) · 400 (the token is bad — the sender's fault) · 500 (we are misconfigured, or
+the session store failed — our fault). `Cache-Control: no-store` on every response (§2.8).
 
 ### `POST /api/backchannel_logout/issue`
 Create signed logout token. Admin Basic auth required.
