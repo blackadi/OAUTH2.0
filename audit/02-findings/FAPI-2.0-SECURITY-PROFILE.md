@@ -29,11 +29,17 @@
 > **One measured value in this entry moved with T1-5**, and it matters for §5.3.2.1: the profile permits mTLS
 > *or* `private_key_jwt`, and `token_endpoint_auth_methods_supported` no longer advertises the mTLS pair at all,
 > so the only FAPI-acceptable method this service offers is `private_key_jwt` — which **one client now actually
-> uses** (T1-3). The gap is that it is required of nobody. Severity stays **S2** on F-2's basis: the profile is
-> off and `README.md` still calls FAPI 2.0 "Working".
+> uses** (T1-3). The gap is that it is required of nobody.
+>
+> **✅ F-2 closed 2026-08-13, and the severity moves with it — S2 → S3.** F-2 was *"`README.md` still calls
+> FAPI 2.0 'Working'"*. It now reads **"Not enabled — `fapiModes` is unset on the service, so none of the
+> profile's constraints are enforced. The code supports it; the deployment does not claim conformance."*
+> DPoP is listed separately as **Working**, because it genuinely is — the old single row conflated a
+> *profile* with a *mechanism*. **What remains is S3 and is not a false claim**: the profile is off, which is
+> a Tier 3 decision (**DR-02**), and the deployment now says so in the first place a reader looks.
 
 - **Verdict:** `MISCONFIGURED` *(unchanged — the profile itself is still not enabled)*
-- **Severity:** ~~**S1**~~ → **S2** (FAPI2-W1 shipped 2026-08-11)
+- **Severity:** ~~**S1**~~ → ~~S2~~ → **S3** (FAPI2-W1 2026-08-11; F-2's `README.md` claim corrected 2026-08-13)
 - **Status:** OpenID **Final**, **22 February 2025** — re-verified against the primary source this session
 - **Authlete version:** 3.0 (`Service.fapiModes`, `FAPI2_SECURITY`)
 - **Repo docs under test:** `README.md` feature tables, `docs/FAPI-TUTORIAL.md`, `docs/curriculum/modules/10-fapi-and-grant-management/`, `AGENTS.md`, `client/src/components/fapi/FapiSection.tsx`

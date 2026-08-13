@@ -61,7 +61,7 @@
 > decision, which is the point of the lab; it is no longer unmet *silently*.**
 
 - **Verdict:** `PARTIAL`
-- **Severity:** **S2** — was S1; see the banner above
+- **Severity:** **S3** — was S1, then S2; see the banners above. F-2's framing residue closed 2026-08-13, so what remains is deliberate curriculum material with the departure stated in `README.md`'s posture table
 - **Original severity:** **S1** (F-1, fixed 2026-08-11)
 - **Authlete version:** 3.0 — no vendor surface; RFC 9700 is realised through other flags and through this server's own code
 - **Repo docs under test:** `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/curriculum/modules/07-oauth-2-1-and-security-bcp/`, `modules/01`, `modules/02`, `modules/03`
