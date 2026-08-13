@@ -83,4 +83,55 @@ describe("TokenManagementService", () => {
       )
     })
   })
+
+  // Two callers with deliberately different argument sources: the admin route passes an Express
+  // Request, and token.controller.ts's ID_TOKEN_REISSUABLE branch passes server-derived params.
+  describe("reissueIdToken", () => {
+    it("reads an Express request body — the admin route", async () => {
+      vi.mocked(mockApi.token.management.reissueIdToken).mockResolvedValue({ action: "OK" } as any)
+
+      const req = { body: { accessToken: "at-1", refreshToken: "rt-1", sub: "user-1" } } as any
+      await service.reissueIdToken(req)
+      expect(mockApi.token.management.reissueIdToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idtokenReissueRequest: expect.objectContaining({
+            accessToken: "at-1",
+            refreshToken: "rt-1",
+            sub: "user-1",
+          }),
+        })
+      )
+    })
+
+    it("accepts a plain params object — the token endpoint's reissue branch", async () => {
+      vi.mocked(mockApi.token.management.reissueIdToken).mockResolvedValue({ action: "OK" } as any)
+
+      await service.reissueIdToken({
+        accessToken: "at-2",
+        refreshToken: "rt-2",
+        sub: "admin",
+        idTokenAudType: "string",
+      })
+      expect(mockApi.token.management.reissueIdToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idtokenReissueRequest: expect.objectContaining({
+            accessToken: "at-2",
+            refreshToken: "rt-2",
+            sub: "admin",
+            idTokenAudType: "string",
+          }),
+        })
+      )
+    })
+
+    it("refuses either shape without both tokens — both are REQUIRED by the reissue API", async () => {
+      await expect(service.reissueIdToken({ accessToken: "at-3" })).rejects.toThrow(
+        /accessToken and refreshToken/
+      )
+      await expect(service.reissueIdToken({ body: { refreshToken: "rt-3" } } as any)).rejects.toThrow(
+        /accessToken and refreshToken/
+      )
+      expect(mockApi.token.management.reissueIdToken).not.toHaveBeenCalled()
+    })
+  })
 })

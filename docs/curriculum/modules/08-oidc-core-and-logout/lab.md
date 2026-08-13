@@ -153,7 +153,7 @@ payload:
 {
   "iss": "https://…",
   "sub": "admin",
-  "aud": ["…your client_id…"],
+  "aud": "…your client_id…",
   "exp": …,
   "iat": …,
   "auth_time": …,
@@ -189,11 +189,24 @@ Before validating anything, make sure you can say *why each claim is there*. Fil
 
 Two things to notice and write down.
 
-**`aud` is an array here.** `["<your-client-id>"]`, not `"<your-client-id>"`. Both are legal — `aud` is defined as
-*"Audience(s)"* — but a validator written as `claims.aud === clientId` fails against this server and passes
-against one that emits a string. `AGENTS.md`'s own recommended-flag table lists `idTokenAudType: "string"`
-(following a FAPI WG decision of November 2024) and this service does not set it. **Handle both shapes; you
-do not control which one a provider sends.**
+**`aud` is a bare string here — and it was an array until 2026-08-12.** Both are legal: `aud` is defined as
+*"Audience(s)"*, so a single value may be sent either as `"<your-client-id>"` or as `["<your-client-id>"]`.
+The service now sets `idTokenAudType: "string"` (following a FAPI WG decision of November 2024, which
+`AGENTS.md`'s recommended-flag table has always listed); before that it emitted the array form.
+
+**This is the most useful thing in the exercise, so do not skim it.** A validator written
+`claims.aud === clientId` was *broken* against this server a fortnight ago and *works* today — and one
+written `claims.aud.includes(clientId)` was fine then and **throws `TypeError: claims.aud.includes is not a
+function` now.** Nothing about the specification changed. One console flag flipped, and each naive validator
+broke in the opposite direction from the other. That is why step 3 of the validator you are about to write
+normalises first:
+
+```js
+const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+```
+
+**Handle both shapes; you do not control which one a provider sends, and you may not control when it
+changes.**
 
 **`s_hash` is present and `at_hash` is not.** `s_hash` binds `state`; `at_hash` would bind an access token,
 and is only required when the access token travels through the front channel — which, in the code flow, it
@@ -305,7 +318,7 @@ ISSUER="$ISSUER" CLIENT_ID="$CLIENT_ID" CLIENT_SECRET="$CLIENT_SECRET" EXPECT_NO
 ```
 PASS  step  1  not encrypted (3 parts, JWS)
 PASS  step  2  iss matches expected issuer — https://…
-PASS  step  3  aud contains client_id — ["…"]
+PASS  step  3  aud contains client_id — "…"
 PASS  step  5  azp absent (single audience) — n/a
 PASS  step  7  alg is the registered algorithm (HS256) — header says HS256
 PASS  step  6  signature verifies — HMAC with client_secret (step 8)
@@ -350,7 +363,7 @@ https://<your-callback>/#state=h1&code=REDACTED&id_token=REDACTED&iss=https%3A%2
 Both artefacts, in the **fragment**. Decode that ID token and you will find:
 
 ```json
-{"iss":"…","sub":"admin","aud":["…"],"exp":…,"iat":…,"auth_time":…,
+{"iss":"…","sub":"admin","aud":"…","exp":…,"iat":…,"auth_time":…,
  "nonce":"hn1","acr":"pwd","c_hash":"BgRKDAMjHi43C3By_ZB_Ww","s_hash":"…"}
 ```
 
@@ -364,36 +377,57 @@ computing it is the same left-half-of-a-SHA-256 construction as `at_hash`.
 
 ### 3d — Validating against JWKS instead of a shared secret
 
-Everything above verified the signature with the **client secret**, because this deployment's clients are
-registered with `idTokenSignAlg: HS256`. That is the branch OIDC Core step 8 describes, and Exercise 4 will
-show you why it is the wrong choice.
+Everything above verified the signature with the **client secret**, because `$CLIENT_ID` — the confidential
+client the labs use — is registered with `idTokenSignAlg: HS256`. That is the branch OIDC Core step 8
+describes, and Exercise 4 will show you why it is the wrong choice.
 
-To switch to asymmetric validation: in the Authlete Console, set each client's **ID token signature
-algorithm** to `ES256`, then re-run 3b with the JWKS branch instead of the secret:
+You do not need to change any console setting to see the other branch. **`$PUB_CLIENT_ID` already signs
+`ES256`**, so run the flow against it and re-run the validator with the JWKS branch instead of the secret — a
+public client takes no secret, hence the empty fourth argument:
 
 ```bash
-JWKS_URI="$API/.well-known/jwks.json" ISSUER="$ISSUER" CLIENT_ID="$CLIENT_ID" \
+NONCE="NONCE-$(openssl rand -hex 6)"
+IDT=$(/tmp/flow.sh "$PUB_CLIENT_ID" "$REDIRECT_URI" "scope=openid%20profile&state=v1&nonce=$NONCE" "" \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).id_token))')
+
+JWKS_URI="$API/.well-known/jwks.json" ISSUER="$ISSUER" CLIENT_ID="$PUB_CLIENT_ID" \
   EXPECT_ALG=ES256 EXPECT_NONCE="$NONCE" node /tmp/validate-id-token.mjs "$IDT"
 ```
 
-The header will then carry a `kid`, the script will select the matching key from
+The header now carries a `kid`, and the script selects the matching key from
 
 ```bash
 curl -s "$API/.well-known/jwks.json"
 ```
 
 ```json
-{"keys":[{"kty":"EC","use":"sig","crv":"P-256","kid":"1","alg":"ES256","x":"…","y":"…"}]}
+{"keys":[{"kty":"EC","use":"sig","crv":"P-256","kid":"1","x":"…","y":"…","alg":"ES256"},
+         {"kty":"RSA","e":"AQAB","use":"sig","kid":"rsa-1","n":"…"}]}
 ```
 
-…and verify against the public key. **This is the path that matters in production**, because it is the only
-one that lets a party verify without also being able to forge.
+```
+PASS  step  7  alg is the registered algorithm (ES256) — header says ES256
+PASS  step  6  signature verifies — JWKS key kid=1 (ES256)
 
-> **`UNVERIFIED` on this deployment as of 2026-07-28.** Both clients here are still `HS256`, so the ES256
-> branch of the script has not been exercised end to end and no transcript for it is shown above. The script
-> is written and the JWKS is real (one EC P-256 key, `kid: "1"`, shown above, fetched live); what has not
-> been observed is an ES256-signed ID token from this server passing through it. Everything in 3a–3c *is*
-> verified. Flip the flag and this becomes a two-minute exercise.
+ACCEPT — all checks passed
+```
+
+…verified against the public key. **This is the path that matters in production**, because it is the only one
+that lets a party verify without also being able to forge.
+
+> **Two keys, and that is what makes step 6 honest.** Until 2026-08-12 this JWKS held a single key, so the
+> script's fallback — `?? (jwks.keys.length === 1 ? jwks.keys[0] : undefined)` in 3a — quietly rescued a
+> `kid` lookup that found nothing, and a broken selector would still have printed `ACCEPT`. It no longer can.
+> Re-read that line now that it cannot fire: **a fallback that is never exercised is a test you are not
+> running.** The RSA key arrived to satisfy the Discovery §3 `MUST` you will meet in 6d.
+
+> **Verified end to end, 2026-08-12** — `$PUB_CLIENT_ID`, `kid: "1"`, all thirteen applicable steps `PASS`.
+> The previous note here said *"both clients here are still `HS256`"* and marked this branch `UNVERIFIED as
+> of 2026-07-28`. **That was wrong when written and got wronger:** only the confidential client is `HS256`;
+> the two public clients have been `ES256` throughout, so the branch was runnable the whole time and nobody
+> ran it. The lesson is the one this module keeps teaching — *"the console said so"* is not evidence, and an
+> `UNVERIFIED` marker whose premise nobody re-checked is worse than no marker, because it looks like
+> diligence.
 
 ---
 
@@ -948,31 +982,59 @@ echo -n "missing logout_token     : "; curl -s -X POST "$API/backchannel_logout"
 ```
 
 ```
-well-formed logout token : {"error":"invalid_request","error_description":"Invalid logout token"}
-no events claim          : {"error":"invalid_request","error_description":"Token is not a backchannel logout token"}
+well-formed logout token : {"error":"server_error"}
+no events claim          : {"error":"server_error"}
 missing logout_token     : {"error":"invalid_request","error_description":"Missing logout_token"}
 ```
 
-The middle and last messages are precise and useful. The first is neither — and the difference is the
-exercise. Look at the server's own log:
+**Read those three answers carefully, because the first two changed on 2026-08-13 and the change is the
+lesson.** They used to be:
 
 ```
-error: Backchannel logout error JWKS_URI must be configured to verify backchannel logout tokens
+well-formed logout token : {"error":"invalid_request","error_description":"Invalid logout token"}
+no events claim          : {"error":"invalid_request","error_description":"Token is not a backchannel logout token"}
 ```
 
-**`JWKS_URI` is not set in `server/.env`, so the receiving endpoint cannot work at all** — and the failure is
-reported to the caller as *"Invalid logout token"*, blaming the input for a server configuration problem. An
-operator debugging this reads the error, checks their token, finds nothing wrong, and loses an afternoon.
+`400 invalid_request` means *"your token is bad"*. But `JWKS_URI` is not set in `server/.env`, so this server
+**cannot check any signature at all**. It was not judging the token; it could not. An operator debugging that
+reads the error, inspects their perfectly good token, finds nothing wrong, and loses an afternoon.
 
-Two structural observations about `logout.controller.ts` that matter more than the config:
+`500 server_error` means *"my fault, not yours"* — and the server's log now says which knob is missing.
+**Notice that even the "no events claim" case became a 500**, and that is deliberate rather than sloppy: if
+the server cannot verify a signature, it must not render *any* verdict on the token, not even a true one about
+a missing claim. Declaring "this token is malformed" while unable to accept a well-formed one would be an
+accident of check ordering, not an assessment.
 
-1. **`jwt.verify(logoutToken, publicKey, { algorithms: [...] })` checks the signature and nothing else.** No
-   `issuer`, no `audience`, no `exp`. OIDC Back-Channel Logout requires validating `iss`, `aud`, `iat`, and
-   the `events` claim, and requires rejecting a token containing `nonce`. Only the `events` check is present.
-2. **It destroys `req.session`** — the session of whoever sent the POST. A back-channel logout is a
-   server-to-server call carrying no browser cookie, so `req.session` is not the user's session. To act on a
-   logout token you need a session store queryable by `sub`/`sid`. As written, a successfully verified logout
-   token would destroy nothing.
+The last line still answers 400, because "you sent no `logout_token`" is a fact about the *request* that holds
+regardless of our configuration.
+
+> **The rule.** Map a failure to the party that can fix it. `4xx` is the caller's problem, `5xx` is yours. A
+> server that reports its own misconfiguration as client error sends people to debug the wrong machine — and
+> it is the single most common way a correct client is blamed for a broken deployment.
+
+### What else was wrong here, and what it took to see it
+
+Two structural defects sat in `logout.controller.ts` alongside the status-code bug. Both were fixed on
+2026-08-13; read them as a worked example of how to audit a validation routine.
+
+1. **`jwt.verify(logoutToken, publicKey, { algorithms: [...] })` checked the signature and almost nothing
+   else.** No `issuer`, no `audience`, no `iat` bound, no `sub`/`sid` presence, no rejection of `nonce` —
+   five of §2.6's eleven steps missing. `exp` *was* checked, because `jsonwebtoken` enforces it by default;
+   knowing which checks a library gives you free and which it does not is the whole skill here. The gap
+   meant any OP whose key happened to be in the configured JWKS could log out any subject, and a token
+   addressed to a different `aud` was accepted.
+2. **It destroyed `req.session`** — the session of whoever sent the POST. A back-channel logout is a
+   server-to-server call carrying no browser cookie, so `req.session` was never the user's session. The
+   endpoint therefore destroyed nothing, returned `200`, and the sending OP believed the user had been
+   logged out. **A security feature that silently does nothing is worse than one that visibly fails**, and
+   this one had `AGENTS.md` describing it as working correctly.
+
+The fix looks sessions up by `sub` in the session store (`utils/session-store.ts`). One detail there is worth
+your attention because it is the kind of thing that ships broken: the two session stores this server supports
+return **different shapes** from `Store.all()` — an object keyed by session id for the in-memory store, an
+array for Redis. Handle only one and the feature silently terminates nothing on the other, which is exactly
+the failure mode being fixed. The test suite runs the real in-memory store rather than trusting a reading of
+its source.
 
 Also check what discovery says about all this:
 
@@ -1001,12 +1063,41 @@ curl -s "$API/.well-known/openid-configuration" | node -e 'let s="";process.stdi
 ```
 
 ```
+[
+  'PS384', 'RS384',
+  'HS256', 'HS512',
+  'ES256', 'RS256',
+  'HS384', 'PS256',
+  'PS512', 'RS512'
+]
+```
+
+OpenID Connect Discovery 1.0 §3, on `id_token_signing_alg_values_supported`: *"The algorithm RS256 **MUST**
+be included."* It is — and it only started being on **2026-08-12**. Until then this endpoint returned:
+
+```
 [ 'HS256', 'HS512', 'ES256', 'HS384' ]
 ```
 
-OpenID Connect Discovery 1.0 §3, on `id_token_signing_alg_values_supported`: *"The algorithm RS256 MUST be
-included."* It is not. A conformance defect, low severity — RS256 is not otherwise needed here — but exactly
-the kind of thing an interop test suite fails you on, and a one-line addition to your Module 07 report.
+**Read that pair of transcripts as one exercise, because the fix is more interesting than the defect.** No
+code changed. Nobody edited a list of algorithm names. One **RSA key** was registered in the service's JWK
+Set, and Authlete recomputed *four* metadata members from the key material it now holds — this one,
+`userinfo_signing_alg_values_supported`, `introspection_signing_alg_values_supported` and
+`authorization_signing_alg_values_supported` all gained the same six entries. That is the shape worth
+learning: **this document is derived, not authored.** The `HS*` entries come from client secrets, the `ES256`
+from the EC key, and all six `RS*`/`PS*` from one 2048-bit RSA key with **no `alg` member** — RFC 7517 §4.4
+makes `alg` OPTIONAL, and omitting it is what lets a single key back every algorithm it can compute.
+
+Two follow-ups, and the second is the point:
+
+- **Discovery §3's `MUST` was failing for a year of this deployment's life**, and it is exactly the kind of
+  thing an interop test suite fails you on while every hand-written test passes. It belonged in your Module
+  07 report.
+- **Advertised is not the same as usable** — the rule this curriculum applies to grant types, response modes
+  and client-auth methods applies to algorithms too. Checking took one flow: a client set to `RS256` was
+  issued an ID token with `{"kid":"rsa-1","alg":"RS256"}` in the header, and 3d's validator returned `ACCEPT`
+  against the published key. Ten advertised algorithms, one of them now actually exercised. **Nine to go** —
+  and `PS256`, the one FAPI 1.0 Advanced §5.2.2 requires, is among the nine.
 
 ---
 

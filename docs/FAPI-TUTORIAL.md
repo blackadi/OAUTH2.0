@@ -481,58 +481,52 @@ The React SPA includes a **FAPI 2.0 Security Profile** section that lets you run
 
 ### FAPI Tools
 
-> ### ⚠️ Both reporting endpoints are currently broken
+> ### ⚠️ Both reporting endpoints were broken for six days, and the story is worth your time
 >
-> `GET /api/fapi/config` and `GET /api/fapi/status` each return **HTTP 500 with an error body**:
+> They work now (**fixed 2026-08-12**), so if you are only here to use the tools, skip ahead. If you are
+> here to learn what breaks in real deployments, this endpoint has answered the same request three
+> different ways:
 >
-> ```json
-> {"error":"Internal Server Error","message":"Response validation failed"}
-> ```
+> | Until | Response |
+> |---|---|
+> | 2026-08-11 | `HTTP 200` + `{"error":"Bad Request","message":"Response validation failed","stack":…}` |
+> | 2026-08-12 | `HTTP 500` + `{"error":"Internal Server Error","message":"Response validation failed"}` |
+> | now | `HTTP 200` + the live posture |
 >
-> `authleteApi.service.get()` throws a schema-validation error before either handler can read a single
-> field, so **neither tool can report FAPI mode.**
+> **Defect 1 — the status inversion** (fixed 2026-08-11). A success status, carrying an error body, that
+> calls itself a Bad Request. The cause was not the SDK: `middleware/errorHandler.ts` derived the HTTP
+> status from the thrown error, and the SDK's `AuthleteError` subclasses set `statusCode` from the response
+> they were *reading* — which for a `200` whose body fails validation is `200`. A monitor watching status
+> codes called this endpoint healthy forever. The handler now trusts an error-supplied status only inside
+> 400–599, across all 57 SDK call sites.
 >
-> **This used to be an HTTP 200** (verified 2026-08-06, fixed 2026-08-11), and the 200 was a separate
-> defect worth understanding on its own:
->
-> ```json
-> HTTP/1.1 200 OK
-> {"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}
-> ```
->
-> A success status, carrying an error body, that calls itself a Bad Request. The cause was not the SDK:
-> `middleware/errorHandler.ts` derived the HTTP status from the thrown error, and the SDK's
-> `AuthleteError` subclasses set `statusCode` from the response they were *reading* — which for a `200`
-> whose body fails validation is `200`. A monitor watching status codes called this endpoint healthy
-> forever. The handler now trusts an error-supplied status only inside 400–599.
->
-> **Two layers, two fixes, and only one of them is about `SPIFFE_JWT`.** The status inversion is fixed;
-> the enum gap below is not, which is why the endpoints still fail.
->
-> **Root cause of the failure itself — one unrecognised enum member.** Authlete returns 129 fields; the SDK rejects all of
-> them over one value:
+> **Defect 2 — one unrecognised enum member** (fixed 2026-08-12). `authleteApi.service.get()` threw a
+> schema-validation error before either handler could read a single field. Authlete returned 132 fields and
+> the SDK rejected all of them over one value:
 >
 > ```
-> Authlete returns:  supportedTokenAuthMethods[8] = "SPIFFE_JWT"
+> Authlete returned: supportedTokenAuthMethods[8] = "SPIFFE_JWT"
 > SDK 1.0.0 accepts: NONE, CLIENT_SECRET_BASIC, CLIENT_SECRET_POST, CLIENT_SECRET_JWT,
 >                    PRIVATE_KEY_JWT, TLS_CLIENT_AUTH, SELF_SIGNED_TLS_CLIENT_AUTH,
 >                    ATTEST_JWT_CLIENT_AUTH        ← SPIFFE_JWT is not a member
 > ```
 >
-> `ClientAuthMethod` is a **strict** Zod enum, so an unknown member fails the whole response. Nothing is
-> wrong with your service: `SPIFFE_JWT` is a legitimate Authlete setting that this SDK version does not
-> know about. The fragility is general — every new client-auth method Authlete ships breaks
-> `service.get()` for any TypeScript SDK caller whose service enables it.
+> `ClientAuthMethod` is a **closed** Zod enum, so one unknown member fails the whole response. Nothing was
+> wrong with the service: `SPIFFE_JWT` is a legitimate Authlete setting — declared in Authlete's own
+> OpenAPI document — that this SDK version does not know. **The fix was to withdraw the member at the
+> service**, which is the only route that was actually available: an SDK release that knows the member is
+> upstream's schedule, and a `patch-package` patch is closed off here (`docs/DEVELOPMENT.md` → SDK Version
+> Pin). Note which side had to move — the authorization server stopped advertising a capability it had, so
+> that a client library could parse its configuration.
 >
-> **Two ways out.** Remove `SPIFFE_JWT` from the service's supported token auth methods (if you are not
-> using it), or wait for an SDK release that knows the member. Do not reach for a `patch-package` patch —
-> see `docs/DEVELOPMENT.md` → SDK Version Pin for why that road is closed here.
+> **Two layers, two fixes, and only one was about `SPIFFE_JWT`.** Fixing the status inversion made the
+> failure *visible*; it did not make the call succeed. Keeping them separate is the whole lesson.
 >
-> Blast radius is exactly two call sites, both in `fapi.controller.ts`; nothing else in the server calls
-> `service.get()`.
->
-> Read the FAPI settings directly in the Authlete Console until this is fixed.
-> `docs/curriculum/modules/10-fapi-and-grant-management/lab.md` Exercise 4 has the learner reproduce it.
+> **If you hit this on your own service**, the check is mechanical: the enum types three fields
+> (`supportedTokenAuthMethods`, `supportedRevocationAuthMethods`, `supportedIntrospectionAuthMethods`), so
+> read all three, not just the first. Blast radius here was exactly two call sites, both in
+> `fapi.controller.ts`; nothing else in the server calls `service.get()`.
+> `docs/curriculum/modules/10-fapi-and-grant-management/lab.md` Exercise 4 walks all three states.
 
 **1. Fetch Config** — shows live FAPI mode and the controls the service actually enforces:
 - `mode`: `"sp"`, `"ms"`, or `"disabled"` — derived from `service.fapiModes`
@@ -557,8 +551,8 @@ The React SPA includes a **FAPI 2.0 Security Profile** section that lets you run
 **2. Fetch Status** — raw Authlete configuration. Both endpoints now read from the service, so they no
 longer disagree; `status` remains the fuller view.
 
-**3. DPoP Key Utilities** — standalone DPoP proof generation for testing against any endpoint. This one
-works; it is pure client-side crypto and does not call the broken endpoints.
+**3. DPoP Key Utilities** — standalone DPoP proof generation for testing against any endpoint. Pure
+client-side crypto, so it kept working throughout the outage described above; it calls neither endpoint.
 
 ### FAPI 2.0 SP Test Flow Wizard
 
@@ -690,18 +684,29 @@ working route for bound tokens — the downgrade §7.2 exists to prevent.
 
 ### `/api/fapi/config` or `/api/fapi/status` returns `Response validation failed`
 
-**This is the expected current behaviour, not a mistake in your FAPI setup.** Both endpoints return HTTP
-200 with that error body because `authleteApi.service.get()` fails SDK response-schema validation: the
-service lists `SPIFFE_JWT` in `supportedTokenAuthMethods`, and SDK 1.0.0's strict `ClientAuthMethod` enum
-does not include it, so Zod rejects the entire 129-field response. Full detail in
+**Not a mistake in your FAPI setup — it is your SDK refusing to parse your own service.** This deployment
+hit it from 2026-08-06 to 2026-08-12 and both endpoints work now; the diagnosis is kept because the failure
+is generic to the TypeScript SDK, not to this repo.
+
+`authleteApi.service.get()` fails SDK response-schema validation when the service holds a
+client-authentication method the SDK's `ClientAuthMethod` enum does not know — here `SPIFFE_JWT`, which
+made Zod reject the entire 132-field response over one value. **`ClientAuthMethod` types three service
+fields**, so check all of them:
+
+```bash
+# Raw HTTP, because the SDK is the thing that cannot read this response.
+curl -s -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" \
+  "$AUTHLETE_BASE_URL/api/$AUTHLETE_SERVICE_ID/service/get" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin)
+for k in ['supportedTokenAuthMethods','supportedRevocationAuthMethods','supportedIntrospectionAuthMethods']:
+    print(k, d.get(k, 'ABSENT'))"
+```
+
+Any member outside the SDK's eight (`NONE`, `CLIENT_SECRET_BASIC`, `CLIENT_SECRET_POST`,
+`CLIENT_SECRET_JWT`, `PRIVATE_KEY_JWT`, `TLS_CLIENT_AUTH`, `SELF_SIGNED_TLS_CLIENT_AUTH`,
+`ATTEST_JWT_CLIENT_AUTH`) is the culprit. **Remove it if you are not using it**, or read the settings in
+the Authlete Console until an SDK release knows the member. Do not patch the SDK. Full detail in
 [Part 5](#fapi-tools).
-
-The one thing you *can* change: if you are not using SPIFFE client authentication, removing `SPIFFE_JWT`
-from the service's supported token auth methods makes the response parse and both endpoints work again.
-Otherwise read the FAPI settings in the Authlete Console directly until the SDK knows the member.
-
-Because of this, the two entries below describe states you **cannot currently observe** through these
-endpoints. They are kept because they are the right diagnosis once the endpoints work.
 
 ### "FAPI mode shows disabled"
 

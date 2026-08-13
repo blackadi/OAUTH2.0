@@ -36,7 +36,7 @@
 |---|---|---|---|
 | 1 | *"The authorization server MUST support the HTTP Basic authentication scheme for authenticating clients that were issued a client password."* | §2.3.1 | ✅ `services/token.service.ts:31-36` via `utils/basic-auth.ts:24-43` |
 | 2 | Body-parameter client auth is *"NOT RECOMMENDED and SHOULD be limited to clients unable to … utilize HTTP Basic"* | §2.3.1 | ✅ supported as the secondary channel (`token.service.ts:28-29`); Authlete decides acceptance per the client's registered method |
-| 3 | *"The client MUST NOT use more than one authentication method in each request."* | §2.3.1 | ⚠️ **Not enforced** — Basic silently wins; see F-1 |
+| 3 | *"The client MUST NOT use more than one authentication method in each request."* | §2.3.1 | ✅ **enforced 2026-08-13 (6749-W1)** — `400 invalid_request` at both `/api/token` and `/api/par`, before any Authlete call; see F-1 |
 | 4 | Omitted `scope` → default value or fail with invalid_scope | §3.3 | ⊘ Authlete's, via `Service.scopeRequired` |
 | 5 | *"If the issued access token scope is different from the one requested … MUST include the `scope` response parameter"* | §3.3 | ⊘ Authlete's, in `responseContent` |
 | 6 | *"MUST NOT automatically redirect the user-agent to the invalid redirection URI"* when redirect URI or client_id is missing/invalid | §4.1.2.1 | ✅ correct by delegation — the local validator refuses to answer at all (see F-2), and Authlete emits `400 [A009301]` as a body |
@@ -75,7 +75,12 @@ same shape is repeated at `controllers/revocation.controller.ts:30-43`, consiste
 Authlete, which matters for signature-bearing parameters. Note this is also the mechanism that makes the
 RFC 9700 F-1 logging defect leak secrets — the same design choice, opposite consequence.
 
-## Finding F-1 — dual-channel client credentials are silently resolved, not rejected (S3)
+## Finding F-1 — dual-channel client credentials are silently resolved, not rejected (S3) — ✅ **FIXED 2026-08-13 (6749-W1)**
+
+> **Fixed banner.** Both endpoints that authenticate clients — `/api/token` and `/api/par` — now refuse a
+> request presenting credentials on both channels with `400 invalid_request`, before any Authlete call
+> (`hasDualChannelClientAuth()` in `utils/basic-auth.ts`). Read the rest of this finding as pre-fix state,
+> **except the mechanism correction below, which still applies** and is the durable part.
 
 §2.3.1: *"The client MUST NOT use more than one authentication method in each request."*
 
@@ -102,6 +107,21 @@ Severity is S3 rather than S2 because the failure mode is a confusing silent suc
 misconfigured client, not a security bypass: whichever credential set is used must still be correct, and
 Authlete validates it. But a learner comparing the two code paths would find an inconsistency the docs
 do not explain.
+
+> **⚠️ Mechanism corrected 2026-08-12 (T1-17). The outcome above is right; the layer is not.**
+> This server does **not** resolve the conflict. The snippet quoted above sets the *top-level* `clientId` /
+> `clientSecret`, but `parameters` is preferentially **`req.rawBody`** (`services/token.service.ts:42`), so
+> body-supplied `client_id` / `client_secret` are forwarded to Authlete **untouched** — the `excluded` set that
+> drops them runs only on the JSON fallback path. **This server therefore emits a dual-channel request, and
+> Authlete picks the winner** (top-level, verified live — 6749-W1). "Basic silently wins" is accurate as an
+> observation and wrong as an attribution.
+>
+> This is the **third** consequence of one design choice, and the pattern is now worth stating as a rule.
+> Raw-body fidelity was adopted to preserve encoding and parameter order for signature-bearing parameters; it
+> also made the RFC 9700 F-1 credential leak reach real traffic (the exclusion list never ran on the live
+> path); and it is why client credentials cross the boundary twice here. **When a finding in
+> `token.service.ts` or `revocation.service.ts` quotes a variable assignment, check what actually goes on the
+> wire — `rawBody` bypasses the assignment.**
 
 **Source gap — pursued, partially closed.** Authlete's
 `/configuration-reference/endpoints/strict-checking-on-client-authentication-parameters` **was fetched
@@ -151,7 +171,7 @@ defect. Recorded so B3 does not re-litigate it.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 6749-W1 | Fetch Authlete's strict-checking page; if Authlete does not reject dual-channel credentials, decide whether this server should | S | Either a documented decision to keep Basic-wins, or a 400 `invalid_request`. No code change if Authlete already rejects. |
+| 6749-W1 | Fetch Authlete's strict-checking page; if Authlete does not reject dual-channel credentials, decide whether this server should | S | ✅ **DONE 2026-08-13 — probed, then ruled, then shipped.** The ruling was **reject**, on the ground that it is the only option making this server stricter than the vendor rather than merely agreeing with it, and that the codebase already enforced RFC 6750 §2's identical rule for token *presentation* while ignoring this one. `hasDualChannelClientAuth()` (`utils/basic-auth.ts`) refuses the shape at `token.controller.ts` and `par.controller.ts` with `400 invalid_request` before any Authlete call; PAR is included because RFC 9126 §2 gives it the token endpoint's client authentication, and exempting it would have rebuilt the inconsistency. **A bare `client_id` beside a Basic header is deliberately *not* a second method** — §2.3.1's methods differ in where the *secret* travels, and a public client legitimately sends `client_id` alone; there is a negative-control test and a live check for it. Nothing in `docs/`, the labs or the SPA sent both channels, so nothing broke. **Probe evidence, retained:** **Authlete does not reject dual presentation, and the top-level channel wins:** both channels correct → token issued; top-level correct + body secret **wrong** → **token issued**, the body value ignored; top-level **wrong** + body correct → `INVALID_CLIENT` `[A157305]`. The [strict-checking page](https://developers.authlete.com/configuration-reference/endpoints/strict-checking-on-client-authentication-parameters) was fetched and is **silent on the question** — it governs *method matching* only, and states no precedence rule — so the probe is the authority, not the page. **The "no code change if Authlete already rejects" escape does not apply.** Remaining choice, unchanged in substance: keep Basic-wins as inherited vendor behaviour and document it, or reject dual presentation locally with `400 invalid_request` — the only option that makes this server stricter than Authlete rather than merely agreeing with it. See the correction under F-1. |
 | 6749-W2 | Note the §2.3.1 rule in `AGENTS.md`'s Basic-wins paragraph | S | The paragraph says *why* Basic wins **and** that §2.3.1 makes the dual-channel request malformed, so the choice reads as a deliberate tolerance rather than an oversight |
 
 No behavioural defect found. RFC 6749 is the second spec in this batch needing no fix.

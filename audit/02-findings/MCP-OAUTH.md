@@ -67,7 +67,7 @@ confidential and public clients."* OAuth 2.1 consolidates the BCP-240 rules that
 `RFC9700-security-bcp.md` plus probe 1 establish that this service:
 
 - enables the **implicit** grant (`IMPLICIT` in `supportedGrantTypes`; RFC 9700 §2.1.2 SHOULD NOT, removed in OAuth 2.1);
-- enables the **password** grant (`PASSWORD`; RFC 9700 §2.4 MUST NOT, removed in OAuth 2.1) — and `PROGRESS.md:1097-1098` records a live transcript issuing a 24-hour access token and a 10-day refresh token from it;
+- enables the **password** grant (`PASSWORD`; RFC 9700 §2.4 MUST NOT, removed in OAuth 2.1) — and `PROGRESS.md:1959-1960` records a live transcript issuing a 24-hour access token and a 10-day refresh token from it;
 - does **not require PKCE** (`pkceRequired = false`, `pkceS256Required = false`; `RFC7636-pkce.md` F-1), while OAuth 2.1 makes PKCE mandatory for all authorization-code clients.
 
 For a teaching deployment that must demonstrate the retired grants, enabling them is a defensible choice — the

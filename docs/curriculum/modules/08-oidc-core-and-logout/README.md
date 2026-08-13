@@ -412,7 +412,7 @@ opens; everything else in the response it treats as an opaque string.
 ```json
 {
   "iss": "https://as.example.com",     // step 2  — MUST equal the expected issuer, exactly
-  "aud": ["1234567890"],               // step 3  — MUST contain our client_id. Defeats substitution
+  "aud": "1234567890",                 // step 3  — MUST contain our client_id. Defeats substitution
   "sub": "admin",                      //         — used, not validated. Key records on (iss, sub)
   "exp": 1785242182,                   // step 9  — now < exp
   "iat": 1785155782,                   // step 10 — reject if too old for YOUR policy; the spec sets no bound
@@ -435,10 +435,12 @@ is precisely why OIDC is called a *layer* rather than a protocol. The security w
 ID token; it is in the thirteen checks you perform on it after leg 7, and every one of those maps to a line
 in the block above.
 
-Two things worth noticing in that JSON, because both are this deployment rather than the spec: **`aud` is an
-array**, so a validator written `claims.aud === clientId` fails here and passes elsewhere; and **`exp - iat`
-is 86400**, a day, for a token whose job is to record a moment. Neither is wrong; both are the kind of
-detail that only shows up when you look at the artefact.
+Two things worth noticing in that JSON, because both are this deployment rather than the spec: **`aud` is a
+bare string** — it was an array until 2026-08-12, when the service set `idTokenAudType: "string"`, so a
+validator written `claims.aud === clientId` fails here *or* passes here depending on which fortnight you ran
+it; and **`exp - iat` is 86400**, a day, for a token whose job is to record a moment. Neither is wrong; both
+are the kind of detail that only shows up when you look at the artefact — and the first is a reminder that
+"the kind of detail" can change under you without any specification moving.
 
 ## Threat model for this module
 

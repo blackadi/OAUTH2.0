@@ -2,6 +2,7 @@ import { Request } from "express";
 import { Authlete } from "@authlete/typescript-sdk";
 import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import logger from "../utils/logger";
+import { dpopHttpTarget } from "../utils/dpop";
 import {
   IntrospectionRequest,
   IntrospectionResponse,
@@ -48,19 +49,23 @@ export class IntrospectionService {
     }
     if (body.uri !== undefined) reqBody.uri = body.uri as string;
     if (body.message !== undefined) reqBody.message = body.message as string;
-    if (body.targetUri !== undefined) reqBody.targetUri = body.targetUri as string;
+    // `targetUri` is deliberately NOT read from the body. It is the URI a DPoP proof is validated
+    // against, so a caller able to set it could replay a proof minted for another endpoint here —
+    // the same defect already closed at UserInfo. It is derived from HTTP context below instead.
     if (body.requestBodyContained !== undefined) {
       reqBody.requestBodyContained = Boolean(body.requestBodyContained);
     }
 
-    // DPoP support — fields come from HTTP headers, not the body
+    // DPoP support — fields come from HTTP headers, not the body.
+    // `htu` excludes the query and fragment (RFC 9449 §4.2) and `targetUri` carries the full request
+    // URI; `dpopHttpTarget()` is the single source for both. `IntrospectionRequest` has `targetUri`.
     const dpopHeader = req.headers["dpop"] as string | undefined;
     if (dpopHeader) {
+      const { htu, targetUri } = dpopHttpTarget(req);
       reqBody.dpop = dpopHeader;
       reqBody.htm = req.method;
-      const protocol = req.protocol;
-      const host = req.get("host") || "";
-      reqBody.htu = `${protocol}://${host}${req.originalUrl}`;
+      reqBody.htu = htu;
+      reqBody.targetUri = targetUri;
     }
 
     log("Introspection parameters", { token: "[redacted]", hasDpop: !!dpopHeader });

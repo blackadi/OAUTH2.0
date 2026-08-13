@@ -160,18 +160,21 @@ Three defects:
    > global error handler derived the HTTP status from the thrown error, and `AuthleteError` subclasses
    > carry the status of the response they were *reading* — `200`, for a body that failed validation. One
    > clause (trust an error-supplied status only inside 400–599) fixed it across all 57 SDK call sites.
-   > The endpoints still return 500, because the enum gap that makes them *fail* is a different defect.
-   > Full marks now require separating the two.
+   > The endpoints then returned an honest **500** until **2026-08-12**, when the second, unrelated defect
+   > was closed at the service (`SPIFFE_JWT`, lab Exercise 4). Full marks require separating the two —
+   > *invisible* and *failing* are different defects with different owners, and neither fix implies the
+   > other.
 2. **A stack trace returned to the caller**, including absolute filesystem paths and internal module
    structure. On an unauthenticated endpoint this is information disclosure.
 3. **An upstream/internal failure reported as `"Bad Request"`** — blaming the caller for a server-side
    problem. Same class as Module 06's token exchange, Module 08's back-channel logout, and Module 09b's
    federation endpoint. Fourth instance in this curriculum.
 
-There is also a **consequence** worth naming separately: because both FAPI endpoints behave this way, the
-deployment **cannot report its own FAPI posture**. In the lab you had to read the Authlete service
-configuration directly to learn anything — the observability layer for the security profile is entirely
-dark.
+There is also a **consequence** worth naming separately: while both FAPI endpoints behaved this way, the
+deployment **could not report its own FAPI posture**, and the lab had to read the Authlete service
+configuration directly to learn anything. Since 2026-08-12 both answer, so the residual finding is
+narrower and more typical — an observability layer that reports *some* of the profile (six of the eight
+§5.3.2.1 requirements) and is silent on the per-client fields that decide the rest.
 
 ### Q13
 

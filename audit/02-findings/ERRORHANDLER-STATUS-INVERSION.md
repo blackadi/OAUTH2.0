@@ -20,12 +20,21 @@
 >   builds its own result object without routing through the handler — which is the behaviour `AGENTS.md`
 >   documents and which the clamp must not disturb.
 >
-> **What is NOT fixed:** the SDK enum gap. `service.get()` still throws, so both endpoints still fail —
-> honestly now. That is the `SPIFFE_JWT` decision (**FAPI2-W5**), untouched here by design. Severity
-> **downgraded S1 → S3**: the failure is no longer silent, and what remains is a broken endpoint that says so.
+> ~~**What is NOT fixed:** the SDK enum gap.~~ **Also closed, 2026-08-12 (T1-5, DR-07 approved).**
+> `SPIFFE_JWT` was withdrawn from `supportedTokenAuthMethods`, `service.get()` parses, and both endpoints
+> return **200 with live values**. So F-2's four-row table is now history in all four rows, and **the entry has
+> no residue**: severity **S1 → S3 → closed**. Module 10 Exercise 4 was **rebuilt, not retired** — it walks all
+> three states (invisible 200 → honest 500 → live data) and lands on the closed-enum lesson, which EH-W4
+> predicted would be *"better material"*. Evidence: `SERVICE-CONFIG-PROBE.md` §17–§18.
+>
+> **The one claim in this entry that got sharper rather than obsolete** is F-1's *"tomorrow: any field Authlete
+> adds to any of the 57 called methods whose Zod schema is strict"*. Measured: the `Service` schema is **not**
+> strict — it strips the 8 of 193 properties it does not model — so the exposure is narrower than F-1 says for
+> *fields* and exactly as bad for *values*. Of 16 enum-typed fields, `ClientAuthMethod` was the only one short,
+> and it types **three** service fields. The clamp remains the reason the next one will be visible.
 
 - **Verdict:** ~~`PARTIAL`~~ → **`RESOLVED`** *(not a specification — a structural defect affecting every SDK call site)*
-- **Severity:** ~~**S1**~~ → **S3** (fixed 2026-08-11; the residue is the enum gap, tracked as FAPI2-W5)
+- **Severity:** ~~**S1**~~ → ~~S3~~ → **closed** (status inversion fixed 2026-08-11; the enum-gap residue closed 2026-08-12)
 - **Authlete version:** 3.0, SDK 1.0.0
 - **Discovered:** while verifying `AGENTS.md`'s claim about the two FAPI endpoints in batch B7
 - **Repo docs under test:** `AGENTS.md` (the `SPIFFE_JWT` paragraph), `docs/curriculum/modules/10-fapi-and-grant-management/` Exercise 4, and `RFC7636-pkce.md` F-1 in this audit
@@ -133,6 +142,13 @@ decisions are independent:
 | Clamp the error status | Both return 500 with an error body | Exercise survives, reframed |
 | Both | Both work | Retires the exercise |
 | Neither | 200 with a stack trace | Status quo |
+
+> **Both shipped (2026-08-11, 2026-08-12), and row 3's prediction was wrong in the useful direction.** The
+> exercise was **not** retired. Removing the *subject* of a defect-based exercise does not remove the lesson if
+> the lesson is about the mechanism rather than the symptom — the rebuild teaches a **closed client-side enum
+> turning a vendor's additive change into a breaking one**, which is only legible *after* the fix, and it now
+> has three dated states to compare instead of one. Worth carrying into any future "this fix retires a lab"
+> argument: check whether the lab is about the symptom or the mechanism before paying for it.
 
 The second row is the one nobody had identified, and it is available now without touching the curriculum.
 

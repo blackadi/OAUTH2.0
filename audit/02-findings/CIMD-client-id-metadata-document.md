@@ -77,6 +77,18 @@ endpoints that currently return HTTP 200 with a stack trace because `service.get
 (`AGENTS.md`; `RFC7636-pkce.md` F-1). Net effect: the deployment cannot report its own CIMD posture at all, by
 two independent mechanisms.
 
+> **⚠️ (a) IS WRONG, and both of its mechanisms are gone (corrected 2026-08-12, T1-5).** **The premise is
+> false: SDK 1.0.0 *does* model the field**, in both the `Service` type (`models/service.ts:1505`) and
+> `Service$inboundSchema`. The cast was never covering an SDK gap — it was covering nothing — so the fix is
+> typed access, one line, with a comment saying so. **CIMD-W3 ✅ closed**, and it never needed to wait on the
+> `SPIFFE_JWT` decision. `00-inventory.md` §7 and this paragraph both took the cast as evidence *of* a gap,
+> which is the same reasoning error as reading a lab's own `UNVERIFIED` marker as evidence about the deployment
+> (`04-remediation-plan.md` §6.2): **a cast is evidence that somebody thought there was a gap.**
+>
+> The second mechanism is also closed — `service.get()` parses since `SPIFFE_JWT` was withdrawn, and both
+> endpoints report `clientIdMetadataDocumentSupported: false` from the live service. So the deployment *can*
+> now report its CIMD posture, and the posture it reports is "off", which is CIMD-W2's decision to make.
+
 **(b) The `MUST NOT follow redirects` rule is delegated and unverified.** Draft-02 requires the AS not to follow
 HTTP redirects when fetching a Client ID Metadata Document — a defence against an attacker parking a URL that
 redirects to someone else's metadata. Authlete performs the fetch, so this is entirely vendor behaviour; nothing
@@ -126,8 +138,9 @@ teachable fact about drafts rather than an error, if stated.
 |---|---|---|---|
 | CIMD-W1 | Create the missing inventory row at revision **-02** | S | Row exists with the draft name, revision, 6 Jul 2026, status "active Internet-Draft", the Authlete 3.0.22 floor, and the note that the MCP spec cites `-00`. Closes the one genuine gap `00-inventory.md` §10 identified. |
 | CIMD-W2 | Decide whether to enable the flag | S | **Gate 4 decision, paired with the MCP verdict.** If enabled: confirm the service's patch level meets 3.0.22, then an HTTPS-URL `client_id` completes an authorization and `client_id_metadata_document_supported` appears in discovery. If not: `MCP-OAUTH-TUTORIAL.md` stops saying "out of the box". |
-| CIMD-W3 | Stop reading the flag through an untyped cast | S | Either the SDK gains the field (upstream) or the cast is isolated behind one typed accessor with a comment naming it as an SDK gap. Rides with the `service.get()` work in B7, which is where the `SPIFFE_JWT` decision lives. |
+| CIMD-W3 | Stop reading the flag through an untyped cast | S | ✅ **DONE 2026-08-12 (T1-5).** Neither branch of the stated criterion applied: **the SDK already had the field**, in the `Service` type and the inbound schema both, so the cast came out and the read is typed. The acceptance criteria were written from the cast's existence rather than from the SDK — see the correction under F-1(a). It did **not** need to ride with the `SPIFFE_JWT` decision. |
 | CIMD-W4 | Record the redirect rule as a delegated MUST | S | One line in `AGENTS.md`: draft-02 forbids following redirects when fetching a CIMD document, Authlete performs the fetch, and this deployment has no way to verify it. Same treatment as RFC 9449 §7.2's delegation. |
 
-**Ordering.** CIMD-W1 is documentation and independent. CIMD-W2 pairs with the MCP decision. CIMD-W3 waits on the
-`SPIFFE_JWT` decision in B7, because both touch the same broken call.
+**Ordering.** CIMD-W1 is documentation and independent. CIMD-W2 pairs with the MCP decision. ~~CIMD-W3 waits on the
+`SPIFFE_JWT` decision in B7, because both touch the same broken call.~~ **CIMD-W3 ✅ shipped 2026-08-12** — the
+dependency was imaginary, since the two changes touch the same *file* and not the same defect.

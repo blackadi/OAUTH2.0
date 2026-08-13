@@ -30,6 +30,15 @@
 > the `SPIFFE_JWT` enum gap. That residue is **S2**, so the header reads S2 — the same basis on which
 > `FAPI-2.0-SECURITY-PROFILE.md` went S1→S2. The verdict stays `PARTIAL`: §2.4 is still deliberately unmet.
 >
+> **⚠️ The residue is gone as of 2026-08-12 (T1-5).** `SPIFFE_JWT` was withdrawn, `service.get()` parses, and
+> `GET /api/fapi/config` reports the live posture — including `pkceRequired: false` and `scopeRequired: false`,
+> the two §2.1.1/§2.2 controls this entry could not observe. **So the F-4/F-4a residue drops from S2 to S4**
+> (documentation only) and the entry's severity now rests on **F-2 alone — S3**, which is deliberate curriculum
+> material. §2.4 remains unmet by decision; the verdict stays `PARTIAL`. The `<thinking>` item 6 below — *"whether
+> `pkceRequired` is actually set on the live service. Cannot observe it"* — was answered by the 2026-08-10 probe
+> and is now answerable **through the repo's own endpoint**, which is the difference between a probe and an
+> operable deployment.
+>
 > **One other part of this entry is now stale.** F-4a's *"`/api/fapi/config` **hardcodes**
 > `pkceRequired: true`"* was fixed by **FAPI2-W1** on 2026-08-11 — all six posture fields are read live at
 > `controllers/fapi.controller.ts:51-64`. The endpoint still fails, but it no longer fabricates. **9700-W4's
@@ -44,8 +53,15 @@
 > hypothetical exercise that **recommends this fix** and makes no claim about the code. 9700-W1/W2 appear in
 > neither direction of the lab-breakage register (`04-remediation-plan.md` §6.1, §6.2).
 
+> **✅ F-2's framing residue closed 2026-08-13.** The entry rested on `README.md` presenting a deliberately
+> unhardened teaching deployment as production guidance. It now opens with a *"Read this before you copy
+> anything"* block that tabulates all four departures — ROPC/implicit enabled, PKCE not required, 24-hour
+> tokens, the three deliberate token-exchange defects — each against what production would do, and says
+> plainly to copy the request handling rather than the service configuration. **§2.4 remains unmet by
+> decision, which is the point of the lab; it is no longer unmet *silently*.**
+
 - **Verdict:** `PARTIAL`
-- **Severity:** **S2** — was S1; see the banner above
+- **Severity:** **S3** — was S1, then S2; see the banners above. F-2's framing residue closed 2026-08-13, so what remains is deliberate curriculum material with the departure stated in `README.md`'s posture table
 - **Original severity:** **S1** (F-1, fixed 2026-08-11)
 - **Authlete version:** 3.0 — no vendor surface; RFC 9700 is realised through other flags and through this server's own code
 - **Repo docs under test:** `AGENTS.md`, `CLAUDE.md`, `README.md`, `docs/curriculum/modules/07-oauth-2-1-and-security-bcp/`, `modules/01`, `modules/02`, `modules/03`

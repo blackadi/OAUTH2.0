@@ -281,7 +281,10 @@ sequenceDiagram
 
 | Status | Error | When |
 |:------:|-------|------|
-| 401 | `invalid_token` | Missing, expired, or invalid Bearer token |
+| 401 | *(no error code)* | **No token at all.** RFC 6750 §3.1: when the request carries no authentication information the server "SHOULD NOT include an error code". You get an empty body and `WWW-Authenticate: Bearer, DPoP` |
+| 401 | `invalid_token` | Token is expired, revoked, or unknown |
+| 401 | `invalid_dpop_proof` | You used the `DPoP` scheme but sent no `DPoP` header, or the proof does not match the key the token is bound to |
+| 400 | `invalid_request` | You sent a `DPoP` proof with the **`Bearer`** scheme — see "Two schemes" below |
 | 403 | `access_denied` | Token lacks the required scope |
 | 403 | `access_denied` | **Token is not associated with the requested grant** — it belongs to a different grant, or to none at all (e.g. `client_credentials`) |
 | 404 | `not_found` | Grant ID doesn't exist |
@@ -289,6 +292,40 @@ sequenceDiagram
 The two 403s return an **identical** body, so a caller cannot use the response to tell "not your grant" from
 "your token has no grant" — nor to discover whether a grant exists. The ownership check runs *before* any
 Authlete lookup, so a mismatched request looks the same whether or not the grant is real.
+
+### Two schemes: `Bearer` and `DPoP`
+
+This endpoint is a **protected resource**, so it follows the same presentation rules as UserInfo. Which
+scheme you use is not a style choice — it depends on the token:
+
+| Your token is… | Send it as | Why |
+|---|---|---|
+| ordinary (not bound to a key) | `Authorization: Bearer <token>` | Nothing to prove |
+| **DPoP-bound** (`token_type: DPoP`) | `Authorization: DPoP <token>` **plus** a `DPoP:` proof header | RFC 9449 §7.1 gives you no alternative |
+
+Two mistakes are easy to make, and the server names both rather than failing vaguely:
+
+```bash
+# ❌ Bearer with a proof attached → 400 invalid_request
+curl -s http://localhost:3000/api/gm/$GID \
+  -H "Authorization: Bearer $BOUND_TOKEN" -H "DPoP: $PROOF"
+
+# ❌ DPoP scheme, proof forgotten → 401 invalid_dpop_proof
+curl -s http://localhost:3000/api/gm/$GID -H "Authorization: DPoP $BOUND_TOKEN"
+
+# ✅ both together
+curl -s http://localhost:3000/api/gm/$GID \
+  -H "Authorization: DPoP $BOUND_TOKEN" -H "DPoP: $PROOF"
+```
+
+**Why refuse the first one instead of just using the proof?** Because accepting it would make `Bearer` a
+working way to spend a bound token, and that is exactly the downgrade RFC 9449 §7.2 forbids. Silently
+ignoring the proof would be worse still — the client would be told "no DPoP header provided" when it
+plainly sent one.
+
+**What if you present a bound token as plain `Bearer` with no proof?** Authlete catches it and you get
+`401` with `[A065308] Expected a DPoP header but none was provided.` in the `WWW-Authenticate` header. The
+binding is checked even when no proof is supplied, so a stolen bound token is not usable here.
 
 ---
 

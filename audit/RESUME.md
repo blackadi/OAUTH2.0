@@ -4,10 +4,55 @@
 the state so a new session resumes without re-reading the repo, re-fetching specifications, or re-probing
 Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` §5 second.
 
-- **Last updated:** 2026-08-12 (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1 and T1-7 (+T1-8) shipped**, see `04-remediation-plan.md` §1.2). **Three of the eight S1s remain open, none directly exploitable, and the latent one is retired.** Next in Tier 1: the ⚙️ configuration block **T1-2…T1-6**, which needs Authlete service writes and is worth batching
+- **Last updated:** 2026-08-13 (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1 … T1-10 and T1-17 shipped, T1-13 closed as unachievable, T1-21 declined**, see `04-remediation-plan.md` §1.2). **T1-9 + T1-10 + 6749-W1 shipped 2026-08-13**: `/api/gm/:grantId` is now a protected resource in the same sense UserInfo is — `DPoP` accepted, the §7.2 downgrade refused, an RFC 6750 §3.1-shaped no-token challenge — every `htu` derives from `dpopHttpTarget()` so a query string no longer breaks proof validation, a caller can no longer choose the introspection `targetUri`, and dual-channel client credentials are refused at `/api/token` and `/api/par`. **Two probes rewrote that design before any code**: `/gm` checks the DPoP binding independently of the ownership introspection (`[A281305]`), and one proof serves both calls. **B1-W1 + B1-W2 + MS-W1 also shipped 2026-08-13**: `/api/jar/process` was unauthenticated and returned Authlete's whole authorization response **including the `ticket`** — a credential — plus `service` and `client`, always with status 200; it is now admin-only with an allowlist, and `jar.controller.ts` joins the surfaces list (**a DR-12 dependency settled**). RFC 9701 JWT introspection returns a signed `token-introspection+jwt` instead of **500**, the profile's only live one — and it signs with the key T1-2 registered, so an earlier ⚙️ action is what made a later code fix produce a signature. **`rsUri` is required for that path and must not be defaulted or sent unconditionally** — see `AGENTS.md`. **T1-14 + T1-15 shipped 2026-08-13 too**: `POST /api/backchannel_logout` performed **5 of §2.6's 11 validation steps** — no `iss`, no `aud`, no `iat` bound, no `sub`/`sid` presence, no `nonce` rejection — and then destroyed **`req.session`**, which is the *caller's* session, so it terminated nothing while answering 200. Both fixed and driven live against a locally-served JWKS. The `jwt.verify` rule is in `AGENTS.md` and **its second clause is the one that gets skipped**: pass `issuer`/`audience`, *and* refuse when they are unconfigured, because omitting an option silently downgrades the check. Two new settings (`BACKCHANNEL_LOGOUT_ISSUER`/`_AUDIENCE`) — **not** `JWT_ISSUER`, since there this server is the RP. **BCL-W3 and BCL-W7 rode along.** The entry is **S2 → S3**. **T1-16 + T1-18 shipped 2026-08-13**: one line (`requestBody: {}`) turned federation's **400 blaming the caller** into a **500 naming the missing configuration** — but **FED-W1's criteria cannot be met by it**, because an entity statement needs a federation JWK Set on the service (`[A316201]`), so **FED-W2 stays blocked** on a feature-enablement decision. **FED-W5 closed with no change of its own**, since the controller mapping was already right once the SDK stopped throwing — the same defect shape as BCL-W3 but a different fix, because *where the throw happens* decides which. **T1-20 shipped 2026-08-13**: `ciba.service.ts` never read `Authorization: Basic`, so the `CLIENT_SECRET_BASIC` configuration `AGENTS.md` *recommends* for CIBA could not authenticate. Three channels now, matching PAR; `appendToParams` extracted to `utils/params.ts`. Verified live — Basic reaches `USER_IDENTIFICATION`, and body credentials for that client now correctly earn `401 [A157357]` instead of being **silently converted** onto the Basic channel. **The three S1 residues are closed as documentation**: `README.md` opens with a *"Read this before you copy anything"* table of the four deliberate departures, and the feature tables carry honest statuses (FAPI 2.0 / Native SSO / Federation **Not enabled**, Backchannel Logout **Partial**, PKCE **supported, not required**). **A CI gap was found while verifying**: the client job ran `vite build` alone, which does not typecheck, so `npm run typecheck` was never invoked and **16 client test files never ran** — 4 real type errors had accumulated. Fixed, and both gates added to `ci.yml`. **721 server tests / 63 files; 109 client tests / 16 files.** **Still open in Tier 1: T1-11's three spec-shaped endpoints (deferred as their own batch — the change breaks the SPA) and T1-19.** **PKCE is now ENFORCED (2026-08-13) and `RFC7636-pkce.md` drops S1 → S3** — `pkceRequired` + `pkceS256Required` are `true` on `4277838306` and `2176571218`, verified live (`[A124301]` with no challenge, `[A124308]` on `plain`, `INTERACTION` on `S256`). **`1523514379` and `1678274156` stay unenforced deliberately** and must not be "fixed": Module 02 teaches the plain flow and Module 03 shows what it costs, so the lesson needs a client that still permits it — recorded in `AGENTS.md`. **Gate 4 Q1 is superseded**; it asked whether the entry stays S1 until PKCE is *actually* required, and it now is. Note §7.2's Tier 1 exit criterion is **under-specified** — it covers only the ⚙️ half of a tier titled *configuration and contained code*, and says *three* probes where T1-17 had five; fix it before using it to judge the tier complete. **T1-17 answered all five unprobed behaviours and deleted work rather than creating it**: `9449-W4` resolved *in our favour* (`/auth/introspection` enforces `cnf.jkt` with no proof — `[A065308]`), so **9449-W3 stays S2 and T1-10 is not escalated**; `7523-W1` showed Authlete refuses a no-`exp` assertion (`[A314305]`), demoting **7523-W2** to defence-in-depth; `GM-W2` works end to end with **no AS code**; `8628-W6` is substituted. Only **6749-W1** still owes a ruling — Authlete does *not* reject dual-channel credentials and the strict-checking page is silent, so the plan's "no code change if Authlete already rejects" escape does not apply. **Do not re-run these five probes.** **S1 register: 8 found, 0 remain — verified entry by entry on 2026-08-13, not asserted.** Current severities: `ERRORHANDLER-…` **closed**; `OIDC-RP-INITIATED-LOGOUT-1.0` **S4**; `RFC8628-…`, `RFC7662-…`, `RFC9470-…`, `RFC7636-pkce`, `FAPI-2.0-SECURITY-PROFILE`, `RFC9700-…` all **S3**. The last three fell on 2026-08-13 — PKCE by being enforced, the other two because `README.md` stopped claiming what was not true. The latent S1 (9470 F-3) is retired rather than downgraded. **The ⚙️ configuration block is complete.** **T1-5 shipped with DR-07 ruled and executed** — nine advertised client-auth methods → five, `service.get()` works, and both FAPI endpoints answer `200` with live values for the first time since 2026-08-06; Module 10 Ex 4 was **rebuilt, not retired**. **T1-4 is deliberately half-landed** — the 24-hour lifetime is kept on purpose (GM-W1/FAPI1-W3 open by decision). **B1-W6 is closed**: `idTokenReissuable` is now `true` and kept, because the `ID_TOKEN_REISSUABLE` branch was calling the wrong Authlete API and now calls `POST /idtoken/reissue`.
 - **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `audit/phase3-and-tier0-fixes`
 - **Skill:** `.claude/skills/rfc-audit/SKILL.md` — invoke with `/rfc-audit` or follow it directly
-- **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **166 markdown files, 97 source refs, clean**
+- **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **167 markdown files, 103 source refs, clean**
+
+---
+
+## 0. START HERE — the next piece of work, and why it is that one
+
+*(Added 2026-08-13, after Phase 5's Tier 1 code batches. Read this before §1.)*
+
+**Phase 5's Tier 1 is essentially done; Tier 2 is documentation; Tier 3 is decisions. The highest
+defect-per-hour work in this repo is none of those — it is the route-coverage backlog**, because every code
+defect found on 2026-08-13 came out of that population and the population is not yet exhausted.
+
+```bash
+node scripts/check-route-coverage.mjs           # gate: fails only on NEW uncovered routes
+node scripts/check-route-coverage.mjs --triage  # the backlog, split by how blind it is
+```
+
+**"47 uncovered routes" is two different problems, and the split is what makes it tractable:**
+
+| | Count | What it means |
+|---|---|---|
+| **A** | **4** | No test anywhere for the module — nothing asserts this code at all |
+| **B** | **43**, in **10 modules** | The controller *is* unit-tested; **nothing drives the route with its middleware** |
+
+**B is the group with history.** `/api/jar/process` had a controller test and no auth middleware — it handed
+Authlete **tickets** to anonymous callers. `/api/device/complete` was ungated outside development. Both
+introspection endpoints were unauthenticated. **A controller test cannot see any of those**: it calls the
+handler directly and never touches the route's middleware chain. That is the defect class, and one
+integration block per module catches it.
+
+**So the work is 10 blocks, not 43 tests**, and the first assertion in each is *does this endpoint enforce
+the auth posture it claims?* — `401` without credentials, and **Authlete not called**. Order by blast radius:
+`client` (14 routes, admin surface returning secrets), `vci` (10), `token` (5, admin token management),
+`hsk` (4), then the rest.
+
+**Group A is ~30 minutes** and two of its four are `nativesso`, which is `nativeSsoSupported: false` — assert
+the honest failure rather than inventing a happy path.
+
+**Bank progress with `--update-baseline`** and commit the diff; never regenerate the baseline to silence a
+failure. `tests/integration/routes.test.ts` is the pattern to copy (`vi.hoisted()` + `vi.mock()` on
+`authlete.service`, `createApp()` factory).
+
+**After that**, in descending value: **T1-11's three spec-shaped endpoints** (PAR/Device/DCR return
+Authlete's camelCase envelope instead of the RFC body — probe-confirmed, but it breaks `ParSection.tsx:112`
+and `DeviceSection.tsx:159-160`, so server + SPA + lab transcripts belong in **one** batch); **T1-19**'s
+remaining small items; then **Tier 2** documentation and **Tier 3** decisions.
 
 ---
 
@@ -20,7 +65,7 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 | 2 — per-spec deep audit | `audit/02-findings/` — **55 files** | ✅ **complete**, all batches B1–B7 approved at Gate 2 |
 | 3 — curriculum audit | `audit/03-curriculum-audit.md` | ✅ **complete** — 3a, 3b, 3c, 3d all written |
 | 4 — synthesis + remediation plan | `audit/04-remediation-plan.md`, `audit/05-decision-records.md` | ✅ **complete** — awaiting Gate 4. **§8 below is superseded by those two files** |
-| 5 — execution | code + docs | 🔨 **in progress** — Gate 4 approved. **Tier 0 complete: T0-1, T0-2, T0-5, T0-6 (2026-08-11), T0-3, T0-4 (2026-08-12). Tier 1: T1-1, T1-7 (+T1-8) (2026-08-12).** RFC 9700 S1 closed; `id_token_hint` verified so **BCL-W5 is unblocked**; §2's confirmation MUST met; §3's per-client matching shipped as far as the vendor permits. The logout entry is **S1 → S4** and all five RPL items are closed. **T1-1 closed the last easily-exploitable open S1**; **T1-7 retired the latent one.** Three S1s remain, all non-exploitable: `FAPI-2.0-…` (false attestation), `RFC7636-pkce.md` (PKCE not required), `RFC9700-…` (implicit + password grants), |
+| 5 — execution | code + docs | 🔨 **in progress** — Gate 4 approved. **Tier 0 complete: T0-1, T0-2, T0-5, T0-6 (2026-08-11), T0-3, T0-4 (2026-08-12). Tier 1: T1-1 … T1-7 (2026-08-12), the ⚙️ block complete; T1-13 closed as unachievable.** RFC 9700 S1 closed; `id_token_hint` verified so **BCL-W5 is unblocked**; §2's confirmation MUST met; §3's per-client matching shipped as far as the vendor permits. The logout entry is **S1 → S4** and all five RPL items are closed. **T1-1 closed the last easily-exploitable open S1**; **T1-7 retired the latent one.** Three S1s remain, all non-exploitable and all now **narrower than their entries**: `FAPI-2.0-…` (the false attestation is gone; open on `README.md`'s claim), `RFC7636-pkce.md` (the false report is gone in both halves; open on the unenforced control), `RFC9700-…` (open on F-2's ROPC framing alone). **T1-5 closed the last of the false-reporting halves** by making `service.get()` work — see `SERVICE-CONFIG-PROBE.md` §17. |
 
 > **Phase 4 output, and what it settled.** Read [`04-remediation-plan.md`](04-remediation-plan.md) first — its
 > §1.1 supersedes §6 below, and its §2 supersedes §8.3.
@@ -72,7 +117,32 @@ five Module 09a `UNVERIFIED` settings re-checked as **still unset on 2026-08-10*
 `client_attestation_pop_methods_supported` (work item **ATT-W5** — one call printing all 62 members).
 *(Closed in Phase 4 §2.2 — both ABSENT.)*
 
-**A fifth pass ran 2026-08-12, and it is the only one that wrote.** T0-4 read all three clients
+**An eighth pass ran 2026-08-12 (T1-5, T1-13)** — `SERVICE-CONFIG-PROBE.md` §17–§19. Three facts worth carrying
+beyond their work items. **The read-only proof came first, deliberately**: `service.get()`'s failure was
+reproduced and the counterfactual tested *in memory* (`Service$inboundSchema.safeParse` on the live response with
+`SPIFFE_JWT` filtered out) before any write, because the fix's cost was a working exercise. It yielded a rule —
+**establishing that a fix works is cheaper than the cheapest thing the fix costs.** Second, **one withdrawal can
+remove several advertisements**: dropping `attest_jwt_client_auth` also removed both
+`client_attestation_*_signing_alg_values_supported` lists, so discovery went 64 → 62 (*not* the audit's earlier
+62, which lacked T1-6's two additions). Third, **T1-13 had no knob** — no Authlete 3.0 `Service` property lists
+the userinfo/introspection signing algorithms, and a write to the only candidate fields left `none` in place.
+That is **RPL-W4's shape a second time**, so check for the field before writing acceptance criteria that say
+"console change".
+
+**A seventh pass ran 2026-08-12 (T1-4, T1-6) and wrote too** — `SERVICE-CONFIG-PROBE.md` §15–§16. Two
+results worth carrying beyond their work items. **`readOnly` in the vendored 3.0.16 schema does not mean
+read-only**: `supportedAcrs` carries `"readOnly": true` and the write was accepted and persisted — set that
+beside T0-4's opposite (a field *absent* from the schema, accepted with `200` and discarded) and the rule is
+that **the schema predicts neither storage nor rejection; only write-then-read-back does**. And
+**`NO_INTERACTION` is not only the `prompt=none` path** — `offline_access` without `prompt=consent` reaches
+it too, so T1-7 fixed a second live symptom of that S1 that nobody had noticed.
+
+**A sixth pass ran 2026-08-12 (T1-2, T1-3) and also wrote** — one `service/update`, one `client/create` and
+three `client/update`s, each read back and diffed key-by-key. Recorded in `SERVICE-CONFIG-PROBE.md` §11–§14.
+Its two durable facts: **one RSA key with no `alg` member changed four advertised algorithm lists**, and the
+**E2E suite mutates shared client state**, so every client snapshot in this audit has a shelf life.
+
+**A fifth pass ran 2026-08-12, and it was the first that wrote.** T0-4 read all three clients
 (`client/get/list`), attempted to register `postLogoutRedirectUris`, and re-read to verify. **Authlete accepted
 the write with `200` and silently discarded the field** — it does not exist in the 3.0 `Client` schema
 (`OIDC-RP-INITIATED-LOGOUT-1.0.md` **F-4**). Net effect on the service: **nothing but `modifiedAt`**, confirmed
@@ -127,8 +197,12 @@ nothing from it). **Still unverified:** RFC 8446 and RFC 9110 dates cited at `mo
 | *"this server supports MCP flows out of the box"* attributed to `docs/MCP-OAUTH-TUTORIAL.md` **and `README.md`** | `MCP-OAUTH-TUTORIAL.md:3` **only** — `README.md` mentions neither MCP nor CIMD. So **MCP-W3's `README.md` half is a no-op** and T0-5 closed the claim completely | `MCP-OAUTH.md` doc-delta row, corrected 2026-08-11 during T0-5 |
 | `04-remediation-plan.md` §7.2 — *"Tier 0 exits when **five** actions shipped"* | **Six** (T0-1…T0-6). The criterion predated T0-6 being split out | fixed 2026-08-11 during T0-6 |
 | `postLogoutRedirectUris` recorded as client metadata that is *unset* on all three clients | **It is not a field Authlete 3.0 has.** 0 of the `Client` schema's 108 properties; a write returns 200 and is discarded | `SERVICE-CONFIG-PROBE.md` §10 row withdrawn 2026-08-12; `OIDC-RP-INITIATED-LOGOUT-1.0.md` F-4 |
+| *"No client has `jwks` or `jwksUri`"* (`RFC7523-…` F-3, `RFC9101-…` F-3) | Client `1523514379` **does** have one — `kid: "e2e-test-key"`, written by `tests/e2e/e2e.test.ts:1169`, private half discarded per run. The substance holds (no *usable* client key) but the wording was falsified by a **test run**, not by an edit | found 2026-08-12 during T1-3; `SERVICE-CONFIG-PROBE.md` §14 |
+| *"Module 08's asymmetric validation branch remains unexercised"* — in `OIDC-CORE-1.0.md` F-2, the lab's own marker, and `04-remediation-plan.md` §6.2 | **Nothing was blocking it.** Only the confidential client is `HS256`; both public clients have been `ES256` throughout. Three documents inherited one lab marker nobody re-checked | corrected 2026-08-12 during T1-2, by running it |
+| *"`NO_INTERACTION` is the `prompt=none` path"* (`OIDC-CORE-1.0.md` F-1, `RFC9470-…` F-3) | **It is not the only one.** A request with no `prompt` at all reaches it whenever it asks for `offline_access` (OIDC Core §11). So the empty-`Location` S1 had a **second live symptom** nobody had looked for | found 2026-08-12 during T1-4; `SERVICE-CONFIG-PROBE.md` §16 |
+| *"the handled `ID_TOKEN_REISSUABLE` action is unreachable while the flag is `false`"* (probe §3.3, OIDC-W5) | True, and it hid a **defect**. Enabling the flag showed the branch requires a `ticket` Authlete does not send, so every refresh returned **400 with a valid token body**. *Handled*, *exercisable* and *correct* are three different claims. **And the work item written from that symptom named the wrong remedy** — the branch was calling `/auth/token/issue` when this action has its own API, `POST /idtoken/reissue`; no arrangement of arguments to the first would have worked | found 2026-08-12 during T1-4; **B1-W6 ✅ fixed the same day** |
 | `backChannelLogoutUri` (capital `C`) cited as absent on all three clients | Authlete's field is **`backchannelLogoutUri`**. The conclusion survives — the correct key is also unset — but the probe was reading a key that cannot exist | `SERVICE-CONFIG-PROBE.md` §10, `OIDC-BACKCHANNEL-LOGOUT-1.0.md` ×2, fixed 2026-08-12 |
-| `03-curriculum-audit.md` citing `PROGRESS.md:1264` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:1327-1328` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
+| `03-curriculum-audit.md` citing `PROGRESS.md:1401` for the RFC 8446 verification claim | Wrong **when written** — it matched no revision of the file. Correct target `PROGRESS.md:2226-2227` | fixed 2026-08-11 during T0-6; see `04-remediation-plan.md` §6.3 |
 
 **Calibration worth carrying into Phase 4:** five of Phase 3's findings correct the audit rather than the
 curriculum, and **every one arose where the audit reasoned from a grep or a recollection while the curriculum
@@ -196,9 +270,9 @@ Batch 3a opened a register Phase 4 must carry — correct labs that a recommende
 
 | Lab | Broken by | Mitigation |
 |---|---|---|
-| Module 00 Ex 2 expects `key count: 1`, EC key at `keys[0]` | **OIDC-W2** / **FAPI1A-W2** — registering an RSA key | Select by `kty === 'EC'` (**CUR-3a-W3**) |
+| ~~Module 00 Ex 2 expects `key count: 1`, EC key at `keys[0]`~~ | ~~**OIDC-W2** / **FAPI1A-W2**~~ | ✅ **both landed in one commit, 2026-08-12.** And the register was short by two — Module 08 §6d and `modules/11…/README.md` also asserted the pre-fix key set |
 | Module 01 Ex 3 + Module 07 §3b both hinge on ROPC succeeding | **FAPI2-W5** — enabling FAPI 2.0 reverses both transcripts | Name `fapiModes` in both (**CUR-3a-W5**) |
-| Module 10 Ex 4 teaches the 200-with-stack-trace | Dropping `SPIFFE_JWT` **retires** it; **EH-W1** alone does **not** | See `ERRORHANDLER-…` F-2's four-row table |
+| Module 10 Ex 4 teaches the 200-with-stack-trace | ~~Dropping `SPIFFE_JWT` **retires** it~~ — **it did not.** Both fixes shipped (2026-08-11, 2026-08-12) and the exercise was **rebuilt**: three dated states plus the closed-enum lesson | See `ERRORHANDLER-…` F-2's four-row table and the note under it. **Rule:** a symptom-based lab dies with the fix; a mechanism-based one gains a data point |
 
 This is distinct from `AGENTS.md`'s **Deliberate defects** table, where the coupling is intentional.
 
@@ -232,8 +306,8 @@ Four files decide security outcomes and are not on it: `routes/device.routes.ts`
 
 ### 5.4 Highest-leverage single changes
 
-- **One client with `private_key_jwt` + a JWKS** unblocks RFC 7523 §2.2, asymmetric JAR, and FAPI (**7523-W4**).
-- **One registered RSA key** satisfies OIDC Discovery §3's RS256 MUST and FAPI's PS256 (**OIDC-W2**).
+- ~~**One client with `private_key_jwt` + a JWKS**~~ ✅ **shipped 2026-08-12 (T1-3)** — RFC 7523 §2.2, asymmetric JAR and FAPI's prerequisite, from one `client/create` (**7523-W4** = **9101-W3**).
+- ~~**One registered RSA key**~~ ✅ **shipped 2026-08-12 (T1-2)** — RS256 *and* PS256, because the key carries no `alg` member (**OIDC-W2** = **FAPI1A-W2**).
 - **One clause in `errorHandler.ts`** stops every SDK validation failure being served as 2xx (**EH-W1**).
 - **One review of `supportedTokenAuthMethods`** subsumes the mTLS metadata fix, the attestation finding and the `SPIFFE_JWT` question (**ATT-W3**).
 
@@ -251,11 +325,11 @@ Four files decide security outcomes and are not on it: `routes/device.routes.ts`
 |---|---|---|
 | `RFC8628-device-authorization-grant.md` | `PARTIAL` | ~~YES~~ → **fixed 2026-08-10.** `POST /api/device/complete` is now gated by `middleware/development-only.ts` (flat 404 outside development) plus `deviceCodeLimiter`, at `routes/device.routes.ts:27`; asserted by `tests/unit/routes/device.routes.test.ts`. **Still unauthenticated *within* development.** The wire-format and rate-limit findings in the entry are unaffected |
 | `OIDC-RP-INITIATED-LOGOUT-1.0.md` | `PARTIAL` | ~~YES~~ → **fixed 2026-08-10.** `isAllowedPostLogoutRedirectUri` (`services/logout.service.ts:131-138`) refused both verified payloads — first by comparing **origins exactly** (2026-08-10), and since 2026-08-12 by matching the identified client's registered set with `===`, no parsing at all. **The fix is not RPL-W1** — RP-Initiated Logout §3 wants exact matching against per-client registered `post_logout_redirect_uris`, no client registers any, so the deployment kept an env-driven allowlist and recorded the departure in `AGENTS.md`. **RPL-W2 ✅ (2026-08-11, T0-2) and RPL-W3 ✅ (2026-08-12, T0-3) have since landed; RPL-W1 and RPL-W4 remain, as T0-4.** Severity S1 → S2 → **S3** |
-| `ERRORHANDLER-STATUS-INVERSION.md` | `PARTIAL` | No — silent failure, not a breach. Systemic across 57 call sites |
-| `FAPI-2.0-SECURITY-PROFILE.md` | `MISCONFIGURED` | No — false attestation (five literals opposite to live values) |
-| `RFC7636-pkce.md` | `MISCONFIGURED` | No — PKCE not required and falsely reported as required |
+| `ERRORHANDLER-STATUS-INVERSION.md` | ~~`PARTIAL`~~ → **`RESOLVED`** | No — silent failure, not a breach. Systemic across 57 call sites. **Both layers closed: the status clamp 2026-08-11 (EH-W1), the enum-gap residue 2026-08-12 (T1-5).** S1 → S3 → **closed** |
+| `FAPI-2.0-SECURITY-PROFILE.md` | `MISCONFIGURED` | No — false attestation (five literals opposite to live values). **F-1 fully closed: the literals 2026-08-11 (FAPI2-W1), the endpoint failure 2026-08-12 (T1-5) — both endpoints now report the live posture.** S1 → **S2**, on F-2's basis (`README.md` still calls FAPI 2.0 "Working") |
+| `RFC7636-pkce.md` | `MISCONFIGURED` | No — PKCE not required and falsely reported as required. **The false report is gone in both halves** (FAPI2-W1 2026-08-11; T1-5 2026-08-12 made the live read observable — `/api/fapi/config` answers `pkceRequired: false`). **Open on the unenforced control alone; the downgrade is Gate 4 Q1's ruling, not taken here** |
 | `RFC7662-token-introspection.md` | `PARTIAL` | ~~No — unauthenticated introspection (RFC 7662 §2.1 MUST)~~ → **fixed 2026-08-12 (T1-1).** Both endpoints require admin Basic auth and carry `generalLimiter`; the gate runs **before** any Authlete call. **S1 → S3.** The residue is architectural: it is not *client* authentication, and whether it could be depends on an unestablished Authlete behaviour (**7662-W6**) |
-| `RFC9700-security-bcp.md` | `PARTIAL` | No — implicit + password grants enabled, no PKCE requirement |
+| `RFC9700-security-bcp.md` | `PARTIAL` | No — implicit + password grants enabled, no PKCE requirement. **F-4/F-4a's residue closed 2026-08-12 (T1-5)**: the posture is readable through the repo's own endpoint, so the entry now rests on F-2 alone (**S3**, deliberate teaching material). §2.4 unmet by decision |
 | `RFC9470-step-up-authentication.md` | `PARTIAL` | ~~Not yet — fabricated `acr`/`auth_time`~~ → **retired 2026-08-12 (T1-7).** OIDC-W1 and 9470-W3 shipped as one change, so the activation route was built correctly rather than built at all. The fabrication block is deleted; `utils/step-up.ts` answers absence as "no". **S2+latent-S1 → S3** |
 
 **Recommendation on record:** the first two should be fixed ahead of Gate 4 rather than waiting for the plan.
@@ -278,6 +352,17 @@ string. Work items **CUR-3b-W1** (fix Module 10) and **CUR-3b-W2** (fix the rule
 - Findings live one-file-per-spec in `audit/02-findings/`, with the schema from the skill's `<one_shot_example>`: verdict header → `<thinking>` → normative table → Authlete boundary table → findings → documentation delta → sources → work items.
 - Cross-reference sibling findings rather than restating them; never count one defect twice.
 - Work-item IDs are per-entry prefixes (`9126-W1`, `EH-W1`, `CUR-3a-W3`). Phase 4 reconciles them.
+- **An acceptance criterion must name the call it expects to change** — added 2026-08-13. Six work items in
+  Phase 5 prescribed remedies that could not reach their stated outcome, and the shared tell was that none
+  named an endpoint: a criterion phrased as *"issue from the fields Authlete actually sends"* or *"return 200
+  with an entity statement"* describes a **result**, and results do not tell you which call produces them.
+  Write *"call `POST /idtoken/reissue` instead of `/auth/token/issue`"*. If you cannot, you have not finished
+  the finding — **probe first**; see `04-remediation-plan.md` §7.4 step 0.
+- **Ask "what was supposed to have caught this?" before asking "how do I fix it?"** — added 2026-08-13. In
+  Phase 5 that question found more real defects than reading code did: four surfaces with no test naming them
+  at all, one of them *unmockable* because the shared Authlete mock lacked a member, and the client's entire
+  test suite plus its `typecheck` script, which CI never invoked because `vite build` does not typecheck. It
+  is now partly mechanical — `node scripts/check-route-coverage.mjs` ratchets against a recorded baseline.
 - Run `node scripts/check-docs.mjs` after writing — it validates `file.ts:NNN` refs, relative links and anchors across `audit/` too. **Three known detection gaps**, all found by this audit and all to be scoped as one change: bare paths with no line number (**CUR-3a-W1**), prose refs of the form `Line ~89` (**CUR-3b-W5**), and endpoint paths inside fenced blocks (**CUR-3c-W11**).
 
 ---

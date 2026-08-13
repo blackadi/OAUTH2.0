@@ -64,6 +64,9 @@ export interface MockAuthleteApi {
     deferredParse: MockFn;
     deferredIssue: MockFn;
   }
+  // Added 2026-08-13: `federation` was missing, so `federation.service.ts` was untestable and had no tests
+  // at all. The file's claim to cover "every SDK method" was inaccurate; check before relying on it.
+  federation: { configuration: MockFn; registration: MockFn }
 }
 
 export function createMockAuthlete(overrides?: Partial<MockAuthleteApi>) {
@@ -148,6 +151,10 @@ export function createMockAuthlete(overrides?: Partial<MockAuthleteApi>) {
       batchIssue: fn(),
       deferredParse: fn(),
       deferredIssue: fn(),
+    },
+    federation: {
+      configuration: fn(),
+      registration: fn(),
     },
     ...overrides,
   }

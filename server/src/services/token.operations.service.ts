@@ -160,8 +160,30 @@ export class TokenManagementService {
     return response;
   }
 
-  async reissueIdToken(req: Request): Promise<IdtokenReissueResponse> {
-    const { accessToken, refreshToken, sub, claims, idtHeaderParams, idTokenAudType } = req.body;
+  /**
+   * `POST /idtoken/reissue`. Two callers with deliberately different sources:
+   *
+   *   - the admin route `POST /api/token/reissue` passes the Express `Request`, so the operator's
+   *     body supplies every field;
+   *   - `token.controller.ts`'s `ID_TOKEN_REISSUABLE` branch passes a plain params object built from
+   *     Authlete's own token response, and **never** from `req.body` — a client that could set `sub`
+   *     could name any subject in an ID token this OP signs.
+   *
+   * The union mirrors `create()` and `revoke()` above rather than inventing a second shape.
+   */
+  async reissueIdToken(
+    req: Request | Record<string, any>
+  ): Promise<IdtokenReissueResponse> {
+    const params = (req.body ?? req) as Record<string, unknown>;
+    const { accessToken, refreshToken, sub, claims, idtHeaderParams, idTokenAudType } =
+      params as {
+        accessToken?: string;
+        refreshToken?: string;
+        sub?: string;
+        claims?: string;
+        idtHeaderParams?: string;
+        idTokenAudType?: string;
+      };
     logger(
       "TokenReissueIdTokenService: calling Authlete token management endpoint",
       { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken }

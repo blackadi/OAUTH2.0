@@ -52,6 +52,13 @@ jobs:
         if: github.event_name == 'schedule'
         run: node scripts/check-docs.mjs --links
 
+      # Added 2026-08-13. Ratchets against scripts/route-coverage-baseline.json: a NEW route with no test
+      # naming it fails the build; the 47 already uncovered are carried as visible, shrinkable debt. This
+      # is the mechanical form of "what was supposed to have caught this?" — the question that found more
+      # real defects during the Phase 5 remediation than reading code did.
+      - name: Check route coverage (no new untested endpoints)
+        run: node scripts/check-route-coverage.mjs
+
   client:
     runs-on: ubuntu-latest
 
@@ -69,5 +76,13 @@ jobs:
           cache-dependency-path: client/package-lock.json
 
       - run: npm ci
+
+      # Added 2026-08-13. CI ran `build` alone, and `vite build` does not typecheck — so `npm run typecheck`
+      # existed in package.json and was never invoked, while 4 real type errors sat unnoticed, and the 16
+      # client test files never ran in CI at all. The server job has gated all three from the start; the
+      # client job gating only the bundler was the asymmetry that hid them.
+      - run: npm run typecheck
+
+      - run: npm run test
 
       - run: npm run build

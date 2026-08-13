@@ -164,7 +164,7 @@ node docs/curriculum/scripts/decode-jwt.mjs "$IDT"
 
 ```
 HEADER:   { "alg": "HS256" }
-PAYLOAD:  { "iss": "https://…", "sub": "admin", "aud": ["<your client_id>"],
+PAYLOAD:  { "iss": "https://…", "sub": "admin", "aud": "<your client_id>",
             "exp": …, "iat": …, "auth_time": …, "acr": "pwd", "s_hash": "…" }
 ```
 

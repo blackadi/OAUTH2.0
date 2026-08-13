@@ -125,6 +125,60 @@ surface, not a token-issuance vulnerability.
 exactly the 4 handled members, `TokenCreateResponseAction` exactly the 4 handled members — so this is a
 latent shape issue, not a live leak. Every other `default` sends a fixed string.
 
+## Finding F-9 — `ID_TOKEN_REISSUABLE` was calling the wrong API, and B1-W6's own acceptance criteria said so too (S2, fixed 2026-08-12)
+
+B1-W6 was written from the symptom — *"it requires a `ticket` Authlete does not send"* — and its acceptance
+criteria followed: *"the branch issues from the fields Authlete actually sends."* That reads as *call
+`/auth/token/issue` with better arguments*. **It is the wrong remedy, and no arrangement of arguments would
+have worked**, because `/auth/token/issue` is the ticket-consuming API and this action has no ticket.
+
+**There is a dedicated API, and the vendored 3.0.16 spec is unambiguous about when to call it:**
+`POST /api/{serviceId}/idtoken/reissue`, *"expected to be called only when the value of the `action` parameter
+in a response from the `/auth/token` API is ID_TOKEN_REISSUABLE"*, whose purpose is *"to generate a token
+response that includes a new ID token together with a new access token and a refresh token."* It takes
+`accessToken` and `refreshToken` (both **REQUIRED**) plus optional `sub`, `claims`, `idtHeaderParams`,
+`idTokenAudType`. **The repo already wrapped it** — `TokenManagementService.reissueIdToken()`, written for the
+admin route `POST /api/token/reissue` — so the fix reached for an existing method rather than a new one.
+
+**What `/auth/token` actually returns on this action**, verified directly against Authlete rather than through
+the server:
+
+| Field | Value |
+|---|---|
+| `ticket` | **ABSENT** — the whole defect |
+| `subject` | `"admin"` |
+| `accessToken`, `refreshToken` | present |
+| `jwtAccessToken` | ABSENT (JWT access tokens are off — DR-09) |
+| `idToken` | ABSENT |
+| `responseContent` | `access_token`, `token_type`, `expires_in`, `scope`, `refresh_token` — **and no `id_token`** |
+
+**That last row settles a question the fix depends on.** B1-W6 described `responseContent` as *"a complete
+valid token JSON"*, which is true of it *as an OAuth token response* and misleading here: it has **no
+`id_token`**, which is precisely why the action exists. It also makes the degrade path safe — when the reissue
+call fails, returning `responseContent` with **200** cannot hand back a *stale* ID token, because there is
+none to hand back. A refresh that yields no `id_token` violates nothing (OIDC Core §12.2 is a SHOULD), and it
+is exactly what clients saw while the flag was `false`, so enabling the flag cannot break them.
+
+**Two behaviours the work item did not anticipate**, both now locked by tests:
+
+1. **`idTokenAudType` defaults to `"array"` and overrides the service.** The spec: the request parameter
+   *"takes precedence over the `idTokenAudType` property of Service"*. T1-4 set the service to `"string"`
+   deliberately, so an omitted parameter would have given reissued ID tokens an array `aud` while every other
+   ID token from this service carries a string — **a configuration decision silently reversed on one code
+   path**. Sent explicitly; verified live as a string.
+2. **`accessToken` has a documented precedence** — `jwtAccessToken` when available, else `accessToken`. Inert
+   today, correct if DR-09 is ever taken.
+
+**Verified live** (authorization-code flow with `openid offline_access`, then a refresh): **200** with a
+reissued `id_token`; `iat` and `exp` advance (checked against a deliberate 4-second gap), `auth_time` holds the
+**original** authentication time, `sub`/`aud`/`iss`/`acr` unchanged. The reissued token **drops `nonce` and
+`s_hash`**. Whether dropping `nonce` conforms to **OIDC Core §12.2 is `UNVERIFIED`** — that section was not
+fetched for this change, and the behaviour is Authlete's either way. Named next action: fetch §12.2.
+
+**The transferable lesson** is the one probe §15 already stated and this confirms from the other side: a work
+item written from a symptom can name a remedy that cannot work. *Handled*, *exercisable* and *correct* were
+three different claims; **so were *the fields are wrong* and *the API is wrong*.**
+
 ## What the boundary gets right
 
 Worth recording, because it is the reason a rebuild is not indicated:
@@ -156,11 +210,12 @@ Worth recording, because it is the reason a rebuild is not indicated:
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| B1-W1 | Map `action` to a status in `jar.controller.ts` and stop returning the raw response | S | `BAD_REQUEST`→400, `INTERNAL_SERVER_ERROR`→500, `LOCATION`/`FORM`/`NO_INTERACTION`/`INTERACTION`→200; response body carries `action` + `responseContent` only, never `ticket`, `service` or `client`. Unit test per action value. |
-| B1-W2 | Decide and enforce an auth posture for `/api/jar/process` | S | Either client authentication or admin Basic auth; documented either way. It is a debugging surface, so "admin-only" is defensible — "unauthenticated" is not, while it emits tickets. |
+| B1-W1 | Map `action` to a status in `jar.controller.ts` and stop returning the raw response | S | ✅ **DONE 2026-08-13.** Statuses map as specified. The body is an **allowlist** — `action`, `resultCode`, `resultMessage`, `responseContent`, `scopes` — rather than the `action` + `responseContent` pair the criteria named: this endpoint has **no specification shape** (it is a repo-invented debugging surface, so no RFC says what its body should be), and `resultMessage`/`scopes` are its entire pedagogical value, which Module 05's lab reads. An allowlist rather than a denylist so the next SDK field cannot leak by default. `ticket`, `service` and `client` are gone; a test asserts the body contains no `SECRET`. `responseContent: null` is deliberately **kept** — on a debugging endpoint *"Authlete returned no content"* is a fact worth seeing, and it is exactly what made T1-7's `NO_INTERACTION` branch mislead. Verified live: an unregistered signing key returns **400** with `[A005328]` and no ticket. New file `tests/unit/controllers/jar.controller.test.ts` (13 cases) — the endpoint previously had none. |
+| B1-W2 | Decide and enforce an auth posture for `/api/jar/process` | S | ✅ **DONE 2026-08-13 — admin Basic auth**, via `requireBasicAuth("jar")`, checked **before** the Authlete call so a rejected caller costs nothing and learns nothing. Client authentication was rejected as the option: this is not a client-facing endpoint and nothing here can validate a client secret, so demanding one would look like protection and provide none — the same reasoning T1-1 recorded for introspection (**7662-W6**). Verified live: no credentials → **401**, and Authlete is not called. **This also settles DR-12's dependency**: `jar.controller.ts` now makes an access-control decision, so it belongs on `AGENTS.md`'s Security-critical surfaces list under *Access control*. |
 | B1-W3 | Make `normalizeGrantType` total | S | Unknown/missing grant type throws `AppError(400)` instead of defaulting; add the two canonical URNs and `urn:openid:params:grant-type:ciba`→`CIBA`; drop the `as GrantType` cast so the enum is checked. Test asserts rejection, not coercion. |
 | B1-W4 | Fix the two echoing `default` branches | S | Send a fixed error body; assert in test. |
 | B1-W5 | Update Module 05 lab §JAR to match real behaviour, and link `TICKET-PARAMETER.md` from `docs/README.md` | S | Lab shows the real status codes after B1-W1; doc index reaches the ticket explainer. |
+| **B1-W6** | ✅ **DONE 2026-08-12.** **Fix the `ID_TOKEN_REISSUABLE` branch — it requires a `ticket` Authlete does not send** | S | 📋 Planned under plan mode (`controllers/token.controller.ts`, `services/token.operations.service.ts` — both Security-critical). **Found 2026-08-12 during T1-4** by setting `idTokenReissuable = true` and exercising the branch for the first time. Authlete answers a refresh request with `action: ID_TOKEN_REISSUABLE`, **`subject: "admin"`, `responseContent` = a complete token response, and no `ticket`** (verified against `/auth/token` directly). The handler guarded on `if (!ticket)` and fell through to `res.status(400).send(result.responseContent)` — so **every refresh-token request returned HTTP 400 carrying a successful token response**. **The acceptance criteria named the wrong remedy and that is the finding** — see F-9 below. Fixed by calling **`POST /idtoken/reissue`**, the API that exists for this action; `idTokenReissuable` is now `true` and **kept**. Suite 635 → **644**. |
 
 **Ordering note.** B1-W1 and B1-W3 both touch behaviour but neither file is on the
 `AGENTS.md` **Security-critical surfaces** list — `jar.controller.ts` is not listed, and

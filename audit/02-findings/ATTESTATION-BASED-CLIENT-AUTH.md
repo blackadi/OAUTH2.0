@@ -1,7 +1,27 @@
 # OAuth 2.0 Attestation-Based Client Authentication
 
-- **Verdict:** `PARTIAL`
-- **Severity:** **S3**
+> ## ✅ F-1 CLOSED 2026-08-12 — the method is no longer advertised (T1-5, DR-07's console pass)
+>
+> `ATTEST_JWT_CLIENT_AUTH` was withdrawn from `supportedTokenAuthMethods`, so
+> `token_endpoint_auth_methods_supported` no longer offers it. **The withdrawal took both algorithm lists with
+> it** — `client_attestation_signing_alg_values_supported` (14) and
+> `client_attestation_pop_signing_alg_values_supported` (11) are now **ABSENT** from the discovery document,
+> which settles something F-1 could only list: those two members are *derived* from the auth method, not
+> configured independently. Discovery 64 → 62 members. Evidence: `SERVICE-CONFIG-PROBE.md` §18.
+>
+> - **ATT-W3** ✅ — delivered as one console decision covering this F-1, `RFC8705-…` F-1 and the `SPIFFE_JWT`
+>   question. Nine advertised methods → **five**.
+> - **F-2 is unaffected and its severity is unchanged.** `par.service.ts` still forwards neither header. What
+>   changed is that the gap is now unreachable *by construction* rather than merely unused, so **ATT-W2 ships
+>   for correctness only** — as T1-21 already said, it cannot be exercised end to end.
+> - **F-3 (the missing `SPEC-INVENTORY.md` row) remains open** — and it now has a second thing to record: the
+>   method was advertised and has been withdrawn, which is the *"permitted but not configured"* → *"declined"*
+>   transition Module 09a's taxonomy has vocabulary for.
+>
+> Severity **S3 → S4**: nothing is advertised that cannot be used, and the residue is documentation.
+
+- **Verdict:** ~~`PARTIAL`~~ → **`OUT_OF_SCOPE`** *(declined at the service; F-1 closed, F-2/F-3 documentation)*
+- **Severity:** ~~**S3**~~ → **S4**
 - **Status:** **Active Internet-Draft**, OAuth WG — `draft-ietf-oauth-attestation-based-client-auth`, revision **10**, latest revision **6 July 2026** — verified this session
 - **Authlete version:** 3.0 — the SDK references the draft on `oauthClientAttestation` / `oauthClientAttestationPop`; **`llms.txt` has no page** (`00-inventory.md` §10: *"no page in `llms.txt`* … unverifiable against Authlete docs")
 - **Repo docs under test:** `AGENTS.md` (mentions the headers in the PAR known-gap note), `docs/curriculum/SPEC-INVENTORY.md` (**no row**)
@@ -142,9 +162,9 @@ no row at all). Same remedy: per-row provenance, as proposed in **FED-W4**.
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | ATT-W1 | Add a `SPEC-INVENTORY.md` row | S | Active Internet-Draft, revision **10**, 6 Jul 2026, labelled as a draft; notes that the SDK cites it and that the method is advertised but unconfigured. Batches with **CIMD-W1** and **HAIP-W2**. |
-| ATT-W2 | Forward the attestation headers at PAR | S | `par.service.ts` sets `oauthClientAttestation` / `oauthClientAttestationPop` from HTTP context, never from the body. Closes **9126-W4**'s sibling gap and is a prerequisite for any FAPI 2.0 attestation client. |
+| ATT-W2 | Forward the attestation headers at PAR | S | ⛔ **DECLINED 2026-08-13 (T1-21), not deferred.** T1-5 withdrew `ATTEST_JWT_CLIENT_AUTH` and `challenge_endpoint` is absent, so no client can use attestation and this code path is unreachable **by construction** — it could never be exercised by a test or a client. Shipping it would put permanently dead code on a Security-critical surface, which is the inverse of Theme 1's lesson about advertising what cannot be used. **The re-add trigger is T1-5's existing one**: re-advertising any withdrawn client-auth method already requires re-checking the SDK's `ClientAuthMethod` enum first, and ATT-W2/ATT-W4 attach to that same check. **Note the cross-reference was wrong** — this does not gate `9126-W4`, which was merged into `9449-W1` and shipped 2026-08-13 (T1-9). |
 | ATT-W3 | Review all nine advertised client-auth methods together | S | Rather than removing two (**8705-W1**), audit the whole `supportedTokenAuthMethods` list: four are unusable and one (`spiffe_jwt`) breaks `service.get()`. One console decision covers `RFC8705-…` F-1, this F-1, and the `SPIFFE_JWT` question. |
-| ATT-W4 | Reject duplicate attestation headers explicitly | S | Match `utils/dpop.ts`'s handling of RFC 9449's single-header rule, so the failure says "more than one header" rather than "malformed JWT". |
+| ATT-W4 | Reject duplicate attestation headers explicitly | S | ⛔ **DECLINED 2026-08-13 (T1-21)**, with ATT-W2 and for the same reason — unreachable by construction while the method is withdrawn. |
 | ATT-W5 | Establish the full discovery member list | S | One read-only probe printing all 62 members, settling `challenge_endpoint` and `client_attestation_pop_methods_supported` and closing the only unestablished fact in this entry. |
 
 **Ordering.** ATT-W3 is the high-leverage item and should be taken as one decision at Gate 4 — it subsumes the

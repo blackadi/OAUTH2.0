@@ -63,8 +63,13 @@ export function requireBasicAuth(realm: string) {
       return deny("Client authentication required");
     }
 
+    // RFC 9110 §11.1 makes the auth-scheme case-insensitive, so `basic` is as valid as `Basic`. This is
+    // strictly widening — it can only accept requests that should already have been accepted — and it
+    // matches `parseBasicAuth`, which has always been case-insensitive. The hand-rolled split below stays
+    // deliberately separate from that helper: this validates *this deployment's* management credentials
+    // with `timingSafeEqual`, a different job from decoding a client's.
     const { authorization } = req.headers;
-    if (!authorization?.startsWith("Basic ")) {
+    if (!authorization || !/^basic /i.test(authorization)) {
       return deny("Client authentication required");
     }
 

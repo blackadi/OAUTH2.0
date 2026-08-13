@@ -54,6 +54,13 @@ OAuth token endpoint. Accepts `application/x-www-form-urlencoded` or `applicatio
 
 **Response:** 200 `{ access_token, token_type, expires_in, refresh_token?, id_token?, scope? }`
 
+**Client authentication — pick one channel, not both.** Send your secret either in an
+`Authorization: Basic` header (`client_secret_basic`) **or** as `client_secret` in the body
+(`client_secret_post`). Sending both is refused with 400 `invalid_request`: RFC 6749 §2.3.1 says
+*"The client MUST NOT use more than one authentication method in each request."* A bare `client_id` in
+the body alongside a Basic header is fine — `client_id` is not a credential. The same rule applies at
+`POST /api/par`, which RFC 9126 §2 gives the token endpoint's client authentication.
+
 ### `GET /api/userinfo`
 UserInfo endpoint. Bearer token required.
 
@@ -108,6 +115,13 @@ belong in the **body** — the `Authorization` header carries the admin credenti
 
 **Response:** 200 with the RFC 7662 body (`{"active":false}` for an unknown or revoked token — §2.2 makes an
 inactive token a result, not an error), 400, 401 (missing/invalid admin credentials), 500.
+
+**JWT responses (RFC 9701).** Send `Accept: application/token-introspection+jwt` and the response is a signed
+JWT with that same media type, carrying `iss`, `aud`, `iat` and a `token_introspection` claim. The JWT form
+**also requires `rsUri` in the body** — it becomes the `aud`, naming the resource server that asked. Without it
+Authlete answers `400 [A404301] The URI of the resource server is required when a JWT introspection response is
+requested.`, which is passed through unchanged: `aud` identifies the caller, and the server has no honest way
+to guess which resource server that is. This returned **500** until 2026-08-13.
 
 ### `POST /api/revocation`
 RFC 7009 token revocation.
@@ -260,7 +274,11 @@ which channel the credentials arrive on and returns 401 on a mismatch:
 
 ## Grant Management
 
-Both endpoints require a Bearer token that carries the relevant scope
+Both endpoints are **protected resources** and accept either scheme: `Bearer` for an ordinary token, or
+`DPoP` plus a `DPoP:` proof header for a key-bound one (RFC 9449 §7.1 permits no alternative for a bound
+token). `Bearer` carrying a proof is refused with 400 — that combination is the §7.2 downgrade.
+
+Both endpoints require a token that carries the relevant scope
 (`grant_management_query` / `grant_management_revoke`) **and that was itself issued under the grant being
 addressed**. A token bound to a different grant — or to none at all, such as a `client_credentials` token —
 gets 403. See [GRANT-MANAGEMENT.md](./GRANT-MANAGEMENT.md) and
@@ -276,8 +294,11 @@ Revoke grant.
 
 **Response:** 204 No Content
 
-**Errors (both):** 401 `invalid_token` (missing/invalid token) · 403 `access_denied` (insufficient scope, or
-the token is not associated with this grant) · 404 `not_found` (no such grant)
+**Errors (both):** 401 with **no error code** and `WWW-Authenticate: Bearer, DPoP` (no token presented —
+RFC 6750 §3.1) · 401 `invalid_token` (expired, revoked or unknown token) · 401 `invalid_dpop_proof`
+(`DPoP` scheme with no proof, or a proof that does not match the token's key) · 400 `invalid_request`
+(`Bearer` scheme carrying a proof) · 403 `access_denied` (insufficient scope, or the token is not
+associated with this grant) · 404 `not_found` (no such grant)
 
 ---
 
@@ -398,11 +419,23 @@ Ends the session. Verifies any `id_token_hint` against the OP's JWKS, optionally
 **Redirect rule (RP-Initiated Logout 1.0 §3).** The URI must **exactly match** one registered for *that client*. The client is taken from `client_id`, or from the `aud` of a verified `id_token_hint` when `client_id` is absent. **No identified client ⇒ no redirect**, since an unidentified client has an empty registered set. Matching is byte-for-byte: `http://localhost:3000` does not match `http://localhost:3000/`. The registry is the `POST_LOGOUT_REDIRECT_URIS` env var (`{"<clientId>": ["<uri>", …]}`) because Authlete 3.0 has no client field for it. `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` do **not** authorise redirects.
 
 ### `POST /api/backchannel_logout`
-Receive incoming logout tokens from other OPs.
+Receive incoming logout tokens from other OPs. Here this server is the **RP**, not the OP.
 
 **Body:** `logout_token`
 
-**Response:** 200 (processed), 400 (invalid token)
+**Validation (OIDC Back-Channel Logout §2.6, all eleven steps).** Signature against `JWKS_URI`; `alg` from an
+allowlist that excludes `none`; `iss` equal to `BACKCHANNEL_LOGOUT_ISSUER`; `aud` equal to
+`BACKCHANNEL_LOGOUT_AUDIENCE`; `exp` unexpired; `iat` within five minutes; the backchannel-logout `events`
+claim present; `sub` or `sid` present; and **no** `nonce` claim. On success the **subject's** sessions are
+terminated — not the caller's, which is another server and has no browser session.
+
+**Configuration is required, and its absence is a 500.** With any of `JWKS_URI`,
+`BACKCHANNEL_LOGOUT_ISSUER` or `BACKCHANNEL_LOGOUT_AUDIENCE` unset the endpoint answers
+`500 server_error` without examining the token. Omitting an `iss`/`aud` check rather than refusing would
+silently downgrade it to "any issuer, any audience".
+
+**Response:** 200 (processed) · 400 (the token is bad — the sender's fault) · 500 (we are misconfigured, or
+the session store failed — our fault). `Cache-Control: no-store` on every response (§2.8).
 
 ### `POST /api/backchannel_logout/issue`
 Create signed logout token. Admin Basic auth required.

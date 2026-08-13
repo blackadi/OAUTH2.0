@@ -1,7 +1,46 @@
 # RFC 7636 — Proof Key for Code Exchange by OAuth Public Clients
 
+> ## ✅ ENFORCED 2026-08-13 — S1 → S3
+>
+> **PKCE is now required.** `pkceRequired` and `pkceS256Required` are `true` on the SPA client
+> (`4277838306`) and the `private_key_jwt` client (`2176571218`). Verified live at all four clients:
+>
+> | Request | Result |
+> |---|---|
+> | enforcing client, no `code_challenge` | refused — `[A124301] The authorization request does not contain 'code_challenge' parameter.` |
+> | enforcing client, `code_challenge_method=plain` | refused — `[A124308] … must be 'S256'.` |
+> | enforcing client, `S256` | `INTERACTION` — proceeds |
+> | `1523514379` / `1678274156`, no challenge | `INTERACTION` — **deliberately still permitted** |
+>
+> **The two exceptions are curriculum infrastructure, not oversight.** Module 02 teaches the plain code flow
+> and Module 03 shows what it costs; the lesson requires a client that permits the flow being criticised.
+> Both are named in `AGENTS.md` with instructions not to "fix" them.
+>
+> **Severity S1 → S3.** The S1 rested on *"PKCE is not required"*, which is no longer true of this
+> deployment. What remains is two deliberately-unenforced teaching clients, documented in `AGENTS.md`, in
+> `README.md`'s *"Read this before you copy anything"* table, and in the feature table's PKCE row. That is a
+> recorded departure with a stated reason, which is the same standing as GM-W1's 24-hour token lifetime.
+> **This supersedes Gate 4 Q1**, which asked whether the entry should stay S1 *until PKCE is actually
+> required*. It now is.
+>
+> ## ✅ F-1 CLOSED IN BOTH HALVES — 2026-08-11 (FAPI2-W1) and 2026-08-12 (T1-5)
+>
+> F-1 had two independent defects and both are gone. The hardcoded `pkceRequired: true` literal was replaced
+> with a live read (FAPI2-W1); the `service.get()` failure that made the live read unobservable was closed by
+> withdrawing `SPIFFE_JWT` (T1-5). **`GET /api/fapi/config` now answers `"pkceRequired": false` — confirmed
+> against the running server, not inferred.** So the "conformance theatre" this finding described is not merely
+> corrected, it is **reversed**: the endpoint now reports the deployment's own failing control.
+>
+> **F-2 is closed as an observability matter too.** `pkceS256Required` is readable the same way; both flags are
+> `false` (probe §2).
+>
+> **What remains is the substance, unchanged:** PKCE is **not required** on this service, which is what
+> `RFC9700-security-bcp.md` F-1 and §2.1.1 turn on. **The severity ruling is Gate 4's question 1**, and its
+> premise has now moved twice — the entry no longer contains any false claim, only an unenforced control. This
+> banner deliberately does **not** downgrade the S1; that is the reviewer's call.
+
 - **Verdict:** `MISCONFIGURED` *(was `IMPLEMENTED_UNVERIFIED`; changed by the live service probe, 2026-08-10 — see `SERVICE-CONFIG-PROBE.md`)*
-- **Severity:** **S1** *(was S2)*
+- **Severity:** **S3** *(was S1, was S2)* — **enforced 2026-08-13; see the banner.** Historical note: **F-1 closed. The control was unenforced; what changed on 2026-08-13 is that the deployment now says so, prominently.** `README.md` carries a *"Read this before you copy anything"* block naming PKCE-not-required as one of four deliberate departures, and the feature table's PKCE row states it with the RFC 9700 §2.1.1 citation. **The remaining S1 is a configuration action, not a documentation one**: `pkceRequired: true` on the two clients that are not load-bearing for Modules 02–03, which need both states to exist in order to teach the difference. Attempted 2026-08-13 and **blocked by the environment's write policy**, not by a technical obstacle — see `PROGRESS.md`.
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/PKCE-TUTORIAL.md`, `docs/curriculum/modules/03-pkce-and-public-clients/`, `README.md`, `docs/curriculum/SPEC-INVENTORY.md:92`
 

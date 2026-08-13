@@ -478,7 +478,7 @@ re-enabled, so **no lab step shows FAPI being enforced**; the five Module 09a co
 |---|---|---|
 | `docs/TICKET-PARAMETER.md` | 290 | Zero inbound links or prose mentions anywhere |
 | `docs/curriculum/AUDIT-PASS-B.md` | 1,482 | Zero mentions; largest single doc file |
-| `docs/curriculum/AUDIT-PASS-A.md` | 748 | Prose mention only, at `PROGRESS.md:266`; never a link |
+| `docs/curriculum/AUDIT-PASS-A.md` | 748 | Prose mention only, at `PROGRESS.md:1124`; never a link |
 | `docs/MCP-OAUTH-TUTORIAL.md` | 293 | Absent from both tutorial indexes while `README.md`/`CHANGELOG.md` claim it shipped |
 | `CHANGELOG.md` | 73 | Self-referential only |
 
@@ -536,7 +536,7 @@ it the genuine gap.
 
 ## 12. Open questions carried into Phase 1
 
-1. **`SPIFFE_JWT` on the live service.** Removing it un-breaks `service.get()` and both FAPI endpoints, but Module 10 Exercise 4 teaches the 200-with-stack-trace as a finding. *Working assumption: leave it; record as `MISCONFIGURED` with the curriculum dependency named.*
+1. ~~**`SPIFFE_JWT` on the live service.**~~ **CLOSED 2026-08-12 (T1-5, DR-07).** Removing it did un-break `service.get()` and both FAPI endpoints — verified by an in-memory parse of the live response *before* the write. The working assumption ("leave it") was overturned, and the feared cost did not arrive: Module 10 Exercise 4 was **rebuilt** around the closed-enum mechanism rather than retired. §7's note that `clientIdMetadataDocumentSupported` is read through a cast *because the SDK lacks the field* was also wrong — **the SDK has it** (CIMD-W3).
 2. **The five Module 09a console settings** are assumed still unapplied. The audit reports the configuration gap rather than assuming a fix.
 3. **Orphaned docs** (`TICKET-PARAMETER.md`, `AUDIT-PASS-B.md`) are assumed an S4 finding to fix in Phase 5, not deliberate.
 

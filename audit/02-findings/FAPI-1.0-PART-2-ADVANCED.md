@@ -29,10 +29,10 @@
 
 | # | §5.2.2 shall | Live value | Status |
 |---|---|---|---|
-| 1 | Authenticate confidential clients with **mTLS** or **`private_key_jwt`** (note: **not** `client_secret_jwt`, which Part 1 allows) | one confidential client, `CLIENT_SECRET_BASIC`; no JWKS on any client | ❌ |
-| 2 | **Require** a JWS-signed request object, by value (`request`) or reference (`request_uri`) | `requestObjectRequired = false` service-wide and per client; `require_signed_request_object = false`; no client has `requestSignAlg`; `require_request_uri_registration = true` with no client `requestUris` | ❌ (`RFC9101-…` F-2, F-3) |
+| 1 | Authenticate confidential clients with **mTLS** or **`private_key_jwt`** (note: **not** `client_secret_jwt`, which Part 1 allows) | **changed 2026-08-12 (T1-3):** a second confidential client is registered `PRIVATE_KEY_JWT` with a JWKS and authenticates with a real client assertion. Still ❌ — Part 2 says *authenticate clients using* these methods, and this service permits all nine, including `none`. Capability is not enforcement | ❌ (capability ✅) |
+| 2 | **Require** a JWS-signed request object, by value (`request`) or reference (`request_uri`) | `requestObjectRequired = false` service-wide and per client; `require_signed_request_object = false`; **one client has `requestSignAlg: ES256` since 2026-08-12 (T1-3)** — so by-value signing works, it is just not *required*; `require_request_uri_registration = true` with no client `requestUris`, so by-reference remains unreachable | ❌ (`RFC9101-…` F-2; F-3 fixed) |
 | 3 | Protect the authorization response: `code id_token` **or** `code` + `response_mode=jwt` | both response types are *available* (`response_types_supported` includes `code id_token`; `response_modes_supported` includes `jwt`); neither is **required**, and JARM is unusable — no client has `authorizationSignAlg` | ❌ (`JARM-…` F-1) |
-| 4 | **PS256 or ES256** for JWS; **not** `none`; RS256 discouraged | `id_token_signing_alg_values_supported = [HS256, HS512, ES256, HS384]` — **PS256 absent, three HMAC algorithms present**; `userinfo_signing_alg_values_supported` includes **`none`**; one client signs ID tokens with **HS256** | ❌ |
+| 4 | **PS256 or ES256** for JWS; **not** `none`; RS256 discouraged | **changed 2026-08-12 (T1-2):** `PS256` is now advertised on all four lists. Still ❌ on the other three clauses — `userinfo_signing_alg_values_supported` still includes **`none`** (T1-13), three HMAC algorithms remain, one client still signs ID tokens with **HS256**, and the same key made the discouraged `RS256` available too | ❌ (PS256 ✅) |
 | 5 | Include **`s_hash`** in the ID Token when hybrid + `state` | ⊘ Authlete's; unexercised — no hybrid-flow lab step and no `s_hash` anywhere in `server/src` or the curriculum transcripts | ❌ unverified |
 | 6 | **Only issue sender-constrained access tokens**; shall support mTLS as the mechanism | `tlsClientCertificateBoundAccessTokens = false`; mTLS **declined** by decision record (`RFC8705-mutual-tls.md`); DPoP available but `dpopRequired = false` | ❌ — and see F-1 |
 | 7 | Request object `exp` ≤ **60 minutes** after `nbf` | `nbfOptional = false` ⇒ `nbf` required ✅, but no request object is required at all (#2), so the bound is never applied | ⚠️ flag right, unreachable |
@@ -46,11 +46,11 @@
 | Concern | Owner | Where |
 |---|---|---|
 | Enforcing the whole profile | Authlete, gated by `fapiModes` | not enabled |
-| Signed request objects | Authlete | available; no client key material (`RFC9101-…` F-3) |
+| Signed request objects | Authlete | available; **one client has key material since 2026-08-12** (`RFC9101-…` F-3, fixed), still not required |
 | JARM | Authlete builds and signs it | available; no client `authorizationSignAlg` (`JARM-…` F-1) |
 | `s_hash` | Authlete | never exercised |
 | Certificate-bound tokens | Authlete + a certificate this deployment cannot receive | **declined** (`RFC8705-…`) |
-| Algorithm restriction | Service key set + client metadata | PS256 not available; HMAC algorithms are |
+| Algorithm restriction | Service key set + client metadata | **PS256 available since 2026-08-12** (T1-2); HMAC algorithms still advertised, and `RS256` arrived with `PS256` |
 
 ## Finding F-1 — Part 2 is unreachable by an accepted decision, not merely unconfigured (S3)
 
@@ -75,10 +75,21 @@ requirements are independent of mTLS and are all configured against — but the 
 "document-only, inheriting the mTLS decline", with the record cross-referenced. Flagging the distinction rather
 than silently choosing.
 
-## Finding F-2 — PS256 is unavailable and three HMAC algorithms are advertised (S3)
+## Finding F-2 — PS256 is unavailable and three HMAC algorithms are advertised (S3) — ⚠️ **PARTLY FIXED 2026-08-12 (T1-2)**
+
+> **Fixed banner — observation 2 only.** The RSA key OIDC-W2 asked for landed on 2026-08-12, so **PS256 is
+> advertised** and **FAPI1A-W2 is closed**. The convergence the finding predicted held exactly: one key, both
+> specifications. Two qualifications the finding did not anticipate. **The same key also made `RS256`
+> available** — the algorithm §5.2.2 *discourages* — because it carries no `alg` member and Authlete then
+> offers every algorithm the key supports; narrowing that would mean pinning `alg` and giving up PS256, so
+> the discouraged algorithm is the price of the required one. And **`PS256` is advertised, not exercised**:
+> the RS256 path was verified with a live ID token, PS256 was not, and this entry's own Theme 1 says those
+> are different claims. **Observations 1 and 3 are untouched** — `none` is still advertised for UserInfo
+> (T1-13) and the HMAC exposure is unchanged (FAPI1A-W5). The rest of this finding describes the pre-fix
+> state.
 
 §5.2.2: implementations *"shall use PS256 or ES256 algorithms"* and *"shall not use `none`"*, with RSASSA-PKCS1-v1_5
-(RS256) discouraged. Live:
+(RS256) discouraged. Live before the fix:
 
 ```
 id_token_signing_alg_values_supported   = ["HS256", "HS512", "ES256", "HS384"]
@@ -135,7 +146,7 @@ Part 2's, and the work item is **FAPI1-W1**.
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | FAPI1A-W1 | Rule Part 2 `OUT_OF_SCOPE` by inheritance from the mTLS decline | S | **Gate 4 decision.** A short record: Part 2 requires mTLS as a sender-constraining mechanism, mTLS is declined with reasons, therefore Part 2 is document-only; the revisit trigger is the existing one. Removes it from configuration-debt tracking where it does not belong. |
-| FAPI1A-W2 | Register an RSA key | S | = **OIDC-W2**. Adds PS256 (FAPI §5.2.2) and RS256 (OIDC Discovery §3) in one console change. |
+| FAPI1A-W2 | Register an RSA key | S | ✅ **DONE 2026-08-12 (T1-2), = OIDC-W2.** PS256 and RS256 both advertised from one RSA-2048 key with no `alg` member. Note the residue this leaves for **DR-02**: PS256 is now *available*, so if FAPI 1.0 Advanced were ever pursued, §5.2.2's algorithm clause would be a client-pinning exercise rather than a key-generation one. |
 | FAPI1A-W3 | Fix the 60s/60min error | S | = **FAPI1-W1**. |
 | FAPI1A-W4 | Add an `s_hash` observation to Module 08 or 10 | S | Extend the existing `c_hash` exercise (`modules/08…/lab.md:326`) to a hybrid request with `state`, and record whether `s_hash` appears. The only Part-2-specific behaviour demonstrable here without mTLS. |
 | FAPI1A-W5 | Note the HMAC exposure | S | Module 10 states that HS256 ID tokens cannot provide the non-repudiation FAPI Advanced exists for, tying it to the one client that uses HS256. |

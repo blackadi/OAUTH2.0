@@ -75,7 +75,14 @@ That is the correct handling of a known non-conformance in teaching material, an
 the repo should be held to. Recorded as a positive because Phase 2 found the opposite pattern four times
 (`FAPI-TUTORIAL.md`'s unreproducible PAR transcript, `README.md`'s four "Working" claims).
 
-### F-2 — fixing the RS256 gap will invalidate Module 00 Exercise 2 (forward dependency, S3)
+### F-2 — fixing the RS256 gap will invalidate Module 00 Exercise 2 (forward dependency, S3) — ✅ **BOTH SHIPPED 2026-08-12 (T1-2)**
+
+> **Fixed banner.** The RSA key landed and **CUR-3a-W3 landed with it**, in the same commit, exactly as this
+> finding recommended. Exercise 2 now selects by `kty === "EC"` and prints the `kty` values rather than a
+> count. The prediction was right in substance and **short by two**: the same key also inverted Module 08
+> §6d — a live transcript whose whole point was that RS256 was *absent* — and falsified
+> `modules/11…/README.md`'s *"one EC P-256 key"*. Neither was in the register; both were caught by
+> `04-remediation-plan.md` §7.4's mandatory grep, which is the argument for that checklist step existing.
 
 `lab.md:82` tells the learner to expect **`key count: 1`** and a single EC key. `OIDC-CORE-1.0.md` F-2 and
 `FAPI-1.0-PART-2-ADVANCED.md` F-2 both recommend registering an **RSA key** (work items **OIDC-W2** /
@@ -143,7 +150,7 @@ It then cross-links Module 07 §3c, whose verification block closes the loop: *"
 recorded the opposite result."*
 
 **The flag is `fapiModes`**, and the audit can now say so with evidence: FAPI mode forbids ROPC, `fapiModes` is
-absent on this service (probe 1 §3.4), and `PROGRESS.md:1020-1021` records the live success transcript. Neither
+absent on this service (probe 1 §3.4), and `PROGRESS.md:1882-1883` records the live success transcript. Neither
 module names the flag — that is the one improvement available, and it is an addition rather than a correction.
 
 **Forward dependency:** `FAPI-2.0-SECURITY-PROFILE.md` FAPI2-W5 contemplates enabling FAPI 2.0. Doing so would
@@ -240,7 +247,7 @@ configuration value, which the module states explicitly rather than assuming.
 |---|---|---|---|
 | CUR-3a-W1 | **Teach `check-docs.mjs` to validate bare paths** | S | A reference to `client/src/utils/pkce.ts` fails the check. Catches the error class that mislocated one file three times and that slipped into this audit. Highest-value item in the batch. |
 | CUR-3a-W2 | Fix `ParSection.tsx:38` → `:43` | S | 3a-F6. |
-| CUR-3a-W3 | Make Module 00 Exercise 2 key-selection robust | S | Select by `kty === 'EC'` rather than `keys[0]`, and drop the `key count: 1` expectation — so **OIDC-W2** can register an RSA key without breaking the lab. 3a-F2. |
+| CUR-3a-W3 | Make Module 00 Exercise 2 key-selection robust | S | ✅ **DONE 2026-08-12 (T1-2), same commit as OIDC-W2.** Selects by `kty === 'EC'`, prints the `kty` values instead of a count, and gained two sentences on *why* you never index into a JWKS — which is the lesson the count was accidentally teaching against. 3a-F2. |
 | CUR-3a-W4 | Verify the RFC 8446 and RFC 9110 dates | S | Two fetches; closes 3a-F4 and one of the ten `01-spec-matrix.md` §7 spot-check rows. |
 | CUR-3a-W5 | Name `fapiModes` in Modules 01 and 07 | S | Both modules explain the ROPC variance; neither names the flag. One clause each, plus a note that re-enabling FAPI reverses both transcripts. 3a-F5. |
 | CUR-3a-W6 | Comment the `--ath` ASCII/utf8 equivalence in `decode-jwt.mjs` | S | One word, so a reader does not wonder whether RFC 9449 §4.3's ASCII requirement is met. 3a-F3. |
@@ -587,14 +594,14 @@ rest of the repo is measured against.
 | 8 | `authorizationCodeDuration: 0` is **NOT EVIDENCED**, not a pass and not a fail | `lab.md:169-173,426`, `quiz-answers.md:139` | ✅ the most disciplined single judgement in the curriculum | **Accurate — exemplary** |
 | 9 | The rotation argument from §5.3.2.1 NOTE 1, **with the `"except in extraordinary circumstances"` carve-out preserved** and NOTE 1 identified as non-normative | `README.md:226-256` | ✅ resolves the tension `FAPI-2.0-SECURITY-PROFILE.md` and probe 1 §3.2 both preserve, and resolves it correctly | **Accurate — exemplary** |
 | 10 | Four `shall`s breached in one request, HTTP 200, `expires_in: 86400`, plain Bearer | `lab.md:95-137` | ✅ matches the live configuration in `SERVICE-CONFIG-PROBE.md` | **Accurate** |
-| 11 | Both FAPI endpoints return **HTTP 200 with an error body and a stack trace**; *"the deployment cannot report its own FAPI posture"* | `README.md:437`, `lab.md:229-246,475` | ✅ = `FAPI-2.0-SECURITY-PROFILE.md` F-1 and `ERRORHANDLER-…`; `AGENTS.md`'s claim is confirmed | **Accurate — exemplary** |
+| 11 | Both FAPI endpoints return **HTTP 200 with an error body and a stack trace**; *"the deployment cannot report its own FAPI posture"* | `README.md:437`, `lab.md:229-281` (re-anchored 2026-08-12, was `:229-246,475`) | ✅ **was accurate when written**; both cited passages were **rewritten 2026-08-12 (T1-5)** — the endpoints answer `200` with live values, so Exercise 4 now walks three dated states and the README row records the fix | **Accurate at the time; target rewritten** |
 | 12 | Grant management: `grant_id`, three actions (§5.2), two scopes (§6.1), the §6.5 MUST/should asymmetry | `README.md:293-337` | ✅ every quotation matches `GRANT-MANAGEMENT.md` | **Accurate** |
 | 13 | create → query → revoke → query returns **200 / 401 / 404 / 204 / 404**; *"this is what a correct implementation looks like"* | `lab.md:296-327` | ✅ `GRANT-MANAGEMENT.md` agrees — the one endpoint family the audit found substantially correct | **Accurate** |
 | 14 | The refresh token **is** revoked (MUST); the access token **is not** (should) and lives 24 h; severity comes from the *interaction* | `lab.md:331-386` | ✅ = `GRANT-MANAGEMENT.md` F-1, *"the most precisely-stated finding in the register"*; `accessTokenDuration = 86400` is RESUME §5.2 theme 4 | **Accurate — exemplary** |
 | 15 | *"shall not expose open redirectors"* — **"and this repo's logout endpoint fails it"** | `README.md:205` | ❌ **stale** — fixed in the working tree 2026-08-10 | `DOC_INCORRECT` / S3 — 3b-F9 |
-| 16 | Exercise 1's set-piece: *"which attacker does this repo's logout open redirect serve?"* → **A1** | `lab.md:81-91`, `:469` | ❌ **stale** — same cause | `DOC_INCORRECT` / S3 — 3b-F9 |
-| 17 | Conformance summary row *"No open redirectors \| **FAIL** — logout endpoint (Module 08)"*, and remediation item 1 *"The open redirect… a one-line fix"* | `lab.md:423,430-431` | ❌ **stale** — same cause; and the fix was not one line | `DOC_INCORRECT` / S3 — 3b-F9 |
-| 18 | Remediation order: open redirect → `fapiModes` → DPoP → token lifetime → 600→599 → FAPI endpoints, *"the reasoning matters more than the list"* | `lab.md:428-444` | ✅ **independently reaches RESUME §5.4's conclusion** — one `fapiModes` change subsumes most FAIL rows, and observability is not last | **Accurate — exemplary** |
+| 16 | Exercise 1's set-piece: *"which attacker does this repo's logout open redirect serve?"* → **A1** | `lab.md:81-91`, ~~`:469`~~ → **`:547`** (the closing-checklist item; `:469` was remediation item **3**, not this) | ❌ **stale** — same cause | `DOC_INCORRECT` / S3 — 3b-F9 |
+| 17 | Conformance summary row *"No open redirectors \| **FAIL** — logout endpoint (Module 08)"*, and remediation item 1 *"The open redirect… a one-line fix"* | ~~`lab.md:423,430-431`~~ → **`:501` and `:508-509`** — the old numbers pointed at Exercise 7's opening line and its **finding 4** | ❌ **stale** — same cause; and the fix was not one line | `DOC_INCORRECT` / S3 — 3b-F9 |
+| 18 | Remediation order: open redirect → `fapiModes` → DPoP → token lifetime → 600→599 → FAPI endpoints, *"the reasoning matters more than the list"* | `lab.md:506-522` (was `:428-444`) | ✅ **independently reaches RESUME §5.4's conclusion** — one `fapiModes` change subsumes most FAIL rows, and observability is not last | **Accurate — exemplary** |
 
 ### 3b-F9 — five Module 10 claims were made stale by the remediation, and Module 08 was updated while Module 10 was not (S3, new class)
 
@@ -611,9 +618,17 @@ prints the post-fix transcript, keeps the old code under a `// BEFORE — the de
 the two payloads used to pass. That is the right way to retire a finding a lab was built on.
 
 **Module 10 was not touched**, and it cross-references Module 08's open redirect five times: `README.md:205`,
-`lab.md:81-91` (an Exercise 1 set-piece with a `<details>` answer), `lab.md:423` (the conformance table),
-`lab.md:430-431` (remediation item 1), `lab.md:469` (the verification block). A learner doing Module 10 today
+`lab.md:81-91` (an Exercise 1 set-piece with a `<details>` answer), `lab.md:501` (the conformance table),
+`lab.md:508-509` (remediation item 1), `lab.md:547` (the closing checklist). A learner doing Module 10 today
 is asked to name the attacker who defeats an endpoint that now refuses them.
+
+> **Three of those four numbers were wrong when this paragraph was written** — corrected 2026-08-12 while
+> re-anchoring after T1-5. As cited, `:423` was Exercise 7's opening line, `:430-431` was Exercise 7's
+> **finding 4**, and `:469` was remediation item **3**; only `:81-91` was right, and it is the one whose
+> description is most specific. **The set was carried as a unit and spot-checked once.** The finding itself
+> (five stale cross-references) survives intact — the *count* was right and every quoted phrase exists — which
+> is why this is a citation defect rather than a substantive one. **CUR-3b-W1 / T2-2 should re-locate each by
+> its quoted text, not by these numbers.**
 
 **Why this is worth its own finding rather than five doc-drift rows.** `AGENTS.md` already carries the rule that
 would have caught it — *"After any change to server behaviour, grep the curriculum for the symptom you changed"*
@@ -763,7 +778,7 @@ uses. Dependency order is sound; the content crossing one edge is not.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| CUR-3b-W1 | **Re-point Module 10 at the fixed logout endpoint** | S | All five references (`README.md:205`; `lab.md:81-91,423,430-431,469`) reflect the 2026-08-10 fix, in Module 08's style: what it used to do, why it passed, what it does now. Exercise 1's A1 question survives as history — it is still the right answer about the *old* endpoint and still the best illustration of the weakest-attacker point. 3b-F9. **Highest-value item in the batch.** |
+| CUR-3b-W1 | **Re-point Module 10 at the fixed logout endpoint** | S | All five references (`README.md:205`; `lab.md:81-91,501,508-509,547` — **re-anchored by content 2026-08-12; the previous numbers pointed at three unrelated lines**) reflect the 2026-08-10 fix *and its 2026-08-12 supersession by T0-4*, in Module 08's style: what it used to do, why it passed, what it does now. Exercise 1's A1 question survives as history — it is still the right answer about the *old* endpoint and still the best illustration of the weakest-attacker point. 3b-F9. **Highest-value item in the batch.** |
 | CUR-3b-W2 | **Add the grep step to the remediation checklist** | S | `AGENTS.md`'s *"grep the curriculum for the symptom you changed"* rule gains: search for the **phrase** naming the defect, not only the error string, and check every module that cross-references the one you edited. Names Module 08→Module 10 as the worked example. 3b-F9. |
 | CUR-3b-W3 | Fix the RFC 9101 §5 → §6.3 citations | S | `README.md:141,468` and `quiz-answers.md:72` read §6.3; the three correct §5 citations for the request *shape* are left alone. 3b-F2. |
 | CUR-3b-W4 | Fix the `dpop.service.ts` pointers | S | `README.md:253-255` reads `:70` (jwk), `:26`/`:60` (ath computed / assigned), `:76-84` (raw P1363). 3b-F4. |
@@ -776,7 +791,7 @@ uses. Dependency order is sound; the content crossing one edge is not.
 | CUR-3b-W11 | Say which DPoP call sites still send a query string in `htu` | S | Module 05's code map notes that `token.service.ts` and `par.service.ts` bypass `dpopHttpTarget()`. Retire when **9449-W1** lands. 3b-F5. |
 | CUR-3b-W12 | Verify RFC 9101 §10.1 | S | One fetch of the RFC's table of contents; closes 3b-F1 and settles the §10.8 citation at `README.md:146`. Same shape as **CUR-3a-W4**. |
 | CUR-3b-W13 | Cite the Native SSO header date alongside the approval date | S | = **NSSO-W3**, widened from one file to five: `SPEC-INVENTORY.md` plus `modules/09a…/README.md:101,389-391,406,432`. 3b-F12. |
-| CUR-3b-W14 | Refresh Module 09a's `UNVERIFIED` dates | S | The four markers say *"as of 2026-07-28"*; all four settings were re-confirmed unset on **2026-08-10** (RESUME §2.1). One date each, and the markers become current rather than merely honest. |
+| CUR-3b-W14 | Refresh Module 09a's `UNVERIFIED` dates | S | ✅ **CLOSED 2026-08-12 (T1-6) — by deletion, not by re-dating.** All four settings were applied and all four success paths run, so the markers are gone rather than refreshed. The lab's framing note now records what the convention bought: each marker named the exact setting responsible, which turned closing them into a checklist rather than an investigation. It also gained the rule this audit learned the hard way — **date the marker**, because one whose premise has silently changed is worse than none (Module 08's was wrong for a fortnight and three documents inherited it). |
 | CUR-3b-W15 | Correct the archetype count in the audit's own entry | S | `FAPI-2.0-ATTACKER-MODEL.md` says **six** in its thinking block and sources list, matching its own normative table. 3b-F13. |
 | CUR-3b-W16 | Name RFC 9440 in Module 05's mTLS revisit conditions | S | The header-forwarding condition is identified as RFC 9440, per `01-spec-matrix.md` §5.3. 3b-F6. |
 
@@ -1351,7 +1366,7 @@ the part that matters for Phase 4.
    if it is wrong, every downstream citation it redirects is wrong too. That is a different risk class from
    3a-F4's *"is Aug 2018 the right date?"*, which is how batch 3a framed it.
 3. **The curriculum does not follow the instruction.** `modules/00…/README.md:87` and `:250` still cite RFC
-   8446, and `PROGRESS.md:1364-1365` records RFC 8446 as *"verified against primary sources"*. So `SPEC-INVENTORY.md`
+   8446, and `PROGRESS.md:2226-2227` records RFC 8446 as *"verified against primary sources"*. So `SPEC-INVENTORY.md`
    says one thing and the module it governs says another, with no note reconciling them.
 
 Same treatment for **RFC 9864** (`SPEC-INVENTORY.md:62,73-75`), at S4: unfetched, but the annotation is
@@ -1378,7 +1393,7 @@ set"* — RP-Initiated Logout §3 wants exactly that, no client registers any `p
 deployment kept an env-driven **origin** allowlist with the departure recorded in `AGENTS.md`.
 
 **This is the more interesting half of the finding.** The answer key's estimate was the audit's own
-(**RPL-W1**), and reality disagreed with both: the "one-line fix" framing appears in `PROGRESS.md:532-547`, in
+(**RPL-W1**), and reality disagreed with both: the "one-line fix" framing appears in `PROGRESS.md:1390-1405`, in
 `RPL-W1`, and here. A remediation that turns out to be 150 lines and a documented spec departure is a better
 exam answer than the one currently marked correct — *"name the fix you would ship, and the gap it leaves"* is
 the question the shipped change actually poses.

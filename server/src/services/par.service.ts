@@ -5,6 +5,8 @@ import { Request } from "express";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
 import { parseBasicAuth } from "../utils/basic-auth";
+import { dpopHttpTarget } from "../utils/dpop";
+import { appendToParams } from "../utils/params";
 
 export class ParService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -43,24 +45,24 @@ export class ParService {
       requestBody.clientId = basic.clientId;
       requestBody.clientSecret = basic.clientSecret;
     } else if (clientId && clientSecret) {
-      requestBody.parameters = this.appendToParams(parameters, [
+      requestBody.parameters = appendToParams(parameters, [
         { key: "client_id", value: clientId },
         { key: "client_secret", value: clientSecret },
       ]);
     } else if (clientId) {
-      requestBody.parameters = this.appendToParams(parameters, [
+      requestBody.parameters = appendToParams(parameters, [
         { key: "client_id", value: clientId },
       ]);
     }
 
-    // DPoP support — fields come from HTTP headers, not the body
+    // DPoP support — fields come from HTTP headers, not the body.
+    // `htu` excludes the query and fragment (RFC 9449 §4.2); `dpopHttpTarget()` is the single
+    // source for that derivation. `PushedAuthorizationRequest` has no `targetUri` member.
     const dpopHeader = req.headers["dpop"] as string | undefined;
     if (dpopHeader) {
       requestBody.dpop = dpopHeader;
       requestBody.htm = req.method;
-      const protocol = req.protocol;
-      const host = req.get("host") || "";
-      requestBody.htu = `${protocol}://${host}${req.originalUrl}`;
+      requestBody.htu = dpopHttpTarget(req).htu;
     }
 
     log("ParService: calling Authlete pushed authorization endpoint", {
@@ -76,14 +78,4 @@ export class ParService {
     return response;
   }
 
-  private appendToParams(
-    params: string,
-    fields: Array<{ key: string; value: string }>
-  ): string {
-    const searchParams = new URLSearchParams(params);
-    for (const { key, value } of fields) {
-      searchParams.set(key, value);
-    }
-    return searchParams.toString();
-  }
 }

@@ -47,6 +47,8 @@ function CibaSection() {
   const [parameters, setParameters] = useState('login_hint=admin&scope=openid');
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
+  // Authlete matches the channel against the client's registered method; see the note by the selector.
+  const [authMethod, setAuthMethod] = useState<'basic' | 'post'>('basic');
 
   const [issueTicket, setIssueTicket] = useState('');
   const [failTicket, setFailTicket] = useState('');
@@ -147,7 +149,36 @@ function CibaSection() {
           <Textarea label="Parameters (URL-encoded)" rows={4} value={parameters} onChange={(e) => setParameters(e.target.value)} placeholder="login_hint=admin&scope=openid" />
           <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
           <Input label="Client Secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
-          <Button onClick={() => handleCall(() => cibaService.backchannelAuthentication({ parameters, clientId, clientSecret }))} loading={loading}>Run</Button>
+          <Select
+            label="Client Auth Method"
+            value={authMethod}
+            onChange={(e) => setAuthMethod(e.target.value as 'basic' | 'post')}
+            options={[
+              { value: 'basic', label: 'client_secret_basic (Authorization header)' },
+              { value: 'post', label: 'client_secret_post (request body)' },
+            ]}
+          />
+          <p className="text-xs text-slate-400">
+            This must match the client&apos;s registered method. Authlete checks <em>where</em> the
+            credentials arrive, not just whether they are correct — the wrong channel returns
+            <code> 401 [A157357]</code>. Authlete&apos;s CIBA guide recommends <code>client_secret_basic</code>,
+            and the backchannel and token endpoints must use the same method.
+          </p>
+          <Button
+            onClick={() =>
+              handleCall(() =>
+                cibaService.backchannelAuthentication(
+                  authMethod === 'basic'
+                    ? { parameters }
+                    : { parameters, clientId, clientSecret },
+                  authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined,
+                ),
+              )
+            }
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 

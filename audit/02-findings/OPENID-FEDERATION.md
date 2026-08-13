@@ -1,10 +1,37 @@
-# OpenID Federation 1.0
+# OpenID Federation
+
+> ## ⚠️ FED-W1 SHIPPED 2026-08-13 — AND ITS ACCEPTANCE CRITERIA CANNOT BE MET BY IT
+>
+> The one-line change is right and is in. **What it cannot do is produce an entity statement**, and the
+> criteria said it would (*"return 200 with `application/entity-statement+jwt`"*). Established by probe
+> before the code was written:
+>
+> | Call | Result |
+> |---|---|
+> | no `requestBody` (the old behaviour) | **400** — `[A258201] … Content-Type header is not specified.` The SDK sends no `Content-Type` when there is no body |
+> | `requestBody: {}` (the fix) | **200 HTTP**, `action: INTERNAL_SERVER_ERROR` — `[A316201] Because a JWK Set for federation has not been set up, this service cannot generate entity configuration.` |
+>
+> So the fix **changes the failure rather than removing it**, and that is worth having: verified live at both
+> routes, `GET /.well-known/openid-federation` now answers **500 naming the missing configuration** instead of
+> **400 blaming the caller**. **FED-W5 is therefore closed by FED-W1** rather than needing its own change —
+> the controller's action mapping was already correct and only ever saw a thrown SDK error before.
+>
+> **FED-W2 is blocked, and now precisely.** There is no entity statement to verify against §3, and there will
+> not be until a **federation JWK Set is configured on the service** — a ⚙️ action no work item schedules,
+> and a *feature-enablement* decision rather than a fix, so it is not taken unilaterally. It belongs with the
+> Tier 3 "claimed working, flag off" family (Theme 2). Note `README.md` makes no federation claim, so nothing
+> is currently false; the SPA's OIDC Federation section will show the honest 500.
+>
+> **Coverage note:** `federation.service.ts` had **no tests**, and could not have had any — the shared
+> `tests/helpers/mock-authlete.ts` had no `federation` member, despite `AGENTS.md` describing it as covering
+> *"every SDK method"*. Both are fixed.
+ 1.0
 
 - **Verdict:** `PARTIAL` — both endpoints are non-functional
 - **Severity:** **S2**
 - **Status:** OpenID **Final**, **17 February 2026** — verified this session. **`SPEC-INVENTORY.md` and `01-spec-matrix.md` record "1.1, Final, 5 May 2026", which the served document does not support — see F-3.**
 - **Authlete version:** 3.0 (`api-reference/federation-endpoint/*`)
-- **Repo docs under test:** `docs/curriculum/SPEC-INVENTORY.md`, `docs/curriculum/PROGRESS.md:506-512`, `docs/curriculum/modules/09b-identity-and-credentials/`
+- **Repo docs under test:** `docs/curriculum/SPEC-INVENTORY.md`, `docs/curriculum/PROGRESS.md:1364-1370`, `docs/curriculum/modules/09b-identity-and-credentials/`
 
 <thinking>
 1. Requirements on the OP: publish an entity configuration — a **signed JWT**, explicitly typed
@@ -16,7 +43,7 @@
    content type. `Service.supportedClientRegistrationTypes` is the gate.
 3. Code: two endpoints, correct action mapping, correct `application/entity-statement+jwt` content type — and
    the configuration call omits a request body Authlete requires, so it always 400s.
-4. Docs: `PROGRESS.md:506-512` diagnoses this precisely, including that the SDK types the field as optional so
+4. Docs: `PROGRESS.md:1364-1370` diagnoses this precisely, including that the SDK types the field as optional so
    the bug compiles and passes review, and that a direct call with `{}` returns 200.
 5. Delta: the entity configuration endpoint — the one thing a federation participant fetches first — returns 400
    at both of its paths, and reports the failure as a caller error.
@@ -56,7 +83,7 @@ const response = await this.authleteApi.federation.configuration({
 });
 ```
 
-No `requestBody`. `PROGRESS.md:506-512` records the diagnosis and I confirm it against the code and the SDK:
+No `requestBody`. `PROGRESS.md:1364-1370` records the diagnosis and I confirm it against the code and the SDK:
 
 - The SDK types the field as **optional** — `requestBody?: FederationConfigurationApiRequestBody` where the type is `{}` — so omitting it compiles cleanly and reads as correct.
 - Authlete requires a body. Both `GET /.well-known/openid-federation` and `GET /api/federation/configuration` therefore return **400** with `[A126203] The request body is missing or empty.`
@@ -66,7 +93,7 @@ No `requestBody`. `PROGRESS.md:506-512` records the diagnosis and I confirm it a
 fetches — it is the root of trust discovery, the equivalent of the discovery document. An OP whose entity
 configuration 400s is not partially federated; it is invisible to the federation. And the failure is reported as
 a **caller** error (`[A126203]` is a 400 about the request), so an operator debugging it looks at the requester
-first. `PROGRESS.md:519-521` groups this with two siblings — Module 06's Zod failure and Module 08's unset
+first. `PROGRESS.md:1377-1379` groups this with two siblings — Module 06's Zod failure and Module 08's unset
 `JWKS_URI` — as one recurring pattern: *"a server configuration error reported as a caller error."* This is the
 third instance, and `POST /api/federation/registration` **in the same file** is written correctly, passing its
 body through.
@@ -111,9 +138,9 @@ mechanism to catch it existed — this entry just gets there first.
 
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
-| The endpoint is broken, the SDK's optional typing hid it, `{}` returns 200, and the failure misreports the cause | `PROGRESS.md:506-512` | **Confirmed** line by line. An unusually complete diagnosis | **Accurate** |
+| The endpoint is broken, the SDK's optional typing hid it, `{}` returns 200, and the failure misreports the cause | `PROGRESS.md:1364-1370` | **Confirmed** line by line. An unusually complete diagnosis | **Accurate** |
 | "OpenID Federation 1.1 … Final, 5 May 2026", *"superseding 1.0"* | `SPEC-INVENTORY.md`, `01-spec-matrix.md` §3 | The served document is 1.0, Final, 17 Feb 2026 — F-3 | `DOC_INCORRECT` / S3 |
-| `POST /api/federation/registration` is written correctly | `PROGRESS.md:521` | Confirmed — it forwards `entityConfiguration` / `trustChain` (`services/federation.service.ts:34-37`) | **Accurate** |
+| `POST /api/federation/registration` is written correctly | `PROGRESS.md:1379` | Confirmed — it forwards `entityConfiguration` / `trustChain` (`services/federation.service.ts:34-37`) | **Accurate** |
 | Content type `application/entity-statement+jwt` on the `OK` branch | `00-inventory.md` §5 | Confirmed; matches §15.1 | **Accurate** |
 | Nothing states that `client_registration_types_supported` is unadvertised | all docs | F-2 | **Omission** / S3 |
 | Federation is **not** listed as "Working" in `README.md`'s feature tables | `README.md:92-130` | Correct — and a welcome contrast with Native SSO, VCI, FAPI 2.0 and MCP | **Accurate** |
@@ -122,7 +149,7 @@ mechanism to catch it existed — this entry just gets there first.
 
 - OpenID Federation 1.0 §§3, 3.2, 5.1.2, 5.1.3, 10, 12, 15.1 — `https://openid.net/specs/openid-federation-1_0.html`, fetched this session. Quoted: the entity statement is *"a signed JWT"*, the `typ: entity-statement+jwt` requirement, the `application/entity-statement+jwt` media type, the six required claims, and `client_registration_types_supported`.
 - Live probe 3 (2026-08-10): `supportedClientRegistrationTypes`; `client_registration_types_supported` absent from the discovery document — `SERVICE-CONFIG-PROBE.md` §8, §9
-- Repo-sourced live evidence: `PROGRESS.md:506-512` (`[A126203]`, and the direct `{}` call returning 200)
+- Repo-sourced live evidence: `PROGRESS.md:1364-1370` (`[A126203]`, and the direct `{}` call returning 200)
 - SDK 1.0.0: `federation.configuration`'s optional `requestBody` typing
 - Code: `services/federation.service.ts:10-19,21-40`, `controllers/federation.controller.ts:13-27,34,54,56`, `routes/federation.routes.ts:11,12,16`
 
@@ -130,11 +157,11 @@ mechanism to catch it existed — this entry just gets there first.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| FED-W1 | Pass `{ requestBody: {} }` to `federation.configuration` | S | Both `GET /.well-known/openid-federation` and `GET /api/federation/configuration` return 200 with `application/entity-statement+jwt`; a test asserts the body is passed. One line, and it unblocks W2. |
-| FED-W2 | Verify the entity statement against §3 | S | Decode the returned JWT: `typ: entity-statement+jwt`, and `iss`, `sub`, `iat`, `exp`, `jwks`, `metadata` present; check whether `client_registration_types_supported` appears in `metadata`. Closes F-2 and requirements 2 and 4. |
+| FED-W1 | Pass `{ requestBody: {} }` to `federation.configuration` | S | ⚠️ **SHIPPED 2026-08-13, criteria unmet by construction — see the banner.** The line is in and a test asserts it. But the stated outcome (*200 with `application/entity-statement+jwt`*) needs a **federation JWK Set on the service**, which the item never mentions; without it Authlete answers `[A316201]`. **It does not unblock W2.** What it does deliver is honesty: both routes now return **500 with the real reason** instead of **400 blaming the caller**, which closes **FED-W5**. |
+| FED-W2 | Verify the entity statement against §3 | S | ⛔ **BLOCKED 2026-08-13, and the blocker is now identified.** No entity statement exists to verify: `[A316201]` — no federation JWK Set is configured on the service. The prerequisite is a ⚙️ service write that enables a feature, not a fix, so it is a **Tier 3-shaped decision** and is not taken here. Reopen after that decision; the verification steps as written remain correct. |
 | FED-W3 | Reconcile the version and date | S | `SPEC-INVENTORY.md` and `01-spec-matrix.md` cite the document header actually fetched (1.0, Final, 17 Feb 2026), or cite a 1.1 document with its URL. Removes the *"superseding 1.0"* claim unless it can be sourced. |
 | FED-W4 | Add the per-row provenance discipline | S | Phase 4 process item: every `SPEC-INVENTORY.md` row records the URL fetched and the header line the status/date came from. Would have caught all three instances of F-3's class. |
-| FED-W5 | Report the failure as a server error until W1 ships | S | If W1 is deferred, the 400 from Authlete is not passed through as though the caller were at fault — same fix pattern as **BCL-W3**. |
+| FED-W5 | Report the failure as a server error until W1 ships | S | ✅ **CLOSED 2026-08-13 by FED-W1 itself**, which is the outcome this item was the fallback for. With `requestBody` present the SDK no longer throws on a 400; Authlete's `INTERNAL_SERVER_ERROR` reaches the controller, whose mapping was **already correct**, and the caller gets 500. Verified live at both routes. No separate change was needed — the same shape as **BCL-W3**, which did need one because the throw happened in our code. |
 
 **Ordering.** W1 is one line and gates W2. W3 and W4 are documentation. None of these files is on the
 `AGENTS.md` **Security-critical surfaces** list, and `AGENTS.md` explicitly excludes `federation` from it —

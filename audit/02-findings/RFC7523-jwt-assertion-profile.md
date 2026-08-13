@@ -116,11 +116,40 @@ Why it is only S4, and why it still matters:
 - **No wrong behaviour results.** The values are dropped, so nothing incorrect is stamped on the token. My first reading was that the assertion's `aud` — which per §3(3) is *the authorization server itself* — would become the issued token's audience, which would be a real defect. It does not; the code is inert, not wrong.
 - **It reads as audience restriction and is not.** A maintainer looking for "does the JWT-bearer path audience-restrict its tokens?" finds `audience:` in the request literal and stops. The honest way to get an `aud` here is `resources` (which Authlete does map to `aud` — verified live in `modules/04…/lab.md:180-184`), and that is available on this very call.
 
-## Finding F-3 — §2.2 client authentication cannot be exercised on this deployment (S3, configuration)
+## Finding F-3 — §2.2 client authentication cannot be exercised on this deployment (S3, configuration) — ✅ **FIXED 2026-08-12 (T1-3)**
+
+> **Fixed banner.** A fourth client (`2176571218`, CONFIDENTIAL, `tokenAuthMethod: PRIVATE_KEY_JWT`,
+> `tokenAuthSignAlg: ES256`) was created with an EC P-256 **public** JWK Set. §2.2 now has a runnable path,
+> **verified live** on both `client_credentials` and `authorization_code`: a client assertion signed with the
+> registered key returns `200` and an access token. **7523-W4 is closed**, and with it the prerequisite three
+> other entries were waiting on (`9101-W3`, and FAPI's in B7). Read the rest of the finding as pre-fix state.
+>
+> **Four behaviours established while proving it, none of which the finding predicted:**
+>
+> | Probe | Result |
+> |---|---|
+> | `aud` = the issuer identifier | ✅ accepted |
+> | `aud` = the token endpoint URL | ✅ accepted — so this deployment takes **both** of RFC 7521 §5.2's readings |
+> | `aud` = anything else | ❌ `[A157318] The 'aud' claim of the client assertion is invalid` |
+> | the **same** assertion replayed inside its 300 s window | ✅ **accepted twice, two different access tokens** — `jti` is sent and not enforced |
+>
+> The replay result is **conformant, not a defect**: §3 and §6 make `jti` replay-checking OPTIONAL. It is
+> recorded because it is the kind of thing a reader assumes goes the other way, and because it locates §2.2's
+> security precisely — in the private key never leaving the client, not in the assertion being single-use.
+> Now taught in `modules/06…/lab.md` Exercise 4, which previously ended at *"That is Module 10's territory."*
 
 The live metadata advertises `client_secret_jwt` and `private_key_jwt`, and **no registered client is
 configured for either**: the three clients are `NONE`, `CLIENT_SECRET_BASIC`, `NONE`, and none has `jwks` or
 `jwksUri` (probe 2, §7). So §2.2 — half the specification — has no runnable path.
+
+> **Correction to the sentence above, found 2026-08-12 during T1-3.** *"None has `jwks` or `jwksUri`"* stopped
+> being true at some point between probe 2 (2026-08-10) and T1-3: client `1523514379` carries a JWKS with
+> `kid: "e2e-test-key"`, written by `server/tests/e2e/e2e.test.ts:1169`, which generates a keypair per run and
+> registers only the public half. **Nobody holds the private key**, so the finding's *substance* — no
+> **usable** client key existed — survives its *wording*, which did not. Two things worth carrying: the E2E
+> suite **mutates shared service state** as a side effect of running, so any "the clients are configured as
+> follows" claim in this audit has a shelf life; and a registered key whose private half is gone is
+> indistinguishable, from the outside, from one that works. See `SERVICE-CONFIG-PROBE.md` §7.
 
 `modules/06…/lab.md:404-413` demonstrates precisely this, and correctly: sending a valid `client_assertion` to
 a `client_secret_basic` client yields `invalid_client` `[A157357]`, and the lab draws the "advertised ≠
@@ -158,10 +187,10 @@ found.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 7523-W1 | Establish whether an assertion with no `exp` is accepted | S | One request, added as a sixth row to the Exercise 4 table. If accepted, W2 follows. |
-| 7523-W2 | Add `exp` to `mandatoryClaims` | S | `mandatoryClaims: ["iss","sub","aud","exp"]`; a unit test asserts the value sent to `joseVerifyApi`; the lab gains the transcript from W1. Conditional on W1. |
+| 7523-W1 | Establish whether an assertion with no `exp` is accepted | S | ✅ **DONE 2026-08-12 (T1-17). It is refused** — `action: BAD_REQUEST`, `[A314305] The JWT specified by the 'assertion' request parameter does not contain the claim 'exp'.`, served as `error: invalid_grant`. The control (same assertion plus `exp`) returns `action: JWT_BEARER` and proceeds. So **Authlete enforces §3(4)'s presence requirement itself, before `/jose/verify` is ever called**. `[A314305]` is a **sixth error code Exercise 4's table does not carry**, and it is now a runnable row rather than a predicted one. Transcript in `PROGRESS.md`, entry 2026-08-12 T1-17. |
+| 7523-W2 | Add `exp` to `mandatoryClaims` | S | ⚠️ **DOWNGRADED to defence-in-depth 2026-08-12 by W1's result.** F-1 named two possibilities; it is the first. `mandatoryClaims` omitting `exp` never had the consequence feared, because a no-`exp` assertion never reaches `/jose/verify`. The change is still *correct* — `mandatoryClaims: ["iss","sub","aud","exp"]` plus a unit test asserting the value sent to `joseVerifyApi` — but whoever ships it must describe it as belt-and-braces against a vendor behaviour change, **not** as closing a hole. It no longer earns its own row; fold it into T2-17. |
 | 7523-W3 | Remove the inert `issuer` / `audience` fields | S | Either dropped, or replaced with `resources` so the JWT-bearer path really can audience-restrict — with a lab step showing `aud` in introspection, mirroring `modules/04…/lab.md` Exercise 4. |
-| 7523-W4 | Register one client with `private_key_jwt` and a JWKS | S | Unblocks §2.2 here, asymmetric JAR (**9101-W3**) and the FAPI work in B7. **Highest-leverage single configuration change in the audit so far.** |
+| 7523-W4 | Register one client with `private_key_jwt` and a JWKS | S | ✅ **DONE 2026-08-12 (T1-3).** Client `2176571218` created rather than an existing one converted — the other three are load-bearing for labs, the SPA and 14 E2E blocks. `requestSignAlg: ES256` set in the same call, which closes **9101-W3** too. Both were exercised live, not just registered. The private half lives in `server/.env` as `PKJWT_PRIVATE_JWK` (gitignored) so the labs are repeatable; only the public half is registered, per `Client.jwks`'s *"must not include private keys"*. |
 | 7523-W5 | Set `clockSkew` explicitly, or document the default | S | Whichever, the value stops being unknown. |
 
 **Ordering and gating.** W1 gates W2. W3 touches `services/jwt-verification.service.ts`, which is **not** on

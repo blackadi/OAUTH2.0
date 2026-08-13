@@ -1,7 +1,7 @@
 # RFC 8705 — OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens
 
-- **Verdict:** `OUT_OF_SCOPE` (inherited decline, upheld) **+ `MISCONFIGURED`** for the advertised metadata
-- **Severity:** **S2** (the metadata finding; the decline itself is sound)
+- **Verdict:** `OUT_OF_SCOPE` (inherited decline, upheld) ~~**+ `MISCONFIGURED`** for the advertised metadata~~ → **metadata half RESOLVED 2026-08-12 (T1-5)**
+- **Severity:** ~~**S2**~~ → **S4** (8705-W1 shipped; the decline itself was always sound)
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/curriculum/modules/05-request-integrity-and-binding/README.md:367-425` (the decision record), `docs/curriculum/SPEC-INVENTORY.md:136,246`, `docs/curriculum/modules/10-fapi-and-grant-management/`
 
@@ -54,7 +54,7 @@ intact; only its one-line summary and its citations need work (F-2).
 | # | Requirement | Source | Status |
 |---|---|---|---|
 | 1 | Support `tls_client_auth` with one of the five expected-certificate metadata fields | §2.1.1–2.1.2 | ⊘ Authlete's; **advertised but unusable** — F-1. `tlsClientAuthSubjectDn` absent on all clients |
-| 2 | Support `self_signed_tls_client_auth` via `jwks`/`jwks_uri` with `x5c` | §2.2.1–2.2.2 | ⊘ Authlete's; advertised but unusable — F-1. No client has `jwks`/`jwksUri` |
+| 2 | Support `self_signed_tls_client_auth` via `jwks`/`jwks_uri` with `x5c` | §2.2.1–2.2.2 | ⊘ Authlete's; advertised but unusable — F-1. **Updated 2026-08-12 (T1-3):** one client now has a `jwks`, but it holds a bare EC signing key with **no `x5c`**, which is what §2.2.1 needs. Unusable for the same reason, for a more precise one |
 | 3 | Bind tokens with `cnf` `{"x5t#S256": …}` | §3.1 | ⊘ Authlete's; `tlsClientCertificateBoundAccessTokens = False` service-wide and per client |
 | 4 | A protected resource MUST obtain the certificate from its TLS layer and match it; mismatch → 401 `invalid_token` | §3.2 | ❌ **impossible in this deployment** — no TLS context. Basis of the decline |
 | 5 | Convey the binding in the introspection response | §3.3 | ❌ `IntrospectionResponse.certificateThumbprint` exists in the SDK and is never read — F-3 |
@@ -107,6 +107,20 @@ is what breaks `authleteApi.service.get()` and therefore both FAPI reporting end
 fix F-1 is one console action away from also retiring Module 10 Exercise 4, which teaches the
 200-with-a-stack-trace as a finding (`AGENTS.md`, Deliberate defects). Sequence the two deliberately at Gate 4;
 do not let one arrive as a side effect of the other.
+
+> **✅ F-1 CLOSED 2026-08-12 (T1-5) — and the caution above was answered, not ignored.** Both methods are gone
+> from `supportedTokenAuthMethods`; `token_endpoint_auth_methods_supported` now reads
+> `[none, client_secret_basic, client_secret_post, client_secret_jwt, private_key_jwt]`. **8705-W1 ✅.**
+>
+> The coupling this section warned about was handled by **ruling on it first**: DR-07 was approved as one
+> decision covering all four withdrawals, and Module 10 Exercise 4 was **rebuilt in the same commit** — it
+> teaches the closed-enum mechanism rather than the 200, so nothing was retired as a side effect. Evidence:
+> `SERVICE-CONFIG-PROBE.md` §18.
+>
+> **§5 stays unused and that is now correct.** With the methods withdrawn there is nothing to isolate, so
+> `mtls_endpoint_aliases` remaining absent is consistent rather than contradictory — which is what makes the
+> decline (DR-01) legible from the metadata alone. **The metadata half of this entry's verdict is discharged;
+> the decline itself was never a defect.** Severity **S2 → S4** (8705-W2/W3 are documentation).
 
 ## Finding F-2 — the decision record's one-line rationale overstates, and cites vendor headers rather than the RFC (S3)
 

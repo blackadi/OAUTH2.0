@@ -155,7 +155,7 @@ password was used, and `auth_time = now` for an authentication that happened at 
 the tokens. On this path there is **no** `maxAge` check and **no** `acrs`/`acrEssential` check — those live only
 in `session.controller.ts`, on the login POST, which `prompt=none` bypasses entirely.
 
-**It is unreachable today, for a reason recorded elsewhere in the repo.** `docs/curriculum/PROGRESS.md:522-531`
+**It is unreachable today, for a reason recorded elsewhere in the repo.** `docs/curriculum/PROGRESS.md:1380-1389`
 reports, from live testing, that Authlete answers `prompt=none` with `NO_INTERACTION` and
 `responseContent: null` plus a ticket, that `authorization.controller.ts:50-53` mishandles that as a redirect
 (emitting `Location:` empty), and that *"the controller does contain `prompt === "none"` handling at line 96 —
@@ -221,7 +221,7 @@ aware; this parser is not.
 | `acr` and `auth_time` visible on introspection | `modules/04…/lab.md:180-184` | **Verified live** — §6.2 satisfied | **Accurate** |
 | "Where do `acr` and `auth_time` come from? … For a JWT access token they are claims in the token; for [an opaque one, introspection]" | `modules/09a…/README.md:304` | Correct, and the clearest statement of §6.1 vs §6.2 in the repo | **Accurate** |
 | `AGENTS.md`'s RFC 9470 paragraph: ACR/`auth_time` binding, `ACR_NOT_SATISFIED`, `EXCEEDS_MAX_AGE`, `introspection.controller.ts:47` parsing | `AGENTS.md` | Behaviour described correctly, but `EXCEEDS_MAX_AGE` is unreachable (F-2) and the line reference is stale — `parseBearerError` is at `:20-36`, the FORBIDDEN branch at `:76` | `DOC_INCORRECT` / S3 |
-| Nothing anywhere notes that the `prompt=none` step-up path fabricates the authentication event | all docs; `PROGRESS.md:522-531` records the dead code but not what it *does* | F-3 | **Omission** / **S2**, latent S1 |
+| Nothing anywhere notes that the `prompt=none` step-up path fabricates the authentication event | all docs; `PROGRESS.md:1380-1389` records the dead code but not what it *does* | F-3 | **Omission** / **S2**, latent S1 |
 
 ## Sources consulted
 
@@ -229,7 +229,7 @@ aware; this parser is not.
 - RFC 9068 §2.2.1 (`auth_time`, `acr`, `amr`) — `https://www.rfc-editor.org/rfc/rfc9068.txt`
 - RFC 6750 §3.1 (the 403/`insufficient_scope` pairing that §3 deliberately departs from) — via `RFC6750-bearer-token-usage.md`
 - Vendored Authlete API spec: `docs/openapi-spec.json`, `NO_INTERACTION` action description
-- Repo-sourced live evidence: `docs/curriculum/PROGRESS.md:522-531` (`NO_INTERACTION` returns `responseContent: null` + ticket; the `:96` branch is unreachable)
+- Repo-sourced live evidence: `docs/curriculum/PROGRESS.md:1380-1389` (`NO_INTERACTION` returns `responseContent: null` + ticket; the `:96` branch is unreachable)
 - Live probe 1 (2026-08-10): `supportedAcrs` absent — `SERVICE-CONFIG-PROBE.md` §3.5
 - Code: `controllers/session.controller.ts:70,108-164`, `controllers/authorization.controller.ts:50-53,90-92,96-131,107-112`, `services/authorization.service.ts:100-107`, `controllers/introspection.controller.ts:20-36,76-101`, `services/introspection.service.ts:38-43`
 
@@ -241,7 +241,7 @@ aware; this parser is not.
 | 9470-W2 | Make the `max_age` check able to fail | M | Compare against the authentication time *before* it is overwritten — capture the prior `authTime` first, or move the check ahead of `:115`. A unit test drives `EXCEEDS_MAX_AGE`, which no test does today. | **⚠️ Framing corrected 2026-08-12 (T1-7).** The login-path check is vacuous — `authTime` is set to `authTimeNow` immediately before it is read — but on inspection that is **correct, not broken**: this is the login POST, where the End-User has just actively authenticated, and a fresh authentication satisfies any `max_age` by construction. **The path where `max_age` must be able to fail is `prompt=none`, which did not exist until T1-7 built it.** So this item is subsumed: `EXCEEDS_MAX_AGE` is now reachable and tested (`authorization.controller.test.ts`). No further code change is owed. |
 | 9470-W3 | **Fix the `prompt=none` handling and the fabricated event together** | M | ✅ **DONE 2026-08-12 (T1-7), with OIDC-W1 as one change.** `NO_INTERACTION` is handled per Authlete's contract (decide, then issue or fail; OIDC Core §3.1.2.6 errors — `login_required` / `consent_required` / `interaction_required` / `account_selection_required`), **and** the `stepUp` fallback is deleted rather than carried over: no session context ⇒ `login_required`, never an invented `acr`/`auth_time`. `acrs`/`acrEssential`/`maxAge` are checked on this path too. **Do not ship the first half alone.** |
 | 9470-W4 | Fix the six section citations | S | §4 for request handling, §6 for claim conveyance, §3 only where a challenge is emitted. Two in `session.controller.ts`, two in the tutorial, plus the stale `AGENTS.md` line reference. |
-| 9470-W5 | Set `supportedAcrs` and advertise `acr_values_supported` | S | At minimum `pwd`; the tutorial's `urn:mace:incommon:iap:silver` examples then have a discoverable counterpart, and the ACR *success* path becomes demonstrable. |
+| 9470-W5 | Set `supportedAcrs` and advertise `acr_values_supported` | S | ✅ **DONE 2026-08-12 (T1-6)** — `["pwd","mfa"]`; `acr_values_supported` now appears in discovery. **Both halves verified live**: `acr_values=pwd` succeeds and the value reaches the ID token *and* introspection; an **essential** `acr` of `mfa` is refused with `unmet_authentication_requirements` / `[A060305]`, **no code issued**. That second half is the first live confirmation that this deployment refuses rather than approximating — the failure mode **T1-7** rebuilt `utils/step-up.ts` to prevent. **`mfa` was registered deliberately although nothing can satisfy it**: an *unregistered* value fails earlier and for a different reason, so registering it is what makes the essential-ACR refusal path reachable. ⚠️ **The `readOnly` trap:** `supportedAcrs` is marked `readOnly: true` in the vendored 3.0.16 schema and Authlete **accepted and persisted the write anyway** — `SERVICE-CONFIG-PROBE.md` §15. |
 | 9470-W6 | Make `parseBearerError` quoted-string aware | S | An `error_description` containing a comma survives intact; test covers it. |
 
 **Ordering and gating.** **W3 is the priority and must be planned as one change** — `controllers/session.controller.ts`

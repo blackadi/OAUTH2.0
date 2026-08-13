@@ -226,56 +226,98 @@ Read each line as an attacker would:
 permitted* configuration, not its best supported one. That sentence is the entire content of this exercise,
 and it is what "supports FAPI 2.0" almost always means when a vendor says it.
 
-For completeness, confirm what enforcement is switched off at the service:
+For completeness, ask the deployment to report its own posture:
 
 ```bash
-# Both endpoints are meant to report this. Watch what they do instead.
+# Both endpoints answer today. Neither always did, and the history is the exercise.
 curl -s -o /dev/null -w "fapi/config -> %{http_code}\n" "$API/fapi/config"
-curl -s "$API/fapi/status" | head -c 160; echo
+curl -s "$API/fapi/status" | python3 -m json.tool | head -8
 ```
-
-```
-fapi/config -> 500
-{"error":"Internal Server Error","message":"Response validation failed", ...
-```
-
-**Both FAPI reporting endpoints fail.** The one thing in this deployment whose job is to answer *"are we
-FAPI conformant?"* cannot answer at all — you had to read the service configuration directly to learn
-anything in Exercises 3 and 4. Record that as a finding in Exercise 7: it is an **observability failure**,
-and it is why an audit reads configuration rather than trusting a status page.
-
-### The number that used to be there
-
-Run the same command against a copy of this repo from before **2026-08-11** and you get:
 
 ```
 fapi/config -> 200
-{"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: ...
+{
+    "mode": "disabled",
+    "dpopEnabled": false,
+    "issuer": "https://<your-host>",
+    "dpopNonceRequired": false,
+    "dpopNonceDuration": 0,
+    "scopeRequired": false,
 ```
 
-**Read that carefully, because it is the more instructive failure.** A `200`, carrying an error body, that
-calls itself a Bad Request. Three mutually contradictory signals in one response. A monitoring system
-checking status codes reported this endpoint healthy **forever**, and a dashboard rendering the JSON showed
-a stack trace.
+**`mode: "disabled"` is the whole table above, compressed into one field.** The endpoint whose job is to
+answer *"are we FAPI conformant?"* answers **no** — which is the correct answer, and it took two unrelated
+fixes before it could give any answer at all. Both belong in your Exercise 7 report as history.
 
-**Predict where that came from before reading on.** It was not the SDK, and it was not FAPI. The global
+### The three answers this endpoint has given
+
+| Until | Status | Body | The defect |
+|---|---|---|---|
+| 2026-08-11 | **200** | `{"error":"Bad Request","message":"Response validation failed","stack":…}` | it failed **invisibly** |
+| 2026-08-12 | **500** | the same message, no stack outside development | it failed honestly, and still failed |
+| now | **200** | the posture above | — |
+
+**Predict where row 1 came from before reading on.** It was not the SDK, and it was not FAPI. The global
 error handler derived the HTTP status from the thrown error object — and the Authlete SDK's `AuthleteError`
 subclasses set `statusCode` from the response they were *reading*. Authlete answered `200`; the SDK could
 not parse the body; the error carried `statusCode: 200`; the handler emitted it. **Every one of the 57 SDK
-call sites in this server had the same exposure**, not just these two endpoints.
+call sites in this server had the same exposure**, not just these two endpoints. The fix was one clause:
+trust an error-supplied status only inside 400–599. A `200` carrying an error body that calls itself a Bad
+Request is three mutually contradictory signals in one response, and a monitor watching status codes
+reported this endpoint healthy **forever**.
 
-The fix was one clause — trust an error-supplied status only inside 400–599 — and it is worth naming what
-that fix did and did not do:
+**Now predict row 2, because it is the stranger one.** Nothing in this server's code made row 3 happen.
+The SDK is byte-identical — still pinned to `1.0.0`. What changed is **one string in the authorization
+server's configuration**, and this was the entire complaint:
 
-| | Before | After |
+```
+supportedTokenAuthMethods.8: invalid_enum_value — received 'SPIFFE_JWT'
+```
+
+**One issue, out of 132 fields, and nothing else in that response was wrong.** Authlete advertised nine
+client-authentication methods; SDK 1.0.0's `ClientAuthMethod` is a *closed* enum of the same nine minus
+`SPIFFE_JWT`; the SDK validates the entire response against it. One member it did not recognise rejected
+all 132 fields — so two endpoints that never mention client authentication went dark because of a method
+no client here has ever used.
+
+**The asymmetry is the lesson, and it is worth checking in your own client library.** That same SDK models
+**185** of Authlete's **193** service properties. The eight it does not know are *silently discarded* —
+`z.object` strips unknown keys by default — while one unknown value inside a field it *does* know is fatal.
+So the library is maximally tolerant of fields it has never heard of, and maximally brittle about values it
+has never heard of. The first is forward-compatible; the second turns any additive change on the server
+into a breaking change on the client.
+
+Four things could close it. Only one was available here:
+
+| Route | Effect | Why not |
 |---|---|---|
-| Does `service.get()` work? | No | **No** — that is the `SPIFFE_JWT` enum gap, still open |
-| Can a monitor tell? | **No** — 200 | Yes — 500 |
+| Make the enum tolerant of unknown members | fixes the whole class | upstream's decision, on upstream's schedule |
+| Patch the vendored SDK | fixes today's instance | `AGENTS.md` forbids it — the old `patches/` directory was deleted and must not return |
+| Fix the status inversion | the failure becomes *visible* | ✅ done 2026-08-11 — but it does not make the call succeed |
+| Withdraw the member the client cannot parse | ✅ done 2026-08-12 | fixes today's instance, not the class |
 
-**Two separable defects, one visible symptom.** The one that made the failure *silent* is fixed; the one
-that makes it *fail* is not. Being able to say which is which — before proposing a fix — is most of what
-this exercise is for. Note also which one was cheap: the status clamp had no dependency on the vendor, the
-SDK, or this curriculum.
+**Notice which side had to move.** Authlete's own OpenAPI document *declares* `SPIFFE_JWT` as a legal value
+— the vendor's specification is ahead of the vendor's own TypeScript SDK. Nothing was misconfigured. The
+authorization server was asked to stop advertising a capability it genuinely had, so that a client library
+could read its configuration at all, and that is a real cost worth naming in a report rather than
+papering over.
+
+> **Verify the claim, do not take it from this page.** Nine members went in and five came out — the
+> withdrawal also dropped `tls_client_auth` and `self_signed_tls_client_auth` (mTLS is not implemented
+> here, Module 05) and `attest_jwt_client_auth`. Confirm it yourself:
+>
+> ```bash
+> curl -s "$API/.well-known/openid-configuration" \
+>   | python3 -c "import sys,json; print(json.load(sys.stdin)['token_endpoint_auth_methods_supported'])"
+> ```
+>
+> ```
+> ['none', 'client_secret_basic', 'client_secret_post', 'client_secret_jwt', 'private_key_jwt']
+> ```
+>
+> Two members of that list disappearing took **two other discovery members** with them:
+> `client_attestation_signing_alg_values_supported` and its `_pop_` sibling are gone, because they existed
+> only to describe `attest_jwt_client_auth`. Withdrawing one advertisement withdrew three.
 
 ---
 
@@ -327,7 +369,7 @@ A sixth member appears in the token response: **`grant_id`**. Now exercise the A
 
 ```bash
 echo "-- query --";            curl -s -H "Authorization: Bearer $AT" "$API/gm/$GID" -w '\n[%{http_code}]\n'
-echo "-- no token --";         curl -s "$API/gm/$GID" -w '\n[%{http_code}]\n'
+echo "-- no token --";         curl -si "$API/gm/$GID" | grep -i -E '^HTTP|^www-authenticate'
 echo "-- nonexistent grant --";curl -s -H "Authorization: Bearer $AT" "$API/gm/not-a-real-grant" -w '\n[%{http_code}]\n'
 echo "-- revoke --";           curl -s -X DELETE -H "Authorization: Bearer $AT" "$API/gm/$GID" -w '[%{http_code}]\n'
 echo "-- query again --";      curl -s -H "Authorization: Bearer $AT" "$API/gm/$GID" -w '\n[%{http_code}]\n'
@@ -338,8 +380,8 @@ echo "-- query again --";      curl -s -H "Authorization: Bearer $AT" "$API/gm/$
 {"scopes":[{"scope":"grant_management_query grant_management_revoke profile"}],"claims":["birthdate","family_name",...]}
 [200]
 -- no token --
-{"error":"invalid_token","error_description":"Access token is invalid or expired"}
-[401]
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer, DPoP
 -- nonexistent grant --
 {"error":"not_found","error_description":"Grant not found"}
 [404]
@@ -353,6 +395,33 @@ echo "-- query again --";      curl -s -H "Authorization: Bearer $AT" "$API/gm/$
 Every status matches the specification: 200 with the grant contents, 401 unauthenticated, 404 for an unknown
 grant, **204 with an empty body** on revoke (§6.5), 404 afterwards. Scope enforcement holds too — try a
 `client_credentials` token carrying only `profile` and you get 401.
+
+**Look closely at the "no token" answer, because it is doing two things you might not expect.**
+
+**It sends no error code.** The body is empty. That looks like less information, and it is deliberate:
+RFC 6750 §3.1 says that when a request carries *no* authentication information at all, the server
+*"SHOULD NOT include an error code or other error information."* There is nothing wrong with your token —
+you did not send one. An `invalid_token` here would be a small lie, and a client written to retry on
+`invalid_token` would loop instead of prompting for login. Compare it with the 401 you get from an
+*expired* token, which **does** say `invalid_token`: that one is a real verdict on a real credential.
+
+**It offers two schemes.** `WWW-Authenticate: Bearer, DPoP` is the server telling you both ways in are
+open. That matters if you hold a **DPoP-bound** token (`token_type: DPoP`), because such a token can only
+be presented one way:
+
+```bash
+# ordinary token
+curl -s "$API/gm/$GID" -H "Authorization: Bearer $AT"
+
+# DPoP-bound token — the scheme changes AND a proof rides along
+curl -s "$API/gm/$GID" -H "Authorization: DPoP $AT" -H "DPoP: $PROOF"
+```
+
+Get that pairing wrong and the server names the mistake instead of failing vaguely: `Bearer` **with** a
+proof is `400 invalid_request`, and `DPoP` **without** a proof is `401 invalid_dpop_proof`. The first
+refusal is the interesting one — accepting it would make `Bearer` a working way to spend a key-bound
+token, which is precisely the downgrade RFC 9449 §7.2 forbids. A protected resource that quietly accepts
+either scheme has thrown away the binding it was asked to enforce.
 
 **This is what a correct implementation looks like**, and it is worth noticing after nine modules of finding
 defects. Write down what makes it correct: local validation before the upstream call, spec-mandated status
@@ -427,8 +496,11 @@ remediation — and cover at minimum:
 2. The numeric requirements, with measured values.
 3. The grant-management revocation gap, with its severity argued from the *interaction* rather than the
    modal verb.
-4. The FAPI reporting endpoints failing, so the deployment cannot report its own posture — and, as a
-   separate finding with a separate fix, the 200-with-error status inversion that used to hide it.
+4. The FAPI reporting endpoints. They answer now, so the finding is no longer *"they fail"* — it is that
+   they **under-report**: `dpopEnabled` is really `dpopNonceRequired`, and neither endpoint reads the
+   per-client fields (`dpopRequired`, `tokenAuthMethod`, `pkceRequired`) that actually decide conformance.
+   An endpoint that reports six of the eight §5.3.2.1 requirements is a different severity from one that
+   reports none — argue which. Both historical defects belong in the report as history, with their dates.
 5. A remediation order, justified.
 
 Write it to `docs/curriculum/my-fapi-audit.md` (gitignored, like Module 07's).
@@ -447,7 +519,7 @@ required mechanism is available and none is mandatory.**
 |---|---|
 | Confidential clients only | **FAIL** — a public client exists and works |
 | Sender-constrained access tokens only | **FAIL** — plain Bearer issued (Ex 2) |
-| MTLS or `private_key_jwt` client auth | **FAIL** — `client_secret_basic` accepted; `none` advertised |
+| MTLS or `private_key_jwt` client auth | **FAIL** — `client_secret_basic` accepted; `none` advertised. Note the failure is *enforcement*, not capability: since 2026-08-12 one client does authenticate with `private_key_jwt`, and the service still permits every other method |
 | Reject requests without PAR | **FAIL** — `require_pushed_authorization_requests: false` |
 | Require PKCE S256 | **FAIL** — `plain` advertised; Module 03 got a token with no PKCE at all |
 | `response_type` must be `code` | **FAIL** — implicit response types advertised and working |
@@ -505,10 +577,11 @@ Tick only what you ran and saw:
 - [ ] Measured `request_uri` `expires_in` = **600** and explained why that fails `< 600`
 - [ ] Recorded `authorizationCodeDuration: 0` as **NOT EVIDENCED** rather than as a pass or a fail
 - [ ] Read the advertised metadata as an attacker choosing the weakest permitted option
-- [ ] Saw both FAPI endpoints fail with **HTTP 500**, and can say why the deployment therefore cannot
-      report its own posture
-- [ ] Can explain what the **200** they used to return came from, and why the status inversion and the
-      SDK enum gap are two defects with two separate fixes
+- [ ] Read `mode: "disabled"` from an endpoint that answers, and can name what it still under-reports
+- [ ] Can explain all three answers this endpoint has given — the invisible **200**, the honest **500**,
+      and today's — and which of the two defects each fix addressed
+- [ ] Can say why a **closed** client-side enum makes a server's additive change a breaking one, and why
+      the server had to withdraw a capability it genuinely had
 - [ ] Ran create → query → revoke → query and got **200 / 401 / 404 / 204 / 404**
 - [ ] Confirmed the refresh token **is** revoked (MUST) and the access token **is not** (should)
 - [ ] Argued that finding's severity from the *interaction* with the 24-hour lifetime

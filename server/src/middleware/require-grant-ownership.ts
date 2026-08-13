@@ -1,7 +1,14 @@
 import { NextFunction, Request, RequestHandler, Response } from "express";
 import { Authlete } from "@authlete/typescript-sdk";
 import { authleteApi as defaultApi, serviceId as defaultServiceId } from "../services/authlete.service";
-import { setDpopNonce } from "../utils/dpop";
+import {
+  authChallenge,
+  dpopHttpTarget,
+  extractAccessToken,
+  isTokenPresentationError,
+  setDpopNonce,
+  TokenPresentationError,
+} from "../utils/dpop";
 import logger from "../utils/logger";
 
 /**
@@ -23,13 +30,21 @@ import logger from "../utils/logger";
 
 export type GrantManagementScope = "grant_management_query" | "grant_management_revoke";
 
-/** Bearer-only, matching the Grant Management API's own contract. */
-export function extractBearerToken(req: Request): string | undefined {
-  const header = req.headers.authorization;
-  if (typeof header === "string" && header.startsWith("Bearer ")) {
-    return header.slice(7).trim() || undefined;
+/**
+ * Answer a presentation the resource refuses locally. Authlete was never called, so the challenge is
+ * built here — the same shape `userinfo.controller.ts` uses. RFC 6750 §3.1 wants no body and no error
+ * code when the request carried no authentication information at all, which is why `code === null`
+ * sends an empty response rather than a JSON error.
+ */
+function sendPresentationError(res: Response, err: TokenPresentationError): void {
+  res.setHeader("WWW-Authenticate", authChallenge(err.schemes, err.code, err.description));
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  if (!err.code) {
+    res.status(err.status).send();
+    return;
   }
-  return undefined;
+  res.status(err.status).json({ error: err.code, error_description: err.description });
 }
 
 export function requireGrantOwnership(
@@ -47,26 +62,66 @@ export function requireGrantOwnership(
       return;
     }
 
-    const token = extractBearerToken(req);
-    if (!token) {
-      res.setHeader(
-        "WWW-Authenticate",
-        `Bearer error="invalid_token", error_description="An access token is required", scope="${requiredScope}"`
-      );
-      res.status(401).json({ error: "invalid_token", error_description: "Access token is invalid or expired" });
-      return;
+    // Token presentation, per RFC 6750 §2 and RFC 9449 §7 — the same four cases
+    // `userinfo.service.ts` handles, because this is the deployment's other protected resource.
+    // All of them fail before any Authlete call.
+    let presented;
+    try {
+      presented = extractAccessToken(req);
+    } catch (err) {
+      if (isTokenPresentationError(err)) return sendPresentationError(res, err);
+      throw err;
     }
+
+    const dpopHeader = req.headers["dpop"] as string | undefined;
+
+    if (!presented) {
+      // RFC 6750 §3.1: the request carried no authentication information, so the challenge names
+      // the schemes and carries no error code. Both schemes are advertised (RFC 9449 §7.2).
+      return sendPresentationError(res, new TokenPresentationError(401, null, null));
+    }
+
+    // RFC 9449 §7.1: a DPoP-bound token is presented with the `DPoP` scheme *and* a proof. The
+    // scheme without a proof can never satisfy that, so refuse it rather than spend a round trip.
+    if (presented.scheme === "dpop" && !dpopHeader) {
+      return sendPresentationError(
+        res,
+        new TokenPresentationError(
+          401,
+          "invalid_dpop_proof",
+          "The DPoP authentication scheme was used but no DPoP proof was provided in the DPoP header field.",
+          ["dpop"],
+        ),
+      );
+    }
+
+    // RFC 9449 §7.2: a protected resource "MUST reject a DPoP-bound access token received as a
+    // bearer token". Honouring the proof here would make `Bearer` a working route for bound tokens
+    // — the downgrade §7.2 forbids — and dropping it silently would report "no DPoP header" to a
+    // client that plainly sent one.
+    if (presented.scheme === "bearer" && dpopHeader) {
+      return sendPresentationError(
+        res,
+        new TokenPresentationError(
+          400,
+          "invalid_request",
+          "A DPoP proof was provided with the Bearer authentication scheme. RFC 9449 Section 7.1 requires the DPoP scheme when presenting a DPoP proof.",
+        ),
+      );
+    }
+
+    const token = presented.token;
 
     // Ask Authlete to enforce the scope too, so an insufficiently-scoped token gets a proper
     // `insufficient_scope` challenge rather than a bare 401 from the grant-management endpoint.
     const introspectionRequest: Record<string, unknown> = { token, scopes: [requiredScope] };
 
-    // UNVERIFIED: no DPoP-bound grant-management token exists on this deployment to test against.
-    const dpop = req.headers["dpop"];
-    if (typeof dpop === "string" && dpop) {
-      introspectionRequest.dpop = dpop;
+    // Verified 2026-08-12: Authlete enforces the `cnf.jkt` binding here even when no proof is
+    // forwarded (`[A065308]`), so this is a conformance path, not a fail-open one.
+    if (presented.scheme === "dpop" && dpopHeader) {
+      introspectionRequest.dpop = dpopHeader;
       introspectionRequest.htm = req.method;
-      introspectionRequest.htu = `${req.protocol}://${req.get("host") ?? ""}${req.originalUrl}`;
+      introspectionRequest.htu = dpopHttpTarget(req).htu;
     }
 
     let result;

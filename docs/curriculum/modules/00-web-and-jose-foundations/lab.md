@@ -76,10 +76,14 @@ Notice `authorization_endpoint` (front channel — meant to be visited in a brow
 ## Exercise 2 — Read a real JWK from the JWKS
 
 ```bash
-curl -s http://localhost:3000/api/.well-known/jwks.json | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);console.log("key count:",j.keys.length);const k=j.keys[0];console.log("fields:",Object.keys(k).join(", "));console.log(JSON.stringify(k,null,2))})'
+curl -s http://localhost:3000/api/.well-known/jwks.json | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);console.log("kty values:",j.keys.map(k=>k.kty).join(", "));const k=j.keys.find(k=>k.kty==="EC");console.log("fields:",Object.keys(k).join(", "));console.log(JSON.stringify(k,null,2))})'
 ```
 
-You should see a single **EC** key on curve **P-256** with `"alg":"ES256"`, `"use":"sig"`, a `kid`, and the
+Note what that snippet does **not** do: index into `keys[0]`. A JWKS is a *set*, and its order is not
+promised to you — pick the key you want by a property of the key. This one selects `kty === "EC"`; a verifier
+handling a real token selects by the `kid` in the token's header, which you will do in Module 08.
+
+You should see an **EC** key on curve **P-256** with `"alg":"ES256"`, `"use":"sig"`, a `kid`, and the
 public coordinates `x` and `y`. Map the fields to the concepts from the lesson:
 
 | Field | Meaning |
@@ -93,6 +97,14 @@ public coordinates `x` and `y`. Map the fields to the concepts from the lesson:
 
 This is the "signet" a verifier uses to check the wax seal. It is public on purpose: anyone can *verify*, only
 the server can *sign*.
+
+> **The first line printed `EC, RSA`, so there are two.** This deployment registered an RSA key on
+> **2026-08-12** alongside the original EC one, because OpenID Connect Discovery §3 says of
+> `id_token_signing_alg_values_supported` that *"The algorithm RS256 **MUST** be included"* — and it was not.
+> Two consequences you will meet later: the RSA key has **no `alg` member**, which is legal (RFC 7517 §4.4
+> makes `alg` OPTIONAL) and is why the server can offer `RS256` *and* `PS256` from one key; and selecting a
+> key now genuinely requires `kid`, because "there is only one" has stopped being true. Module 08 §3d does
+> exactly that, and Module 11 explains why you keep both keys published during a rotation.
 
 ## Exercise 3 — Decode a JWT locally
 

@@ -90,9 +90,30 @@ Note the interaction with PAR, which is not a coincidence: the `request_uri` **P
 That is why Module 05 Exercise 1 works while §5.2.2 is unavailable. Two mechanisms, one parameter name; the
 curriculum should say so explicitly, and currently does not.
 
-## Finding F-3 — asymmetric request-object signing is unreachable for every registered client (S3, configuration)
+## Finding F-3 — asymmetric request-object signing is unreachable for every registered client (S3, configuration) — ✅ **FIXED 2026-08-12 (T1-3)**
 
-No client has `jwks`, `jwksUri` or `requestSignAlg` (probe 2). Authlete advertises 14
+> **Fixed banner.** Client `2176571218` was registered with an EC P-256 JWK Set **and**
+> `requestSignAlg: ES256`. **Verified live**: an ES256-signed request object returns `action: INTERACTION`
+> with a ticket, against the *registered* key and with no ephemeral registration step — which is exactly
+> **9101-W3's** acceptance criterion. Two controls were run rather than assumed:
+>
+> | Object | Result |
+> |---|---|
+> | ES256, signed with the registered key | `INTERACTION` + ticket |
+> | ES256, **one byte flipped in the signature** | `400 invalid_request_object` — `[A005328] The signature of the request object … was not verified` |
+> | `alg: none`, same client | `BAD_REQUEST` — `[A005336]` *client-level* algorithm mismatch |
+>
+> The negative control matters: acceptance alone would not have distinguished "the signature was verified"
+> from "the signature was ignored." And `[A005336]` is a **different** code from the `[A008311]` the other
+> clients get for the identical object — the client-level pin fires before the service-level check, which
+> `modules/05…/lab.md` Step 3 had described in prose and can now show as a transcript (new Step 4b).
+>
+> **F-2 is untouched.** By-*reference* JAR is still unreachable: `require_request_uri_registration = true` and
+> no client has `requestUris`. That is **9101-W2**, and registering a key did nothing for it. The rest of this
+> finding describes the pre-fix state.
+
+No client has `jwks`, `jwksUri` or `requestSignAlg` (probe 2) — see `RFC7523-…` F-3's correction for the
+`jwks` half, which drifted before T1-3 rather than at it. Authlete advertises 14
 `request_object_signing_alg_values_supported`, of which only the three `HS*` entries are usable here, and only
 for the one confidential client (`1523514379`) whose secret can serve as the MAC key. The two public clients
 have no secret and no key, so they cannot produce a verifiable request object by any algorithm.
@@ -157,7 +178,7 @@ a vulnerability.
 |---|---|---|---|
 | 9101-W1 | *(= B1-W1/B1-W2)* Map `action` to a status in `jar.controller.ts` and stop emitting the raw response | S | See B1. `BAD_REQUEST` → 400 carrying `responseContent`; `ticket`, `service`, `client` never in the body. |
 | 9101-W2 | Register a `requestUris` entry on one client and add a §5.2.2 lab step | M | A by-reference JAR request completes; the lab shows registration being enforced (`require_request_uri_registration`) and distinguishes a client-hosted `request_uri` from PAR's. |
-| 9101-W3 | Register an asymmetric key on one client and set `requestSignAlg` | S | An ES256-signed request object validates without the lab's ephemeral key; Module 05 Step 3 becomes "here is the registered key" rather than "generate one". Prerequisite for the FAPI work in B7. |
+| 9101-W3 | Register an asymmetric key on one client and set `requestSignAlg` | S | ✅ **DONE 2026-08-12 (T1-3), = 7523-W4.** An ES256-signed request object validates against the registered key, with a tampered-signature control to prove the check is real. **The acceptance criterion's second clause was deliberately not followed**: Step 3 was *kept*, not replaced. Generating a key locally, checking `d` is absent before pasting it, and watching the error move is the exercise — replacing it with "here is the registered key" would have deleted the teaching to satisfy the work item. The registered client is added as **Step 4b** instead, which also makes Step 3's pinned-algorithm warning demonstrable. |
 | 9101-W4 | Say in Module 05 which JAR halves this deployment can and cannot run | S | Two sentences: by-reference unavailable until W2; object signing symmetric-only until W3. |
 | 9101-W5 | Build the Authlete authorization request from named fields | S | `authorization.service.ts` sends `{ parameters }` and nothing derived from client input; matches `userinfo.service.ts:65`. Test asserts a `?context=` query parameter does not reach Authlete. |
 

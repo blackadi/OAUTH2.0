@@ -12,6 +12,7 @@ import { Request } from "express";
 import logger from "../utils/logger";
 import { parseProperties } from "../utils/properties";
 import { parseBasicAuth } from "../utils/basic-auth";
+import { dpopHttpTarget } from "../utils/dpop";
 
 export class TokenService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -72,14 +73,14 @@ export class TokenService {
       reqBody.properties = properties;
     }
 
-    // DPoP support — fields come from HTTP headers, not the body
+    // DPoP support — fields come from HTTP headers, not the body.
+    // `htu` excludes the query and fragment (RFC 9449 §4.2); `dpopHttpTarget()` is the single
+    // source for that derivation. `TokenRequest` has no `targetUri` member, so only `htu` is sent.
     const dpopHeader = req.headers["dpop"] as string | undefined;
     if (dpopHeader) {
       reqBody.dpop = dpopHeader;
       reqBody.htm = req.method;
-      const protocol = req.protocol;
-      const host = req.get("host") || "";
-      reqBody.htu = `${protocol}://${host}${req.originalUrl}`;
+      reqBody.htu = dpopHttpTarget(req).htu;
     }
 
     // Client attestation headers (OAuth 2.0 Attestation-Based Client Authentication)

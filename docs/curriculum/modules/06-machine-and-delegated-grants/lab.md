@@ -407,8 +407,68 @@ pinned**, and this client is registered for `client_secret_basic`. Your service 
 *service* supports, not what *this client* is permitted to use. Module 02's "advertised ≠ permitted" rule,
 now applied to client authentication.
 
-To exercise §2.2 for real, register a client with `private_key_jwt` and a JWKS. That is Module 10's territory,
-where FAPI requires it.
+### Now do it on a client that *is* permitted — §2.2 for real
+
+`$PKJWT_CLIENT_ID` is registered `PRIVATE_KEY_JWT` with a public JWK Set, and `$PKJWT_PRIVATE_JWK` is the
+matching private key. `/tmp/mkassert.mjs` cannot sign this one — it only does HMAC — so here is its
+asymmetric sibling:
+
+```bash
+cat > /tmp/mkassert-es256.mjs <<'EOF'
+// private_key_jwt client assertion, signed with an EC P-256 key (RFC 7523 §2.2).
+//   node mkassert-es256.mjs '<privateJwkJson>' <clientId> <aud>
+import crypto from "node:crypto";
+const [, , jwkJson, clientId, aud] = process.argv;
+const jwk = JSON.parse(jwkJson);
+const u8 = (b) => Buffer.from(b).toString("base64url");           // bytes -> base64url
+const j64 = (o) => u8(JSON.stringify(o));                          // object -> base64url JSON
+const now = Math.floor(Date.now() / 1000);
+const si = `${j64({ alg: "ES256", typ: "JWT", kid: jwk.kid })}.${j64(
+  { iss: clientId, sub: clientId, aud, iat: now, exp: now + 300, jti: crypto.randomUUID() })}`;
+const sig = crypto.sign("sha256", Buffer.from(si), {
+  key: crypto.createPrivateKey({ key: jwk, format: "jwk" }),
+  dsaEncoding: "ieee-p1363",     // raw R‖S — JWS signatures are never DER
+});
+console.log(`${si}.${u8(sig)}`);
+EOF
+
+CA=$(node /tmp/mkassert-es256.mjs "$PKJWT_PRIVATE_JWK" "$PKJWT_CLIENT_ID" "$ISS")
+
+curl -s -X POST "$API/token" -d "grant_type=client_credentials" -d "scope=profile" \
+  -d "client_id=$PKJWT_CLIENT_ID" \
+  -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+  --data-urlencode "client_assertion=$CA"
+```
+
+```json
+{"access_token":"EXAMPLE-Vvd2Ohbi","token_type":"Bearer","expires_in":86400,"scope":"profile"}
+```
+
+**Byte for byte the same request shape that just failed**, and the only difference is which client sent it.
+That is the whole of "advertised ≠ permitted" in one pair of transcripts.
+
+Four things worth noticing:
+
+1. **There is no `client_secret` anywhere.** The AS holds only a *public* key for this client, so nothing it
+   stores can be replayed if the AS's own database leaks. That is the property §2.2 exists for, and the one
+   `client_secret_jwt` — which HMACs with the shared secret — does not have.
+2. **`aud` is the issuer**, read from discovery as `$ISS` in 3a. Both values work here — verified: the issuer
+   and the token endpoint URL each authenticate, and anything else is refused with
+   `[A157318] The 'aud' claim of the client assertion is invalid`. RFC 7521 §5.2 is what requires that
+   refusal, and it is the check that stops an assertion you were given for one AS being replayed at another.
+3. **`dsaEncoding: "ieee-p1363"`.** Same raw R‖S encoding as the DPoP proofs in Module 05 and the ID token
+   validator in Module 08. Get it wrong and you get `[A157326] The signature of the JWT for client
+   authentication is invalid` — indistinguishable from having the wrong key, and worth remembering the next
+   time a signature "should" verify. That exact error was produced while writing this exercise, by a
+   base64url helper that JSON-stringified the signature bytes instead of encoding them.
+4. **`jti` is sent and nothing enforces it** — verified: the *same* assertion sent twice inside its
+   300-second window returns two different access tokens. RFC 7523 §3 and §6 make replay prevention
+   OPTIONAL, so this is conformant, not a defect. It is also why §2.2's security rests on the private key
+   never leaving the client, and not on the assertion being single-use.
+
+> **Verified live 2026-08-12.** This client did not exist before then — until the audit registered it, §2.2
+> was untestable on this deployment and this exercise ended at the paragraph above. The registration was one
+> `client/create` call; no code changed.
 
 ---
 

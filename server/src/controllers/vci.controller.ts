@@ -2,13 +2,21 @@ import { NextFunction, Request, Response } from "express";
 import { VciService } from "../services/vci.service";
 import { requireBasicAuth } from "../middleware/require-basic-auth";
 import { handleControllerError } from "../utils/controller-error";
+import { extractAccessToken } from "../utils/dpop";
 
 const checkAuth = requireBasicAuth("vci");
 
+/**
+ * The credential endpoints are protected resources, so token presentation goes through the shared extractor
+ * (`utils/dpop.ts`) rather than a fourth hand-rolled `startsWith("Bearer ")`. That gains them the `DPoP`
+ * scheme (RFC 9449 §7.1 — the only conformant way to present a bound token) and case-insensitive scheme
+ * matching (RFC 9110 §11.1), both of which this endpoint refused before 2026-08-13.
+ *
+ * The `accessToken` body fallback below is kept and is unaffected: it is a JSON field, so it cannot collide
+ * with RFC 6750 §2.2's form-encoded `access_token`, which is what the shared extractor guards against.
+ */
 function extractBearerToken(req: Request): string | null {
-  const auth = req.headers.authorization;
-  if (auth?.startsWith("Bearer ")) return auth.slice(7);
-  return null;
+  return extractAccessToken(req)?.token ?? null;
 }
 
 function statusForAction(action: string | undefined, mapping: Record<string, number>, fallback = 500): number {

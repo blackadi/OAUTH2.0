@@ -25,14 +25,18 @@ function basicHeader(auth?: BasicAuth): Record<string, string> {
 }
 
 async function pushedAuthorization(
-  body: Record<string, string>,
+  // Values are optional: with `client_secret_basic` the credentials travel in the header, so the
+  // body carries `parameters` alone. A required-value record cannot express that.
+  body: Record<string, string | undefined>,
   basicAuth?: BasicAuth,
 ): Promise<unknown> {
   return http.postJson(PAR_ENDPOINT, body, basicHeader(basicAuth));
 }
 
 async function pushedAuthorizationWithDpop(
-  body: Record<string, string>,
+  // Values are optional: with `client_secret_basic` the credentials travel in the header, so the
+  // body carries `parameters` alone. A required-value record cannot express that.
+  body: Record<string, string | undefined>,
   dpopProof: string,
   basicAuth?: BasicAuth,
 ): Promise<ParResponseWithNonce> {

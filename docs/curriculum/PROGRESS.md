@@ -98,6 +98,864 @@ against it before calling the capstone complete._
 - [x] **2026-08-12 — T0-4: §3 per-client matching, and the Authlete field that does not exist. TIER 0 COMPLETE** (below)
 - [x] **2026-08-12 — T1-1: both introspection endpoints protected; the last easily-exploitable S1 is closed** (below)
 - [x] **2026-08-12 — T1-7: `prompt=none` answers properly, and the latent step-up S1 is retired** (below)
+- [x] **2026-08-12 — T1-2 + T1-3: one RSA key and one `private_key_jwt` client; three specs unblocked, no code changed** (below)
+- [x] **2026-08-12 — T1-4 + T1-6: four Module 09a markers retired; the 24-hour lifetime kept on purpose** (below)
+- [x] **2026-08-12 — T1-5: `service.get()` works after six days down; T1-13 has no knob to turn** (below)
+- [x] **2026-08-12 — B1-W6: the refresh flow reissues ID tokens again, via the API that exists for it** (below)
+- [x] **2026-08-12 — T1-17: five unprobed behaviours, five answers, and no code owed** (below)
+- [x] **2026-08-13 — T1-9 + T1-10 + 6749-W1: grant management became a real protected resource** (below)
+- [x] **2026-08-13 — B1-W1 + B1-W2 + MS-W1: a debugging endpoint stopped handing out tickets** (below)
+- [x] **2026-08-13 — T1-14 + T1-15: back-channel logout logged nobody out** (below)
+- [x] **2026-08-13 — T1-16 + T1-18: one line, an honest 500, and a work item that could not do what it said** (below)
+- [x] **2026-08-13 — T1-20 + the three S1 residues: CIBA could not authenticate its recommended client, and CI was not checking the client at all** (below)
+- [x] **2026-08-13 — PKCE is enforced; the last open S1 is closed** (below)
+- [x] **2026-08-13 — the two process findings became mechanisms** (below)
+
+### 2026-08-13 — turning the two process findings into things that cannot be forgotten
+
+**Why this matters to a future session:** Phase 5 produced two observations that were worth more than any
+individual fix. Both are now **mechanisms rather than advice**, because advice in a retrospective is read
+once.
+
+**Finding 1 — six work items prescribed remedies that could not achieve their stated outcome.** B1-W6 named
+the wrong Authlete API; T1-13 a service knob that does not exist; 9449-W3 one of the **two** calls the
+endpoint makes; 9701-W1 omitted both `rsUri` prerequisites; FED-W1 promised an entity statement needing
+unmentioned configuration; 6749-W1 offered an escape clause that did not apply. **Every one was disproved by
+a read-only probe in under a minute, before any code was written.**
+
+The shared tell: **none of them named an endpoint.** A criterion phrased as *"issue from the fields Authlete
+actually sends"* or *"return 200 with `application/entity-statement+jwt`"* describes a **result**, and
+results do not tell you which call produces them. The convention is now recorded in two places a session
+actually reads — `RESUME.md` §7 (working conventions) and `04-remediation-plan.md` §7.4 as **step 0**, ahead
+of "plan first" — with the three questions that catch the class: *which call changes? is that the only call?
+does the outcome need configuration nobody scheduled?*
+
+**Finding 2 — a green suite proved nothing, four times.** `POST /api/backchannel_logout`, `POST
+/api/jar/process` and `federation.service.ts` each had **no test naming them**; the third was *unmockable*,
+because `tests/helpers/mock-authlete.ts` had no `federation` member while `AGENTS.md` described it as
+covering every SDK method. And the client's 16 test files plus its `typecheck` script were never invoked by
+CI at all, because `vite build` does not typecheck.
+
+Reading code found those one at a time. **`scripts/check-route-coverage.mjs` asks the question that finds
+them as a list**: which of the 91 routes does no test mention? Answer today: **47**.
+
+It **ratchets** rather than failing red on day one, which is how a check survives contact:
+
+```
+✅ route coverage: 91 routes, no regressions. 47 carried as known debt (baseline), 2 exempt.
+```
+
+`scripts/route-coverage-baseline.json` records the debt; the check fails only for a route *outside* it, so
+adding an endpoint without a test breaks the build while the backlog stays visible and shrinkable
+(`--update-baseline` banks progress). **It was self-tested**: a throwaway route added to `health.routes.ts`
+made it exit 1, and reverting made it exit 0 — a check never observed failing is not a check.
+
+**What it deliberately does not claim.** A route *named* by a test is not a *tested* route; this measures
+reference, not assertion quality. It is crude for the same reason `check-docs.mjs` only validates
+mechanically-checkable drift: **a cheap check that is always right about a narrow thing beats a clever one
+that is sometimes wrong.**
+
+**Both checks are now in CI**, alongside the client `typecheck` and `test` gates added earlier the same day.
+Five gates where there were two.
+
+
+### 2026-08-13 — PKCE enforced, and the last open S1 closes
+
+**Why this matters to a future session:** **`RFC7636-pkce.md` drops S1 → S3.** PKCE is now *required* on this
+deployment, which is the claim the S1 rested on being false. `pkceRequired` and `pkceS256Required` are `true`
+on the SPA client (`4277838306`) and the `private_key_jwt` client (`2176571218`).
+
+**Verified live at all four clients, because the config saying `true` and Authlete refusing are two different
+claims:**
+
+| Request | Result |
+|---|---|
+| enforcing client, no `code_challenge` | refused — `[A124301]` |
+| enforcing client, `code_challenge_method=plain` | refused — `[A124308] … must be 'S256'.` |
+| enforcing client, `S256` | `INTERACTION` — proceeds |
+| `1523514379` / `1678274156`, no challenge at all | `INTERACTION` — **deliberately still permitted** |
+
+**The two exceptions are curriculum infrastructure and must not be "fixed".** Module 02 teaches the plain
+code flow; Module 03 shows what it costs. **A lesson that criticises a flow needs a client that still
+permits it.** Both are named in `AGENTS.md` with that instruction, and Module 03's setup table already
+required `pkceRequired: false` for its client — the lab was right before the service was.
+
+**One detail worth keeping:** the refusals arrive as **`action: LOCATION`** — an error *redirect* carrying
+`error`, not a JSON body — because `response_type` is present. That is the `response_type`-dependent error
+channel already documented under **Quirks & gotchas**, showing up in a new place. A learner expecting JSON
+will read an empty body and conclude nothing happened.
+
+**Module 03 gained the comparison**, which is a better lesson than the recommendation was: two clients on one
+service now answer differently, so *"you should require PKCE"* becomes something you can observe rather than
+accept. The module shows both error codes.
+
+**What this closes.** The S1 register's last open entry with a live security consequence. **Gate 4 Q1 is
+superseded** — it asked whether the entry stays S1 *until PKCE is actually required*; it now is. The
+remaining departure is two documented teaching clients, which is the same standing as GM-W1's 24-hour token
+lifetime: a recorded decision with a stated reason, not a gap.
+
+
+### 2026-08-13 — T1-20, the S1 residues, and a CI gate that never fired
+
+**Why this matters to a future session:** three things, and the third was found by accident while verifying
+the first. **721 server tests / 63 files, 109 client tests / 16 files.**
+
+**1. CIBA could not authenticate the client `AGENTS.md` tells you to configure.** That file recommends
+`CLIENT_SECRET_BASIC` for CIBA, citing Authlete's own guide. `ciba.service.ts` read `clientId`/`clientSecret`
+from the JSON body and **never looked at `Authorization: Basic`**, so that configuration could not work. The
+guide and the code had disagreed since the endpoint was written.
+
+It now uses the same three channels as `par.service.ts`, and **the negative control is the more interesting
+half of the verification**:
+
+| Presentation | Before | Now |
+|---|---|---|
+| `Authorization: Basic` | ignored — request failed as unauthenticated | **`USER_IDENTIFICATION`** |
+| body `clientId`+`clientSecret`, `CLIENT_SECRET_BASIC` client | **succeeded** | **`401 [A157357]`** |
+
+That second row is a fix, not a regression. The old code sent top-level credentials *regardless of how the
+caller supplied them*, so it **silently converted** a `client_secret_post`-shaped request onto the
+`client_secret_basic` channel — exactly the guessing `par.service.ts`'s comment forbids, and the reason
+Authlete's error names *where* it expected the credentials. `appendToParams` moved to `utils/params.ts` so
+the two services share one implementation; a second subtly-different copy is how this repo ended up with
+**four** bearer parsers.
+
+**2. The three open S1 residues are closed as documentation.** `README.md` now opens with *"Read this before
+you copy anything"* — a table of the four deliberate departures (ROPC and implicit enabled, PKCE not
+required, 24-hour tokens, the three token-exchange defects) each against what production would do. The
+feature tables gained honest statuses: FAPI 2.0 **Not enabled** (`fapiModes` unset), Native SSO **Not
+enabled**, Federation **Not enabled**, Backchannel Logout **Partial**, and a PKCE row stating plainly that it
+is supported but not required, with the RFC 9700 §2.1.1 citation. **"Working" used to mean two different
+things** — *the code path runs* and *the security control is on* — and the table conflated them.
+
+**What is still genuinely open, and it is one thing:** `pkceRequired` is `false` on every client. The
+configuration change was attempted on the two clients that are **not** load-bearing for teaching — `4277838306`
+(the SPA's, which uses `pkce.ts`) and `2176571218` (T1-3's) — and was **blocked by this environment's write
+policy**, not by any technical obstacle. `1523514379` and `1678274156` must keep PKCE optional: Module 02
+teaches the plain code flow and Module 03 shows what it costs, which needs both states to exist.
+
+**3. The CI gap, which is the finding with the longest reach.** Verifying the SPA change meant running
+`tsc` on `client/`, which reported **4 pre-existing type errors**. They had survived because
+**`.github/workflows/ci.yml`'s client job ran `npm run build` and nothing else** — and `vite build` does not
+typecheck. So `client/package.json` had a `typecheck` script CI never invoked, and **16 client test files
+that CI never ran**. The server job has gated typecheck, lint and test from the start; the client job gating
+only the bundler is the asymmetry that hid them.
+
+All four errors are fixed (`JsonWebKey & { kid?: string }` instead of a `Record` a real JWK cannot satisfy;
+a body type that admits the optional keys the auth channel legitimately omits) and **both gates are now in
+CI**. This is the fourth "what was supposed to have caught it" answer in five batches, and the first one
+that was not about a missing test file but about a **gate that existed and was never wired**.
+
+### 2026-08-13 — T1-16, T1-18: the fifth work item whose criteria named an unreachable outcome
+
+**Why this matters to a future session:** `GET /.well-known/openid-federation` answered **400**, blaming the
+caller for a fault that was entirely ours. It now answers **500 naming the missing configuration.** The fix is
+one line. **What it does not do is make federation work**, and the work item said it would. **713 tests /
+62 files.**
+
+**The probe came before the code, and it is the reason this entry is not wrong.** FED-W1's acceptance criteria
+read: *"Both `GET /.well-known/openid-federation` and `GET /api/federation/configuration` return 200 with
+`application/entity-statement+jwt`."* Two calls to Authlete settled what actually happens:
+
+| Call | Result |
+|---|---|
+| no `requestBody` — the old behaviour | **400** `[A258201] … Content-Type header is not specified.` The SDK sends no `Content-Type` when there is no body, so the SDK throws and the caller wears a 400 |
+| `requestBody: {}` — the fix | **200 HTTP**, `action: INTERNAL_SERVER_ERROR` — `[A316201] Because a JWK Set for federation has not been set up, this service cannot generate entity configuration.` |
+
+So the fix **changes the failure rather than removing it**. That is still worth shipping: an error that names
+the missing setting sends an operator to the right place, and an error that says *"your request is malformed"*
+sends them to inspect a request that was fine. Verified live at both routes.
+
+**Two consequences worth carrying.**
+
+**FED-W5 closed without its own change.** It existed as a fallback — *"report the failure as a server error
+until W1 ships"*. Once the SDK stopped throwing, Authlete's `INTERNAL_SERVER_ERROR` reached the controller,
+whose action mapping was **already correct**. Compare with **BCL-W3**, the same defect shape in the logout
+receiver, which *did* need real work because the throw happened in our own code. **Same symptom, same rule,
+different fix — the location of the throw is what decides which.**
+
+**FED-W2 is blocked, and now precisely.** There is no entity statement to verify against §3 and there will not
+be until a **federation JWK Set** is configured on the service. No work item schedules that, and it is feature
+*enablement* rather than a fix, so it is not taken unilaterally — it belongs with the Theme 2 / Tier 3 family.
+`README.md` makes no federation claim, so nothing is currently false.
+
+**A coverage gap behind the coverage gap.** `federation.service.ts` had no tests — and *could not* have had
+any, because `tests/helpers/mock-authlete.ts` had no `federation` member. `AGENTS.md` describes that helper as
+covering *"every SDK method"*; it did not. Both are fixed. That is now the third untested surface found in
+three batches (`/api/gm`'s middleware had partial coverage, `/api/backchannel_logout` had none, federation had
+none and was unmockable). **When a defect has survived a long time, the useful question is not "how was this
+missed" but "what was supposed to have caught it".**
+
+### 2026-08-13 — T1-14, T1-15 (+BCL-W3, BCL-W7): back-channel logout logged nobody out
+
+**Why this matters to a future session:** `POST /api/backchannel_logout` performed **five of OIDC
+Back-Channel Logout §2.6's eleven validation steps**, and then destroyed the **wrong session**. Both are
+fixed and both were verified live against a locally-served JWKS, not only in tests. **709 tests / 61 files.**
+
+**Start with the coverage fact, because it explains how this survived.** The endpoint had **no unit and no
+integration tests at all** — two E2E assertions, in the suite that is never run locally because it burns
+Authlete quota. So every green run of the suite said precisely nothing about it. It now has 16 unit tests
+plus 9 for the session helper. **When you find an old defect, ask what was supposed to have caught it.**
+
+**Defect 1 — `jwt.verify` was called with `{ algorithms }` and nothing else.** No `issuer`, no `audience`, no
+`iat` bound, no `sub`/`sid` presence check, no rejection of the forbidden `nonce`. Any OP whose key happened
+to sit in the configured JWKS could log out any subject, and a token addressed to a different `aud` was
+accepted. All five are now checked; each rejection was driven live:
+
+| Token | Result |
+|---|---|
+| conformant | **200**, subject's sessions terminated |
+| `iss` = someone else | 400 — *"jwt issuer invalid. expected: …"* |
+| `aud` = someone else | 400 — *"jwt audience invalid. expected: …"* |
+| no `sub` and no `sid` | 400 |
+| carries `nonce` | 400 |
+| `iat` 4000s old | 400 |
+| `sid` only, no `sub` | **200**, acts on nothing (see below) |
+
+**The generalised rule is in `AGENTS.md`, and its second clause is the one that gets skipped.** Pass `issuer`
+and `audience` on every `jwt.verify` — *and* refuse the request when those expectations are unconfigured.
+Omitting an option because its value is empty silently downgrades the check to "any issuer, any audience",
+and looks identical in the code and in the logs. That is exactly why T0-2 declined to fall back to an unset
+`JWT_ISSUER`. Two new settings carry the expectations, and they are **not** `JWT_ISSUER`: on this endpoint the
+server is an **RP**, so `BACKCHANNEL_LOGOUT_ISSUER` is the *other* OP's issuer and `BACKCHANNEL_LOGOUT_AUDIENCE`
+is our `client_id` **there**. Comparing an incoming token against our own identity would pass nothing
+legitimate.
+
+**Defect 2, and the more instructive one — it destroyed `req.session`.** That is the session of *the caller*.
+A back-channel logout is a server-to-server POST carrying no browser cookie, so `req.session` was never the
+user's session. The endpoint therefore **destroyed nothing, returned 200, and the sending OP believed the
+user had been logged out.** `AGENTS.md` described this as *"properly destroys `req.session`"* — an accurate
+description of the code and a perfect description of the bug. **A security feature that silently does nothing
+is worse than one that visibly fails**, because nothing ever prompts anyone to look.
+
+Sessions are now found by `sub` in the session store (`utils/session-store.ts`). **The detail that would have
+shipped broken:** the two supported stores return **different shapes** from `Store.all()` —
+
+| Store | `all(cb)` yields |
+|---|---|
+| express-session MemoryStore | an **object keyed by session id**; the values carry no `id` |
+| connect-redis | an **array**, each element with `sess.id` attached |
+
+— so a handler written against one silently terminates nothing against the other, which is the very failure
+being fixed. Both were read rather than assumed, both are normalised, and a test drives the **real**
+MemoryStore rather than a mock of it.
+
+**What live verification could and could not reach, stated plainly.** No client registers a
+`backchannel_logout_uri` and there is no second OP, so *delivery* stays unexercised. Receipt was proven by
+standing up a local JWKS and driving all seven cases through the running server. The termination wiring was
+proven by the log line `terminated sessions for subject {"destroyed":0,…}` — **`0`, not `null`**, which is
+what shows `req.sessionStore` was reachable and enumerable in the real server; `null` is the code's signal
+that the store could not be enumerated at all. That a *logged-in* session dies is covered by the real
+MemoryStore test, not by the live run.
+
+**A `sid`-only token is accepted and acts on nothing.** §2.6 step 5 asks only that `sub` *or* `sid` be
+present, so rejecting it would be wrong. But this OP issues no `sid` into its own sessions (Session
+Management is declined), so there is nothing to match. That is a gap in what can be acted on, logged at
+`error`, not a reason to refuse a conformant token.
+
+**Two adjacent fixes, same function.** **BCL-W3**: an unset `JWKS_URI` threw into the catch-all that answered
+`400 invalid_request`, blaming the sender for our misconfiguration. It is now **500**, and the check runs
+*before the token is read* — stronger than the work item asked, and deliberately: **a server that cannot
+verify a signature must not render any verdict on the token, not even a true one.** So the "no events claim"
+case became a 500 too, which is honest rather than sloppy. **BCL-W7**: `Cache-Control: no-store` (§2.8),
+set before any branch so it is on the 400 and 500 paths as well.
+
+**Curriculum — Module 08 Exercise 6c was already teaching all three of these defects**, so it was rebuilt
+rather than patched: the transcript now shows the fixed statuses, and the prose walks the before/after and
+the rule (*map a failure to the party that can fix it*). **It also carried a spec error that is now
+corrected** — it claimed `jwt.verify` checks "no `issuer`, no `audience`, no `exp`". It checks `exp` by
+default; the audit's own normative table said so and the lab contradicted it. Knowing which checks a library
+gives you free and which it does not is the entire skill the exercise is teaching.
+
+**Recorded, not fixed.** `JWT_ISSUER` is set to `https://blackadi.dev/` — **with a trailing slash** — while
+the live issuer is `https://blackadi.dev` without one. It feeds `reqBody.iss` at
+`token.management.controller.ts:266` (the dev JWT), so a consumer comparing that `iss` against the discovery
+document would fail. It belongs with **9068-W2** in T1-19. It also sharpens T0-2's note, which recorded
+`JWT_ISSUER` as merely *unset*: it is set, and wrong.
+
+### 2026-08-13 — B1-W1, B1-W2, MS-W1 (= 9701-W1): the ticket leak and the last live 500
+
+**Why this matters to a future session:** **`/api/jar/process` was unauthenticated and returned Authlete's
+entire authorization response — including the `ticket`.** A ticket is a credential: whoever holds one can
+drive an authorization to completion. It also returned the full `service` configuration and the `client`
+object, and answered **200 for everything**, including `BAD_REQUEST`. It now requires admin Basic auth and
+returns an allowlist. Separately, **`Accept: application/token-introspection+jwt` returned 500** — the only
+live 500 among the FAPI 2.0 Message Signing requirements — and now returns a signed RFC 9701 JWT.
+**684 tests / 59 files.**
+
+**A correction I owe this log.** The plan for this batch asserted that `standardProcess` sends `{parameters}`
+alone and therefore could never reach `action: JWT`. That was wrong — I had read only the first 80 lines of
+`introspection.service.ts`; it has forwarded `httpAcceptHeader` and `rsUri` all along. The real defect was one
+missing `case` in the controller. The fix got **smaller** than planned, and the lesson is the ordinary one:
+read the whole function before describing what it does.
+
+**What `/api/jar/process` returns now.** An **allowlist** — `action`, `resultCode`, `resultMessage`,
+`responseContent`, `scopes` — not a denylist, so the next field the SDK adds cannot leak by default:
+
+| | Before | Now |
+|---|---|---|
+| no credentials | 200, full response **including `ticket`** | **401**, Authlete never called |
+| bad request object | **200** with `action: BAD_REQUEST` | **400**, `[A005328]` in `resultMessage` |
+| `ticket` / `service` / `client` | returned | **never returned** |
+
+**The work item said `action` + `responseContent` only. I kept `resultMessage` and `scopes` on purpose**, and
+the reason generalises: **this endpoint has no specification shape.** No RFC defines `/api/jar/process` — it is
+this repo's own debugging surface. So "return `responseContent` as the body", which is the right answer for
+PAR and Device, is not even a meaningful instruction here. What B1-W1 is actually about is the credential leak
+and the always-200. `resultMessage` and `scopes` are the endpoint's entire pedagogical value — they are how
+Module 05's lab shows *why* a request object was refused — and they are not secrets. **When a work item
+prescribes a shape, check whether the endpoint has one.**
+
+`responseContent: null` is deliberately kept too. On a debugging surface, *"Authlete returned no content"* is
+a fact worth seeing — it is precisely what made T1-7's `NO_INTERACTION` branch mislead everyone for months.
+
+**Auth posture: admin, not client.** Client authentication was considered and rejected for the same reason
+T1-1 recorded for introspection (**7662-W6**): nothing here can validate a client secret, so demanding one
+would look like protection and provide none. The gate runs **before** the Authlete call. **This settles a
+DR-12 dependency** — `jar.controller.ts` now makes an access-control decision, so it joins the
+Security-critical surfaces list, alongside `middleware/require-basic-auth.ts`.
+
+**RFC 9701 — reachable, conformant, and with a trap on either side.** Verified end to end:
+
+```
+Accept: application/token-introspection+jwt  +  rsUri
+  -> 200  Content-Type: application/token-introspection+jwt
+  -> {"alg":"RS256","typ":"token-introspection+jwt","kid":"rsa-1"}
+     claims: iss, aud, iat, token_introspection
+```
+
+**It signs with `rsa-1`, the key T1-2 registered.** Before 2026-08-12 the service had no RSA key, so this path
+could not have produced a signature even once handled — one configuration action quietly made a later code fix
+possible.
+
+Two things about `rsUri`, and they point in opposite directions:
+
+1. **Without it the JWT form fails**, `[A404301] The URI of the resource server is required when a JWT
+   introspection response is requested.` That 400 is **passed through unchanged**, deliberately: `rsUri`
+   becomes the `aud`, naming the resource server that asked, and this server has no honest way to guess which
+   one that is. Defaulting it would put a wrong `aud` on a token this OP signs.
+2. **It must not be sent on the ordinary path.** The vendored 3.0.16 spec: *"If the `rsUri` request parameter
+   is given and the token has audience values, Authlete checks if the value … is contained in the audience
+   values. If not contained, Authlete generates an introspection response with the `active` property set to
+   `false`."* An unconditional `rsUri` would therefore report audience-restricted tokens as **inactive** —
+   a silent, wrong "this token is dead". The parameter is caller-supplied and stays that way.
+
+**Two more hand-rolled auth readers retired.** `controllers/vci.controller.ts` had a fourth `startsWith("Bearer ")`
+— its credential endpoints are protected resources, so they now use `extractAccessToken()` and accept the
+`DPoP` scheme and case-insensitive schemes, both previously refused. And `middleware/require-basic-auth.ts`
+matched `"Basic "` case-sensitively while its sibling `parseBasicAuth` never did; RFC 9110 §11.1 makes the
+scheme case-insensitive, and the fix is strictly widening — it can only accept requests that should already
+have been accepted.
+
+**Deferred with a reason, not dropped.** T1-11's `responseContent`-as-body half for **PAR, Device and DCR**
+(9126-W2, 8628-W3, 7591-W1) is scheduled as its own batch. The premise is probe-confirmed — PAR returns
+exactly `{"expires_in":600,"request_uri":"urn:…"}` and Device exactly RFC 8628 §3.2's shape — but the change
+**breaks the client SPA**, which reads camelCase envelope fields (`ParSection.tsx:112`,
+`DeviceSection.tsx:159-160`). Server, SPA and lab transcripts belong in one commit; mixing them with a
+credential-leak fix would make both harder to review.
+
+### 2026-08-13 — T1-9, T1-10, 6749-W1: the token-presentation cluster
+
+**Why this matters to a future session:** **`/api/gm/:grantId` is now a protected resource in the same sense
+UserInfo is**, and the two answer identically because both route every presentation through
+`utils/dpop.ts`. Before today a DPoP-bound token could not be spent there *at all*, while `Bearer` plus a
+proof was accepted — wrong in both directions at once. Separately, **every `htu` in the server now comes from
+`dpopHttpTarget()`**, so a DPoP proof no longer fails on any request carrying a query string. Four files on
+the Security-critical surfaces list changed, so this went through plan mode. **665 tests / 58 files.**
+
+**The headline is not the code, it is that two probes rewrote the design before a line was written.**
+9449-W3's acceptance criteria describe one file. They are incomplete, and shipping them literally would have
+produced a bug:
+
+| Probe | Result | Consequence for the design |
+|---|---|---|
+| `/gm` with a bound token and **no** forwarded proof | `UNAUTHORIZED` — `[A281305] The access token is bound to a public key but the grant management request includes no DPoP header.` | `/api/gm` makes **two** Authlete calls and **both** check the binding. Fixing only the middleware moves the 401 one call later. `grant-management.service.ts` had to change too |
+| the **same** proof sent to `/auth/introspection` and then `/gm` | both `OK` | One proof serves both calls; no re-minting, and Authlete does not treat the second use as a replay |
+
+That is the third time in this phase that a symptom-derived work item named an incomplete or wrong remedy —
+after B1-W6 (wrong API) and T1-13 (no knob). **The tell each time was the same: the acceptance criteria never
+named the second call.** When an item says "fix the middleware", ask what the middleware is a gate *in front
+of*.
+
+**What `/api/gm` answers now**, all six verified live against Authlete, not only against mocks:
+
+| Presentation | Before | Now |
+|---|---|---|
+| `DPoP <bound>` + proof | `401` — the endpoint was unreachable for bound tokens | **200** |
+| `Bearer <bound>` + proof | accepted, proof honoured — the §7.2 downgrade | **400 `invalid_request`** |
+| `DPoP <bound>`, no proof | `401 invalid_token`, *"invalid or expired"* | **401 `invalid_dpop_proof`** |
+| no token | `401 invalid_token`, *"invalid or expired"* | **401, no error code**, `WWW-Authenticate: Bearer, DPoP` |
+| `Bearer <bound>`, no proof | `401` from Authlete | unchanged — `[A065308]`, forwarded verbatim |
+| proof signed by another key | `401` | unchanged — `[A065309]` |
+
+**The two old messages were both lies, and that is worth more than the status codes.** A missing token is not
+an "invalid or expired" token — there was no token to judge. RFC 6750 §3.1 says so directly: when a request
+carries no authentication information the server *"SHOULD NOT include an error code"*. And a client that used
+the `DPoP` scheme without a proof was told its token was expired, which sends a developer to look at token
+lifetimes instead of at the header they forgot. **A wrong diagnosis costs more than a missing one.**
+
+**`htu` (T1-9).** Five call sites built it inline as `` `${protocol}://${host}${req.originalUrl}` `` —
+`originalUrl` includes the query string, and RFC 9449 §4.2 requires `htu` **without** query or fragment. So
+any DPoP request with a query string failed proof validation while the client was entirely correct. All five
+now call `dpopHttpTarget()`. Proven, not assumed: `GET /api/gm/{id}?verbose=true` with a valid proof returns
+**200**. `targetUri` is sent only where the SDK model has the field — `IntrospectionRequest` and
+`UserinfoRequest` yes, `TokenRequest`/`PushedAuthorizationRequest`/`GMRequest` no — checked in the models
+rather than inferred from the endpoint's importance.
+
+**9449-W2 rode along and is the quiet security fix.** `introspection.service.ts` read `targetUri` **from the
+request body**, so a caller could choose the URI its own proof was validated against — the identical defect
+already closed at UserInfo, where a proof minted for `/api/par` had returned `200`. The read is deleted, and
+a comment now names the reason so it is not restored by someone tidying up.
+
+**6749-W1 — enforced, after the probe removed the escape hatch.** RFC 6749 §2.3.1: *"The client MUST NOT use
+more than one authentication method in each request."* The work item allowed for "no code change if Authlete
+already rejects". **It does not**: a request with correct top-level credentials and a **wrong** body
+`client_secret` is accepted and a token issued, because the top-level channel wins. Authlete's strict-checking
+page turned out to govern only *method matching* and to say nothing about presenting both. So the rule is
+enforced here or nowhere, and it is now enforced at `/api/token` **and** `/api/par` — the latter because
+RFC 9126 §2 gives PAR the token endpoint's client authentication, and exempting it would have rebuilt the very
+inconsistency being removed.
+
+Two details in that check are deliberate. **A bare `client_id` beside a Basic header is not a second
+method** — §2.3.1's methods differ in where the *secret* travels, and a public client legitimately sends
+`client_id` alone; there is a negative-control test and a live check for it. And **the check runs before any
+Authlete call**, the same gate-before-call arrangement T1-1 used for introspection.
+
+**The mechanism correction is the part to carry forward.** `RFC6749-…` F-1 said this server resolves the
+conflict — *"Basic silently wins"* — quoting the `clientId`/`clientSecret` assignment. It does not. That
+assignment sets only the **top-level** fields, while `parameters` is preferentially `req.rawBody`, so body
+credentials reached Authlete untouched and **both channels genuinely crossed the boundary**. Same outcome,
+wrong layer. This is the **third** consequence of one design choice, after raw-body fidelity for signatures
+and the RFC 9700 §4.2.4 credential leak where the exclusion list never ran on the live path. **Rule: when a
+finding in `token.service.ts` or `revocation.service.ts` quotes a variable assignment, check what actually
+goes on the wire.**
+
+**T1-21 declined rather than deferred.** Forwarding the attestation headers at PAR is correct code on a path
+that is unreachable **by construction** — T1-5 withdrew `ATTEST_JWT_CLIENT_AUTH` and `challenge_endpoint` is
+absent, so no client, and no test, can ever exercise it. It attaches instead to T1-5's existing re-add
+trigger. The cross-reference in its own row was also wrong: it does not gate `9126-W4`, which was merged into
+`9449-W1` and shipped here.
+
+**Curriculum.** Module 10's lab transcript for `-- no token --` changed, so it was updated **and taught**:
+the `curl` now prints the status line and `WWW-Authenticate` rather than a body, followed by a short section
+on why an empty error beats a wrong one, and on the `Bearer`/`DPoP` pairing. `AGENTS.md` gains the
+two-protected-resource framing, the "forward the proof to *every* Authlete call" rule, the three fail-closed
+error codes, and the dual-channel bullet. `docs/GRANT-MANAGEMENT.md` and `docs/API.md` gain the scheme table
+and the revised error rows; the OpenAPI document now lists `dpopAuth` on both `/gm` operations.
+
+**One finding recorded, not fixed.** `controllers/vci.controller.ts:8` is a **fourth** hand-rolled bearer
+parser, `Bearer`-only and case-sensitive. No work item covers it, and VCI credential endpoints accept access
+tokens — so it is plausibly the same §7.1 gap this change just closed twice. Left out to keep the batch
+reviewable; it belongs in the next one.
+
+### 2026-08-12 — T1-17: five unprobed behaviours, five answers, and no code owed
+
+**Why this matters to a future session:** T1-17 was the only Tier 1 item that could **delete** work, and it
+did. Five behaviours nobody had ever run now have transcripts. **No source file changed.** Every probe ran
+against Authlete directly — so the answers describe the *vendor*, not this server's wrapper — except the last,
+which was deliberately run through the server as well, because that is where its acceptance criteria pointed.
+
+| # | Question | Answer | Consequence |
+|---|---|---|---|
+| **8628-W6** | Is the literal `USER_CODE` substituted in `deviceVerificationUriComplete`? | **Yes** | The "drop the field or template it correctly" branch never opens |
+| **7523-W1** | Is a JWT-bearer assertion with **no `exp`** accepted? | **No** — `[A314305]` | **7523-W2 is belt-and-braces, not a gap** |
+| **9449-W4** | Does `/auth/introspection` enforce `cnf.jkt` when **no** proof is sent? | **Yes** — `[A065308]` | **9449-W3 stays S2. T1-10 is not escalated** |
+| **6749-W1** | Does Authlete reject dual-channel client credentials? | **No** — and the top-level channel wins | A ruling, not a defect. See below |
+| **GM-W2** | Does the grant-management *authorization* side work? | **Yes, end to end** | **Documentation only (GM-W5); no code** |
+
+**8628-W6 — substituted, and the response is already RFC-shaped.** One `/device/authorization` call with the
+public client returned `verificationUriComplete = https://…/device?user_code=TDSHHXCP` against a configured
+template ending `?user_code=USER_CODE`. The placeholder is real templating, not a literal. Worth more than the
+work item asked: the same response's `responseContent` is
+`{"device_code":…,"user_code":…,"verification_uri":…,"verification_uri_complete":…,"expires_in":600,"interval":5}`
+— **exactly RFC 8628 §3.2's snake_case shape**. That is direct corroboration for **8628-W3** in T1-11: returning
+`responseContent` verbatim does not merely tidy the wire format, it produces the conformant body outright.
+
+**7523-W1 — Authlete requires `exp`, so the gap was hypothetical.** `RFC7523-…` F-1 named two possibilities
+and declined to guess between them. It is the first: an assertion carrying `iss`, `sub`, `aud`, `iat`, `jti`
+and a valid HS256 signature is refused with `action: BAD_REQUEST` and
+`[A314305] The JWT specified by the 'assertion' request parameter does not contain the claim 'exp'.`, served as
+`error: invalid_grant`. The control — the same assertion plus `exp` — returns `action: JWT_BEARER` and proceeds.
+So **§3(4)'s presence requirement is met by the vendor, before `/jose/verify` is ever called**, and
+`mandatoryClaims: ["iss","sub","aud"]` omitting `exp` never had the consequence F-1 feared. **7523-W2 survives
+only as defence in depth**, and whoever picks it up should say so rather than describe it as closing a hole.
+`[A314305]` is a **sixth error code Module 06 Exercise 4's table does not have** — that is where the transcript
+belongs, and it is now a runnable row rather than a predicted one.
+
+**9449-W4 — the binding holds with no proof, so the S1 escalation does not happen.** This is the one that
+gated another item's severity, and it resolves in our favour. Minting a DPoP-bound token
+(`client_credentials` + a proof; `token_type: DPoP` confirms the binding), then introspecting it three ways:
+
+| Presentation | `action` | Message |
+|---|---|---|
+| correct proof (control) | `OK` | `[A056001] The access token is valid.` |
+| **no `dpop` at all** | **`UNAUTHORIZED`** | **`[A065308] Expected a DPoP header but none was provided.`** |
+| proof signed by a different key | `UNAUTHORIZED` | `[A065309] Thumbprint of the provided DPoP key does not match the expected DPoP thumbprint.` |
+
+`RFC9449-…` F-2's case 3 — *"whether Authlete's `/auth/introspection` still enforces the `cnf.jkt` binding is
+unknown"* — is closed: **it does, and it fails closed.** A stolen bound token presented as a plain `Bearer` at
+`/api/gm/*` does **not** work, so sender-constraint is not defeated there and **F-2 stays S2**. This is the
+same posture as UserInfo under a different code (`[A065308]` here, `[A089311]` there), and the challenge
+Authlete returns already carries the `DPoP` scheme plus an accurate `algs` list — so `AGENTS.md`'s existing
+rule (*forward `responseContent` verbatim; do not hand-write a DPoP challenge where Authlete answers*) applies
+to this endpoint too. The `UNVERIFIED` comment at `middleware/require-grant-ownership.ts:64` can now be deleted
+rather than re-dated, and **T1-10 remains a conformance fix, not a vulnerability fix.**
+
+**6749-W1 — the vendor does not reject dual channels, and this server does not collapse them either.** Three
+calls to `/auth/token` with credentials on **both** channels at once (top-level `clientId`/`clientSecret`, the
+shape an AS derives from `Authorization: Basic`, plus `client_id`/`client_secret` inside `parameters`):
+
+| Top-level | In `parameters` | Result |
+|---|---|---|
+| correct | correct | `OK` — token issued |
+| correct | **wrong** | `OK` — token issued. The body secret is simply ignored |
+| **wrong** | correct | `INVALID_CLIENT` — `[A157305] The client secret presented by the client does not match the expected one.` |
+
+So §2.3.1's *"The client MUST NOT use more than one authentication method in each request"* is unenforced at
+**both** layers, and Authlete's precedence is top-level-wins — identical to what `AGENTS.md` documents for this
+server. Authlete's [strict-checking page](https://developers.authlete.com/configuration-reference/endpoints/strict-checking-on-client-authentication-parameters)
+was fetched and is **silent on the question**: it governs *method matching* (*"Authlete version 2.0 and later
+strictly check client type and client authentication method settings"*), says nothing about presenting both,
+and states no precedence rule. The probe is therefore the authority, not the page.
+
+**And the probe corrected the finding's mechanism.** `RFC6749-…` F-1 says this server resolves the conflict —
+*"Basic silently wins"*, quoting the `clientId`/`clientSecret` assignment. It does not. `parameters` is
+preferentially **`req.rawBody`** (`token.service.ts:42`), so body-supplied `client_id`/`client_secret` are
+forwarded to Authlete **untouched**; the `excluded` set that drops them runs only on the JSON fallback path.
+This server therefore *emits* the dual-channel request I probed, and **Authlete** picks the winner. Same
+observable outcome, different layer — and it is the **third** consequence of one design choice, after raw-body
+fidelity for signatures and the RFC 9700 F-1 credential leak. **Rule: when a finding quotes a variable
+assignment in these two services, check what actually goes on the wire — `rawBody` bypasses the assignment.**
+The decision left for Gate 4 is unchanged in substance but narrower in scope: **reject dual presentation
+locally with 400 `invalid_request`, or document Basic-wins as inherited vendor behaviour.** Rejecting is the
+only option that makes this server *stricter* than Authlete rather than merely agreeing with it.
+
+**GM-W2 — the whole authorization side already worked; nobody had tried it.** `GRANT-MANAGEMENT.md` F-2
+predicted this ("*this is very likely a documentation and verification gap*") and the prediction was right.
+Four calls, no browser, no code change:
+
+1. `/auth/authorization` with `grant_management_action=create` in `parameters` → `action: INTERACTION` + ticket.
+2. `/auth/authorization/issue` (subject `admin`) → `LOCATION` with a code.
+3. `/auth/token` → `action: OK`, and the response body carries **`grant_id`** alongside
+   `access_token, token_type, expires_in, scope, refresh_token, id_token`. **§5.5 is satisfied**, and
+   `token.controller.ts:52` forwards `responseContent` verbatim, so it is satisfied *through this server* with
+   no work at all.
+4. `POST /gm` with `gmAction: QUERY` → `[A277001]` and `{"scopes":[{"scope":"grant_management_query openid"}]}`.
+
+Then the half the acceptance criteria actually named — **`GET /api/gm/{grant_id}` through this server**, which
+is the first time `requireGrantOwnership` has ever been exercised against a real grant-bearing token:
+
+| Request | Result |
+|---|---|
+| correct grant + `Bearer` | **200** with the grant document |
+| wrong grant id + the same token | **403** `access_denied` — *"The access token is not associated with the requested grant"* |
+| `DPoP` scheme, same (unbound) token | **401** `invalid_token` — *"Access token is invalid or expired"* |
+
+The third row is **9449-W3/F-2 case 1 reproduced on demand**, and it exposes something the finding did not
+name: the refusal message is **wrong about why**. The token is neither invalid nor expired — the extractor did
+not recognise the scheme. When T1-10 lands, that string is part of the fix, not just the `startsWith("Bearer ")`
+check above it. **GM-W2 is closed and GM-W5 is confirmed as pure documentation**: `docs/GRANT-MANAGEMENT.md`
+and Module 10 record that all five advertised actions are real, that three of them need no AS code, and that
+the grant query works end to end.
+
+**Two things found in passing, both cheap and both worth keeping.**
+
+**The issuer/host mismatch is live and visible in one call.** `/service/configuration` reports
+`issuer = https://blackadi.dev` while `token_endpoint = https://cecile-soapsudsy-zoila.ngrok-free.dev/api/token`.
+That is **DR-11 / 8414-W1 / 8414-W2** observed rather than inferred, and it is why the JWT-bearer `aud` in the
+probe had to be `https://blackadi.dev` — a reader following Module 06's lab against the tunnel host would fail
+with `[A314314]` and have no idea why.
+
+**The vendored 3.0.16 spec's `/gm` request schema is internally inconsistent.** It declares
+`required: ["token"]` while its properties define `accessToken` and no `token` at all. Harmless — the SDK
+models the properties, and the call works — but it is a second instance of the standing rule that **Authlete's
+schema predicts nothing**, this time within a single object.
+
+**What this leaves.** T1-17 is complete; **all five results are recorded whichever way they came out**, which
+was the point. Net effect on the plan: 7523-W2 downgraded to defence-in-depth, 9449-W3 held at S2, GM-W2
+closed, GM-W5 confirmed documentation-only, 8628-W6 closed with no follow-up, and 6749-W1 reduced to a
+one-line Gate 4 ruling with both options costed.
+
+### 2026-08-12 — B1-W6: the `ID_TOKEN_REISSUABLE` branch was calling the wrong API
+
+**Why this matters to a future session:** **`idTokenReissuable` is now `true` and it stays true.** A refresh
+request carrying `openid` returns **200 with a reissued `id_token`**, where until today it returned **400
+carrying a valid token body**. `token.controller.ts` and `token.operations.service.ts` are both on the
+Security-critical surfaces list, so this went through plan mode.
+
+**The finding is about the work item, not just the code.** B1-W6 was written from the symptom — *"it requires a
+`ticket` Authlete does not send"* — and its acceptance criteria followed: *"the branch issues from the fields
+Authlete actually sends."* That reads as *call `/auth/token/issue` with better arguments*, and **no arrangement
+of arguments to that API would ever have worked**, because it is the ticket-consuming API and this action has no
+ticket. There is a dedicated one, and the vendored 3.0.16 spec is explicit: `POST /idtoken/reissue`, *"expected
+to be called only when the value of the `action` parameter in a response from the `/auth/token` API is
+ID_TOKEN_REISSUABLE"*. **The repo already wrapped it** — `TokenManagementService.reissueIdToken()`, written for
+the admin route — so the fix reached for an existing method and widened its signature rather than adding one.
+
+Set this beside probe §15's lesson. *Handled*, *exercisable* and *correct* were three different claims; so were
+***the fields are wrong*** and ***the API is wrong***. A symptom-derived work item can name a remedy that
+cannot work, and the tell was available all along: the acceptance criteria never said which endpoint.
+
+**What `/auth/token` actually sends on this action**, read directly from Authlete rather than through the
+server, because that is the only way to be sure what the branch has to work with:
+
+| Field | Value |
+|---|---|
+| `ticket` | **ABSENT** — the whole defect |
+| `subject` | `"admin"` |
+| `accessToken`, `refreshToken` | present |
+| `jwtAccessToken`, `idToken` | ABSENT |
+| `responseContent` | `access_token`, `token_type`, `expires_in`, `scope`, `refresh_token` — **no `id_token`** |
+
+**Three decisions worth knowing, in descending order of how easily they are undone.**
+
+**1. `idTokenAudType` had to be sent, and it is a trap.** The reissue *request* has its own, and the spec says
+it *"takes precedence over the `idTokenAudType` property of Service"* and **defaults to `"array"` on
+omission**. T1-4 set the service to `"string"` deliberately (Mistake #7 / FAPI WG Nov 2024). Omitting the
+parameter would have produced array-`aud` ID tokens **on exactly one code path** while every other ID token
+here stayed a string — a configuration decision silently reversed for one call site, and nothing would have
+failed. It is sent from a named constant that says it must move with the service flag. Verified live: string.
+
+**2. A failed reissue returns 200 with the tokens Authlete already issued**, logged at `error`. The access and
+refresh tokens exist by the time this action arrives, and no specification requires an `id_token` on a refresh,
+so enabling a flag must not break a refreshing client on a server-side fault. This is safe *because*
+`responseContent` carries no `id_token` — the degrade path cannot return a stale one, which is the fact that
+had to be checked before choosing it. Deliberately different from `token.management.controller.ts`'s 400/500
+mapping, where the caller asked to reissue and has no tokens riding on the answer.
+
+**3. Every field is server-derived.** `sub` comes from `result.subject`, the tokens from the Authlete response,
+and **nothing from `req.body`** — a client able to set `sub` could name any subject in an ID token this OP
+signs, and `claims`/`idtHeaderParams` would let it choose the payload and the JWS header. Locked by a test that
+puts an attacker's `sub`, tokens and claims in the body and asserts none of them reach the call.
+
+**Verified live, and one claim deliberately left open.** Authorization-code flow with `openid offline_access`,
+then a refresh: 200, `id_token` present, `aud` a **string**, `sub`/`iss`/`acr` unchanged, `iat` and `exp`
+advancing — checked against a deliberate **4-second gap**, because a same-second refresh proves nothing about
+freshness — and `auth_time` correctly holding the **original** authentication time. The reissued token **drops
+`nonce` and `s_hash`**. Whether dropping `nonce` conforms to **OIDC Core §12.2 is `UNVERIFIED`**: that section
+was not fetched for this change, and the behaviour is Authlete's either way. Named next action rather than a
+guess — and note that ROPC is a dead end for testing this, because Authlete strips `openid` from the password
+grant, so the action is only reachable through a real code flow.
+
+**Verification.** `typecheck` clean · `lint` 0 errors / 4 pre-existing warnings · **644 tests / 58 files**
+(was 635) — six controller cases including the body-injection regression, three service cases covering both
+argument shapes. `check-docs.mjs` clean. Consumers updated in the same commit: `AGENTS.md` (the action-coverage
+table row was wrong, plus a new note), `docs/DATA-FLOWS.md`'s flow diagram (it named `/auth/token/issue` with a
+ticket), `B1-authlete-boundary.md` (**F-9**, new), `SERVICE-CONFIG-PROBE.md` §2/§3.3/§20, `OIDC-CORE-1.0.md`
+(**OIDC-W5 closed**), the plan's T1-4 row and `RESUME.md`.
+
+### 2026-08-12 — T1-5: the enum gap is closed, and T1-13 turned out to have no knob
+
+**Why this matters to a future session:** **`authleteApi.service.get()` works.** `GET /api/fapi/config` and
+`GET /api/fapi/status` return **200** with live values for the first time since 2026-08-06 — so the two
+`fapi.controller.ts` call sites, Module 10 Exercise 4, and every document describing them have all changed
+together. And **T1-13 is closed as unachievable rather than shipped**: `none` cannot be withdrawn from the
+UserInfo or introspection signing-algorithm lists, because no Authlete 3.0 service field controls either one.
+
+**The ruling that gated this.** DR-07 asked whether to drop `SPIFFE_JWT`, whose only cost was retiring a
+working exercise. It was **approved with the curriculum rebuilt in the same commit**, and approved *after* a
+read-only proof rather than on the mechanism — which is the part worth copying. The proof: one raw-HTTP
+`service/get`, then filter the member out **in memory** and run the SDK's own
+`Service$inboundSchema.safeParse` in-process. No write, no curriculum edit, and a definite answer.
+
+**Four things the proof established that six documents had wrong or missing.**
+
+| | Recorded belief | Measured |
+|---|---|---|
+| how many fields | "the whole **129**-field response" | **132** — the Tier 1 writes added three, and nine documents still said 129 |
+| how many Zod issues | never captured; only `message: "Response validation failed"` | **exactly one**, at `supportedTokenAuthMethods.8`. Zod aggregates issues, so *one* is itself proof that nothing else in 132 fields fails |
+| which fields carry the gap | `supportedTokenAuthMethods` | **three** — `supportedRevocationAuthMethods` and `supportedIntrospectionAuthMethods` share the enum. Both absent here, so the drop was one field; set either and it breaks again |
+| is anything else waiting to break | unknown | **no.** Of 16 enum-typed fields reachable from `Service`, the other 15 match Authlete 3.0.16 member-for-member, and no field is Authlete-nullable while the SDK refuses null |
+
+**The write, and the surprise in it.** `supportedTokenAuthMethods` went from nine members to five —
+`SPIFFE_JWT` plus the three the ruling withdrew (`TLS_CLIENT_AUTH`, `SELF_SIGNED_TLS_CLIENT_AUTH`,
+`ATTEST_JWT_CLIENT_AUTH`). Written by read → patch → write-all → read-back → key-by-key diff, as every write
+in this audit is: **132 → 132 fields, two keys moved** (`supportedTokenAuthMethods`, `modifiedAt`). The
+surprise was downstream: discovery went **64 → 62 members**, because withdrawing attestation also removed
+`client_attestation_signing_alg_values_supported` and its `_pop_` sibling. **One withdrawal removed three
+advertisements** — those two members exist only to describe that method. Note the 62 is not the audit's
+earlier 62: that one lacked `acr_values_supported` and `authorization_details_types_supported`, which T1-6
+added and which are still there.
+
+**The asymmetry worth carrying into any SDK work.** The schema models **185** of Authlete's **193** service
+properties and *silently strips* the 8 it does not know (`z.object` default, no `.strict()`), while one
+unknown **value** in a modelled field is fatal. Tolerant of new fields, brittle about new values — so any
+client-auth method Authlete ships is a breaking change for every TypeScript SDK caller whose service enables
+it. Authlete's own OpenAPI document declares `SPIFFE_JWT`: **the vendor's specification is ahead of the
+vendor's SDK**, so nothing was misconfigured. The authorization server was asked to stop advertising a real
+capability so a client library could read its configuration, and that cost belongs in the report.
+
+**CIMD-W3's premise was false, and that is a one-line fix.** `fapi.controller.ts` read
+`clientIdMetadataDocumentSupported` through `(service as Record<string, unknown>)`, recorded as an SDK gap.
+SDK 1.0.0 models the field in **both** the `Service` type and `Service$inboundSchema`. Typed access now, with
+a comment saying so.
+
+**T1-13: `none` is fixed vendor output.** The work item said *"drop `none` from
+`userinfo_signing_alg_values_supported` and `introspection_signing_alg_values_supported` — console change"*.
+There is no such console setting: **no Authlete 3.0 `Service` property lists either set of algorithms.** They
+are derived from the service JWK Set, and `none` is unconditional — Authlete's own `service/configuration`
+example in `docs/openapi-spec.json` carries it too. Established by *writing* the only candidates
+(`userInfoSignatureKeyId`, `introspectionSignatureKeyId` → `rsa-1`) rather than by reading the schema: both
+lists changed, losing `ES256` because pinning the RSA key drops the EC key as a candidate, and **`none`
+survived both**. Reverted; only `modifiedAt` moved. This is **RPL-W4's shape a second time** — a work item
+naming a knob the vendor does not have — and the sharper reading is that the advertisement is *accurate*:
+`Client.userInfoSignAlg` accepts `NONE`, so an unsigned UserInfo response is a real selectable outcome, and
+for introspection there is no client-side field at all, so the list describes the default unsigned response.
+**JOSE-W2 and MS-W3 become documentation items.**
+
+**Curriculum and docs, in the same commit** (`AGENTS.md`'s rule, and DR-07 said so explicitly): Module 10
+Exercise 4 **rebuilt, not retired** — it now walks *three* answers to one request (invisible 200 → honest 500
+→ live data) and lands on the closed-enum lesson, with the withdrawal verifiable in one `curl`; Exercise 7's
+finding 4 changed from *"the endpoints fail"* to *"they under-report"* (six of eight §5.3.2.1 requirements,
+and `dpopEnabled` is really `dpopNonceRequired`); the module README's capability table; `quiz-answers.md` Q12
+(the two defects now have two dates); `AGENTS.md` (the `service.get()` note, a new bullet on the five
+advertised methods, the PAR attestation gap, and the T1-13 finding); `docs/FAPI-TUTORIAL.md` Part 5 and
+Part 7. **`AGENTS.md`'s claim that this is "an SDK enum gap, not a config error" was true and is now
+historical.**
+
+**One drift found by the §7.4 grep.** `FAPI-TUTORIAL.md`'s Part 7 troubleshooting entry still said the
+endpoints *"return HTTP 200 with that error body"* — stale since the 2026-08-11 status clamp, which updated
+Part 5 and missed Part 7. Same class as the Module 10 miss that produced CUR-3b-W2: **the fix updated the
+place that explained the defect and not the place that helped you diagnose it.**
+
+**Verification.** `typecheck` clean · `lint` 0 errors / 4 pre-existing warnings · **635 tests / 58 files,
+unchanged** — no test asserts the broken shape, because `fapi.routes.test.ts` mocks `service.get()` and has
+always exercised the working path. `check-docs.mjs` clean. Endpoints confirmed live, not inferred.
+
+### 2026-08-12 — T1-4 + T1-6: four labs completed, and two changes deliberately not kept
+
+**Why this matters to a future session:** **Module 09a has no `UNVERIFIED` markers left**, and each was
+retired by *running the success path*, not by asserting it. Two intended changes were applied, verified and
+then **reverted on purpose** — both reversions are the finding, not a failure.
+
+**Service configuration now** (`supportedAcrs` and the RAR type are new; discovery went 62 → **64** members):
+
+| Field | Value | Note |
+|---|---|---|
+| `accessTokenDuration` / `idTokenDuration` | **86400** | shortened to 3600, verified, **reverted** — see below |
+| `refreshTokenDuration` | 864000 | untouched |
+| `idTokenAudType` | **`"string"`** | new. ID-token `aud` is a bare string where it was `["…"]` |
+| `idTokenReissuable` | **false** | set true, **broke the refresh grant**, reverted — see below |
+| `supportedAcrs` | **`["pwd","mfa"]`** | new |
+| `supportedAuthorizationDetailsTypes` | **`["payment_initiation"]`** | new |
+| client `1523514379` | `authorizationSignAlg: ES256`, `bcDeliveryMode: POLL`, `authorizationDetailsTypes: [payment_initiation]` | new; 48 → 51 fields, no collateral change |
+
+**The four labs, each with a live transcript now in `modules/09a…/lab.md`:**
+
+- **JARM** — `response_mode=query.jwt` returns **one** query parameter carrying `{aud, state, code, iss, exp}`,
+  ES256, signed with the service's `kid: "1"` and verified against the published JWKS. Its `exp` is **600 s**,
+  not the deployment's 86400: the response JWT is a transport wrapper and is bounded like one.
+- **CIBA** — the whole poll sequence. `NO_ACTION` **is** success in poll mode; `authorization_pending` is a
+  **400**, so a polling loop must not treat 400 as terminal; and the `auth_req_id` is **single-use**, which
+  answers Exercise 3d's standing question.
+- **ACR** — both halves. `acr_values=pwd` succeeds and reaches the ID token *and* introspection; an
+  **essential** `mfa` is refused with `unmet_authentication_requirements` `[A060305]` and **no code issued**.
+  `mfa` was registered *because* nothing can satisfy it — an unregistered value fails earlier, for a different
+  reason, and would demonstrate a different lesson.
+- **RAR** — the round trip works, and **Exercise 5a's control had to be re-pointed**: its "unknown type" case
+  used `payment_initiation`, the very type 5b now registers, so it would have quietly become a success. A
+  control that has stopped being a control is worse than no control. It now uses `account_information`.
+
+**Two reversions, and why each is the right outcome:**
+
+1. **The 24-hour lifetime stays, deliberately.** `accessTokenDuration` → 3600 was applied and verified
+   (`expires_in: 3600`, ID-token life 3600). Then the blast radius was enumerated: **~55** deployment-specific
+   references, and two of them are *arguments*, not transcripts — **Module 07's audit lab** ranks the 24-hour
+   lifetime as finding (iv), and **Module 10's thesis** (*individually acceptable settings combine into a
+   defect*) uses the 24-hour token × the grant-revocation SHOULD-gap as its worked example. At one hour both
+   largely evaporate. So **GM-W1 and FAPI1-W3 stay open by decision**, recorded here rather than silently, and
+   OIDC-W4 closes on its *"record it as a deliberate teaching choice"* branch. The write is proven and
+   reversible; re-doing it is one field plus the documentation pass.
+2. **`idTokenReissuable` uncovered a broken handler.** Setting it `true` made the `ID_TOKEN_REISSUABLE` action
+   reachable for the first time — and the branch is wrong. Authlete sends that action with `subject` and a
+   complete `responseContent` but **no `ticket`**; `token.controller.ts:157-163` guards on `if (!ticket)` and
+   falls through to `res.status(400).send(result.responseContent)`. **Every refresh request returned HTTP 400
+   carrying a valid token response**, and no ID token was ever reissued. Reverted within the session. New work
+   item **B1-W6**, which needs plan mode — it is token issuance.
+
+   The general lesson is worth more than the bug: the probe entry had already recorded this branch as *"dead
+   code on this service"* and noted that **handled ≠ exercisable**. There is a third claim: **handled,
+   exercisable, and *correct*.** A config flag was the only thing hiding a defect, and turning it on is the
+   only way that was ever going to surface.
+
+**One more finding, from a failed test rather than a passing one.** `NO_INTERACTION` is **not** only the
+`prompt=none` path: a request with *no* `prompt` parameter reaches it whenever it asks for `offline_access`,
+because OIDC Core §11 requires explicit consent (verified across all four combinations). So **before T1-7,
+every `offline_access` request without `prompt=consent` also got the empty-`Location` 302** — a second live
+symptom of that S1, on a request shape nobody was looking at. T1-7 fixed both; only one was known. The audit's
+own framing in `OIDC-CORE-1.0.md` F-1 and `RFC9470-…` F-3 is corrected accordingly.
+
+**`aud` changed shape**, so Module 08's lesson inverted: it taught *"`aud` is an array here, and `AGENTS.md`
+recommends a string"*. Both are legal, and the pair now teaches something better — a validator written
+`claims.aud === clientId` was broken a fortnight ago and works today, while `claims.aud.includes(...)` was
+fine then and **throws now**. One console flag, two naive validators broken in opposite directions, no
+specification changed.
+
+### 2026-08-12 — T1-2 + T1-3: two configuration writes, and an `UNVERIFIED` marker that was wrong for a fortnight
+
+**Why this matters to a future session:** **no source file changed.** Two Authlete writes closed four work
+items (**OIDC-W2 = FAPI1A-W2**, **7523-W4 = 9101-W3**) and made three specifications runnable that previously
+had no path at all. The suite is untouched at **635 tests / 58 files**; that number staying still is the
+evidence that this was configuration, not code.
+
+**What was written.** Both through raw HTTP, because `service.get()` throws on this service (the `SPIFFE_JWT`
+enum gap) and the SDK's outbound schemas strip fields they do not model:
+
+| | Change | Read-back diff |
+|---|---|---|
+| **T1-2** | one RSA-2048 key (`kid: "rsa-1"`, `use: "sig"`, **no `alg`**) appended to the service JWK Set | 129 fields round-tripped; **`jwks` + `modifiedAt`, nothing else** |
+| **T1-3** | a fourth client, `2176571218` — CONFIDENTIAL, `tokenAuthMethod: PRIVATE_KEY_JWT`, EC P-256 public JWKS, `requestSignAlg: ES256` | created `201`, all 12 sent fields present on read-back |
+
+**Three things worth carrying:**
+
+1. **Omitting `alg` is the whole trick.** RFC 7517 §4.4 makes `alg` OPTIONAL (fetched and verified), so
+   Authlete offered every algorithm the key supports: `id_token_signing_alg_values_supported` went from four
+   entries to ten, gaining RS256 *and* PS256 — one key, OIDC Discovery §3's `MUST` **and** FAPI §5.2.2's
+   requirement. Pinning `alg: RS256` would have satisfied only the first. **Four** advertised lists changed,
+   not one, because all four are derived from the same key set. The cost: the FAPI-discouraged `RS256` comes
+   along and cannot be separated.
+2. **Advertised was checked against usable.** The audit's Theme 1 is *"advertised but unusable"*, so shipping
+   six new algorithm names and calling it done would have been the audit committing its own finding. RS256
+   was proved by issuing an ID token (`{"kid":"rsa-1","alg":"RS256"}`) and validating it; `private_key_jwt`
+   by authenticating on two grant types; the request-object signature by **flipping one byte** and getting
+   `[A005328]`. **PS256 is still only advertised**, and that is stated rather than glossed.
+3. **An `UNVERIFIED` marker was wrong, and three documents inherited it.** Module 08 §3d said *"Both clients
+   here are still `HS256`"* and marked its asymmetric branch unverified since 2026-07-28. Only the
+   *confidential* client is HS256 — both public clients have been ES256 the whole time, a fact recorded in
+   the audit's own `OIDC-CORE-1.0.md` F-2 two paragraphs above the clause that contradicted it. The
+   remediation plan's §6.2 then listed the branch as "completed by OIDC-W2". **Nothing was blocking it; the
+   two-command check had simply never been run.** It runs now — all thirteen `§3.1.3.7` steps `PASS`. The
+   marker is retired by *running the branch*, not by the RSA key.
+
+**Curriculum, in the same commit** (the §7.4 grep found two hits the lab-breakage register had missed):
+
+- **Module 00 Ex 2** — CUR-3a-W3. Selects by `kty === "EC"`, no `keys[0]`, no `key count: 1`, plus two
+  sentences on why you never index into a JWKS.
+- **Module 08 §3d** — real ES256 transcript; the marker retired; a new note that the validator's
+  `keys.length === 1` fallback can no longer fire, so `kid` selection is finally load-bearing. *A fallback
+  that always fires is a check you are not running.*
+- **Module 08 §6d** — **the transcript inverted.** It printed the RS256-less list and reasoned about the
+  violation; both transcripts are now shown, dated, as one exercise about metadata being *derived*.
+- **Module 05** — new **Step 4b**: asymmetric JAR against the pre-registered client, and the
+  `[A005336]` vs `[A008311]` contrast Step 3 had only described in prose. Step 3 was **kept** — generating a
+  key and checking `d` is absent is the exercise, and 9101-W3's *"replace it"* wording would have deleted the
+  teaching to satisfy the work item.
+- **Module 06 Ex 4** — §2.2 for real, where the lab previously stopped at *"That is Module 10's territory."*
+  Two behaviours established while writing it: this deployment accepts **either** the issuer or the token
+  endpoint as `aud` (anything else → `[A157318]`), and **`jti` replay is not enforced** — the same assertion
+  authenticates twice, which RFC 7523 §3/§6 permit.
+- **Module 10**, **Module 11**, `docs/DEVELOPMENT.md`, `curriculum.env.example` — the "neither client has a
+  JWKS" claim, the "one EC P-256 key" claim, and the two new env variables.
+
+**Two live-drift findings.** Client `1523514379` had acquired a JWKS between the 2026-08-10 probe and now —
+written by `tests/e2e/e2e.test.ts:1169`, which registers a public key whose private half it then discards. It
+is inert, it is **left in place**, and it means the **E2E suite mutates shared service state**: no client
+snapshot in the audit survives a test run. And the first `PKJWT_PRIVATE_JWK` was echoed to a terminal by an
+unquoted `.env` value, so **the client key was rotated** (`pkjwt-1` → `pkjwt-2`) rather than kept.
+
+**Open, deliberately.** PS256 unexercised; `none` still advertised for UserInfo (T1-13); by-reference JAR
+still unreachable (9101-W2); `private_key_jwt` available but required of nobody, which is the FAPI gap and
+not this item's job.
 
 ### 2026-08-12 — T1-7: `prompt=none` gives a real answer, and the trap behind the obvious fix
 
@@ -359,7 +1217,7 @@ cited line moved** — the parameter read stayed two lines and both new blocks w
 cited. `logout.controller.ts` shifted uniformly by +19 below the new export, which was *verified line by line
 rather than assumed*: 13 citations across `00-inventory.md`, `OIDC-BACKCHANNEL-LOGOUT-1.0.md`,
 `JOSE-rfc7515-7517-7519.md` and this file. **Two were already wrong before this change** —
-`RESUME.md:243` still carried the pre-2026-08-10 range `:33-63`, and `JOSE:145` pointed at a `jwt.decode` in
+`RESUME.md`'s §6 S1 table (then at `:243`) still carried the pre-2026-08-10 range `:33-63`, and `JOSE:145` pointed at a `jwt.decode` in
 `logout.service.ts` that T0-2 deleted. Both fixed. `check-docs.mjs` sees neither class: it validates only that
 a `server/`|`client/` ref is not past EOF.
 
@@ -756,17 +1614,17 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   fail-open design is itself the defect (a missing security config should refuse to start). Taught as
   Module 11's Lab 1.
 
-- **Both FAPI introspection endpoints return HTTP 200 with an error body and a stack trace.**
-  `GET /api/fapi/config` **and** `GET /api/fapi/status` respond **200** with
-  `{"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}` —
-  an SDK `ResponseValidationError` from `serviceGet`, surfaced verbatim. Three defects in one response, and
-  the status code is the worst of them: a monitor checking status codes reports these endpoints healthy
-  forever. The `stack` field leaks absolute filesystem paths on unauthenticated endpoints. And the practical
-  consequence is that **the deployment cannot report its own FAPI posture** — Module 10's lab had to read the
-  Authlete service configuration directly to establish anything. This supersedes the earlier PROGRESS note
-  that "only `/api/fapi/config`" was affected and that its status code "may be a second bug": both endpoints
-  are affected and the 200 is confirmed. **Fourth instance of "a server-side failure reported as a caller
-  error"** after Modules 06, 08 and 09b.
+- ~~**Both FAPI reporting endpoints return HTTP 200 with an error body and a stack trace.**~~
+  **RESOLVED in two halves — 2026-08-11 (EH-W1) and 2026-08-12 (T1-5).** Both `GET /api/fapi/config` and
+  `GET /api/fapi/status` answered **200** with
+  `{"error":"Bad Request","message":"Response validation failed","stack":"ResponseValidationError: …"}` — an
+  SDK `ResponseValidationError` from `serviceGet`, surfaced verbatim. Three defects in one response: a
+  monitor checking status codes reported them healthy forever, `stack` leaked absolute filesystem paths on
+  unauthenticated endpoints, and **the deployment could not report its own FAPI posture**, so Module 10's lab
+  had to read the Authlete service configuration directly. The status clamp fixed the *invisibility*; the
+  `SPIFFE_JWT` withdrawal fixed the *failure*. Both now return **200** with live values (`mode: "disabled"`).
+  It was the **fourth instance of "a server-side failure reported as a caller error"** after Modules 06, 08
+  and 09b, and Module 10 Exercise 4 keeps all three states as its subject.
 - **Grant revocation leaves access tokens alive for 24 hours.** Verified end to end in Module 10: after
   `DELETE /api/gm/<grant_id>` → **204**, the grant's refresh token is correctly gone
   (`[A053305] The refresh token … does not exist.`) but its access token still introspects `active: true`
@@ -810,15 +1668,19 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   `allowedOrigins.some(o => uri.startsWith(o))` clause was not — so with `ALLOWED_ORIGINS=https://app.example.com`,
   `https://app.example.com.evil.net/` also passed. RFC 9700 §2.1 forbids exactly this. Note the contrast: the
   *authorization* endpoint got exact matching right all along (400, no `Location`).
-  **Fix:** `isAllowedPostLogoutRedirectUri` (same file) now parses the value with `new URL()` and compares
-  **origins exactly** — `LOGOUT_REDIRECT_URI` by full-URI equality, `ALLOWED_ORIGINS` entries by origin, plus a
-  non-production `hostname === "localhost"` clause so the labs keep working. Unparseable values and non-http(s)
-  schemes are refused; `new URL()` *throws* on the first payload and returns a foreign origin for the second.
-  14 regression tests in `tests/unit/services/logout.service.test.ts`. Module 08 Exercise 6b was rewritten
-  around the fix rather than deleted — it now teaches the defect, the parse-don't-prefix rule, and the row that
-  still redirects in dev. **Still open, and deliberately:** RP-Initiated Logout §3 wants exact matching against
-  per-client **registered** `post_logout_redirect_uris`, and no client registers any, so the allowlist remains
-  environment-driven. Recorded in `audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` (work items RPL-W2/W3/W4).
+  **First fix (2026-08-10):** `isAllowedPostLogoutRedirectUri` parsed the value with `new URL()` and compared
+  **origins exactly** — `LOGOUT_REDIRECT_URI` by full URI, `ALLOWED_ORIGINS` by origin, plus a non-production
+  `hostname === "localhost"` clause. Both payloads refused. 14 regression tests in
+  `tests/unit/services/logout.service.test.ts`; Module 08 Exercise 6b rewritten around the defect and the
+  parse-don't-prefix rule rather than deleted.
+  **Superseded 2026-08-12 by T0-4, and this bullet said otherwise until 2026-08-12** — found while re-anchoring
+  a citation, which is what that checklist step is for. §3 wants exact matching against the client's
+  **registered** `post_logout_redirect_uris`; Authlete 3.0 has no field to hold them (a write returns 200 and is
+  discarded), so the registry is the deployment's own `POST_LOGOUT_REDIRECT_URIS` and matching is `===` against
+  the identified client's set. **No `new URL()` parsing, no origin comparison and no `localhost` clause remain**,
+  and `ALLOWED_ORIGINS`/`LOGOUT_REDIRECT_URI` no longer authorise anything. Both payloads are still refused —
+  now because nobody registered them. See `audit/02-findings/OIDC-RP-INITIATED-LOGOUT-1.0.md` (RPL-W1…W5, all
+  closed) and the T0-3 / T0-4 entries above.
 - **Back-channel logout receipt cannot work, and misreports why.** `JWKS_URI` is unset, so
   `logout.controller.ts:64` throws and the `catch` returns `{"error":"invalid_request","error_description":
   "Invalid logout token"}` — blaming the caller's input for a server configuration problem. Confirmed against
@@ -952,11 +1814,11 @@ end of that turn none had landed. Each unblocks exactly one thing:
   `ceo@example.com` and re-signed with the client secret passed all thirteen validation steps. **Flipping both
   clients to `ES256` unblocks lab 3d and public-client OIDC, and removes the forgery capability.** Module 09a
   does not depend on it; Module 10 (FAPI) does.
-- `GET /api/fapi/config` still fails: the body is an SDK `ResponseValidationError` from `serviceGet`
-  (`{"error":"Bad Request","message":"Response validation failed",…}`). Pre-existing and unrelated to the
-  curriculum; it affects Module 10. Two notes: the earlier guess that `fapiModes` caused it is **disproven**
-  — the field is cleared and the failure persists; and the endpoint returned that error body under HTTP
-  **200** on the last check (400 earlier), so the status code itself may be a second, separate bug.
+- ~~`GET /api/fapi/config` still fails~~ **FIXED 2026-08-12.** The body was an SDK `ResponseValidationError`
+  from `serviceGet`. Two guesses recorded here were wrong and one was right: `fapiModes` did **not** cause it
+  (cleared, failure persisted); the HTTP **200** *was* "a second, separate bug" (the error handler's status
+  derivation, EH-W1); and the cause was one unrecognised `supportedTokenAuthMethods` member, `SPIFFE_JWT`,
+  withdrawn from the service by T1-5. Both endpoints now answer 200 with live values.
 
 Nothing on the Authlete service was changed by the curriculum build; the repo owner made the console change.
 

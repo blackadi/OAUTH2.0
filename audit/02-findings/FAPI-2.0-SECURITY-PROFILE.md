@@ -20,14 +20,26 @@
 > Locked by `tests/unit/routes/fapi.routes.test.ts` and `tests/integration/routes.test.ts`, each with a
 > hardened **and** an unhardened service, so a constant returning would fail the suite.
 >
-> **F-1's first half is NOT fixed** — the endpoints still fail, because `service.get()` still throws on the
-> `SPIFFE_JWT` enum gap. What changed is that they now fail as **500** rather than 200 (see
-> `ERRORHANDLER-STATUS-INVERSION.md`, EH-W1). **FAPI2-W2** ✅ (= EH-W1). **FAPI2-W3/W4/W5/W6 remain open.**
-> Severity **downgraded S1 → S2**: the false attestation is gone; the profile is still off and `README.md`
-> still calls FAPI 2.0 "Working" (F-2).
+> ~~**F-1's first half is NOT fixed**~~ → **✅ fixed 2026-08-12 (T1-5).** `SPIFFE_JWT` was withdrawn from
+> `supportedTokenAuthMethods`, `service.get()` parses, and **both endpoints answer 200 with live values**
+> (`mode: "disabled"`). So F-1 is closed in both halves: the endpoint neither lies nor fails. **FAPI2-W2** ✅
+> (= EH-W1). **FAPI2-W3/W4/W5/W6 remain open** — and FAPI2-W4 is now the *only* thing between this endpoint and
+> an honest report of all eight §5.3.2.1 requirements, since it reports six.
+>
+> **One measured value in this entry moved with T1-5**, and it matters for §5.3.2.1: the profile permits mTLS
+> *or* `private_key_jwt`, and `token_endpoint_auth_methods_supported` no longer advertises the mTLS pair at all,
+> so the only FAPI-acceptable method this service offers is `private_key_jwt` — which **one client now actually
+> uses** (T1-3). The gap is that it is required of nobody.
+>
+> **✅ F-2 closed 2026-08-13, and the severity moves with it — S2 → S3.** F-2 was *"`README.md` still calls
+> FAPI 2.0 'Working'"*. It now reads **"Not enabled — `fapiModes` is unset on the service, so none of the
+> profile's constraints are enforced. The code supports it; the deployment does not claim conformance."*
+> DPoP is listed separately as **Working**, because it genuinely is — the old single row conflated a
+> *profile* with a *mechanism*. **What remains is S3 and is not a false claim**: the profile is off, which is
+> a Tier 3 decision (**DR-02**), and the deployment now says so in the first place a reader looks.
 
 - **Verdict:** `MISCONFIGURED` *(unchanged — the profile itself is still not enabled)*
-- **Severity:** ~~**S1**~~ → **S2** (FAPI2-W1 shipped 2026-08-11)
+- **Severity:** ~~**S1**~~ → ~~S2~~ → **S3** (FAPI2-W1 2026-08-11; F-2's `README.md` claim corrected 2026-08-13)
 - **Status:** OpenID **Final**, **22 February 2025** — re-verified against the primary source this session
 - **Authlete version:** 3.0 (`Service.fapiModes`, `FAPI2_SECURITY`)
 - **Repo docs under test:** `README.md` feature tables, `docs/FAPI-TUTORIAL.md`, `docs/curriculum/modules/10-fapi-and-grant-management/`, `AGENTS.md`, `client/src/components/fapi/FapiSection.tsx`

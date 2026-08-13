@@ -264,7 +264,11 @@ compares DPoP with mTLS as a design decision. That is what is here.
   RFC 9449 §7.1 — the lab asks you to justify three of its decisions.
 - **`server/src/routes/jar.routes.ts`** → `POST /api/jar/process`. Note `jar.service.ts` does no key handling at
   all — it forwards `client_id` + `request` to Authlete, which verifies the signature against the **client's**
-  registered JWKS. All of JAR's cryptography lives upstream.
+  registered JWKS. All of JAR's cryptography lives upstream. **It requires admin credentials, and returns an
+  allowlist** (`action`, `resultCode`, `resultMessage`, `responseContent`, `scopes`) — since 2026-08-13, because
+  Authlete's authorization response also carries a `ticket`, and this endpoint used to hand that credential to
+  any anonymous caller along with the whole `service` configuration. This is a repo-invented debugging surface,
+  so nothing in a specification told anyone where to draw that line; somebody had to decide.
 - **`server/src/utils/validate.ts`** — `validateAuthorizationParams` checks `client_id` and nothing else, which
   is what lets the canonical RFC 9101 §5 shape (`client_id` + `request`, everything else inside the signature)
   reach Authlete at all. Until **2026-08-04** it demanded `response_type` and `redirect_uri` on the query string

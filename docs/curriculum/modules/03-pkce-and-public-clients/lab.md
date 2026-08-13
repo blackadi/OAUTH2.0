@@ -35,9 +35,23 @@ curl -sf -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" "$API/client/get/$PUB_CLIENT_I
 | `clientType` | `PUBLIC` | — |
 | `tokenAuthMethod` | `NONE` | `[A157302] The client type of the client is 'public' but the client authentication method is not 'none'.` |
 | `parRequired` | `false` | `[A294308] The authorization request was sent without PAR.` |
-| `pkceRequired` | `false` | Break 3 cannot run — which is the point of Break 3. Leave it off for the lab, then read the last section. |
+| `pkceRequired` | `false` | Break 3 cannot run — which is the point of Break 3. Leave it off for the lab, then read the last section. **This client is one of two kept deliberately permissive**; see the note below. |
 | service `fapiModes` | empty | mandates PAR and blocks the plain flow (Module 02 setup) |
 
+> **Two clients on this service now disagree about PKCE, and that is on purpose.** Since 2026-08-13 the SPA
+> client and the `private_key_jwt` client have `pkceRequired: true` and `pkceS256Required: true`; the client
+> you are using here, and the one Module 02 uses, do not. Try it — swap `$PUB_CLIENT_ID` for the SPA's client
+> id in the authorization URL below and drop the `code_challenge`:
+>
+> ```
+> [A124301] The authorization request does not contain 'code_challenge' parameter. See RFC 7636 for details.
+> ```
+>
+> Send `code_challenge_method=plain` to that same client and you get `[A124308] … must be 'S256'.` **That is
+> what "PKCE is required" looks like from the outside**, and you can now see both answers on one deployment
+> rather than taking the recommendation on trust. RFC 9700 §2.1.1 says clients MUST use PKCE; the two
+> permissive clients exist only so this module can show you the flow it is arguing against.
+>
 > **This lab avoids the `openid` scope** and uses `scope=profile`. If your public client's `idTokenSignAlg`
 > is a symmetric algorithm (`HS256`), requesting `openid` fails with *"[A406301] The algorithm is symmetric
 > (HS256), but the client type of the client … is not 'confidential'"* — a symmetric signature needs a client
