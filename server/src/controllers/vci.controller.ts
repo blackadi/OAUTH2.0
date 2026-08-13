@@ -69,6 +69,31 @@ const DEFERRED_ISSUE_MAP: Record<string, number> = {
   CALLER_ERROR: 400,
 };
 
+/**
+ * `/vci/deferred/parse`'s actions. `UNAUTHORIZED` is the one that matters: it is how Authlete reports a bad
+ * or absent access token on the deferred path, and until 2026-08-13 nothing here could receive it because
+ * the API was never called. See `VciService.parseDeferred`.
+ */
+const DEFERRED_PARSE_MAP: Record<string, number> = {
+  OK: 200,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  INTERNAL_SERVER_ERROR: 500,
+};
+
+/**
+ * Which members of `CredentialIssuanceOrder` a caller may set on a deferred *retrieval*, as an allowlist so
+ * the next field the SDK adds cannot be forwarded by default — the same reasoning as `jar.controller.ts`'s
+ * `EXPOSED_FIELDS`, in the opposite direction.
+ *
+ * `requestIdentifier` is absent deliberately: it is server-derived, from `parse`. So is `transactionId`,
+ * which is not an order member at all — it is this endpoint's input and becomes the `requestContent`.
+ * `issuanceDeferred` is absent because re-deferring a request the caller is currently retrieving is not a
+ * meaningful instruction.
+ */
+const CALLER_SETTABLE_ORDER_FIELDS = ["credentialPayload", "credentialDuration", "signingKeyId"] as const;
+
 function sendDiscoverResponse(res: Response, response: any, _label: string): void {
   if (response.responseContent) {
     try {
@@ -199,14 +224,74 @@ export function createVciControllers(serviceInstance = new VciService()) {
           handleControllerError(err, req, res, next, "BatchIssue");
         }
       },
+      /**
+       * OID4VCI §9's Deferred Credential Endpoint. **Two Authlete calls, and that is not incidental.**
+       *
+       * Until 2026-08-13 this handler collected no access token at all — it checked only that the body
+       * carried an `order`, then called `/vci/deferred/issue`, whose request model has no `accessToken`
+       * field. So a caller holding a `transactionId` (a handle, not a credential) reached issuance, and
+       * neither this server nor Authlete had anything to authenticate. Its two siblings on this router both
+       * answered `401` without a token; the asymmetry was the bug.
+       *
+       * The fix is `/vci/deferred/parse` first, which is the only Authlete API on this path that accepts a
+       * token — see `VciService.parseDeferred` for why the siblings need no equivalent.
+       *
+       * Two rules to keep:
+       *
+       * 1. **`requestIdentifier` comes from `parse`, never from the body.** It names the credential request
+       *    Authlete resolved from the *validated* `transaction_id`. Taking it from `req.body` would let a
+       *    caller with any valid token name any pending request — the same server-determined-fields rule
+       *    `introspection.service.ts` and `userinfo.service.ts` follow. The decorative members of
+       *    `CredentialIssuanceOrder` (`credentialPayload` and friends) stay caller-supplied, matching what
+       *    the two siblings already permit.
+       * 2. **`transactionId` is required and `requestIdentifier` alone is refused.** A bare
+       *    `requestIdentifier` is exactly the shape that used to bypass validation, and it carries no
+       *    `transaction_id` to build a `requestContent` from, so there is nothing to validate against.
+       *
+       * UNVERIFIED: that Authlete accepts this `requestContent` and returns `info.identifier` on this
+       * deployment. `verifiableCredentialsEnabled` is `false`, so `parse` answers `FORBIDDEN` before
+       * reaching that logic; the shape is taken from the vendored 3.0.16 schema and §9.1's REQUIRED
+       * `transaction_id`. Named next action: re-run this path if VCI is ever enabled.
+       *
+       * NOTE for T1-11: the request shape here is still Authlete's (`{ order: { transactionId } }`) rather
+       * than §9.1's (`{ transaction_id }`), and the response is still the vendor envelope. That is the
+       * wire-format batch's scope, deliberately not this change's — this endpoint is a fourth site for it,
+       * alongside PAR, Device and DCR.
+       */
       handleIssueDeferred: async (req: Request, res: Response, next: NextFunction) => {
         try {
-          const { order } = req.body as { order?: any };
-          if (!order?.transactionId && !order?.requestIdentifier) {
+          const bearerToken = extractBearerToken(req);
+          const { accessToken: bodyToken, order } = req.body as { accessToken?: string; order?: any };
+          const accessToken = bearerToken || bodyToken;
+          if (!accessToken) {
+            res.status(401).json({ error: "invalid_token", error_description: "Access token is required. Provide via Authorization: Bearer header or accessToken field in body." });
+            return;
+          }
+
+          const transactionId = order?.transactionId;
+          if (!transactionId) {
             res.status(400).json({ error: "invalid_request", error_description: "Missing order with transactionId for deferred credential retrieval." });
             return;
           }
-          const result = await serviceInstance.issueDeferred(order);
+
+          const parsed = await serviceInstance.parseDeferred(
+            accessToken,
+            JSON.stringify({ transaction_id: transactionId }),
+          );
+          const parseStatus = statusForAction(parsed.action, DEFERRED_PARSE_MAP);
+          if (parseStatus !== 200) {
+            res.status(parseStatus).json(parsed);
+            return;
+          }
+
+          const callerOrder: Record<string, unknown> = {};
+          for (const key of CALLER_SETTABLE_ORDER_FIELDS) {
+            if (order[key] !== undefined) callerOrder[key] = order[key];
+          }
+          const result = await serviceInstance.issueDeferred({
+            ...callerOrder,
+            requestIdentifier: parsed.info?.identifier,
+          });
           const status = statusForAction(result.action, DEFERRED_ISSUE_MAP);
           res.status(status).json(result);
         } catch (err) {

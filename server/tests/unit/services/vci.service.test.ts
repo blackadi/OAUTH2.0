@@ -146,6 +146,25 @@ describe("VciService", () => {
     })
   })
 
+  // `/vci/deferred/parse` is the only Authlete API on the deferred path that accepts an access token —
+  // `VciDeferredIssueRequest` has no `accessToken` field, while `/vci/single/issue` and `/vci/batch/issue`
+  // both do. That is why this path makes two calls and its siblings make one.
+  describe("parseDeferred", () => {
+    it("calls verifiableCredentials.deferredParse with the token and the request content", async () => {
+      const mockResponse = { action: "OK", info: { identifier: "req-1" } }
+      vi.mocked(mockApi.verifiableCredentials.deferredParse).mockResolvedValue(mockResponse as any)
+
+      const result = await service.parseDeferred("at-1", '{"transaction_id":"tx-1"}')
+
+      expect(mockApi.verifiableCredentials.deferredParse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vciDeferredParseRequest: { accessToken: "at-1", requestContent: '{"transaction_id":"tx-1"}' },
+        })
+      )
+      expect(result).toEqual(mockResponse)
+    })
+  })
+
   describe("issueDeferred", () => {
     it("calls verifiableCredentials.deferredIssue", async () => {
       const mockResponse = { action: "OK", credential: "eyJ..." }

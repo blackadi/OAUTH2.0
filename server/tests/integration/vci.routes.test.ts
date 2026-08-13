@@ -12,7 +12,7 @@ import { createApp } from "../../src/app"
  *               GET  /.well-known/openid-credential-issuer          public
  *   offers      POST /api/vci/offer/create|info                     admin Basic auth
  *   credential  POST /api/vci/credential/issue|batch                access token
- *               POST /api/vci/deferred/issue                        *** nothing — see below ***
+ *               POST /api/vci/deferred/issue                        access token, validated via parse (§4)
  *
  * Every one of the ten was carried in `scripts/route-coverage-baseline.json`: `vci.service.ts` and
  * `vci.controller.ts` both have unit tests, and no test drove a route through its middleware.
@@ -257,57 +257,50 @@ describe("Integration: VCI routes", () => {
   })
 
   // -----------------------------------------------------------------------------------------------------
-  // 4. DEFECT RECORD — POST /api/vci/deferred/issue authenticates nobody.
+  // 4. POST /api/vci/deferred/issue — the two-call flow, fixed 2026-08-13.
   //
-  // This is NOT a deliberate defect and it is NOT in AGENTS.md's "Deliberate defects" table. It is recorded
-  // here because a route-level test is what makes it visible, and because a silent fix should have to walk
-  // past this comment.
+  // This endpoint used to authenticate nobody: it collected no access token, and the Authlete API it called
+  // (`VciDeferredIssueRequest`) has no `accessToken` field, so nothing on the path could validate one. A
+  // caller holding a `transactionId` — a handle, not a credential — reached issuance. Its two siblings on
+  // this router both answered 401 without a token; that asymmetry was the bug, and a controller test could
+  // not see it because it never drives the route.
   //
-  // The evidence, in the order it was established:
-  //
-  //   1. `handleIssueDeferred` (controllers/vci.controller.ts) never calls `extractBearerToken`. Its two
-  //      siblings on this router both do, and both answer 401 without a token. It checks only that the
-  //      body carries `order.transactionId` or `order.requestIdentifier`.
-  //   2. `VciService.issueDeferred(order)` calls `verifiableCredentials.deferredIssue({ serviceId, order })`
-  //      — and SDK 1.0.0's `VciDeferredIssueRequest` is `{ order?: CredentialIssuanceOrder }`. There is no
-  //      `accessToken` field, so Authlete cannot validate one either. The token is not dropped in transit;
-  //      it is never collected.
-  //   3. Authlete splits this flow in two. `VciDeferredParseRequest` DOES carry `accessToken` — its own
-  //      doc comment reads "The access token that came along with the deferred credential request" — and
-  //      `/vci/deferred/parse` is where the token is checked. This server never calls it: `deferredParse`,
-  //      `parse` and `batchParse` appear in no source file.
-  //   4. AGENTS.md describes this endpoint's auth category as "access token via Authorization: Bearer
-  //      header or body", which is the control that is missing.
-  //
-  // So a caller holding only a `transactionId` — a handle, not a credential — reaches issuance. UNVERIFIED:
-  // OID4VCI 1.0 (Final, 16 September 2025) §9's exact normative sentence on authenticating the Deferred
-  // Credential Request was not quoted verbatim from the primary source, so no MUST is cited here. The
-  // finding does not rest on it: the two sibling endpoints, the unused parse API and AGENTS.md's own claim
-  // are each independent of the spec text.
-  //
-  // Not live-exploitable on this deployment — `verifiableCredentialsEnabled` is `false`.
-  //
-  // TO FIX: require a token in the handler as the siblings do, and route the request through
-  // `verifiableCredentials.deferredParse` so Authlete validates it. That changes access control, so it is
-  // a plan-mode change under CLAUDE.md. When it lands, this block should assert 401 and the record below
-  // should be deleted rather than amended.
+  // It now calls `/vci/deferred/parse` first, which is the only Authlete API on this path that takes a
+  // token. The four assertions that decide whether the fix works rather than merely exists are marked
+  // below. UNVERIFIED, and it cannot be otherwise here: `verifiableCredentialsEnabled` is `false`, so on
+  // this deployment `parse` answers FORBIDDEN before it would ever return an `info.identifier`.
   // -----------------------------------------------------------------------------------------------------
-  describe("POST /api/vci/deferred/issue — records a missing access-token check", () => {
-    it("issues from a transactionId alone, with no token presented anywhere", async () => {
-      vc().deferredIssue.mockResolvedValue({ action: "OK", responseContent: "{}" })
+  describe("POST /api/vci/deferred/issue", () => {
+    const parsedOk = { action: "OK", info: { identifier: "req-from-parse" } }
+
+    // (1) The token is collected.
+    it("refuses a request with no token, and reaches neither Authlete API", async () => {
+      const res = await request(app)
+        .post("/api/vci/deferred/issue")
+        .send({ order: { transactionId: "tx-1" } })
+        .expect(401)
+
+      expect(res.body.error).toBe("invalid_token")
+      expect(vc().deferredParse).not.toHaveBeenCalled()
+      expect(vc().deferredIssue).not.toHaveBeenCalled()
+    })
+
+    // (2) The token is validated — by Authlete, at parse, which is the only place it can be.
+    it("stops at parse when Authlete rejects the token, and never issues", async () => {
+      vc().deferredParse.mockResolvedValue({ action: "UNAUTHORIZED", responseContent: "{}" })
 
       await request(app)
         .post("/api/vci/deferred/issue")
+        .set("Authorization", "Bearer bad-token")
         .send({ order: { transactionId: "tx-1" } })
-        .expect(200)
+        .expect(401)
 
-      expect(vc().deferredIssue).toHaveBeenCalledWith({
-        serviceId: "test-service",
-        vciDeferredIssueRequest: { order: { transactionId: "tx-1" } },
-      })
+      expect(vc().deferredParse).toHaveBeenCalledTimes(1)
+      expect(vc().deferredIssue).not.toHaveBeenCalled()
     })
 
-    it("ignores an Authorization header entirely — it is never forwarded to Authlete", async () => {
+    it("forwards the token to parse as the §9.1 request content", async () => {
+      vc().deferredParse.mockResolvedValue(parsedOk)
       vc().deferredIssue.mockResolvedValue({ action: "OK", responseContent: "{}" })
 
       await request(app)
@@ -316,24 +309,113 @@ describe("Integration: VCI routes", () => {
         .send({ order: { transactionId: "tx-1" } })
         .expect(200)
 
-      const [args] = vc().deferredIssue.mock.calls[0]
-      expect(JSON.stringify(args)).not.toContain("at-1")
+      expect(vc().deferredParse).toHaveBeenCalledWith({
+        serviceId: "test-service",
+        vciDeferredParseRequest: {
+          accessToken: "at-1",
+          requestContent: JSON.stringify({ transaction_id: "tx-1" }),
+        },
+      })
     })
 
-    it("never reaches the parse API that would validate a token", async () => {
+    // (3) Issuance is bound to the request Authlete validated, not to what the caller typed.
+    it("takes requestIdentifier from parse, never from the body", async () => {
+      vc().deferredParse.mockResolvedValue(parsedOk)
       vc().deferredIssue.mockResolvedValue({ action: "OK", responseContent: "{}" })
 
-      await request(app).post("/api/vci/deferred/issue").send({ order: { transactionId: "tx-1" } }).expect(200)
+      await request(app)
+        .post("/api/vci/deferred/issue")
+        .set("Authorization", "Bearer at-1")
+        .send({ order: { transactionId: "tx-1", requestIdentifier: "someone-elses-request" } })
+        .expect(200)
+
+      expect(vc().deferredIssue).toHaveBeenCalledWith({
+        serviceId: "test-service",
+        vciDeferredIssueRequest: { order: { requestIdentifier: "req-from-parse" } },
+      })
+      const [args] = vc().deferredIssue.mock.calls[0]
+      expect(JSON.stringify(args)).not.toContain("someone-elses-request")
+    })
+
+    // (4) The bypass shape is closed.
+    it("refuses a requestIdentifier with no transactionId", async () => {
+      const res = await request(app)
+        .post("/api/vci/deferred/issue")
+        .set("Authorization", "Bearer at-1")
+        .send({ order: { requestIdentifier: "def123" } })
+        .expect(400)
+
+      expect(res.body.error).toBe("invalid_request")
+      expect(vc().deferredParse).not.toHaveBeenCalled()
+      expect(vc().deferredIssue).not.toHaveBeenCalled()
+    })
+
+    it("rejects an empty order", async () => {
+      await request(app)
+        .post("/api/vci/deferred/issue")
+        .set("Authorization", "Bearer at-1")
+        .send({ order: {} })
+        .expect(400)
 
       expect(vc().deferredParse).not.toHaveBeenCalled()
     })
 
-    // The only check it does make. Kept so the endpoint is not wholly unasserted.
-    it("rejects a body with neither transactionId nor requestIdentifier", async () => {
-      const res = await request(app).post("/api/vci/deferred/issue").send({ order: {} }).expect(400)
+    it("accepts the JSON accessToken body fallback, as its siblings do", async () => {
+      vc().deferredParse.mockResolvedValue(parsedOk)
+      vc().deferredIssue.mockResolvedValue({ action: "OK", responseContent: "{}" })
 
-      expect(res.body.error).toBe("invalid_request")
-      expect(vc().deferredIssue).not.toHaveBeenCalled()
+      await request(app)
+        .post("/api/vci/deferred/issue")
+        .send({ accessToken: "at-body", order: { transactionId: "tx-1" } })
+        .expect(200)
+
+      expect(vc().deferredParse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vciDeferredParseRequest: expect.objectContaining({ accessToken: "at-body" }),
+        }),
+      )
+    })
+
+    it("maps a parse BAD_REQUEST to 400 and a FORBIDDEN to 403, without issuing", async () => {
+      for (const [action, status] of [["BAD_REQUEST", 400], ["FORBIDDEN", 403]] as const) {
+        vi.clearAllMocks()
+        vc().deferredParse.mockResolvedValue({ action })
+
+        await request(app)
+          .post("/api/vci/deferred/issue")
+          .set("Authorization", "Bearer at-1")
+          .send({ order: { transactionId: "tx-1" } })
+          .expect(status)
+
+        expect(vc().deferredIssue).not.toHaveBeenCalled()
+      }
+    })
+
+    it("still maps the issue action once parse has passed", async () => {
+      vc().deferredParse.mockResolvedValue(parsedOk)
+      vc().deferredIssue.mockResolvedValue({ action: "FORBIDDEN" })
+
+      await request(app)
+        .post("/api/vci/deferred/issue")
+        .set("Authorization", "Bearer at-1")
+        .send({ order: { transactionId: "tx-1" } })
+        .expect(403)
+    })
+
+    // All three credential endpoints now share one posture. Asserting it as a set is the point: the defect
+    // was that one of the three disagreed, and a per-endpoint test would not have noticed.
+    it("agrees with its two siblings on the no-token answer", async () => {
+      const paths = [
+        "/api/vci/credential/issue",
+        "/api/vci/credential/batch",
+        "/api/vci/deferred/issue",
+      ]
+
+      for (const path of paths) {
+        const res = await request(app).post(path).send({ order: { transactionId: "tx-1" } })
+        expect(res.status, path).toBe(401)
+        expect(res.body.error, path).toBe("invalid_token")
+      }
     })
   })
 })

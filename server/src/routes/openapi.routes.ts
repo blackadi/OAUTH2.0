@@ -1699,22 +1699,39 @@ const spec: Record<string, unknown> = {
     "/vci/deferred/issue": {
       post: {
         summary: "Issue deferred credential",
-        description: "Issues a deferred credential.",
+        description:
+          "Retrieves a credential after deferred issuance (OID4VCI §9), when the Credential Endpoint returned 202 with a `transaction_id`. " +
+          "Requires the same Bearer access token used at the Credential Endpoint, in the Authorization header or as `accessToken` in the body. " +
+          "`order.transactionId` is required; `order.requestIdentifier` is ignored if supplied, because the server takes it from Authlete's deferred parse response so issuance is bound to the credential request the validated transaction_id resolves to. " +
+          "This endpoint makes two Authlete calls: `/vci/deferred/parse` validates the token (the deferred issue API has no accessToken field and cannot), then `/vci/deferred/issue` issues.",
         requestBody: {
           content: {
             "application/json": {
               schema: {
                 type: "object",
                 properties: {
-                  order: { type: "object" },
+                  accessToken: { type: "string" },
+                  order: {
+                    type: "object",
+                    properties: {
+                      transactionId: { type: "string" },
+                      credentialPayload: { type: "string" },
+                      credentialDuration: { type: "integer" },
+                      signingKeyId: { type: "string" },
+                    },
+                    required: ["transactionId"],
+                  },
                 },
+                required: ["order"],
               },
             },
           },
         },
         responses: {
           "200": { description: "Deferred credential issued" },
-          "400": { description: "Caller error" },
+          "202": { description: "Accepted (still pending — keep polling)" },
+          "400": { description: "Caller error, or no transactionId in the order" },
+          "401": { description: "No access token presented, or Authlete rejected it at parse" },
           "403": { description: "Forbidden" },
           "500": { description: "Internal server error" },
         },

@@ -222,15 +222,18 @@ function VciSection() {
       case 'deferred-issue':
         return (
           <div className="space-y-3">
+            <Input label="Access Token" value={credAccessToken} onChange={(e) => setCredAccessToken(e.target.value)} placeholder="access-token"
+              onFocus={handleTokenFocus} />
             <p className="text-xs text-muted-foreground">
               Poll for a credential that was deferred (returned 202 Accepted with <code>transaction_id</code>). Set the <code>transactionId</code> from the issue response.
+              Requires the <strong>same access token</strong> used at the Credential tab — the server validates it via Authlete&apos;s deferred <em>parse</em> API before issuing.
             </p>
             <Textarea label="Order (JSON)" rows={6} value={deferredOrderJson} onChange={(e) => setDeferredOrderJson(e.target.value)}
               placeholder='{"transactionId":"..."}' />
             <Button onClick={() => {
               let order: unknown = {};
-              try { order = JSON.parse(deferredOrderJson); } catch { order = { requestIdentifier: deferredOrderJson }; }
-              handleCall(() => vciService.issueDeferred({ order }));
+              try { order = JSON.parse(deferredOrderJson); } catch { order = { transactionId: deferredOrderJson }; }
+              handleCall(() => vciService.issueDeferred({ accessToken: credAccessToken, order }));
             }} loading={loading}>Issue Deferred</Button>
           </div>
         );
@@ -276,7 +279,8 @@ function VciSection() {
           </div>
           <p>
             After issuing, if the server returns <code>202 ACCEPTED</code> with a <code>transaction_id</code>,
-            use the <strong>Deferred</strong> tab to poll for the credential.
+            use the <strong>Deferred</strong> tab to poll for the credential — carrying the same access token,
+            which that endpoint now requires.
             Use the <strong>Batch</strong> tab to request multiple credential types in one call (OID4VCI §10).
           </p>
         </div>

@@ -111,6 +111,78 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — PKCE is enforced; the last open S1 is closed** (below)
 - [x] **2026-08-13 — the two process findings became mechanisms** (below)
 - [x] **2026-08-13 — the route-coverage backlog reached zero, and the checker was counting comments** (below)
+- [x] **2026-08-13 — VCI-W5: the deferred credential endpoint authenticates somebody now** (below)
+
+### 2026-08-13 — VCI-W5: the deferred credential endpoint authenticates somebody now
+
+**Why this matters to a future session:** the defect the previous entry *found* is now **fixed**, and the fix
+turned out to hinge on a vendor asymmetry that no amount of reading this server's code would have revealed.
+
+**`POST /api/vci/deferred/issue` collected no access token.** It checked only that `req.body.order` carried a
+`transactionId`, then issued a credential. A `transaction_id` is a **handle, not a credential** — OID4VCI §9.1
+makes it REQUIRED so a wallet can name which pending request it is collecting. Its two siblings on the same
+router both answered `401` without a token.
+
+**The one fact that decided the design, and it is Authlete's, not ours:**
+
+| Authlete API | Request model | Where a token can be validated |
+|---|---|---|
+| `/vci/single/issue` | `accessToken` **+** `order` | on that call |
+| `/vci/batch/issue` | `accessToken` **+** `orders` | on that call |
+| `/vci/deferred/issue` | `order` **only** | **nowhere** — no field for it |
+| `/vci/deferred/parse` | `accessToken` + `requestContent` | **here, and only here** |
+
+Verified against SDK 1.0.0 and the vendored `docs/openapi-spec.json` (3.0.16). So two of the three credential
+endpoints could be written the obvious way and be safe; the third could not, because Authlete splits
+authentication (`parse`) away from the operation (`issue`) on the deferred path alone. **Writing it by analogy
+with its siblings produced an endpoint that looked finished and enforced nothing.** `deferredParse` was sitting
+unused in the SDK the whole time — and this repo's own audit entry had recorded it as unused, two lines from the
+claim that the module's auth tiers were correct.
+
+`handleIssueDeferred` now calls `parse` first (`UNAUTHORIZED`→401) and issues only on `OK`. Two rules in the
+code, both load-bearing:
+
+1. **`requestIdentifier` comes from `parse`'s `info.identifier`, never from `req.body`.** It names the
+   credential request Authlete resolved from the *validated* `transaction_id`; reading it from the body would
+   let any valid token name any pending request. Same rule as `introspection.service.ts` and
+   `userinfo.service.ts`, and there is a test that puts an attacker's value in the body and asserts it never
+   reaches the call.
+2. **`transactionId` is required; a bare `requestIdentifier` is refused.** That was the shape which bypassed
+   validation, and it carries no `transaction_id` for `parse` to check.
+
+Caller-settable order fields are an **allowlist** (`credentialPayload`, `credentialDuration`, `signingKeyId`),
+so the next field the SDK adds cannot be forwarded by default — `jar.controller.ts`'s `EXPOSED_FIELDS` in the
+opposite direction.
+
+**Three things that came with it.**
+
+**Module 09b Exercise 7's transcript broke, and was rebuilt rather than patched.** Its Observation 3 contrasted
+`credential/batch` (token error) with `deferred/issue` (order error) to teach that *"some validation happens
+before Authlete is consulted."* After the fix all three endpoints answer identically, so the contrast is gone —
+the lab now teaches **why they agree**: that the disagreement *was* the defect, that an asymmetry is only
+visible across a set, that the docs asserted the missing control, and that the vendor's API shape is why it
+happened. Mechanism, not symptom, per the rule in `03-curriculum-audit.md`'s lab-breakage register. Two
+pre-existing errors in the same block were fixed while it was open and both are called out in it: the batch
+transcript showed `invalid_request` where the code emits `invalid_token`, and the adjacent note still described
+`require-basic-auth.ts` as **fail-open**, which it has not been for days.
+
+**The audit entry corrected itself in three places.** `OID4VCI-1.0.md` F-3 had generalised across *"three parse
+APIs"* whose request models differ — *"the `issue` APIs accept the credential request directly, so a separate
+parse step is optional"* is true of two and false of the third. **VCI-W4 said "keep the code as-is."** And the
+documentation-delta table graded `AGENTS.md`'s VCI paragraph *"Matches the code"* by comparing it against
+`vci.routes.ts`'s route table rather than against the handler. All three are annotated rather than overwritten,
+and **F-6** records the gap. The transferable rule: *when a finding groups vendor APIs by name, check whether
+their request models agree before reasoning about the group.*
+
+**`verifiableCredentialsEnabled` is `false`, so the fixed path is UNVERIFIED live and says so.** `parse` answers
+`FORBIDDEN` before it would return an `info.identifier`. The `requestContent` shape comes from the 3.0.16 schema
+and §9.1's REQUIRED `transaction_id`; §9's normative sentence on authenticating the request was never quoted
+verbatim, so **no MUST is cited anywhere** — the fix rests on the four independent facts above. Named next
+action: re-run the path if VCI is ever enabled. No Authlete writes were made. The wire format stays Authlete's
+(`{ order: { transactionId } }` rather than §9.1's `{ transaction_id }`) — **T1-11**'s scope, and this endpoint
+is now a fourth site for it beside PAR, Device and DCR.
+
+Server tests **939 → 951**; client 109 unchanged.
 
 ### 2026-08-13 — the route-coverage backlog reached zero, and the tool that measured it was wrong
 
