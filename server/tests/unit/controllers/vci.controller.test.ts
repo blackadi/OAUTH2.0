@@ -22,7 +22,17 @@ const {
 } = createVciControllers(mockVciService as any)
 
 function mockReq(overrides: Partial<Request> = {}): Request {
-  return { body: {}, headers: {}, params: {}, logger: { error: vi.fn() }, ...overrides } as unknown as Request
+  // `method` and `is()` are consulted by `extractAccessToken` (RFC 6750 §2.2's form-body case), which the
+  // credential endpoints use since 2026-08-13 instead of a hand-rolled `startsWith("Bearer ")`.
+  return {
+    body: {},
+    headers: {},
+    params: {},
+    method: "POST",
+    is: vi.fn().mockReturnValue(false),
+    logger: { error: vi.fn() },
+    ...overrides,
+  } as unknown as Request
 }
 
 function mockRes(): Response {
@@ -350,6 +360,35 @@ describe("VCI controllers", () => {
       await credential.handleBatchIssue(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(400)
+    })
+  })
+
+  // Credential endpoints are protected resources, so presentation goes through the shared extractor
+  // (utils/dpop.ts) rather than a hand-rolled startsWith("Bearer "). Before 2026-08-13 both of these
+  // arrived as "no token" and answered 401.
+  describe("token presentation", () => {
+    it.each([
+      ["DPoP scheme (RFC 9449 §7.1)", "DPoP tok-1"],
+      ["lower-case bearer (RFC 9110 §11.1)", "bearer tok-1"],
+    ])("accepts %s", async (_label, header) => {
+      mockVciService.issueSingle.mockResolvedValue({ action: "OK" })
+      const req = mockReq({ headers: { authorization: header }, body: { order: {} } })
+      const res = mockRes()
+
+      await credential.handleIssueSingle(req, res, mockNext())
+
+      expect(mockVciService.issueSingle).toHaveBeenCalledWith("tok-1", {})
+      expect(res.status).toHaveBeenCalledWith(200)
+    })
+
+    it("still accepts the accessToken body field", async () => {
+      mockVciService.issueSingle.mockResolvedValue({ action: "OK" })
+      const req = mockReq({ body: { accessToken: "body-tok", order: {} } })
+      const res = mockRes()
+
+      await credential.handleIssueSingle(req, res, mockNext())
+
+      expect(mockVciService.issueSingle).toHaveBeenCalledWith("body-tok", {})
     })
   })
 })

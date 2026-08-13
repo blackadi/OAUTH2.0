@@ -212,6 +212,32 @@ curl -s -X POST "${BASE}/api/introspection/standard" \
 ```
 
 Expected: `active: true`, `scope: openid profile`, `sub: admin`, `client_id`, `token_type: Bearer`.
+
+#### The JWT form (RFC 9701)
+
+Ask for a signed response with `Accept: application/token-introspection+jwt`. **`rsUri` is required** — it
+becomes the `aud` claim, naming the resource server that asked:
+
+```bash
+curl -s -X POST "${BASE}/api/introspection/standard" \
+  -u "${MGMT_CLIENT_ID}:${MGMT_CLIENT_SECRET}" \
+  -H "Accept: application/token-introspection+jwt" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "token=${AT2}" -d "rsUri=${BASE}/api/userinfo" \
+  | cut -d. -f1,2 | tr '.' '\n' | while read -r p; do echo "$p" | base64 -d 2>/dev/null; echo; done
+```
+
+```json
+{"alg":"RS256","typ":"token-introspection+jwt","kid":"rsa-1"}
+{"iss":"https://blackadi.dev","aud":"…/api/userinfo","iat":1786591514,"token_introspection":{"active":true,…}}
+```
+
+The media type comes back on the response too, as RFC 9701 §4 requires. Drop `rsUri` and you get
+`400 [A404301] The URI of the resource server is required when a JWT introspection response is requested.` —
+that is Authlete's answer passed through unchanged, because `aud` names *you*, and the server cannot guess it.
+**Until 2026-08-13 this whole path returned 500**: the `JWT` action fell through the controller's `default:`
+branch. Note the signature uses `kid: rsa-1`, the RSA key registered on 2026-08-12 — before that there was no
+RSA key on the service to sign with.
 An unknown or revoked token gives `{"active":false}` with **200** — RFC 7662 §2.2 makes an inactive token a
 result, not an error.
 

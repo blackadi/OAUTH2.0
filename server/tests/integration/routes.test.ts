@@ -243,6 +243,48 @@ describe("Integration: all API routes", () => {
       expect(res.text).toContain('"active":true')
     })
 
+    // RFC 9701. This action used to fall through to `default:` and answer 500 — the only live 500 among
+    // the FAPI 2.0 Message Signing requirements. `responseContent` is the signed JWT itself.
+    it("returns the signed JWT and its media type on action JWT", async () => {
+      const jwt = "eyJhbGciOiJSUzI1NiIsInR5cCI6InRva2VuLWludHJvc3BlY3Rpb24rand0In0.eyJpc3MiOiJ4In0.sig"
+      mockApi.introspection.standardProcess.mockResolvedValue({ action: "JWT", responseContent: jwt })
+
+      const res = await request(app).post("/api/introspection/standard")
+        .set("Authorization", ADMIN_BASIC)
+        .set("Accept", "application/token-introspection+jwt")
+        .type("form").send("token=at-1").expect(200)
+
+      expect(res.headers["content-type"]).toContain("application/token-introspection+jwt")
+      expect(res.text).toBe(jwt)
+    })
+
+    // Authlete requires `rsUri` alongside the JWT Accept header ([A404301]) and answers BAD_REQUEST
+    // without it. That 400 is deliberately passed through: `aud` names the calling resource server, and
+    // the server has no honest way to guess which one that is.
+    it("passes through Authlete's 400 when the JWT form is requested without rsUri", async () => {
+      mockApi.introspection.standardProcess.mockResolvedValue({
+        action: "BAD_REQUEST",
+        responseContent: '{"error":"invalid_request","error_description":"[A404301] ..."}',
+      })
+
+      const res = await request(app).post("/api/introspection/standard")
+        .set("Authorization", ADMIN_BASIC)
+        .set("Accept", "application/token-introspection+jwt")
+        .type("form").send("token=at-1").expect(400)
+      expect(res.text).toContain("A404301")
+    })
+
+    it("forwards the Accept header so the JWT form is reachable at all", async () => {
+      mockApi.introspection.standardProcess.mockResolvedValue({ action: "OK", responseContent: "{}" })
+      await request(app).post("/api/introspection/standard")
+        .set("Authorization", ADMIN_BASIC)
+        .set("Accept", "application/token-introspection+jwt")
+        .type("form").send("token=at-1")
+
+      const sent = mockApi.introspection.standardProcess.mock.calls[0][0].standardIntrospectionRequest
+      expect(sent.httpAcceptHeader).toBe("application/token-introspection+jwt")
+    })
+
     it("rejects an unauthenticated caller without calling Authlete", async () => {
       mockApi.introspection.standardProcess.mockClear()
       await request(app).post("/api/introspection/standard")

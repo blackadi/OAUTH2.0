@@ -104,6 +104,88 @@ against it before calling the capstone complete._
 - [x] **2026-08-12 — B1-W6: the refresh flow reissues ID tokens again, via the API that exists for it** (below)
 - [x] **2026-08-12 — T1-17: five unprobed behaviours, five answers, and no code owed** (below)
 - [x] **2026-08-13 — T1-9 + T1-10 + 6749-W1: grant management became a real protected resource** (below)
+- [x] **2026-08-13 — B1-W1 + B1-W2 + MS-W1: a debugging endpoint stopped handing out tickets** (below)
+
+### 2026-08-13 — B1-W1, B1-W2, MS-W1 (= 9701-W1): the ticket leak and the last live 500
+
+**Why this matters to a future session:** **`/api/jar/process` was unauthenticated and returned Authlete's
+entire authorization response — including the `ticket`.** A ticket is a credential: whoever holds one can
+drive an authorization to completion. It also returned the full `service` configuration and the `client`
+object, and answered **200 for everything**, including `BAD_REQUEST`. It now requires admin Basic auth and
+returns an allowlist. Separately, **`Accept: application/token-introspection+jwt` returned 500** — the only
+live 500 among the FAPI 2.0 Message Signing requirements — and now returns a signed RFC 9701 JWT.
+**684 tests / 59 files.**
+
+**A correction I owe this log.** The plan for this batch asserted that `standardProcess` sends `{parameters}`
+alone and therefore could never reach `action: JWT`. That was wrong — I had read only the first 80 lines of
+`introspection.service.ts`; it has forwarded `httpAcceptHeader` and `rsUri` all along. The real defect was one
+missing `case` in the controller. The fix got **smaller** than planned, and the lesson is the ordinary one:
+read the whole function before describing what it does.
+
+**What `/api/jar/process` returns now.** An **allowlist** — `action`, `resultCode`, `resultMessage`,
+`responseContent`, `scopes` — not a denylist, so the next field the SDK adds cannot leak by default:
+
+| | Before | Now |
+|---|---|---|
+| no credentials | 200, full response **including `ticket`** | **401**, Authlete never called |
+| bad request object | **200** with `action: BAD_REQUEST` | **400**, `[A005328]` in `resultMessage` |
+| `ticket` / `service` / `client` | returned | **never returned** |
+
+**The work item said `action` + `responseContent` only. I kept `resultMessage` and `scopes` on purpose**, and
+the reason generalises: **this endpoint has no specification shape.** No RFC defines `/api/jar/process` — it is
+this repo's own debugging surface. So "return `responseContent` as the body", which is the right answer for
+PAR and Device, is not even a meaningful instruction here. What B1-W1 is actually about is the credential leak
+and the always-200. `resultMessage` and `scopes` are the endpoint's entire pedagogical value — they are how
+Module 05's lab shows *why* a request object was refused — and they are not secrets. **When a work item
+prescribes a shape, check whether the endpoint has one.**
+
+`responseContent: null` is deliberately kept too. On a debugging surface, *"Authlete returned no content"* is
+a fact worth seeing — it is precisely what made T1-7's `NO_INTERACTION` branch mislead everyone for months.
+
+**Auth posture: admin, not client.** Client authentication was considered and rejected for the same reason
+T1-1 recorded for introspection (**7662-W6**): nothing here can validate a client secret, so demanding one
+would look like protection and provide none. The gate runs **before** the Authlete call. **This settles a
+DR-12 dependency** — `jar.controller.ts` now makes an access-control decision, so it joins the
+Security-critical surfaces list, alongside `middleware/require-basic-auth.ts`.
+
+**RFC 9701 — reachable, conformant, and with a trap on either side.** Verified end to end:
+
+```
+Accept: application/token-introspection+jwt  +  rsUri
+  -> 200  Content-Type: application/token-introspection+jwt
+  -> {"alg":"RS256","typ":"token-introspection+jwt","kid":"rsa-1"}
+     claims: iss, aud, iat, token_introspection
+```
+
+**It signs with `rsa-1`, the key T1-2 registered.** Before 2026-08-12 the service had no RSA key, so this path
+could not have produced a signature even once handled — one configuration action quietly made a later code fix
+possible.
+
+Two things about `rsUri`, and they point in opposite directions:
+
+1. **Without it the JWT form fails**, `[A404301] The URI of the resource server is required when a JWT
+   introspection response is requested.` That 400 is **passed through unchanged**, deliberately: `rsUri`
+   becomes the `aud`, naming the resource server that asked, and this server has no honest way to guess which
+   one that is. Defaulting it would put a wrong `aud` on a token this OP signs.
+2. **It must not be sent on the ordinary path.** The vendored 3.0.16 spec: *"If the `rsUri` request parameter
+   is given and the token has audience values, Authlete checks if the value … is contained in the audience
+   values. If not contained, Authlete generates an introspection response with the `active` property set to
+   `false`."* An unconditional `rsUri` would therefore report audience-restricted tokens as **inactive** —
+   a silent, wrong "this token is dead". The parameter is caller-supplied and stays that way.
+
+**Two more hand-rolled auth readers retired.** `controllers/vci.controller.ts` had a fourth `startsWith("Bearer ")`
+— its credential endpoints are protected resources, so they now use `extractAccessToken()` and accept the
+`DPoP` scheme and case-insensitive schemes, both previously refused. And `middleware/require-basic-auth.ts`
+matched `"Basic "` case-sensitively while its sibling `parseBasicAuth` never did; RFC 9110 §11.1 makes the
+scheme case-insensitive, and the fix is strictly widening — it can only accept requests that should already
+have been accepted.
+
+**Deferred with a reason, not dropped.** T1-11's `responseContent`-as-body half for **PAR, Device and DCR**
+(9126-W2, 8628-W3, 7591-W1) is scheduled as its own batch. The premise is probe-confirmed — PAR returns
+exactly `{"expires_in":600,"request_uri":"urn:…"}` and Device exactly RFC 8628 §3.2's shape — but the change
+**breaks the client SPA**, which reads camelCase envelope fields (`ParSection.tsx:112`,
+`DeviceSection.tsx:159-160`). Server, SPA and lab transcripts belong in one commit; mixing them with a
+credential-leak fix would make both harder to review.
 
 ### 2026-08-13 — T1-9, T1-10, 6749-W1: the token-presentation cluster
 

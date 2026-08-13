@@ -1915,7 +1915,13 @@ const spec: Record<string, unknown> = {
     "/jar/process": {
       post: {
         summary: "Process JWT-authenticated request",
-        description: "Processes a JAR (JWT-Secured Authorization Request) per RFC 9101. Validates the request object JWT and extracts OAuth parameters.",
+        description:
+          "Processes a JAR (JWT-Secured Authorization Request) per RFC 9101. Validates the request object JWT " +
+          "and reports how Authlete parsed it. This is a debugging surface, not a specification endpoint, and " +
+          "it requires admin Basic auth: the underlying authorization response carries a ticket, which is a " +
+          "credential. The response is an allowlist of action, resultCode, resultMessage, responseContent and " +
+          "scopes; ticket, service and client are never returned.",
+        security: [{ basicAuth: [] }],
         requestBody: {
           content: {
             "application/json": {
@@ -1931,9 +1937,10 @@ const spec: Record<string, unknown> = {
           },
         },
         responses: {
-          "200": { description: "Processed request parameters" },
-          "400": { description: "Invalid request object" },
-          "401": { description: "Client authentication failed" },
+          "200": { description: "Authlete parsed the request object; outcome in `action`" },
+          "400": { description: "Invalid request object, or a missing `request`/`clientId` field" },
+          "401": { description: "Admin Basic auth missing or invalid" },
+          "500": { description: "Authlete internal error" },
         },
       },
     },

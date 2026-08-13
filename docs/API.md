@@ -116,6 +116,13 @@ belong in the **body** — the `Authorization` header carries the admin credenti
 **Response:** 200 with the RFC 7662 body (`{"active":false}` for an unknown or revoked token — §2.2 makes an
 inactive token a result, not an error), 400, 401 (missing/invalid admin credentials), 500.
 
+**JWT responses (RFC 9701).** Send `Accept: application/token-introspection+jwt` and the response is a signed
+JWT with that same media type, carrying `iss`, `aud`, `iat` and a `token_introspection` claim. The JWT form
+**also requires `rsUri` in the body** — it becomes the `aud`, naming the resource server that asked. Without it
+Authlete answers `400 [A404301] The URI of the resource server is required when a JWT introspection response is
+requested.`, which is passed through unchanged: `aud` identifies the caller, and the server has no honest way
+to guess which resource server that is. This returned **500** until 2026-08-13.
+
 ### `POST /api/revocation`
 RFC 7009 token revocation.
 

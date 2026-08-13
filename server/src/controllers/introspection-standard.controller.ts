@@ -34,6 +34,20 @@ export const introspectionStandardController = {
           res.setHeader("Content-Type", "application/json");
           return res.send(result.responseContent);
 
+        // RFC 9701 §5: the resource server asked for a JWT response with
+        // `Accept: application/token-introspection+jwt`, and §4 requires that media type on the way back.
+        // `responseContent` is the signed JWT itself — verified live: `typ: token-introspection+jwt`,
+        // `alg: RS256`, `kid: rsa-1`, carrying `iss`, `aud`, `iat` and the `token_introspection` claim.
+        //
+        // This branch used to fall through to `default:` and answer **500**, which was the only live 500
+        // among the FAPI 2.0 Message Signing requirements. Note the JWT form additionally needs `rsUri`
+        // in the request body — without it Authlete answers `[A404301] The URI of the resource server is
+        // required …`, which arrives here as `BAD_REQUEST` → 400. That 400 is deliberately left alone:
+        // `aud` identifies the calling resource server, and the server has no honest way to guess it.
+        case "JWT":
+          res.setHeader("Content-Type", "application/token-introspection+jwt");
+          return res.send(result.responseContent);
+
         default: {
           const log = req.logger || logger;
           log.error("Unknown introspection action", { action: result.action });

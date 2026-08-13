@@ -199,13 +199,29 @@ jar() {   # jar '<js expression building the object>'  -> posts it to /api/jar/p
   const jwt = '"$1"';
   fs.writeFileSync("/tmp/jar-body.json", JSON.stringify({request: jwt, clientId: process.env.CID}));
   ' --input-type=module
-  curl -s -X POST "$API/jar/process" -H "Content-Type: application/json" --data-binary @/tmp/jar-body.json \
+  curl -s -X POST "$API/jar/process" -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" \
+    -H "Content-Type: application/json" --data-binary @/tmp/jar-body.json \
     | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);
         console.log("action:",j.action);console.log(j.resultMessage);
-        if(j.scopes)console.log("scopes:",JSON.stringify(j.scopes.map(s=>s.name||s)),"ticket:",!!j.ticket);})'
+        if(j.scopes)console.log("scopes:",JSON.stringify(j.scopes.map(s=>s.name||s)));})'
 }
 export CID="$CLIENT_ID"
 ```
+
+**Two things about that `curl` are worth a moment.**
+
+**It authenticates.** `/api/jar/process` needs this deployment's admin credentials, and until 2026-08-13 it
+did not. The reason is the field you will *not* see in any output below: Authlete's authorization response
+carries a **`ticket`**, and a ticket is a credential — whoever holds one can drive an authorization to
+completion. An unauthenticated endpoint handing those out is a real hole, and it was open. The endpoint now
+returns an allowlist of `action`, `resultCode`, `resultMessage`, `responseContent` and `scopes`, and drops
+everything else — including `ticket`, the full `service` configuration and the `client` object.
+
+**A debugging endpoint is still an endpoint.** This one is this repo's own invention; no RFC defines it. That
+is exactly why it needed a deliberate decision rather than a default. When you build one of these, ask two
+questions: *what does the upstream response contain that I am about to forward?*, and *who is allowed to ask?*
+
+
 
 ### Step 1 — an unsigned object is refused
 
@@ -300,7 +316,7 @@ jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", over: {code_ch
 ```
 action: INTERACTION
 [A004001] Authlete has successfully issued a ticket to the service (API Key = …) for the authorization request from the client (ID = …). [response_type=code, openid=false]
-scopes: ["profile"] ticket: true
+scopes: ["profile"]
 ```
 
 **`INTERACTION` means accepted** — the AS verified your signature, unpacked the object, and is ready to ask the
@@ -324,7 +340,7 @@ jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", key: J.registe
 ```
 action: INTERACTION
 [A004001] Authlete has successfully issued a ticket to the service (API Key = …) for the authorization request from the client (ID = …). [response_type=code, openid=false]
-scopes: ["profile"] ticket: true
+scopes: ["profile"]
 ```
 
 No console step, no `/tmp` key. Now send the **unsigned** object to the *same* client and compare it with
