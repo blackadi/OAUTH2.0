@@ -108,6 +108,43 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — T1-14 + T1-15: back-channel logout logged nobody out** (below)
 - [x] **2026-08-13 — T1-16 + T1-18: one line, an honest 500, and a work item that could not do what it said** (below)
 - [x] **2026-08-13 — T1-20 + the three S1 residues: CIBA could not authenticate its recommended client, and CI was not checking the client at all** (below)
+- [x] **2026-08-13 — PKCE is enforced; the last open S1 is closed** (below)
+
+### 2026-08-13 — PKCE enforced, and the last open S1 closes
+
+**Why this matters to a future session:** **`RFC7636-pkce.md` drops S1 → S3.** PKCE is now *required* on this
+deployment, which is the claim the S1 rested on being false. `pkceRequired` and `pkceS256Required` are `true`
+on the SPA client (`4277838306`) and the `private_key_jwt` client (`2176571218`).
+
+**Verified live at all four clients, because the config saying `true` and Authlete refusing are two different
+claims:**
+
+| Request | Result |
+|---|---|
+| enforcing client, no `code_challenge` | refused — `[A124301]` |
+| enforcing client, `code_challenge_method=plain` | refused — `[A124308] … must be 'S256'.` |
+| enforcing client, `S256` | `INTERACTION` — proceeds |
+| `1523514379` / `1678274156`, no challenge at all | `INTERACTION` — **deliberately still permitted** |
+
+**The two exceptions are curriculum infrastructure and must not be "fixed".** Module 02 teaches the plain
+code flow; Module 03 shows what it costs. **A lesson that criticises a flow needs a client that still
+permits it.** Both are named in `AGENTS.md` with that instruction, and Module 03's setup table already
+required `pkceRequired: false` for its client — the lab was right before the service was.
+
+**One detail worth keeping:** the refusals arrive as **`action: LOCATION`** — an error *redirect* carrying
+`error`, not a JSON body — because `response_type` is present. That is the `response_type`-dependent error
+channel already documented under **Quirks & gotchas**, showing up in a new place. A learner expecting JSON
+will read an empty body and conclude nothing happened.
+
+**Module 03 gained the comparison**, which is a better lesson than the recommendation was: two clients on one
+service now answer differently, so *"you should require PKCE"* becomes something you can observe rather than
+accept. The module shows both error codes.
+
+**What this closes.** The S1 register's last open entry with a live security consequence. **Gate 4 Q1 is
+superseded** — it asked whether the entry stays S1 *until PKCE is actually required*; it now is. The
+remaining departure is two documented teaching clients, which is the same standing as GM-W1's 24-hour token
+lifetime: a recorded decision with a stated reason, not a gap.
+
 
 ### 2026-08-13 — T1-20, the S1 residues, and a CI gate that never fired
 

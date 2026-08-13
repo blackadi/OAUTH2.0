@@ -93,7 +93,7 @@ jwt.verify(logoutToken, publicKey, { algorithms: ["RS256", "ES256"] });   // :57
 ```
 
 `jsonwebtoken` validates `exp` and `nbf` by default, so §2.6 step 4 is half-met; `iss` and `aud` are only checked
-when the `issuer` and `audience` options are passed, and they are not. `PROGRESS.md:1324-1325` states this exactly:
+when the `issuer` and `audience` options are passed, and they are not. `PROGRESS.md:1361-1362` states this exactly:
 *"passes no `issuer` or `audience`, so `iss` and `aud` are never checked and only the `events` claim is validated."*
 
 **The `nonce` omission is the interesting one**, because §2.4 explains why the prohibition exists:
@@ -115,7 +115,7 @@ out any subject at this endpoint, because nothing requires the token to be addre
 deployment (`00-inventory.md` §7), so **every** request to this endpoint gets that response, blaming the caller's
 token for the server's missing configuration.
 
-`PROGRESS.md:1320-1325` records this with the server log confirming the real cause
+`PROGRESS.md:1357-1362` records this with the server log confirming the real cause
 (*"JWKS_URI must be configured to verify backchannel logout tokens"*), and identifies it as the third instance of
 one pattern — *"a server configuration error reported as a caller error"* — after Module 06's Zod failure and
 this same file. §2.8 does require 400 for a validation failure, so the status is defensible; the `error_description`
@@ -183,7 +183,7 @@ damage: destroying `req.session` is not merely insufficient, it is the wrong obj
 | Title *"incorporating errata set 1"*, Final, **15 Dec 2023** | `SPEC-INVENTORY.md:185` | **Confirmed** against the primary source this session | **Accurate** |
 | §2.4's `nonce` MUST NOT, with the reason quoted | `SPEC-INVENTORY.md:196-197` | Quoted correctly — and the check is absent from the code | **Accurate doc, absent control** |
 | "The SDK exposes no backchannel logout token API" | `AGENTS.md`; `01-spec-matrix.md` §5.2 | Confirmed — the raw `fetch()` at `:34` is justified | **Accurate** |
-| Back-channel logout receipt cannot work (`JWKS_URI` unset), misreports why, and never checks `iss`/`aud` | `PROGRESS.md:1320-1325` | Confirmed line by line | **Accurate** |
+| Back-channel logout receipt cannot work (`JWKS_URI` unset), misreports why, and never checks `iss`/`aud` | `PROGRESS.md:1357-1362` | Confirmed line by line | **Accurate** |
 | "properly destroys `req.session`" | `AGENTS.md` | The wrong session object; the user is not logged out — F-5 | `DOC_INCORRECT` / **S2** |
 | The second `fetch()` duplicates `authleteApi.client.list` | `01-spec-matrix.md` §5.2 | Confirmed at `:122-171` | **Accurate** |
 | Nothing notes that no client has a `backchannel_logout_uri`, so `deliver-all` is a no-op | `AGENTS.md`, `BACKCHANNEL-LOGOUT-TUTORIAL.md` | F-4 | **Omission** / S3 |
@@ -193,7 +193,7 @@ damage: destroying `req.session` is not merely insufficient, it is the wrong obj
 
 - OpenID Connect Back-Channel Logout 1.0 incorporating errata set 1 §§2.4, 2.5, 2.6, 2.8, and the OP/client metadata definitions — `https://openid.net/specs/openid-connect-backchannel-1_0.html`, fetched this session. §2.4's `nonce` prohibition and §2.6's eleven validation steps quoted.
 - Live probe 3 (2026-08-10): `backchannel_logout_supported`, `backchannel_logout_session_supported`, per-client `backchannelLogoutUri` — `SERVICE-CONFIG-PROBE.md` §8, §10
-- Repo-sourced live evidence: `PROGRESS.md:1320-1325`
+- Repo-sourced live evidence: `PROGRESS.md:1357-1362`
 - Code: `controllers/logout.controller.ts:40-108`, `services/backchannel-logout.service.ts:28,34,64-111,122-171`, `utils/jwksClient.ts:30`, `config/authlete.config.ts:16`
 - Phase 1: `01-spec-matrix.md` §5.2 (the SDK-gap confirmation)
 
@@ -203,7 +203,7 @@ damage: destroying `req.session` is not merely insufficient, it is the wrong obj
 |---|---|---|---|
 | BCL-W1 | Complete the §2.6 validation | S | ✅ **DONE 2026-08-13 (T1-14)**, exactly as specified, plus the configuration that makes `issuer`/`audience` meaningful — see **JOSE-W1** for the generalised rule. 16 unit tests including the different-`aud` case, and all six rejection paths re-run live against a locally-served JWKS. **The endpoint had no unit or integration coverage whatsoever before this** — only two E2E assertions in a suite that is never run locally, which is why a green suite said nothing about it. |
 | BCL-W2 | Terminate the **user's** session, not the request's | M | ✅ **DONE 2026-08-13 (T1-15).** `destroySessionsForSubject` (`utils/session-store.ts`) enumerates the store, matches `session.user`, and destroys each; a test seeds a **real** `express-session` MemoryStore and proves alice's two sessions die while bob's survives. `AGENTS.md`'s *"properly destroys `req.session`"* is corrected — it did precisely that, and that was the bug. **`sid` is deliberately not matched**: this OP issues no `sid` of its own, so there is nothing to match against; a `sid`-only token is accepted (§2.6 step 5 is satisfied) and acts on nothing, logged at `error`. **The finding the work item did not predict:** the two supported stores return **different shapes** from `Store.all()`, so a naive implementation silently terminates nothing on one of them. |
-| BCL-W3 | Distinguish server misconfiguration from a bad token | S | ✅ **DONE 2026-08-13**, with T1-14/T1-15 since it is the same function. Unset `JWKS_URI` — or either new expectation — yields **500 `server_error`** and an operator-facing log naming which knob is missing. **The check runs before the token is parsed**, which is stronger than the criteria asked: a server that cannot verify a signature must not render *any* verdict on the token, so even the `events`-claim rejection became a 500 rather than a true-but-unearned 400. `FED-W5` is the same bug in the federation service and stays in **T1-18**. Same fix pattern as the two sibling instances `PROGRESS.md:1291-1293` names. |
+| BCL-W3 | Distinguish server misconfiguration from a bad token | S | ✅ **DONE 2026-08-13**, with T1-14/T1-15 since it is the same function. Unset `JWKS_URI` — or either new expectation — yields **500 `server_error`** and an operator-facing log naming which knob is missing. **The check runs before the token is parsed**, which is stronger than the criteria asked: a server that cannot verify a signature must not render *any* verdict on the token, so even the `events`-claim rejection became a 500 rather than a true-but-unearned 400. `FED-W5` is the same bug in the federation service and stays in **T1-18**. Same fix pattern as the two sibling instances `PROGRESS.md:1328-1330` names. |
 | BCL-W4 | Configure `JWKS_URI`, or state that receipt is not runnable | S | ⚠️ **Half done 2026-08-13 — the tutorial now says so plainly**, and the endpoint says so itself with a `500` naming the missing setting rather than blaming the token. **The receipt path was also proven runnable**: T1-14's verification stood up a local JWKS and drove all seven cases through the live server, so "not runnable" is now "not configured", which is a different and much smaller claim. Configuring it permanently is a deployment decision, not a code one. |
 | BCL-W5 | Advertise the capability and register one `backchannel_logout_uri` | S | `backchannel_logout_supported: true` in discovery and one client with a URI, so F-4's code path executes for the first time. **Blocked on RPL-W2** — do not register a URI while `id_token_hint` is unverified. |
 | BCL-W6 | Replace the duplicate client-listing `fetch()` with `authleteApi.client.list` | S | The only remaining raw `fetch()` to Authlete is the justified one at `:34`. |

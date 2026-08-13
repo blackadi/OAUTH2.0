@@ -24,7 +24,7 @@ This project implements a complete OAuth 2.0 and OpenID Connect authorization se
 > | Here | In production |
 > |---|---|
 > | ROPC and implicit grants **enabled** | both retired — OAuth 2.1, RFC 9700 §2.4 and §2.1.2 |
-> | PKCE **not required** | required for every client (RFC 9700 §2.1.1) |
+> | PKCE optional on **two teaching clients** | required for every client (RFC 9700 §2.1.1) |
 > | Access tokens live **24 hours** | minutes |
 > | Three token-exchange defects **left in on purpose** | fixed — see `AGENTS.md` → *Deliberate defects* |
 >
@@ -110,7 +110,7 @@ npm --prefix client run dev    # SPA on :3001 (proxies /api → :3000)
 | Feature | Status | Documentation |
 |---------|--------|---------------|
 | Authorization Code | Working | [API Reference](docs/API.md) |
-| PKCE (RFC 7636) | **Supported, not required** — `pkceRequired` is `false` on every client, so a code flow *without* PKCE still succeeds. RFC 9700 §2.1.1 says clients MUST use it. Deliberate: Module 02 teaches the plain flow and Module 03 shows what it costs, which needs both states to exist | [PKCE Tutorial](docs/PKCE-TUTORIAL.md) |
+| PKCE (RFC 7636) | **Required on the application clients, deliberately optional on two teaching clients** — `pkceRequired` + `pkceS256Required` are `true` for the SPA and the `private_key_jwt` client, so a code flow without `code_challenge` is refused (`[A124301]`) and `plain` is refused (`[A124308]`). They stay `false` on the two clients Module 02 and Module 03 use, because those modules teach the plain flow *and then* what it costs — the lesson needs both states to exist. RFC 9700 §2.1.1 | [PKCE Tutorial](docs/PKCE-TUTORIAL.md) |
 | Client Credentials | Working | [API Reference](docs/API.md) |
 | Resource Owner Password (ROPC) | **Working, and deliberately so** — the grant is retired by OAuth 2.1 and RFC 9700 §2.4. It is enabled here *because* Modules 01 and 07 teach why it was removed, using a live transcript. Do not copy this into a real deployment | [API Reference](docs/API.md) |
 | Refresh Tokens | Working | [API Reference](docs/API.md) |
