@@ -1,5 +1,33 @@
 # RFC 9449 — OAuth 2.0 Demonstrating Proof of Possession (DPoP)
 
+> ## ✅ F-1 AND F-2 CLOSED — 2026-08-13 (T1-9, T1-10)
+>
+> **F-1 (`htu` carried the query string).** All five call sites now derive `htu` from `dpopHttpTarget()`.
+> Proven live: `GET /api/gm/{id}?verbose=true` with a valid proof returns **200**, where any request with a
+> query string previously failed proof validation despite a correct client. `targetUri` is sent only where the
+> SDK request model has it — `IntrospectionRequest` and `UserinfoRequest` do; `TokenRequest`,
+> `PushedAuthorizationRequest` and `GMRequest` do not. **9449-W2** shipped with it: a caller can no longer
+> supply `targetUri`, closing the last place the URI a proof is validated against was attacker-chosen.
+>
+> **F-2 (grant management spoke neither §7.1 nor §7.2).** `/api/gm/:grantId` is now a full protected resource,
+> answering identically to UserInfo, verified live in all four cases:
+>
+> | Presentation | Before | Now |
+> |---|---|---|
+> | `DPoP <bound>` + proof | `401` — unreachable | **200** |
+> | `Bearer <bound>` + proof | accepted, proof honoured — the §7.2 downgrade | **400 `invalid_request`** |
+> | `DPoP <bound>`, no proof | `401 invalid_token` *"invalid or expired"* — wrong about the cause | **401 `invalid_dpop_proof`** |
+> | no token | `401 invalid_token` | **401, no error code**, `WWW-Authenticate: Bearer, DPoP` (RFC 6750 §3.1) |
+>
+> **Two things the work items did not predict.** `/api/gm` makes **two** Authlete calls and *both* check the
+> binding independently — `/gm` without a forwarded proof answers `[A281305]`, so fixing the middleware alone
+> would have moved the 401 one call later; and the **same proof serves both calls**, which Authlete does not
+> treat as a replay. Both established by probe before the code was written.
+>
+> **Severity unchanged at S2**, and that was decided by evidence rather than by default: 9449-W4 (T1-17) showed
+> `/auth/introspection` enforces `cnf.jkt` even with no proof present (`[A065308]`), so the fail-open case that
+> would have made this S1 does not exist. F-3 and F-4 (the nonce path) are untouched.
+
 - **Verdict:** `PARTIAL`
 - **Severity:** **S2**
 - **Authlete version required:** **2.2+** (`01-spec-matrix.md` §2); running 3.0
@@ -40,11 +68,11 @@
 | 2 | Proof payload: `jti`, `htm`, `htu`, `iat` | §4.2 | ✅ `client/src/services/dpop.service.ts:50-57` |
 | 3 | `ath` present when a proof accompanies an access token | §4.2, §7 | ✅ `client/src/services/dpop.service.ts:59-61` |
 | 4 | Twelve validation checks | §4.3 | ⊘ Authlete's |
-| 5 | `htu` excludes query and fragment | §4.2, §4.3 #9 | ⚠️ correct at UserInfo only — **F-1** |
+| 5 | `htu` excludes query and fragment | §4.2, §4.3 #9 | ✅ **all five call sites, 2026-08-13 (T1-9)** — was correct at UserInfo only; see the banner |
 | 6 | Valid proof required at the token endpoint to bind a token; `token_type: DPoP` returned | §5 | ✅ `token.service.ts:76-83`; `token_type: "DPoP"` observed (`FAPI-TUTORIAL.md:432`) |
 | 7 | `cnf.jkt` = RFC 7638 thumbprint of the proof key | §6 | ⊘ Authlete's — **verified live**, `[A089312]` on a foreign key (`modules/05…/lab.md:735`) |
-| 8 | A bound token is presented with the `DPoP` scheme; the RS checks the proof and matches the key | §7.1 | ✅ UserInfo (`userinfo.service.ts:38-45`, `utils/dpop.ts:111-141`); ❌ Grant Management — **F-2** |
-| 9 | An RS MUST reject a bound token received as a bearer token | §7.2 | ✅ UserInfo, by delegation — `401 [A089311]`, verified (`modules/05…/lab.md:684-688`); ❌ Grant Management — **F-2** |
+| 8 | A bound token is presented with the `DPoP` scheme; the RS checks the proof and matches the key | §7.1 | ✅ **both protected resources, 2026-08-13 (T1-10)** — UserInfo and Grant Management now share `utils/dpop.ts:111-141` |
+| 9 | An RS MUST reject a bound token received as a bearer token | §7.2 | ✅ **both, 2026-08-13** — refused locally as `400 invalid_request`, and by Authlete when presented with no proof (`[A089311]` UserInfo, `[A065308]` introspection, `[A281305]` `/gm`) |
 | 10 | AS: missing nonce → **400** `use_dpop_nonce` + `DPoP-Nonce` | §8 | ⊘ Authlete's, **unexercisable** — F-3; and `AGENTS.md` documents 401 — **F-4** |
 | 11 | AS: mismatched nonce MUST be rejected; response MAY carry a fresh nonce | §8, §8.2 | ⊘ Authlete's, unexercisable — F-3 |
 | 12 | RS: nonce challenge uses **401** + `WWW-Authenticate: DPoP` + `DPoP-Nonce` | §9 | ⊘ Authlete's, unexercisable — F-3 |
@@ -133,14 +161,23 @@ Consequences, in order of how much they matter:
 2. **`Bearer` + a proof is accepted, and the proof is validated.** That is the §7.2 downgrade shape: `Bearer` becomes a working route for a bound token. `userinfo.service.ts:52-58` refuses this same presentation with `400 invalid_request`; two protected surfaces in one codebase, opposite answers.
 3. **The failing-open case cannot be settled from here.** `Bearer <bound token>` with **no** proof forwards no `dpop` field, so whether Authlete's proprietary `/auth/introspection` still enforces the `cnf.jkt` binding is unknown. At UserInfo it does (`[A089311]`, verified 2026-08-04). If `/auth/introspection` does not, a stolen bound token works at `/api/gm/*` with a plain `Bearer` header and sender-constraint is defeated there. The middleware's own comment at `:64` already says `UNVERIFIED: no DPoP-bound grant-management token exists on this deployment to test against.`
 
-**Severity S2, not S1, and the reason is worth stating.** Case 2 still validates the proof, so possession of
-the private key is still required — the security property survives the scheme violation. S1 would need case 3
-to resolve against us, which is unverified. If the probe below shows Authlete does not check the binding when
-no proof is supplied, **this becomes S1**.
+**Severity S2, not S1 — and as of 2026-08-12 that is settled rather than provisional.** Case 2 still validates
+the proof, so possession of the private key is still required; the security property survives the scheme
+violation. S1 would have needed case 3 to resolve against us, and **it did not**.
 
-**Named next action.** Mint a DPoP-bound token with `grant_management_query` scope, then call
-`POST /auth/introspection` with `{token}` and no `dpop` field, and read the `action`. One live call; settles
-case 3 in both directions. It is the same missing evidence the middleware comment names.
+> **✅ Case 3 closed 2026-08-12 (T1-17, work item 9449-W4).** `/auth/introspection` **does** enforce the
+> `cnf.jkt` binding when no `dpop` field is supplied — a bound token introspected with no proof returns
+> `UNAUTHORIZED` / `[A065308] Expected a DPoP header but none was provided.`, and a proof signed by a
+> different key returns `[A065309]` thumbprint mismatch. **A stolen bound token therefore does not work at
+> `/api/gm/*` with a plain `Bearer` header**, sender-constraint is not defeated there, and this finding stays
+> **S2**. `middleware/require-grant-ownership.ts:64`'s `UNVERIFIED` comment is now false and should be deleted
+> by 9449-W3 rather than re-dated.
+>
+> **Case 1 was reproduced in the same pass**, live rather than by reading: `Authorization: DPoP <token>` at
+> `GET /api/gm/{grant_id}` returns **401 `invalid_token` — *"Access token is invalid or expired"***. Note the
+> message is **wrong about the cause**: the token is neither invalid nor expired, the extractor simply did not
+> recognise the scheme. 9449-W3 should fix that string as well as the `startsWith("Bearer ")` test above it.
+> Full transcripts in `PROGRESS.md`, entry 2026-08-12 T1-17.
 
 ## Finding F-3 — the nonce path cannot be exercised on this deployment (S3)
 
@@ -212,10 +249,10 @@ something broken, from the file that is supposed to be authoritative.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 9449-W1 | Route all DPoP `htu` construction through `dpopHttpTarget()` | S | `token.service.ts`, `introspection.service.ts`, `par.service.ts`, `require-grant-ownership.ts` all use it; `targetUri` set where the request model has it (introspection); a test asserts a query string does not reach `htu`. |
-| 9449-W2 | Stop reading `targetUri` from the introspection request body | S | `introspection.service.ts:51` removed; the value comes from `dpopHttpTarget()`. Matches the rule the file's own comment states. |
-| 9449-W3 | Accept the `DPoP` scheme at `/api/gm/:grantId`, and refuse the downgrade | M | `extractAccessToken()` replaces `extractBearerToken()`; `DPoP` + proof works, `DPoP` without a proof → `401 invalid_dpop_proof`, `Bearer` + proof → `400 invalid_request`. Scheme matching case-insensitive per RFC 9110 §11.1. Unit tests per case. |
-| 9449-W4 | Settle whether `/auth/introspection` enforces `cnf.jkt` without a proof | S | One live call with a bound token and no `dpop`. If the binding is not enforced, 9449-W3 is reclassified **S1** and prioritised accordingly. |
+| 9449-W1 | Route all DPoP `htu` construction through `dpopHttpTarget()` | S | ✅ **DONE 2026-08-13 (T1-9).** All five sites now use it — the four named plus **`grant-management.service.ts`**, which the item did not list because the `/gm` call was not known to take DPoP fields at all. `targetUri` is sent only where the request model has it: `IntrospectionRequest` and `UserinfoRequest` yes; `TokenRequest`, `PushedAuthorizationRequest` and `GMRequest` no — checked in the SDK models rather than assumed. Regression tests assert a query string never reaches `htu` at each site, and it was proven live: a `GET /api/gm/{id}?verbose=true` with a valid proof now returns **200** where it previously failed validation. **9126-W4 closes with this.** |
+| 9449-W2 | Stop reading `targetUri` from the introspection request body | S | ✅ **DONE 2026-08-13 (T1-9).** The body read is deleted and replaced by a comment naming the reason, so it is not restored by someone tidying. `targetUri` now comes from `dpopHttpTarget()` alongside `htu`. This closes the last place a caller could choose the URI its own proof was validated against — the identical defect already fixed at UserInfo, where a proof minted for `/api/par` had returned `200`. A unit test drives a body `targetUri` of `https://…/api/par` and asserts the request carries the real one. |
+| 9449-W3 | Accept the `DPoP` scheme at `/api/gm/:grantId`, and refuse the downgrade | M | ✅ **DONE 2026-08-13 (T1-10).** All four cases shipped and **verified live, not just unit-tested**: `DPoP` + proof → **200** (was 401), `Bearer` + proof → **400 `invalid_request`**, `DPoP` without a proof → **401 `invalid_dpop_proof`**, and no token → **401 with no error code** and `WWW-Authenticate: Bearer, DPoP` (RFC 6750 §3.1, matching UserInfo — approved separately because it changed a live lab transcript). Scheme matching is case-insensitive by construction now that `extractAccessToken()` owns it. **The acceptance criteria were incomplete and that is the lesson**: they name only the middleware, but `/api/gm` makes **two** Authlete calls and both check the binding independently — `/gm` without a forwarded proof answers `[A281305] The access token is bound to a public key but the grant management request includes no DPoP header.` Fixing the middleware alone would have moved the 401 one call later. `grant-management.service.ts` forwards the same proof, which Authlete accepts rather than treating as a replay (verified). **GM-W4 closed in the same change.** |
+| 9449-W4 | Settle whether `/auth/introspection` enforces `cnf.jkt` without a proof | S | ✅ **DONE 2026-08-12 (T1-17). It enforces it, and it fails closed** — so **9449-W3 is NOT reclassified; F-2 stays S2.** A `client_credentials` token minted with a proof (`token_type: DPoP`) was introspected three ways: correct proof → `OK` `[A056001]`; **no `dpop` at all → `UNAUTHORIZED` `[A065308] Expected a DPoP header but none was provided.`**; a proof signed by a different key → `UNAUTHORIZED` `[A065309] Thumbprint of the provided DPoP key does not match the expected DPoP thumbprint.` Same posture as UserInfo under a different code (`[A089311]` there), and Authlete's challenge already carries the `DPoP` scheme plus an accurate `algs` list — so `AGENTS.md`'s "forward `responseContent` verbatim, do not hand-write a DPoP challenge" rule extends to this endpoint. The `UNVERIFIED` comment at `middleware/require-grant-ownership.ts:64` can be **deleted**, not re-dated. Transcript in `PROGRESS.md`, entry 2026-08-12 T1-17. |
 | 9449-W5 | Correct `AGENTS.md:303` | S | 400 `use_dpop_nonce` for the AS (§8), 401 for a resource server (§9), `use_dpop_nonce` named as the retry code for a stale nonce, and the `FAPI-TUTORIAL.md` pointer either made good or dropped. |
 | 9449-W6 | Produce one real nonce transcript | M | Either set `dpopNonceRequired` on the service, or send the SDK's per-request override from the token/PAR calls; capture the actual status and headers; rewrite the nonce sections of `FAPI-TUTORIAL.md` and `PAR-TUTORIAL.md` against it. |
 | 9449-W7 | Enable `dpopRequired` on the `DPOP` client | S | The client named `DPOP` (1678274156) actually requires DPoP, so §5.2's `dpop_bound_access_tokens` semantics can be demonstrated — a token request without a proof is rejected. |

@@ -102,6 +102,230 @@ against it before calling the capstone complete._
 - [x] **2026-08-12 — T1-4 + T1-6: four Module 09a markers retired; the 24-hour lifetime kept on purpose** (below)
 - [x] **2026-08-12 — T1-5: `service.get()` works after six days down; T1-13 has no knob to turn** (below)
 - [x] **2026-08-12 — B1-W6: the refresh flow reissues ID tokens again, via the API that exists for it** (below)
+- [x] **2026-08-12 — T1-17: five unprobed behaviours, five answers, and no code owed** (below)
+- [x] **2026-08-13 — T1-9 + T1-10 + 6749-W1: grant management became a real protected resource** (below)
+
+### 2026-08-13 — T1-9, T1-10, 6749-W1: the token-presentation cluster
+
+**Why this matters to a future session:** **`/api/gm/:grantId` is now a protected resource in the same sense
+UserInfo is**, and the two answer identically because both route every presentation through
+`utils/dpop.ts`. Before today a DPoP-bound token could not be spent there *at all*, while `Bearer` plus a
+proof was accepted — wrong in both directions at once. Separately, **every `htu` in the server now comes from
+`dpopHttpTarget()`**, so a DPoP proof no longer fails on any request carrying a query string. Four files on
+the Security-critical surfaces list changed, so this went through plan mode. **665 tests / 58 files.**
+
+**The headline is not the code, it is that two probes rewrote the design before a line was written.**
+9449-W3's acceptance criteria describe one file. They are incomplete, and shipping them literally would have
+produced a bug:
+
+| Probe | Result | Consequence for the design |
+|---|---|---|
+| `/gm` with a bound token and **no** forwarded proof | `UNAUTHORIZED` — `[A281305] The access token is bound to a public key but the grant management request includes no DPoP header.` | `/api/gm` makes **two** Authlete calls and **both** check the binding. Fixing only the middleware moves the 401 one call later. `grant-management.service.ts` had to change too |
+| the **same** proof sent to `/auth/introspection` and then `/gm` | both `OK` | One proof serves both calls; no re-minting, and Authlete does not treat the second use as a replay |
+
+That is the third time in this phase that a symptom-derived work item named an incomplete or wrong remedy —
+after B1-W6 (wrong API) and T1-13 (no knob). **The tell each time was the same: the acceptance criteria never
+named the second call.** When an item says "fix the middleware", ask what the middleware is a gate *in front
+of*.
+
+**What `/api/gm` answers now**, all six verified live against Authlete, not only against mocks:
+
+| Presentation | Before | Now |
+|---|---|---|
+| `DPoP <bound>` + proof | `401` — the endpoint was unreachable for bound tokens | **200** |
+| `Bearer <bound>` + proof | accepted, proof honoured — the §7.2 downgrade | **400 `invalid_request`** |
+| `DPoP <bound>`, no proof | `401 invalid_token`, *"invalid or expired"* | **401 `invalid_dpop_proof`** |
+| no token | `401 invalid_token`, *"invalid or expired"* | **401, no error code**, `WWW-Authenticate: Bearer, DPoP` |
+| `Bearer <bound>`, no proof | `401` from Authlete | unchanged — `[A065308]`, forwarded verbatim |
+| proof signed by another key | `401` | unchanged — `[A065309]` |
+
+**The two old messages were both lies, and that is worth more than the status codes.** A missing token is not
+an "invalid or expired" token — there was no token to judge. RFC 6750 §3.1 says so directly: when a request
+carries no authentication information the server *"SHOULD NOT include an error code"*. And a client that used
+the `DPoP` scheme without a proof was told its token was expired, which sends a developer to look at token
+lifetimes instead of at the header they forgot. **A wrong diagnosis costs more than a missing one.**
+
+**`htu` (T1-9).** Five call sites built it inline as `` `${protocol}://${host}${req.originalUrl}` `` —
+`originalUrl` includes the query string, and RFC 9449 §4.2 requires `htu` **without** query or fragment. So
+any DPoP request with a query string failed proof validation while the client was entirely correct. All five
+now call `dpopHttpTarget()`. Proven, not assumed: `GET /api/gm/{id}?verbose=true` with a valid proof returns
+**200**. `targetUri` is sent only where the SDK model has the field — `IntrospectionRequest` and
+`UserinfoRequest` yes, `TokenRequest`/`PushedAuthorizationRequest`/`GMRequest` no — checked in the models
+rather than inferred from the endpoint's importance.
+
+**9449-W2 rode along and is the quiet security fix.** `introspection.service.ts` read `targetUri` **from the
+request body**, so a caller could choose the URI its own proof was validated against — the identical defect
+already closed at UserInfo, where a proof minted for `/api/par` had returned `200`. The read is deleted, and
+a comment now names the reason so it is not restored by someone tidying up.
+
+**6749-W1 — enforced, after the probe removed the escape hatch.** RFC 6749 §2.3.1: *"The client MUST NOT use
+more than one authentication method in each request."* The work item allowed for "no code change if Authlete
+already rejects". **It does not**: a request with correct top-level credentials and a **wrong** body
+`client_secret` is accepted and a token issued, because the top-level channel wins. Authlete's strict-checking
+page turned out to govern only *method matching* and to say nothing about presenting both. So the rule is
+enforced here or nowhere, and it is now enforced at `/api/token` **and** `/api/par` — the latter because
+RFC 9126 §2 gives PAR the token endpoint's client authentication, and exempting it would have rebuilt the very
+inconsistency being removed.
+
+Two details in that check are deliberate. **A bare `client_id` beside a Basic header is not a second
+method** — §2.3.1's methods differ in where the *secret* travels, and a public client legitimately sends
+`client_id` alone; there is a negative-control test and a live check for it. And **the check runs before any
+Authlete call**, the same gate-before-call arrangement T1-1 used for introspection.
+
+**The mechanism correction is the part to carry forward.** `RFC6749-…` F-1 said this server resolves the
+conflict — *"Basic silently wins"* — quoting the `clientId`/`clientSecret` assignment. It does not. That
+assignment sets only the **top-level** fields, while `parameters` is preferentially `req.rawBody`, so body
+credentials reached Authlete untouched and **both channels genuinely crossed the boundary**. Same outcome,
+wrong layer. This is the **third** consequence of one design choice, after raw-body fidelity for signatures
+and the RFC 9700 §4.2.4 credential leak where the exclusion list never ran on the live path. **Rule: when a
+finding in `token.service.ts` or `revocation.service.ts` quotes a variable assignment, check what actually
+goes on the wire.**
+
+**T1-21 declined rather than deferred.** Forwarding the attestation headers at PAR is correct code on a path
+that is unreachable **by construction** — T1-5 withdrew `ATTEST_JWT_CLIENT_AUTH` and `challenge_endpoint` is
+absent, so no client, and no test, can ever exercise it. It attaches instead to T1-5's existing re-add
+trigger. The cross-reference in its own row was also wrong: it does not gate `9126-W4`, which was merged into
+`9449-W1` and shipped here.
+
+**Curriculum.** Module 10's lab transcript for `-- no token --` changed, so it was updated **and taught**:
+the `curl` now prints the status line and `WWW-Authenticate` rather than a body, followed by a short section
+on why an empty error beats a wrong one, and on the `Bearer`/`DPoP` pairing. `AGENTS.md` gains the
+two-protected-resource framing, the "forward the proof to *every* Authlete call" rule, the three fail-closed
+error codes, and the dual-channel bullet. `docs/GRANT-MANAGEMENT.md` and `docs/API.md` gain the scheme table
+and the revised error rows; the OpenAPI document now lists `dpopAuth` on both `/gm` operations.
+
+**One finding recorded, not fixed.** `controllers/vci.controller.ts:8` is a **fourth** hand-rolled bearer
+parser, `Bearer`-only and case-sensitive. No work item covers it, and VCI credential endpoints accept access
+tokens — so it is plausibly the same §7.1 gap this change just closed twice. Left out to keep the batch
+reviewable; it belongs in the next one.
+
+### 2026-08-12 — T1-17: five unprobed behaviours, five answers, and no code owed
+
+**Why this matters to a future session:** T1-17 was the only Tier 1 item that could **delete** work, and it
+did. Five behaviours nobody had ever run now have transcripts. **No source file changed.** Every probe ran
+against Authlete directly — so the answers describe the *vendor*, not this server's wrapper — except the last,
+which was deliberately run through the server as well, because that is where its acceptance criteria pointed.
+
+| # | Question | Answer | Consequence |
+|---|---|---|---|
+| **8628-W6** | Is the literal `USER_CODE` substituted in `deviceVerificationUriComplete`? | **Yes** | The "drop the field or template it correctly" branch never opens |
+| **7523-W1** | Is a JWT-bearer assertion with **no `exp`** accepted? | **No** — `[A314305]` | **7523-W2 is belt-and-braces, not a gap** |
+| **9449-W4** | Does `/auth/introspection` enforce `cnf.jkt` when **no** proof is sent? | **Yes** — `[A065308]` | **9449-W3 stays S2. T1-10 is not escalated** |
+| **6749-W1** | Does Authlete reject dual-channel client credentials? | **No** — and the top-level channel wins | A ruling, not a defect. See below |
+| **GM-W2** | Does the grant-management *authorization* side work? | **Yes, end to end** | **Documentation only (GM-W5); no code** |
+
+**8628-W6 — substituted, and the response is already RFC-shaped.** One `/device/authorization` call with the
+public client returned `verificationUriComplete = https://…/device?user_code=TDSHHXCP` against a configured
+template ending `?user_code=USER_CODE`. The placeholder is real templating, not a literal. Worth more than the
+work item asked: the same response's `responseContent` is
+`{"device_code":…,"user_code":…,"verification_uri":…,"verification_uri_complete":…,"expires_in":600,"interval":5}`
+— **exactly RFC 8628 §3.2's snake_case shape**. That is direct corroboration for **8628-W3** in T1-11: returning
+`responseContent` verbatim does not merely tidy the wire format, it produces the conformant body outright.
+
+**7523-W1 — Authlete requires `exp`, so the gap was hypothetical.** `RFC7523-…` F-1 named two possibilities
+and declined to guess between them. It is the first: an assertion carrying `iss`, `sub`, `aud`, `iat`, `jti`
+and a valid HS256 signature is refused with `action: BAD_REQUEST` and
+`[A314305] The JWT specified by the 'assertion' request parameter does not contain the claim 'exp'.`, served as
+`error: invalid_grant`. The control — the same assertion plus `exp` — returns `action: JWT_BEARER` and proceeds.
+So **§3(4)'s presence requirement is met by the vendor, before `/jose/verify` is ever called**, and
+`mandatoryClaims: ["iss","sub","aud"]` omitting `exp` never had the consequence F-1 feared. **7523-W2 survives
+only as defence in depth**, and whoever picks it up should say so rather than describe it as closing a hole.
+`[A314305]` is a **sixth error code Module 06 Exercise 4's table does not have** — that is where the transcript
+belongs, and it is now a runnable row rather than a predicted one.
+
+**9449-W4 — the binding holds with no proof, so the S1 escalation does not happen.** This is the one that
+gated another item's severity, and it resolves in our favour. Minting a DPoP-bound token
+(`client_credentials` + a proof; `token_type: DPoP` confirms the binding), then introspecting it three ways:
+
+| Presentation | `action` | Message |
+|---|---|---|
+| correct proof (control) | `OK` | `[A056001] The access token is valid.` |
+| **no `dpop` at all** | **`UNAUTHORIZED`** | **`[A065308] Expected a DPoP header but none was provided.`** |
+| proof signed by a different key | `UNAUTHORIZED` | `[A065309] Thumbprint of the provided DPoP key does not match the expected DPoP thumbprint.` |
+
+`RFC9449-…` F-2's case 3 — *"whether Authlete's `/auth/introspection` still enforces the `cnf.jkt` binding is
+unknown"* — is closed: **it does, and it fails closed.** A stolen bound token presented as a plain `Bearer` at
+`/api/gm/*` does **not** work, so sender-constraint is not defeated there and **F-2 stays S2**. This is the
+same posture as UserInfo under a different code (`[A065308]` here, `[A089311]` there), and the challenge
+Authlete returns already carries the `DPoP` scheme plus an accurate `algs` list — so `AGENTS.md`'s existing
+rule (*forward `responseContent` verbatim; do not hand-write a DPoP challenge where Authlete answers*) applies
+to this endpoint too. The `UNVERIFIED` comment at `middleware/require-grant-ownership.ts:64` can now be deleted
+rather than re-dated, and **T1-10 remains a conformance fix, not a vulnerability fix.**
+
+**6749-W1 — the vendor does not reject dual channels, and this server does not collapse them either.** Three
+calls to `/auth/token` with credentials on **both** channels at once (top-level `clientId`/`clientSecret`, the
+shape an AS derives from `Authorization: Basic`, plus `client_id`/`client_secret` inside `parameters`):
+
+| Top-level | In `parameters` | Result |
+|---|---|---|
+| correct | correct | `OK` — token issued |
+| correct | **wrong** | `OK` — token issued. The body secret is simply ignored |
+| **wrong** | correct | `INVALID_CLIENT` — `[A157305] The client secret presented by the client does not match the expected one.` |
+
+So §2.3.1's *"The client MUST NOT use more than one authentication method in each request"* is unenforced at
+**both** layers, and Authlete's precedence is top-level-wins — identical to what `AGENTS.md` documents for this
+server. Authlete's [strict-checking page](https://developers.authlete.com/configuration-reference/endpoints/strict-checking-on-client-authentication-parameters)
+was fetched and is **silent on the question**: it governs *method matching* (*"Authlete version 2.0 and later
+strictly check client type and client authentication method settings"*), says nothing about presenting both,
+and states no precedence rule. The probe is therefore the authority, not the page.
+
+**And the probe corrected the finding's mechanism.** `RFC6749-…` F-1 says this server resolves the conflict —
+*"Basic silently wins"*, quoting the `clientId`/`clientSecret` assignment. It does not. `parameters` is
+preferentially **`req.rawBody`** (`token.service.ts:42`), so body-supplied `client_id`/`client_secret` are
+forwarded to Authlete **untouched**; the `excluded` set that drops them runs only on the JSON fallback path.
+This server therefore *emits* the dual-channel request I probed, and **Authlete** picks the winner. Same
+observable outcome, different layer — and it is the **third** consequence of one design choice, after raw-body
+fidelity for signatures and the RFC 9700 F-1 credential leak. **Rule: when a finding quotes a variable
+assignment in these two services, check what actually goes on the wire — `rawBody` bypasses the assignment.**
+The decision left for Gate 4 is unchanged in substance but narrower in scope: **reject dual presentation
+locally with 400 `invalid_request`, or document Basic-wins as inherited vendor behaviour.** Rejecting is the
+only option that makes this server *stricter* than Authlete rather than merely agreeing with it.
+
+**GM-W2 — the whole authorization side already worked; nobody had tried it.** `GRANT-MANAGEMENT.md` F-2
+predicted this ("*this is very likely a documentation and verification gap*") and the prediction was right.
+Four calls, no browser, no code change:
+
+1. `/auth/authorization` with `grant_management_action=create` in `parameters` → `action: INTERACTION` + ticket.
+2. `/auth/authorization/issue` (subject `admin`) → `LOCATION` with a code.
+3. `/auth/token` → `action: OK`, and the response body carries **`grant_id`** alongside
+   `access_token, token_type, expires_in, scope, refresh_token, id_token`. **§5.5 is satisfied**, and
+   `token.controller.ts:52` forwards `responseContent` verbatim, so it is satisfied *through this server* with
+   no work at all.
+4. `POST /gm` with `gmAction: QUERY` → `[A277001]` and `{"scopes":[{"scope":"grant_management_query openid"}]}`.
+
+Then the half the acceptance criteria actually named — **`GET /api/gm/{grant_id}` through this server**, which
+is the first time `requireGrantOwnership` has ever been exercised against a real grant-bearing token:
+
+| Request | Result |
+|---|---|
+| correct grant + `Bearer` | **200** with the grant document |
+| wrong grant id + the same token | **403** `access_denied` — *"The access token is not associated with the requested grant"* |
+| `DPoP` scheme, same (unbound) token | **401** `invalid_token` — *"Access token is invalid or expired"* |
+
+The third row is **9449-W3/F-2 case 1 reproduced on demand**, and it exposes something the finding did not
+name: the refusal message is **wrong about why**. The token is neither invalid nor expired — the extractor did
+not recognise the scheme. When T1-10 lands, that string is part of the fix, not just the `startsWith("Bearer ")`
+check above it. **GM-W2 is closed and GM-W5 is confirmed as pure documentation**: `docs/GRANT-MANAGEMENT.md`
+and Module 10 record that all five advertised actions are real, that three of them need no AS code, and that
+the grant query works end to end.
+
+**Two things found in passing, both cheap and both worth keeping.**
+
+**The issuer/host mismatch is live and visible in one call.** `/service/configuration` reports
+`issuer = https://blackadi.dev` while `token_endpoint = https://cecile-soapsudsy-zoila.ngrok-free.dev/api/token`.
+That is **DR-11 / 8414-W1 / 8414-W2** observed rather than inferred, and it is why the JWT-bearer `aud` in the
+probe had to be `https://blackadi.dev` — a reader following Module 06's lab against the tunnel host would fail
+with `[A314314]` and have no idea why.
+
+**The vendored 3.0.16 spec's `/gm` request schema is internally inconsistent.** It declares
+`required: ["token"]` while its properties define `accessToken` and no `token` at all. Harmless — the SDK
+models the properties, and the call works — but it is a second instance of the standing rule that **Authlete's
+schema predicts nothing**, this time within a single object.
+
+**What this leaves.** T1-17 is complete; **all five results are recorded whichever way they came out**, which
+was the point. Net effect on the plan: 7523-W2 downgraded to defence-in-depth, 9449-W3 held at S2, GM-W2
+closed, GM-W5 confirmed documentation-only, 8628-W6 closed with no follow-up, and 6749-W1 reduced to a
+one-line Gate 4 ruling with both options costed.
 
 ### 2026-08-12 — B1-W6: the `ID_TOKEN_REISSUABLE` branch was calling the wrong API
 

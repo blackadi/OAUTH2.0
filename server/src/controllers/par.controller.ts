@@ -6,6 +6,7 @@ import { validateOrThrow, parSchema } from "../utils/validation";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
 import { setDpopNonce } from "../utils/dpop";
+import { hasDualChannelClientAuth } from "../utils/basic-auth";
 
 function mapActionToStatus(action?: string): number {
   switch (action) {
@@ -24,6 +25,17 @@ export function createParControllers(parServiceInstance = new ParService()) {
     handle: async (req: Request, res: Response, next: NextFunction) => {
       try {
         validateOrThrow(parSchema, req.body);
+
+        // RFC 6749 §2.3.1's single-method rule, which RFC 9126 §2 inherits by requiring the same
+        // client authentication as the token endpoint. Enforced identically in `token.controller.ts`;
+        // leaving one endpoint lenient would recreate the inconsistency this closes.
+        if (hasDualChannelClientAuth(req.headers.authorization, req.body as Record<string, unknown>)) {
+          throw new AppError(
+            "Client credentials were presented both in the Authorization header and in the request body. RFC 6749 Section 2.3.1 permits only one authentication method per request.",
+            400,
+          );
+        }
+
         const result = await parServiceInstance.process(req);
         // DPoP nonce — relay to client if Authlete returned one
         setDpopNonce(res, result.dpopNonce);

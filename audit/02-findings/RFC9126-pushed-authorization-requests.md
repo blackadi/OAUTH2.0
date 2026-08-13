@@ -195,7 +195,7 @@ route to a verified nonce transcript.
 | 9126-W1 | Accept the RFC 9126 wire format at `/api/par` | M | A form-encoded body of authorization parameters is accepted and forwarded as `parameters`; the existing JSON `{parameters}` shape stays supported for the SPA and the labs; unit test covers both. `parseBasicAuth` continues to own the credential channel. |
 | 9126-W2 | Return `responseContent` as the body | S | 201 body is exactly `{"expires_in":…,"request_uri":"urn:…"}`; error bodies are Authlete's `responseContent` verbatim; `resultCode`/`resultMessage`/`action` never reach the client. Follows `token.controller.ts:52`. Route test asserts the top-level members. |
 | 9126-W3 | Add a 405 handler for non-POST on `/api/par` | S | `GET /api/par` → 405 with `Allow: POST`, not the SPA catch-all. |
-| 9126-W4 | Use `dpopHttpTarget()` in `par.service.ts` | S | Merged into **9449-W1**. |
+| 9126-W4 | Use `dpopHttpTarget()` in `par.service.ts` | S | ✅ **DONE 2026-08-13 (T1-9)**, via **9449-W1**. `par.service.ts` builds `htu` from `dpopHttpTarget()`; no `targetUri` is sent, because `PushedAuthorizationRequest` has no such member. |
 | 9126-W5 | Rewrite `FAPI-TUTORIAL.md` Step 3 against a real transcript | S | Every header and body reproducible; the `DPoP-Nonce` line removed or gated on the nonce flag; `/api/authorize` → `/api/authorization`. |
 | 9126-W6 | State the wire-format gap in `PAR-TUTORIAL.md` and Module 05, then remove it | S | Until W1 ships, both documents say plainly that this endpoint takes an Authlete-shaped JSON body and is not callable by a conformant PAR client. After W1, the text and the diagram agree. |
 

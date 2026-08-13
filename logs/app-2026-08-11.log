@@ -1,0 +1,335 @@
+2026-08-11T07:35:27.600Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.612Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.613Z [INFO]:  Logout: redirecting to post_logout_redirect_uri
+2026-08-11T07:35:27.618Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.618Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T07:35:27.619Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.620Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T07:35:27.623Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.623Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T07:35:27.624Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.624Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T07:35:27.625Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.625Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T07:35:27.628Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.628Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T07:35:27.629Z [INFO]:  RP-Initiated Logout
+2026-08-11T07:35:27.629Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T07:35:27.713Z [INFO]:  HskService: calling Authlete hardware security key create API
+2026-08-11T07:35:27.720Z [INFO]:  Authorization request parameters
+2026-08-11T07:35:27.724Z [INFO]:  CibaService: calling Authlete backchannel authentication endpoint
+2026-08-11T07:35:27.729Z [INFO]:  RevocationService: URL-encoded parameters length
+2026-08-11T07:35:27.730Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.730Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T07:35:27.738Z [INFO]:  DcrRegisterService: calling Authlete DCR register endpoint
+2026-08-11T07:35:27.731Z [INFO]:  RevocationService: calling Authlete revocation endpoint
+2026-08-11T07:35:27.737Z [INFO]:  RevocationService: decoded Basic auth
+2026-08-11T07:35:27.738Z [INFO]:  RevocationService: URL-encoded parameters length
+2026-08-11T07:35:27.738Z [INFO]:  RevocationService: calling Authlete revocation endpoint
+2026-08-11T07:35:27.735Z [INFO]:  Issue authorization request parameters
+2026-08-11T07:35:27.736Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.737Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.739Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.740Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.741Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.742Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.743Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.744Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T07:35:27.732Z [INFO]:  TokenService: received body
+2026-08-11T07:35:27.732Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T07:35:27.732Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T07:35:27.737Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T07:35:27.737Z [INFO]:  TokenService: received body
+2026-08-11T07:35:27.737Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T07:35:27.737Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T07:35:27.739Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T07:35:27.739Z [INFO]:  TokenService: received body
+2026-08-11T07:35:27.740Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T07:35:27.740Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T07:35:27.741Z [INFO]:  TokenService: received body
+2026-08-11T07:35:27.741Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T07:35:27.741Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T07:35:27.742Z [INFO]:  TokenService: received body
+2026-08-11T07:35:27.743Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T07:35:27.743Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T07:35:27.745Z [INFO]:  DcrGetService: calling Authlete DCR get endpoint
+2026-08-11T07:35:27.747Z [INFO]:  DcrUpdateService: calling Authlete DCR update endpoint
+2026-08-11T07:35:27.748Z [INFO]:  DcrDeleteService: calling Authlete DCR delete endpoint
+2026-08-11T07:35:27.751Z [INFO]:  DeviceService: calling Authlete device authorization endpoint
+2026-08-11T07:35:27.762Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.764Z [INFO]:  ClientListService: calling Authlete client list endpoint
+2026-08-11T07:35:27.769Z [INFO]:  ClientGetService: calling Authlete client get endpoint
+2026-08-11T07:35:27.770Z [INFO]:  ClientCreateService: calling Authlete client create endpoint
+2026-08-11T07:35:27.771Z [INFO]:  ClientDeleteService: calling Authlete client delete endpoint
+2026-08-11T07:35:27.768Z [INFO]:  Introspection parameters
+2026-08-11T07:35:27.769Z [INFO]:  Introspection response received
+2026-08-11T07:35:27.773Z [INFO]:  Introspection parameters
+2026-08-11T07:35:27.773Z [INFO]:  Introspection response received
+2026-08-11T07:35:27.775Z [INFO]:  Introspection parameters
+2026-08-11T07:35:27.775Z [INFO]:  Introspection response received
+2026-08-11T07:35:27.777Z [INFO]:  StandardIntrospectionService: URL-encoded parameters length
+2026-08-11T07:35:27.766Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.767Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.768Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.769Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.770Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.771Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.776Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.777Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.778Z [INFO]:  Userinfo parameters
+2026-08-11T07:35:27.797Z [INFO]:  TokenCreateService: calling Authlete token management endpoint
+2026-08-11T07:35:27.801Z [INFO]:  TokenUpdateService: calling Authlete token management endpoint
+2026-08-11T07:35:27.802Z [INFO]:  TokenListService: calling Authlete token management endpoint
+2026-08-11T07:35:27.803Z [INFO]:  TokenDeleteService: calling Authlete token management endpoint
+2026-08-11T07:35:27.852Z [INFO]:  GrantManagement: query grant
+2026-08-11T07:35:27.855Z [INFO]:  GrantManagement: revoke grant
+2026-08-11T07:35:27.969Z [INFO]:  Discovery parameters
+2026-08-11T08:10:48.261Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.264Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.264Z [INFO]:  Logout: redirecting to post_logout_redirect_uri
+2026-08-11T08:10:48.264Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.264Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:10:48.265Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.265Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:10:48.265Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.265Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:10:48.266Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.266Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:10:48.266Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.266Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:10:48.266Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.266Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:10:48.267Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.267Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:10:48.268Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:10:48.268Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.319Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:10:48.319Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.324Z [INFO]:  Logout: verified subject from id_token_hint
+2026-08-11T08:10:48.324Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.325Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:10:48.328Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:10:48.328Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.329Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:10:48.329Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:11:08.860Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.862Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.862Z [INFO]:  Logout: redirecting to post_logout_redirect_uri
+2026-08-11T08:11:08.863Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.863Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:11:08.863Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.863Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:11:08.864Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.864Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:11:08.864Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.864Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:11:08.865Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.865Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:11:08.865Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.865Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:11:08.865Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.865Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:11:08.866Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.866Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:11:08.870Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.870Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:11:08.870Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.870Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:11:08.871Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.871Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:11:08.871Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:11:08.871Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:16:22.783Z [INFO]:  Authorization request parameters
+2026-08-11T08:16:22.784Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T08:16:22.785Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.783Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.789Z [INFO]:  Issue authorization request parameters
+2026-08-11T08:16:22.793Z [INFO]:  DeviceService: calling Authlete device authorization endpoint
+2026-08-11T08:16:22.796Z [INFO]:  CibaService: calling Authlete backchannel authentication endpoint
+2026-08-11T08:16:22.792Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.794Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.795Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.797Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.798Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.799Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.800Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.801Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:22.786Z [INFO]:  TokenService: received body
+2026-08-11T08:16:22.787Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:22.787Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:22.792Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T08:16:22.792Z [INFO]:  TokenService: received body
+2026-08-11T08:16:22.792Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:22.792Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:22.794Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T08:16:22.794Z [INFO]:  TokenService: received body
+2026-08-11T08:16:22.795Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:22.795Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:22.796Z [INFO]:  TokenService: received body
+2026-08-11T08:16:22.796Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:22.796Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:22.797Z [INFO]:  TokenService: received body
+2026-08-11T08:16:22.797Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:22.797Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:22.807Z [INFO]:  HskService: calling Authlete hardware security key create API
+2026-08-11T08:16:22.787Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.788Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.789Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.790Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.792Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.793Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.802Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.803Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.804Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:22.797Z [INFO]:  Introspection parameters
+2026-08-11T08:16:22.799Z [INFO]:  Introspection response received
+2026-08-11T08:16:22.806Z [INFO]:  Introspection parameters
+2026-08-11T08:16:22.806Z [INFO]:  Introspection response received
+2026-08-11T08:16:22.808Z [INFO]:  Introspection parameters
+2026-08-11T08:16:22.808Z [INFO]:  Introspection response received
+2026-08-11T08:16:22.810Z [INFO]:  StandardIntrospectionService: URL-encoded parameters length
+2026-08-11T08:16:22.812Z [INFO]:  TokenCreateService: calling Authlete token management endpoint
+2026-08-11T08:16:22.817Z [INFO]:  TokenUpdateService: calling Authlete token management endpoint
+2026-08-11T08:16:22.819Z [INFO]:  TokenListService: calling Authlete token management endpoint
+2026-08-11T08:16:22.820Z [INFO]:  TokenDeleteService: calling Authlete token management endpoint
+2026-08-11T08:16:22.823Z [INFO]:  DcrRegisterService: calling Authlete DCR register endpoint
+2026-08-11T08:16:22.824Z [INFO]:  RevocationService: URL-encoded parameters length
+2026-08-11T08:16:22.825Z [INFO]:  RevocationService: calling Authlete revocation endpoint
+2026-08-11T08:16:22.831Z [INFO]:  RevocationService: decoded Basic auth
+2026-08-11T08:16:22.831Z [INFO]:  RevocationService: URL-encoded parameters length
+2026-08-11T08:16:22.831Z [INFO]:  RevocationService: calling Authlete revocation endpoint
+2026-08-11T08:16:22.829Z [INFO]:  DcrGetService: calling Authlete DCR get endpoint
+2026-08-11T08:16:22.831Z [INFO]:  DcrUpdateService: calling Authlete DCR update endpoint
+2026-08-11T08:16:22.832Z [INFO]:  DcrDeleteService: calling Authlete DCR delete endpoint
+2026-08-11T08:16:22.874Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.948Z [INFO]:  ClientListService: calling Authlete client list endpoint
+2026-08-11T08:16:22.953Z [INFO]:  ClientGetService: calling Authlete client get endpoint
+2026-08-11T08:16:22.954Z [INFO]:  ClientCreateService: calling Authlete client create endpoint
+2026-08-11T08:16:22.955Z [INFO]:  ClientDeleteService: calling Authlete client delete endpoint
+2026-08-11T08:16:22.879Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.879Z [INFO]:  Logout: redirecting to post_logout_redirect_uri
+2026-08-11T08:16:22.880Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.880Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:16:22.881Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.881Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:22.882Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.882Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:22.882Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.883Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:22.883Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.883Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:22.883Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.884Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:22.884Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.884Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:22.887Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:16:22.887Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.978Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:16:22.978Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.983Z [INFO]:  Logout: verified subject from id_token_hint
+2026-08-11T08:16:22.983Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.983Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:16:22.987Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:16:22.987Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.988Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:22.988Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:16:23.105Z [INFO]:  GrantManagement: query grant
+2026-08-11T08:16:23.107Z [INFO]:  GrantManagement: revoke grant
+2026-08-11T08:16:23.110Z [INFO]:  Discovery parameters
+2026-08-11T08:16:41.505Z [INFO]:  RevocationService: URL-encoded parameters length
+2026-08-11T08:16:41.506Z [INFO]:  RevocationService: calling Authlete revocation endpoint
+2026-08-11T08:16:41.511Z [INFO]:  RevocationService: decoded Basic auth
+2026-08-11T08:16:41.512Z [INFO]:  RevocationService: URL-encoded parameters length
+2026-08-11T08:16:41.512Z [INFO]:  RevocationService: calling Authlete revocation endpoint
+2026-08-11T08:16:41.521Z [INFO]:  HskService: calling Authlete hardware security key create API
+2026-08-11T08:16:41.534Z [INFO]:  Authorization request parameters
+2026-08-11T08:16:41.535Z [INFO]:  ClientListService: calling Authlete client list endpoint
+2026-08-11T08:16:41.539Z [INFO]:  Issue authorization request parameters
+2026-08-11T08:16:41.540Z [INFO]:  ClientGetService: calling Authlete client get endpoint
+2026-08-11T08:16:41.542Z [INFO]:  ClientCreateService: calling Authlete client create endpoint
+2026-08-11T08:16:41.544Z [INFO]:  ClientDeleteService: calling Authlete client delete endpoint
+2026-08-11T08:16:41.549Z [INFO]:  CibaService: calling Authlete backchannel authentication endpoint
+2026-08-11T08:16:41.552Z [INFO]:  DcrRegisterService: calling Authlete DCR register endpoint
+2026-08-11T08:16:41.553Z [INFO]:  DeviceService: calling Authlete device authorization endpoint
+2026-08-11T08:16:41.554Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.561Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.558Z [INFO]:  DcrGetService: calling Authlete DCR get endpoint
+2026-08-11T08:16:41.559Z [INFO]:  DcrUpdateService: calling Authlete DCR update endpoint
+2026-08-11T08:16:41.561Z [INFO]:  DcrDeleteService: calling Authlete DCR delete endpoint
+2026-08-11T08:16:41.562Z [INFO]:  Introspection parameters
+2026-08-11T08:16:41.567Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T08:16:41.561Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.563Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.564Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.566Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.567Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.568Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.569Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.569Z [INFO]:  ParService: calling Authlete pushed authorization endpoint
+2026-08-11T08:16:41.564Z [INFO]:  Introspection response received
+2026-08-11T08:16:41.568Z [INFO]:  Introspection parameters
+2026-08-11T08:16:41.568Z [INFO]:  Introspection response received
+2026-08-11T08:16:41.570Z [INFO]:  Introspection parameters
+2026-08-11T08:16:41.570Z [INFO]:  Introspection response received
+2026-08-11T08:16:41.571Z [INFO]:  StandardIntrospectionService: URL-encoded parameters length
+2026-08-11T08:16:41.568Z [INFO]:  TokenService: received body
+2026-08-11T08:16:41.569Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:41.569Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:41.573Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T08:16:41.573Z [INFO]:  TokenService: received body
+2026-08-11T08:16:41.573Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:41.573Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:41.575Z [INFO]:  TokenService: decoded Basic auth
+2026-08-11T08:16:41.575Z [INFO]:  TokenService: received body
+2026-08-11T08:16:41.575Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:41.575Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:41.576Z [INFO]:  TokenService: received body
+2026-08-11T08:16:41.576Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:41.576Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:41.577Z [INFO]:  TokenService: received body
+2026-08-11T08:16:41.577Z [INFO]:  TokenService: URL-encoded parameters length
+2026-08-11T08:16:41.577Z [INFO]:  TokenService: calling Authlete token endpoint
+2026-08-11T08:16:41.568Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.569Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.571Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.572Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.573Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.574Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.579Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.580Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.581Z [INFO]:  Userinfo parameters
+2026-08-11T08:16:41.584Z [INFO]:  TokenCreateService: calling Authlete token management endpoint
+2026-08-11T08:16:41.589Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.588Z [INFO]:  TokenUpdateService: calling Authlete token management endpoint
+2026-08-11T08:16:41.590Z [INFO]:  TokenListService: calling Authlete token management endpoint
+2026-08-11T08:16:41.591Z [INFO]:  TokenDeleteService: calling Authlete token management endpoint
+2026-08-11T08:16:41.593Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.593Z [INFO]:  Logout: redirecting to post_logout_redirect_uri
+2026-08-11T08:16:41.594Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.594Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:16:41.595Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.595Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:41.596Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.596Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:41.596Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.596Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:41.597Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.597Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:41.597Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.597Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:41.598Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.598Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-11T08:16:41.600Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:16:41.600Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.672Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:16:41.672Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.678Z [INFO]:  Logout: verified subject from id_token_hint
+2026-08-11T08:16:41.678Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.678Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:16:41.683Z [INFO]:  Logout: id_token_hint rejected, continuing without a subject
+2026-08-11T08:16:41.683Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.684Z [INFO]:  RP-Initiated Logout
+2026-08-11T08:16:41.684Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-11T08:16:41.740Z [INFO]:  GrantManagement: query grant
+2026-08-11T08:16:41.743Z [INFO]:  GrantManagement: revoke grant
+2026-08-11T08:16:41.777Z [INFO]:  Discovery parameters

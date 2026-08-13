@@ -617,8 +617,11 @@ const spec: Record<string, unknown> = {
     "/gm/{grantId}": {
       get: {
         summary: "Query grant status",
-        description: "Returns the status of a granted authorization (Grant Management API).",
-        security: [{ bearerAuth: [] }],
+        description:
+          "Returns the status of a granted authorization (Grant Management API). This is a protected " +
+          "resource: a DPoP-bound token must be presented with the DPoP scheme and a proof (RFC 9449 §7.1), " +
+          "and Bearer with a proof is refused as the §7.2 downgrade.",
+        security: [{ bearerAuth: [] }, { dpopAuth: [] }],
         parameters: [
           {
             name: "grantId",
@@ -634,8 +637,10 @@ const spec: Record<string, unknown> = {
       },
       delete: {
         summary: "Revoke grant",
-        description: "Revokes a granted authorization (Grant Management API).",
-        security: [{ bearerAuth: [] }],
+        description:
+          "Revokes a granted authorization (Grant Management API). Same presentation rules as the query " +
+          "operation — Bearer or DPoP, per RFC 6750 §2 and RFC 9449 §7.",
+        security: [{ bearerAuth: [] }, { dpopAuth: [] }],
         parameters: [
           {
             name: "grantId",

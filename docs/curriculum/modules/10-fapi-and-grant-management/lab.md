@@ -369,7 +369,7 @@ A sixth member appears in the token response: **`grant_id`**. Now exercise the A
 
 ```bash
 echo "-- query --";            curl -s -H "Authorization: Bearer $AT" "$API/gm/$GID" -w '\n[%{http_code}]\n'
-echo "-- no token --";         curl -s "$API/gm/$GID" -w '\n[%{http_code}]\n'
+echo "-- no token --";         curl -si "$API/gm/$GID" | grep -i -E '^HTTP|^www-authenticate'
 echo "-- nonexistent grant --";curl -s -H "Authorization: Bearer $AT" "$API/gm/not-a-real-grant" -w '\n[%{http_code}]\n'
 echo "-- revoke --";           curl -s -X DELETE -H "Authorization: Bearer $AT" "$API/gm/$GID" -w '[%{http_code}]\n'
 echo "-- query again --";      curl -s -H "Authorization: Bearer $AT" "$API/gm/$GID" -w '\n[%{http_code}]\n'
@@ -380,8 +380,8 @@ echo "-- query again --";      curl -s -H "Authorization: Bearer $AT" "$API/gm/$
 {"scopes":[{"scope":"grant_management_query grant_management_revoke profile"}],"claims":["birthdate","family_name",...]}
 [200]
 -- no token --
-{"error":"invalid_token","error_description":"Access token is invalid or expired"}
-[401]
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer, DPoP
 -- nonexistent grant --
 {"error":"not_found","error_description":"Grant not found"}
 [404]
@@ -395,6 +395,33 @@ echo "-- query again --";      curl -s -H "Authorization: Bearer $AT" "$API/gm/$
 Every status matches the specification: 200 with the grant contents, 401 unauthenticated, 404 for an unknown
 grant, **204 with an empty body** on revoke (§6.5), 404 afterwards. Scope enforcement holds too — try a
 `client_credentials` token carrying only `profile` and you get 401.
+
+**Look closely at the "no token" answer, because it is doing two things you might not expect.**
+
+**It sends no error code.** The body is empty. That looks like less information, and it is deliberate:
+RFC 6750 §3.1 says that when a request carries *no* authentication information at all, the server
+*"SHOULD NOT include an error code or other error information."* There is nothing wrong with your token —
+you did not send one. An `invalid_token` here would be a small lie, and a client written to retry on
+`invalid_token` would loop instead of prompting for login. Compare it with the 401 you get from an
+*expired* token, which **does** say `invalid_token`: that one is a real verdict on a real credential.
+
+**It offers two schemes.** `WWW-Authenticate: Bearer, DPoP` is the server telling you both ways in are
+open. That matters if you hold a **DPoP-bound** token (`token_type: DPoP`), because such a token can only
+be presented one way:
+
+```bash
+# ordinary token
+curl -s "$API/gm/$GID" -H "Authorization: Bearer $AT"
+
+# DPoP-bound token — the scheme changes AND a proof rides along
+curl -s "$API/gm/$GID" -H "Authorization: DPoP $AT" -H "DPoP: $PROOF"
+```
+
+Get that pairing wrong and the server names the mistake instead of failing vaguely: `Bearer` **with** a
+proof is `400 invalid_request`, and `DPoP` **without** a proof is `401 invalid_dpop_proof`. The first
+refusal is the interesting one — accepting it would make `Bearer` a working way to spend a key-bound
+token, which is precisely the downgrade RFC 9449 §7.2 forbids. A protected resource that quietly accepts
+either scheme has thrown away the binding it was asked to enforce.
 
 **This is what a correct implementation looks like**, and it is worth noticing after nine modules of finding
 defects. Write down what makes it correct: local validation before the upstream call, spec-mandated status

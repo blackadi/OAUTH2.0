@@ -74,7 +74,7 @@ grant, so machine-to-machine grant management is refused — is documented in bo
 
 ## Finding F-1 — revocation leaves access tokens alive for 24 hours (S2, confirmed from the repo's own evidence)
 
-`PROGRESS.md:782-790` records this from a live Module 10 run: after `DELETE /api/gm/<grant_id>` → 204, the
+`PROGRESS.md:1006-1014` records this from a live Module 10 run: after `DELETE /api/gm/<grant_id>` → 204, the
 grant's refresh token is gone (`[A053305]`) but its access token still introspects `active: true` with ~24 hours
 remaining.
 
@@ -152,7 +152,7 @@ change. Note that neither accepts the `DPoP` scheme, which is the substance of `
 | Draft revision `-03`, 9 May 2023 | `SPEC-INVENTORY.md`, `01-spec-matrix.md` §2 | **Confirmed** against `openid.net/specs/oauth-v2-grant-management-03.html` this session | **Accurate** |
 | `requireGrantOwnership` runs first, introspects, requires the grant to match, 403 otherwise; Authlete validates the token but not ownership | `AGENTS.md` | Matches the code exactly, including the reasoning | **Accurate — exemplary** |
 | "deliberately stricter than Grant Management for OAuth 2.0: a client-credentials token has no grant, so machine-to-machine grant management is not supported" | `AGENTS.md` | Correct, and correctly labelled as a departure | **Accurate** |
-| Revocation leaves access tokens alive 24 h; MUST satisfied, should not | `PROGRESS.md:782-790` | **Confirmed** against §6.5 verbatim | **Accurate — the most precisely-stated finding in the register** |
+| Revocation leaves access tokens alive 24 h; MUST satisfied, should not | `PROGRESS.md:1006-1014` | **Confirmed** against §6.5 verbatim | **Accurate — the most precisely-stated finding in the register** |
 | Grant Management listed as **"Working"** | `README.md:92-130` | True of the half that is implemented; the AS advertises five actions and three are unexercised | **Accurate but incomplete** / S3 — F-2 |
 | Nothing states that §5.1 restricts grant management to confidential clients | `docs/GRANT-MANAGEMENT.md`, `AGENTS.md`, Module 10 | F-3 | **Omission** / S3 |
 | Nothing states that `create`/`replace`/`merge` need no AS code and may already work | Module 10, `GRANT-MANAGEMENT.md` | F-2 | **Omission** / S3 |
@@ -162,7 +162,7 @@ change. Note that neither accepts the `DPoP` scheme, which is the substance of `
 - Grant Management for OAuth 2.0, `oauth-v2-grant-management-03`, 9 May 2023 — `https://openid.net/specs/oauth-v2-grant-management-03.html`, fetched this session. Quoted verbatim: §5.2's three actions, §5.5's `grant_id` obligation, §6.4's query shape, **§6.5's MUST/should sentence**, §7.1's three metadata parameters, §5.1's confidential-client restriction.
 - Live probes 2 and 3 (2026-08-10): `grant_management_endpoint`, `grant_management_actions_supported`, `grant_management_action_required`, `scopes_supported`, `accessTokenDuration`, per-client `clientType` — `SERVICE-CONFIG-PROBE.md` §6–§8
 - SDK 1.0.0: `GMResponseAction` (7 members), `GrantManagementAction` (`CREATE, QUERY, REPLACE, REVOKE, MERGE`) — `01-spec-matrix.md` §6
-- Repo-sourced live evidence: `PROGRESS.md:782-790` (revocation transcript, `[A053305]`)
+- Repo-sourced live evidence: `PROGRESS.md:1006-1014` (revocation transcript, `[A053305]`)
 - Code: `middleware/require-grant-ownership.ts` (whole file), `services/grant-management.service.ts:16-53`, `controllers/grant-management.controller.ts:15-55,77-100`, `routes/grant-management.routes.ts:11,16`
 
 ## Proposed work items
@@ -170,9 +170,9 @@ change. Note that neither accepts the `DPoP` scheme, which is the substance of `
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | GM-W1 | Shorten `accessTokenDuration` | S | ⬜ **OPEN — deliberately, decided 2026-08-12 (T1-4).** The change was applied live (86400 → 3600) and **reverted the same session** once the curriculum cost was measured: ~55 references, and **Module 10's own thesis** — *individually acceptable settings combine into a defect* — uses this very interaction (24-hour token × the §6.5 gap) as its worked example. Shortening the token would have dissolved the finding this entry exists to teach. So the §6.5 exposure stays 24 hours **by an explicit decision recorded in `PROGRESS.md`**, not by oversight. See **OIDC-W4**, which closes on its "record it" branch. Reopening costs one field plus a documentation pass, and the write is already proven. |
-| GM-W2 | Establish whether the authorization-request side already works | S | Three commands: `grant_management_action=create` → read `grant_id` from the token response → `GET /api/gm/{grant_id}`. Result recorded in Module 10 and in `PROGRESS.md`. **Do this before scheduling any code work** — the actions likely need none. |
+| GM-W2 | Establish whether the authorization-request side already works | S | ✅ **DONE 2026-08-12 (T1-17). It works end to end, and needs no AS code** — F-2's prediction was right. `grant_management_action=create` in `parameters` → `INTERACTION` + ticket; `/auth/authorization/issue` → a code; `/auth/token` → **`grant_id` in the response body** beside `access_token, token_type, expires_in, scope, refresh_token, id_token`, so **§5.5 is satisfied and `token.controller.ts:52` already forwards it verbatim**; `POST /gm` `QUERY` → `[A277001]` with `{"scopes":[{"scope":"grant_management_query openid"}]}`. Then the half the criteria actually named — **`GET /api/gm/{grant_id}` through this server → 200**, with a wrong grant id → **403**, which is the **first live exercise of `requireGrantOwnership` against a real grant-bearing token**. Transcripts in `PROGRESS.md`, entry 2026-08-12 T1-17. **No code work is scheduled; GM-W5 is confirmed as pure documentation.** |
 | GM-W3 | Restrict the two grant-management scopes to confidential clients | S | Per §5.1. Either Authlete scope-to-client restriction, or a documented decision to allow public clients in a teaching deployment, with the draft's reasoning quoted. |
-| GM-W4 | Remove the duplicate bearer parser | S | `services/grant-management.service.ts` uses the shared extractor; folded into **9449-W3** so both parsers are replaced in one change. |
+| GM-W4 | Remove the duplicate bearer parser | S | ✅ **DONE 2026-08-13 (T1-10).** Both copies are gone — the service's and the middleware's — replaced by `extractAccessToken()` from `utils/dpop.ts`, so `/api/gm` gained the `DPoP` scheme and case-insensitive matching as a side effect of de-duplication. The service was also rewritten to share one `process()` between `query` and `revoke`, since the two differed only in `gmAction`. **A fourth hand-rolled parser survives** at `controllers/vci.controller.ts:8`, `Bearer`-only and case-sensitive; no work item covers it and VCI credential endpoints are protected resources, so it is recorded as a new finding rather than silently left. |
 | GM-W5 | Document the two halves and the advertised five actions | S | `docs/GRANT-MANAGEMENT.md` and Module 10 distinguish the management API from the authorization-request side, note that all five actions are advertised, and record GM-W2's result. |
 
 **Ordering and gating.** GM-W2 first — it is three commands and it determines whether anything else is needed.

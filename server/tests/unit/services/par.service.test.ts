@@ -153,4 +153,25 @@ describe("ParService", () => {
       expect(sent.parameters).toBe("response_type=code")
     })
   })
+
+  describe("DPoP target derivation (RFC 9449 §4.2)", () => {
+    it("strips the query string from htu", async () => {
+      // PushedAuthorizationRequest has no targetUri member, so htu carries the target alone.
+      vi.mocked(mockApi.pushedAuthorization.create).mockResolvedValue({ action: "CREATED" } as any)
+
+      await service.process({
+        body: { parameters: "response_type=code&client_id=c-1", clientId: "c-1" },
+        headers: { dpop: "proof-jwt" },
+        method: "POST",
+        protocol: "https",
+        originalUrl: "/api/par?trace=1",
+        get: () => "as.example.com",
+      } as any)
+
+      const sent = vi.mocked(mockApi.pushedAuthorization.create).mock.calls[0][0]
+        .pushedAuthorizationRequest as Record<string, unknown>
+      expect(sent.htu).toBe("https://as.example.com/api/par")
+      expect(sent.htm).toBe("POST")
+    })
+  })
 })

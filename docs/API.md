@@ -54,6 +54,13 @@ OAuth token endpoint. Accepts `application/x-www-form-urlencoded` or `applicatio
 
 **Response:** 200 `{ access_token, token_type, expires_in, refresh_token?, id_token?, scope? }`
 
+**Client authentication — pick one channel, not both.** Send your secret either in an
+`Authorization: Basic` header (`client_secret_basic`) **or** as `client_secret` in the body
+(`client_secret_post`). Sending both is refused with 400 `invalid_request`: RFC 6749 §2.3.1 says
+*"The client MUST NOT use more than one authentication method in each request."* A bare `client_id` in
+the body alongside a Basic header is fine — `client_id` is not a credential. The same rule applies at
+`POST /api/par`, which RFC 9126 §2 gives the token endpoint's client authentication.
+
 ### `GET /api/userinfo`
 UserInfo endpoint. Bearer token required.
 
@@ -260,7 +267,11 @@ which channel the credentials arrive on and returns 401 on a mismatch:
 
 ## Grant Management
 
-Both endpoints require a Bearer token that carries the relevant scope
+Both endpoints are **protected resources** and accept either scheme: `Bearer` for an ordinary token, or
+`DPoP` plus a `DPoP:` proof header for a key-bound one (RFC 9449 §7.1 permits no alternative for a bound
+token). `Bearer` carrying a proof is refused with 400 — that combination is the §7.2 downgrade.
+
+Both endpoints require a token that carries the relevant scope
 (`grant_management_query` / `grant_management_revoke`) **and that was itself issued under the grant being
 addressed**. A token bound to a different grant — or to none at all, such as a `client_credentials` token —
 gets 403. See [GRANT-MANAGEMENT.md](./GRANT-MANAGEMENT.md) and
@@ -276,8 +287,11 @@ Revoke grant.
 
 **Response:** 204 No Content
 
-**Errors (both):** 401 `invalid_token` (missing/invalid token) · 403 `access_denied` (insufficient scope, or
-the token is not associated with this grant) · 404 `not_found` (no such grant)
+**Errors (both):** 401 with **no error code** and `WWW-Authenticate: Bearer, DPoP` (no token presented —
+RFC 6750 §3.1) · 401 `invalid_token` (expired, revoked or unknown token) · 401 `invalid_dpop_proof`
+(`DPoP` scheme with no proof, or a proof that does not match the token's key) · 400 `invalid_request`
+(`Bearer` scheme carrying a proof) · 403 `access_denied` (insufficient scope, or the token is not
+associated with this grant) · 404 `not_found` (no such grant)
 
 ---
 

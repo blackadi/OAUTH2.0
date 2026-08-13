@@ -5,6 +5,7 @@ import { Request } from "express";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
 import { parseBasicAuth } from "../utils/basic-auth";
+import { dpopHttpTarget } from "../utils/dpop";
 
 export class ParService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -53,14 +54,14 @@ export class ParService {
       ]);
     }
 
-    // DPoP support — fields come from HTTP headers, not the body
+    // DPoP support — fields come from HTTP headers, not the body.
+    // `htu` excludes the query and fragment (RFC 9449 §4.2); `dpopHttpTarget()` is the single
+    // source for that derivation. `PushedAuthorizationRequest` has no `targetUri` member.
     const dpopHeader = req.headers["dpop"] as string | undefined;
     if (dpopHeader) {
       requestBody.dpop = dpopHeader;
       requestBody.htm = req.method;
-      const protocol = req.protocol;
-      const host = req.get("host") || "";
-      requestBody.htu = `${protocol}://${host}${req.originalUrl}`;
+      requestBody.htu = dpopHttpTarget(req).htu;
     }
 
     log("ParService: calling Authlete pushed authorization endpoint", {

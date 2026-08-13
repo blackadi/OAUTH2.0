@@ -21,6 +21,35 @@ export interface BasicCredentials {
  * job for OAuth clients (see `par.service.ts`, `token.service.ts`) and
  * `require-basic-auth.ts`'s job for this deployment's own management credentials.
  */
+/**
+ * Does this request present client credentials on **both** authentication channels?
+ *
+ * RFC 6749 §2.3.1: *"The client MUST NOT use more than one authentication method in each request."*
+ * Authlete does not enforce this — verified live 2026-08-12: a request carrying correct top-level
+ * credentials and a **wrong** `client_secret` in the body is accepted and a token issued, because the
+ * top-level channel wins. Nor does this server resolve the conflict, despite appearances: `parameters`
+ * is preferentially `req.rawBody`, so body-supplied credentials reach Authlete untouched and both
+ * channels genuinely cross the boundary.
+ *
+ * So the rule is enforced here, before any Authlete call — the same gate-before-call shape the
+ * introspection endpoints use, and the counterpart of `extractAccessToken()`'s enforcement of the
+ * analogous RFC 6750 §2 rule for token *presentation*.
+ *
+ * Only a second **credential** counts. `client_id` in the body alongside a Basic header is not a
+ * second authentication method: §2.3.1's methods are distinguished by where the *secret* travels, and
+ * a public client legitimately sends a bare `client_id` with no `Authorization` header at all.
+ */
+export function hasDualChannelClientAuth(
+  authorizationHeader: string | undefined,
+  body: Record<string, unknown> | undefined,
+): boolean {
+  if (!parseBasicAuth(authorizationHeader)) return false;
+
+  // Both spellings: form-encoded bodies use `client_secret`, JSON callers use `clientSecret`.
+  const bodySecret = body?.client_secret ?? body?.clientSecret;
+  return typeof bodySecret === "string" && bodySecret !== "";
+}
+
 export function parseBasicAuth(authorizationHeader?: string): BasicCredentials | undefined {
   if (!authorizationHeader) return undefined;
 

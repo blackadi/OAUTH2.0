@@ -1,0 +1,23 @@
+2026-08-10T20:50:23.498Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.503Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.503Z [INFO]:  Logout: redirecting to post_logout_redirect_uri
+2026-08-10T20:50:23.504Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.504Z [INFO]:  Backchannel logout deliver-all completed
+2026-08-10T20:50:23.505Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.505Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-10T20:50:23.506Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.506Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-10T20:50:23.506Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.507Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-10T20:50:23.507Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.507Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-10T20:50:23.508Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.508Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-10T20:50:23.508Z [INFO]:  RP-Initiated Logout
+2026-08-10T20:50:23.508Z [INFO]:  Logout: post_logout_redirect_uri not allowed, rendering page
+2026-08-10T20:50:58.981Z [WARN]:  AUTH_USERS not set. Using default demo user admin:password. Set AUTH_USERS=subject:username:password:name;subject2:...
+2026-08-10T20:50:59.081Z [WARN]:  AUTH_USERS not set. Using default demo user admin:password. Set AUTH_USERS=subject:username:password:name;subject2:...
+2026-08-10T20:50:59.098Z [WARN]:  AUTH_USERS not set. Using default demo user admin:password. Set AUTH_USERS=subject:username:password:name;subject2:...
+2026-08-10T20:50:59.113Z [WARN]:  AUTH_USERS not set. Using default demo user admin:password. Set AUTH_USERS=subject:username:password:name;subject2:...
+2026-08-10T20:50:59.130Z [WARN]:  AUTH_USERS not set. Using default demo user admin:password. Set AUTH_USERS=subject:username:password:name;subject2:...
+2026-08-10T20:50:59.136Z [INFO]:  DeviceService: calling Authlete device authorization endpoint

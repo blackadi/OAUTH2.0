@@ -113,6 +113,23 @@ describe("Integration: all API routes", () => {
         .send("grant_type=authorization_code&code=code-1").expect(200)
       expect(res.body.access_token).toBe("at-1")
     })
+
+    it("refuses credentials on both channels — RFC 6749 §2.3.1", async () => {
+      // Authlete accepts this shape and lets the Basic channel win (verified live 2026-08-12),
+      // and this server forwards both because `parameters` is the raw body. So the single-method
+      // rule is enforced here, before any Authlete call.
+      const res = await request(app).post("/api/token")
+        .set("Authorization", `Basic ${Buffer.from("c-1:s-1").toString("base64")}`)
+        .send("grant_type=client_credentials&client_id=c-1&client_secret=s-1").expect(400)
+      expect(res.body.error).toBe("invalid_request")
+      expect(mockApi.token.process).not.toHaveBeenCalled()
+    })
+
+    it("still accepts either channel on its own", async () => {
+      mockApi.token.process.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ access_token: "at-2" }) })
+      await request(app).post("/api/token")
+        .send("grant_type=client_credentials&client_id=c-1&client_secret=s-1").expect(200)
+    })
   })
 
   describe("POST /api/userinfo", () => {
@@ -294,6 +311,16 @@ describe("Integration: all API routes", () => {
         .send({ parameters: "response_type=code&client_id=c-1", clientId: "c-1", clientSecret: "s-1" }).expect(201)
       expect(res.body.requestUri).toBe("urn:ietf:params:oauth:request_uri:abc")
     })
+
+    it("refuses credentials on both channels — §2.3.1, inherited via RFC 9126 §2", async () => {
+      // Enforced identically to the token endpoint; leaving PAR lenient would recreate the
+      // inconsistency this closes.
+      const res = await request(app).post("/api/par")
+        .set("Authorization", `Basic ${Buffer.from("c-1:s-1").toString("base64")}`)
+        .send({ parameters: "response_type=code&client_id=c-1", clientSecret: "s-1" }).expect(400)
+      expect(res.body.error).toBe("invalid_request")
+      expect(mockApi.pushedAuthorization.create).not.toHaveBeenCalled()
+    })
   })
 
   describe("POST /api/client/dcr/register", () => {
@@ -348,10 +375,42 @@ describe("Integration: all API routes", () => {
       expect(mockApi.grantManagement.processRequest).not.toHaveBeenCalled()
     })
 
-    it("returns 401 with no bearer token, without introspecting", async () => {
+    it("returns 401 with no token and no error code, without introspecting", async () => {
+      // RFC 6750 §3.1: no authentication information was sent, so the challenge names the
+      // schemes and carries no error code. Both are offered — RFC 9449 §7.2.
       const res = await request(app).get("/api/gm/g-1").expect(401)
-      expect(res.body.error).toBe("invalid_token")
+      expect(res.body).toEqual({})
+      expect(res.headers["www-authenticate"]).toBe("Bearer, DPoP")
       expect(mockApi.introspection.process).not.toHaveBeenCalled()
+    })
+
+    it("accepts the DPoP scheme and refuses the Bearer downgrade (RFC 9449 §7)", async () => {
+      mockApi.introspection.process.mockResolvedValue({ action: "OK", grantId: "g-1" })
+      mockApi.grantManagement.processRequest.mockResolvedValue({
+        action: "OK",
+        responseContent: '{"scopes":[]}',
+      })
+
+      await request(app)
+        .get("/api/gm/g-1")
+        .set("Authorization", "DPoP bound-tok")
+        .set("DPoP", "proof-jwt")
+        .expect(200)
+
+      // §7.2 — a bound token MUST NOT be accepted as a bearer token.
+      const downgrade = await request(app)
+        .get("/api/gm/g-1")
+        .set("Authorization", "Bearer bound-tok")
+        .set("DPoP", "proof-jwt")
+        .expect(400)
+      expect(downgrade.body.error).toBe("invalid_request")
+
+      // §7.1 — the DPoP scheme without a proof can never satisfy the binding check.
+      const noProof = await request(app)
+        .get("/api/gm/g-1")
+        .set("Authorization", "DPoP bound-tok")
+        .expect(401)
+      expect(noProof.body.error).toBe("invalid_dpop_proof")
     })
 
     it("returns 403 when the token lacks the query scope", async () => {

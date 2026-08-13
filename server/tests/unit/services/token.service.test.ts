@@ -32,6 +32,29 @@ describe("TokenService", () => {
       expect(result).toEqual(mockResponse)
     })
 
+
+    describe("DPoP target derivation (RFC 9449 §4.2)", () => {
+      it("strips the query string from htu", async () => {
+        // TokenRequest has no targetUri member, so htu is the only field carrying the target.
+        // Sending the query string made proof validation fail for an entirely correct client.
+        vi.mocked(mockApi.token.process).mockResolvedValue({ action: "OK" } as any)
+
+        await service.process({
+          headers: { dpop: "proof-jwt" },
+          body: { grant_type: "client_credentials" },
+          method: "POST",
+          protocol: "https",
+          originalUrl: "/api/token?debug=1",
+          get: () => "as.example.com",
+        } as any)
+
+        const sent = vi.mocked(mockApi.token.process).mock.calls[0][0].tokenRequest as
+          Record<string, unknown>
+        expect(sent.htu).toBe("https://as.example.com/api/token")
+        expect(sent.htm).toBe("POST")
+      })
+    })
+
     // Basic parsing moved to utils/basic-auth.ts. The previous inline
     // `credentials.split(":")` truncated a secret at its second colon and let a
     // malformed header clobber body-supplied credentials.

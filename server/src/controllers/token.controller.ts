@@ -16,6 +16,7 @@ import { parseProperties } from "../utils/properties";
 import { JwtVerificationService } from "../services/jwt-verification.service";
 import { TokenManagementService } from "../services/token.operations.service";
 import { setDpopNonce } from "../utils/dpop";
+import { hasDualChannelClientAuth } from "../utils/basic-auth";
 
 const tokenService = new TokenService();
 const loginService = new LoginService();
@@ -46,6 +47,20 @@ export const tokenController = {
         return res.status(400).json({
           error: "invalid_request",
           error_description: validationError,
+        });
+      }
+
+      // RFC 6749 §2.3.1: "The client MUST NOT use more than one authentication method in each
+      // request." Neither Authlete nor this server resolves that — both channels reach Authlete
+      // because `parameters` is the raw body — so it is refused here, before any Authlete call.
+      if (hasDualChannelClientAuth(req.headers.authorization, req.body as Record<string, unknown>)) {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
+        return res.status(400).json({
+          error: "invalid_request",
+          error_description:
+            "Client credentials were presented both in the Authorization header and in the request body. RFC 6749 Section 2.3.1 permits only one authentication method per request.",
         });
       }
       const result = await tokenService.process(req);

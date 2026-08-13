@@ -21,6 +21,7 @@ function mockRes(): Response {
   const res: Partial<Response> = {};
   res.status = vi.fn().mockReturnValue(res);
   res.json = vi.fn().mockReturnValue(res);
+  res.send = vi.fn().mockReturnValue(res);
   res.setHeader = vi.fn().mockReturnValue(res);
   return res as unknown as Response;
 }
@@ -85,16 +86,18 @@ describe("requireGrantOwnership", () => {
     });
   });
 
-  it("returns 401 with no token, without calling introspection", async () => {
+  it("returns 401 with NO error code when no token is presented (RFC 6750 §3.1)", async () => {
     const res = mockRes();
     await mw()(mockReq({ headers: {} } as Partial<Request>), res, next);
 
     expect(mockApi.introspection.process).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({
-      error: "invalid_token",
-      error_description: "Access token is invalid or expired",
-    });
+    // §3.1: "the resource server SHOULD NOT include an error code or other error information."
+    expect(res.json).not.toHaveBeenCalled();
+    expect(res.send).toHaveBeenCalled();
+    // Both schemes advertised — RFC 9449 §7.2. A client holding a bound token must be told
+    // DPoP is available, or it cannot present that token at all.
+    expect(res.setHeader).toHaveBeenCalledWith("WWW-Authenticate", "Bearer, DPoP");
   });
 
   it("returns 401 for a whitespace-only bearer value", async () => {
@@ -102,6 +105,53 @@ describe("requireGrantOwnership", () => {
     await mw()(mockReq({ headers: { authorization: "Bearer    " } } as Partial<Request>), res, next);
     expect(mockApi.introspection.process).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it("rejects the DPoP scheme with no proof — 401 invalid_dpop_proof (RFC 9449 §7.1)", async () => {
+    const res = mockRes();
+    await mw()(mockReq({ headers: { authorization: "DPoP tok-1" } } as Partial<Request>), res, next);
+
+    expect(mockApi.introspection.process).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "invalid_dpop_proof" }),
+    );
+    // Only DPoP is offered back: Bearer cannot carry the proof this presentation needs.
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "WWW-Authenticate",
+      expect.stringMatching(/^DPoP error="invalid_dpop_proof"/),
+    );
+  });
+
+  it("rejects Bearer + a DPoP proof — 400, the §7.2 downgrade", async () => {
+    const res = mockRes();
+    await mw()(
+      mockReq({ headers: { authorization: "Bearer tok-1", dpop: "proof-jwt" } } as Partial<Request>),
+      res,
+      next,
+    );
+
+    // Accepting this would make Bearer a working route for a DPoP-bound token.
+    expect(mockApi.introspection.process).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "invalid_request" }),
+    );
+  });
+
+  it("matches the auth-scheme case-insensitively (RFC 9110 §11.1)", async () => {
+    vi.mocked(mockApi.introspection.process).mockResolvedValue({
+      action: "OK",
+      grantId: "grant-alice",
+    } as never);
+
+    await mw()(
+      mockReq({ headers: { authorization: "bEaReR tok-1" } } as Partial<Request>),
+      mockRes(),
+      next,
+    );
+
+    expect(next).toHaveBeenCalledWith();
   });
 
   it("returns 400 when grantId is missing from the path", async () => {
@@ -186,13 +236,13 @@ describe("requireGrantOwnership", () => {
     });
   });
 
-  it("forwards a DPoP proof when one is present", async () => {
+  it("forwards a DPoP proof presented with the DPoP scheme", async () => {
     vi.mocked(mockApi.introspection.process).mockResolvedValue({
       action: "OK",
       grantId: "grant-alice",
     } as never);
     const req = mockReq({
-      headers: { authorization: "Bearer tok-1", dpop: "proof-jwt" },
+      headers: { authorization: "DPoP tok-1", dpop: "proof-jwt" },
     } as Partial<Request>);
 
     await mw()(req, mockRes(), next);
@@ -205,6 +255,25 @@ describe("requireGrantOwnership", () => {
         htu: "https://as.example.com/api/gm/grant-alice",
       }),
     });
+  });
+
+  it("excludes the query string from htu (RFC 9449 §4.2)", async () => {
+    vi.mocked(mockApi.introspection.process).mockResolvedValue({
+      action: "OK",
+      grantId: "grant-alice",
+    } as never);
+    const req = mockReq({
+      headers: { authorization: "DPoP tok-1", dpop: "proof-jwt" },
+      originalUrl: "/api/gm/grant-alice?verbose=true",
+    } as Partial<Request>);
+
+    await mw()(req, mockRes(), next);
+
+    // Sending the query string here fails proof validation for a client that is entirely correct.
+    const sent = vi.mocked(mockApi.introspection.process).mock.calls[0][0] as {
+      introspectionRequest: { htu: string };
+    };
+    expect(sent.introspectionRequest.htu).toBe("https://as.example.com/api/gm/grant-alice");
   });
 
   it("relays a DPoP nonce from the introspection response", async () => {

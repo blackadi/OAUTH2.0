@@ -89,4 +89,41 @@ describe("IntrospectionService", () => {
       expect(result).toEqual(mockResponse)
     })
   })
+
+  describe("DPoP target derivation (RFC 9449 §4.2)", () => {
+    const sentRequest = () =>
+      (vi.mocked(mockApi.introspection.process).mock.calls[0][0] as {
+        introspectionRequest: Record<string, unknown>
+      }).introspectionRequest
+
+    const run = (body: Record<string, unknown>, originalUrl: string) => {
+      vi.mocked(mockApi.introspection.process).mockResolvedValue({ action: "OK" } as never)
+      return service.process({
+        body,
+        headers: { dpop: "proof-jwt" },
+        method: "POST",
+        protocol: "https",
+        originalUrl,
+        get: () => "as.example.com",
+      } as never)
+    }
+
+    it("strips the query and fragment from htu, keeping them in targetUri", async () => {
+      await run({ token: "tok-1" }, "/api/introspection?trace=1")
+
+      expect(sentRequest().htu).toBe("https://as.example.com/api/introspection")
+      expect(sentRequest().targetUri).toBe("https://as.example.com/api/introspection?trace=1")
+    })
+
+    it("ignores a caller-supplied targetUri", async () => {
+      // A caller able to choose targetUri could replay a proof minted for another endpoint —
+      // the same defect already closed at UserInfo. It is server-determined, like htm/htu/dpop.
+      await run(
+        { token: "tok-1", targetUri: "https://as.example.com/api/par" },
+        "/api/introspection",
+      )
+
+      expect(sentRequest().targetUri).toBe("https://as.example.com/api/introspection")
+    })
+  })
 })
