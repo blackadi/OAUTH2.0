@@ -110,6 +110,62 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — T1-20 + the three S1 residues: CIBA could not authenticate its recommended client, and CI was not checking the client at all** (below)
 - [x] **2026-08-13 — PKCE is enforced; the last open S1 is closed** (below)
 - [x] **2026-08-13 — the two process findings became mechanisms** (below)
+- [x] **2026-08-13 — the route-coverage backlog reached zero, and the checker was counting comments** (below)
+
+### 2026-08-13 — the route-coverage backlog reached zero, and the tool that measured it was wrong
+
+**Why this matters to a future session:** the mechanism built in the previous entry was pointed at the
+backlog it was built to describe, and the backlog is now **empty — 47 → 0, all 91 routes named by a test**.
+Server tests **721 → 939** across **63 → 69** files. `scripts/route-coverage-baseline.json` is
+`{"unreferenced": []}`, which is the intended terminal state: with nothing carried, any unreferenced route is
+a regression and fails the build. **Do not repopulate it to accommodate a new endpoint.**
+
+Six new integration files, worked in the triage's own order — group A (no test anywhere) first, then group B
+by blast radius:
+
+| File | Routes | What only a route-level test could see |
+|---|---|---|
+| `native-sso.routes.test.ts` | 2 | Both gate themselves by calling `requireBasicAuth` from *inside* the handler; the router declares nothing |
+| `root.routes.test.ts` | 2 | The catch-all answers **200 HTML for any unmatched GET, including under `/api`**, and renders caller-controlled query parameters |
+| `backchannel-logout.routes.test.ts` | 4 | Two opposite postures asserted against each other |
+| `client.routes.test.ts` | 16 | All sixteen gate in-handler — an admin surface returning client secrets |
+| `vci.routes.test.ts` | 10 | Three postures in one router, and the defect below |
+| `admin-surfaces.routes.test.ts` | 16 | token / HSK / federation / JAR / device-consent / health / route index |
+
+**The three results worth carrying, in ascending order of how much they cost to learn.**
+
+**1. The instruction "assert the honest failure, do not invent a happy path" had teeth.** `nativeSsoSupported`
+is `false`, so Authlete's answer at either native-SSO endpoint has never been observed. The block asserts the
+two gates that run *before* any Authlete call — auth and validation, both deployment-independent — plus this
+server's own action→status mapping, and labels the one `OK`→200 case as mapping only. `NATIVE-SSO-TUTORIAL.md`
+is what the alternative looks like: four transcripts sharing one fabricated `device_secret`.
+
+**2. A new defect, the same shape as `/api/jar/process`.** **`POST /api/vci/deferred/issue` authenticates
+nobody.** `handleIssueDeferred` never collects an access token — its two siblings on the same router both do
+and both answer `401` without one — and SDK 1.0.0's `VciDeferredIssueRequest` is `{ order? }`, with **no
+`accessToken` field**, so Authlete cannot validate one either. Authlete splits the flow: `VciDeferredParseRequest`
+*does* carry `accessToken` (*"The access token that came along with the deferred credential request"*) and
+`/vci/deferred/parse` is where it is checked — and this server never calls it. **Both `AGENTS.md` and
+`routes-list.routes.ts:381` claimed a Bearer token was required.** Not live-exploitable
+(`verifiableCredentialsEnabled` is `false`). **Recorded, not fixed:** it changes access control, so it needs
+plan mode. The evidence is in `AGENTS.md` under the VCI bullet's *Known gap*; a characterization block in
+`tests/integration/vci.routes.test.ts` asserts the current behaviour and names the fix, so a silent change
+fails loudly. **UNVERIFIED:** OID4VCI 1.0 §9's exact normative sentence was not quoted verbatim from the
+primary source, so no MUST is cited — the finding rests on three items independent of the spec text.
+
+**3. The checker was measuring the wrong thing, and the second-order bug was worse.** A comment in the new
+native-SSO test cited `/api/jar/process` as the defect it was modelled on — and that prose mention alone moved
+`/jar/process` out of the backlog, because `referenceMatcher` searched the whole file including comments.
+Whole-line comments are now stripped before matching (trailing ones are not: cutting from the first `//` would
+also eat the tail of any line holding a URL). **Fixing it immediately exposed that
+`POST /api/backchannel_logout` — the endpoint the script was written because of, and the one that validated 5
+of §2.6's 11 steps while logging nobody out — was referenced in the entire suite only inside two comments.**
+Its eleven steps had a controller test; nothing drove the route. Covered rather than added to the baseline,
+because growing the baseline to clear a failure is the one move the ratchet cannot defend against.
+
+**The transferable rule:** *a tool that measures references must read only executable text* — and when a
+measurement tool is corrected, re-run it before trusting the previous reading, because what it was hiding is
+usually worse than the error you found.
 
 ### 2026-08-13 — turning the two process findings into things that cannot be forgotten
 

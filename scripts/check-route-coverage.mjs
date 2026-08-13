@@ -44,6 +44,10 @@ const TEST_DIRS = [join(REPO, "server/tests/unit"), join(REPO, "server/tests/int
  * Removing a line from the baseline is how you bank progress — `--update-baseline` rewrites it, and the
  * diff shows what changed. Never regenerate it to make a failure go away; that is the one move this design
  * cannot defend against.
+ *
+ * **The backlog reached zero on 2026-08-13**, so the file is now `{"unreferenced": []}`. That is the
+ * intended terminal state, not a missing baseline: with nothing carried, any unreferenced route is a
+ * regression and fails the build. Do not repopulate it to accommodate a new endpoint.
  */
 
 /**

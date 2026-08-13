@@ -34,11 +34,11 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (553 tests, 55 files)
+npm --prefix server run test              # unit + integration (939 tests, 69 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (504 tests, 54 files)
-npm --prefix server run test:integration  # integration tests only (49 tests)
+npm --prefix server run test:unit         # unit tests only (662 tests, 62 files)
+npm --prefix server run test:integration  # integration tests only (277 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (100 tests, requires real Authlete creds)
@@ -85,15 +85,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 54 files across 5 categories (504 tests):
+- **Unit tests**: 62 files across 5 categories (662 tests):
   - `tests/unit/services/` — 25 files (163 tests), each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo). One file is a cross-service invariant rather than a service: `credential-logging.test.ts` asserts no request body reaches a log line (see **Quirks & gotchas**)
   - `tests/unit/controllers/` — 9 files (113 tests), token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci
   - `tests/unit/middleware/` — 6 files (60 tests), error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership (plus `development-only.ts`, covered via `tests/unit/routes/device.routes.test.ts`)
   - `tests/unit/utils/` — 8 files (125 tests), basic-auth/createLocalJWT/jwksClient/properties/validate/validation/dpop/verify-id-token-hint
   - `tests/unit/routes/` — 5 files, fapi + metrics + openapi + protected-resource-metadata + device routes
-- **Integration tests**: 1 file `tests/integration/routes.test.ts` (49 tests) — full Express stack with mocked SDK
+- **Integration tests**: 7 files (277 tests) — full Express stack with mocked SDK, via `createApp()`. `routes.test.ts` is the general one (49 tests); the other six were written to drain the route-coverage backlog and each drives one module's routes **through its middleware chain**, asserting the auth posture first: `client.routes.test.ts` (16 routes), `admin-surfaces.routes.test.ts` (token/HSK/federation/JAR/device-consent/health/route-index, 16), `vci.routes.test.ts` (10), `backchannel-logout.routes.test.ts` (4), `native-sso.routes.test.ts` (2), `root.routes.test.ts` (2). **Prefer adding to these over a new controller test** when the thing under test is a gate, a status mapping or a route parameter — a controller test calls the handler directly and cannot see any of it
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
-- Run with `npm --prefix server run test` — 553 tests across 55 files, completes in ~2s
+- Run with `npm --prefix server run test` — 939 tests across 69 files, completes in ~2s
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -130,7 +130,17 @@ docker compose up -d prometheus grafana
 - **PAR (Pushed Authorization Requests — RFC 9126)**: Single POST endpoint at `/api/par`. Delegates to `authleteApi.pushedAuthorization.*` (SDK v1.0.0 includes this natively). Accepts `parameters` (URL-encoded OAuth params), `clientId`, `clientSecret` in JSON body. No admin auth required. **Client authentication takes either an `Authorization: Basic` header (for `CLIENT_SECRET_BASIC` clients) or `clientId`/`clientSecret` body fields (for `CLIENT_SECRET_POST`)** — see the two-channel table under Quirks & gotchas; the SPA exposes this as a "Client Auth Method" selector in `ParSection.tsx`. Action mapped to HTTP status: `CREATED`→201, `BAD_REQUEST`→400, `UNAUTHORIZED`→401, `FORBIDDEN`→403, `PAYLOAD_TOO_LARGE`→413, `INTERNAL_SERVER_ERROR`→500. The response includes `requestUri` (the `request_uri` for the authorization call), `responseContent` (JSON with `expires_in`, `request_uri`). See `ParSection.tsx` in the client for the testing UI.
 - **HSK (Hardware Security Keys)**: Four endpoints at `/api/hsk/{create,get/:handle,delete/:handle,list}`. Delegates to `authleteApi.hardwareSecurityKeys.*` (SDK v1.0.0 includes natively). All endpoints require admin Basic auth (`MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`). Create accepts `kty`, `use`, `kid`, `hsmName`, `alg` in JSON body; requires `kty` and `hsmName`. Action mapping: `SUCCESS`→201 (create) / 200 (get/list) / 204 (delete), `INVALID_REQUEST`→400, `NOT_FOUND`→404, `SERVER_ERROR`→500. Get/delete use `:handle` route param. List returns all keys. See `src/services/hsk.service.ts`, `src/controllers/hsk.controller.ts`, `src/routes/hsk.routes.ts`.
 - **Device Flow (RFC 8628)**: Three POST API endpoints at `/api/device/{authorization,verification,complete}` plus three browser paths at `/device` (GET show form, POST verify code, POST /device/consent authenticate+complete). Delegates to `authleteApi.deviceFlow.*` (SDK v1.0.0 includes natively). No admin auth required — client authentication is via `clientId`/`clientSecret` in the request body. Action→status mappings live in `device.controller.ts` and match the SDK's action enums exactly: authorization `OK`→200 (with `deviceCode`, `userCode`, `verificationUri`, `expiresIn`, `interval`) / `BAD_REQUEST`→400 / `UNAUTHORIZED`→401 / `INTERNAL_SERVER_ERROR`→500; verification `VALID`→200 / `NOT_EXIST`→404 / `EXPIRED`→400 / `INTERNAL_SERVER_ERROR`→500; complete `SUCCESS`→200 / `USER_CODE_NOT_EXIST`→404 / `USER_CODE_EXPIRED`→400 / `INVALID_REQUEST`→400 / `SERVER_ERROR`→500. **`ACCESS_DENIED` is a request `result` value, not a response action** — `DeviceCompleteRequestResult` is `{AUTHORIZED, ACCESS_DENIED, TRANSACTION_FAILED}`, while `DeviceCompleteResponseAction` has no `ACCESS_DENIED` member. A denial returns `SUCCESS`→200; the device learns of it as `access_denied` on its next token poll. Service must have `supportedGrantTypes` including `DEVICE_CODE`, plus `deviceAuthorizationEndpoint`. `deviceVerificationUri` and a positive `deviceFlowCodeDuration` are **mandatory** — Authlete errors on `/device/authorization` without them. `deviceFlowPollingInterval` is optional (0 omits `interval` from the response); `deviceVerificationUriComplete`, `userCodeCharset` (default `BASE20`) and `userCodeLength` (0 → 8 for `BASE20`, 9 for `NUMERIC`) are optional. **Security posture (changed 2026-08-10):** `POST /api/device/complete` approves any live `userCode` as any `subject`, with no authentication of that subject — so it is now **development-only**, gated by `middleware/development-only.ts` and answering a flat `404` anywhere else. It used to carry no middleware at all in every environment, which made it a token-minting oracle for anyone who could read a user code off a screen (RFC 8628 §5.5). The authenticated path is `POST /device/consent`, which is available in all environments. `/api/device/verification` and `POST /device` carry `deviceCodeLimiter` (5/min) because unlimited attempts are a code-enumeration oracle — RFC 8628 §5.1 asks for rate limiting and its own worked example assumes ~5 attempts; `/api/device/authorization` carries `generalLimiter` and stays public, since it is §3.1's device authorization endpoint and Authlete authenticates the client from the body credentials. See `docs/DEVICE-FLOW-TUTORIAL.md` Part 12 and `DeviceSection.tsx` (4 tabs: Authorization, Verification, Complete, Poll Token) in the client for the testing UI. The Authlete Token endpoint natively supports `grant_type=urn:ietf:params:oauth:grant-type:device_code` — no custom token endpoint needed for polling.
-- **VCI (Verifiable Credential Issuance — OID4VCI)**: 9 API endpoints + `/.well-known/openid-credential-issuer` (OID4VCI 1.0 Final). Three auth categories: (1) **Discovery** (metadata, jwtissuer, jwks, well-known) — public GET; (2) **Offers** (offer/create, offer/info) — admin Basic auth; (3) **Credential** (credential/issue, credential/batch, deferred/issue) — access token via `Authorization: Bearer` header or body. Action→status: discovery `OK`→200/`NOT_FOUND`→404; offer `CREATED`→201/`FORBIDDEN`→403/`CALLER_ERROR`→400/`AUTHLETE_ERROR`→500; issue `OK`→200/`ACCEPTED`→202; batch `OK`→200; deferred `OK`→200/`ACCEPTED`→202. Files: `vci.service.ts`, `vci.controller.ts`, `vci.routes.ts` in server; `VciSection.tsx` in client.
+- **VCI (Verifiable Credential Issuance — OID4VCI)**: 9 API endpoints + `/.well-known/openid-credential-issuer` (OID4VCI 1.0 Final). Three auth categories: (1) **Discovery** (metadata, jwtissuer, jwks, well-known) — public GET; (2) **Offers** (offer/create, offer/info) — admin Basic auth; (3) **Credential** (credential/issue, credential/batch) — access token via `Authorization: Bearer` or `DPoP` header (both case-insensitive, through `extractAccessToken`) or a JSON `accessToken` body field. Action→status: discovery `OK`→200/`NOT_FOUND`→404; offer `CREATED`→201/`FORBIDDEN`→403/`CALLER_ERROR`→400/`AUTHLETE_ERROR`→500; issue `OK`→200/`ACCEPTED`→202; batch `OK`→200; deferred `OK`→200/`ACCEPTED`→202. Files: `vci.service.ts`, `vci.controller.ts`, `vci.routes.ts` in server; `VciSection.tsx` in client.
+
+  **Known gap — `POST /api/vci/deferred/issue` authenticates nobody** (found 2026-08-13 while draining the route-coverage backlog; **not** a deliberate defect, and **not** in the table below). It is deliberately excluded from category (3) above, because until this was found both this file and `routes-list.routes.ts:381` described it as requiring a Bearer token and neither was true. The evidence, in the order it was established:
+
+  | # | Fact |
+  |---|---|
+  | 1 | `handleIssueDeferred` never calls `extractBearerToken`. Its two siblings on the same router both do and both answer `401` without a token. It checks only that the body carries `order.transactionId` or `order.requestIdentifier` |
+  | 2 | SDK 1.0.0's `VciDeferredIssueRequest` is `{ order?: CredentialIssuanceOrder }` — **no `accessToken` field**, so Authlete cannot validate one either. The token is not dropped in transit; it is never collected |
+  | 3 | **Authlete splits this flow in two.** `VciDeferredParseRequest` *does* carry `accessToken` — its own doc comment reads *"The access token that came along with the deferred credential request"* — and `/vci/deferred/parse` is where the token is checked. This server never calls it: `deferredParse`, `parse` and `batchParse` appear in no source file |
+
+  So a caller holding a `transactionId` — a handle, not a credential — reaches issuance. **Not live-exploitable here**: `verifiableCredentialsEnabled` is `false`, the same standing as Native SSO. **UNVERIFIED:** OID4VCI 1.0 (Final, 16 Sep 2025) §9's exact normative sentence on authenticating the Deferred Credential Request was not quoted verbatim from the primary source, so no MUST is cited — the finding rests on the three rows above, each independent of the spec text. **To fix:** require a token in the handler as the siblings do, *and* route the request through `verifiableCredentials.deferredParse` so Authlete validates it. That changes access control, so it is a plan-mode change. Recorded as a characterization block in `tests/integration/vci.routes.test.ts`, which asserts the current behaviour and names the fix — so a silent change fails loudly.
 - **MCP (Model Context Protocol — OAuth 2.1)**: `GET /.well-known/oauth-authorization-server` serves RFC 8414 AS metadata at root (same content as `openid-configuration`). Client UI: `McpSection.tsx` with 3 tabs (AS Metadata, Protected Resource Metadata, CIMD Metadata) + 5-step Full Flow Wizard (Discover → Register Client → Authorize with PKCE+Resource → Token Exchange → UserInfo). Service layer: `mcp.service.ts` — `fetchAsMetadata()` tries both well-known paths, `fetchProtectedResourceMetadata()` (RFC 9728), `fetchCimdMetadata()`, `buildAuthorizationUrl()` (PKCE S256 + RFC 8707 resource indicator), `exchangeCode()`, `fetchUserInfo()`. Requires CIMD enabled in Authlete (`clientIdMetadataDocumentSupported: true`). Tutorial: `docs/MCP-OAUTH-TUTORIAL.md`.
 
 ## Client SPA architecture
@@ -279,19 +289,27 @@ to anonymous callers; `federation.service.ts` had no tests and *could not* have 
 was found by reading code, one at a time. **The question that finds them as a list is *"which routes does no
 test mention?"***, and that is all this script asks.
 
-**`--triage` splits the backlog by how blind it is**, which is what makes it workable: **4** routes have no
-test anywhere, and **43 across 10 modules** have a unit-tested controller but **nothing driving the route with
-its middleware**. The second group is the one with history — `/api/jar/process` had a controller test *and* no
-auth middleware; `/api/device/complete` was ungated outside development; both introspection endpoints were
-unauthenticated. **A controller test calls the handler directly and never touches the middleware chain**, so
-it cannot see any of that. Work it as one integration block per module, asserting the auth posture first.
+**The backlog is drained: `scripts/route-coverage-baseline.json` is empty and all 91 routes are named by a
+test** (2026-08-13). An empty baseline is the intended terminal state, not a missing file — the check now
+fails on *any* unreferenced route, so a new endpoint without a test breaks the build immediately. It still
+**ratchets**, which is how it got here: 47 routes were carried as debt on day one, `--triage` split them into
+**4** with no test anywhere and **43 across 10 modules** with a unit-tested controller but **nothing driving
+the route with its middleware**, and the second group was worked one integration block per module with the
+auth posture asserted first. Bank progress with `--update-baseline`; **never regenerate it to silence a
+failure**, which is the one move the design cannot defend against.
 
-It **ratchets**: today's 47 uncovered routes are recorded in `scripts/route-coverage-baseline.json`, and the
-check fails only when a route *outside* that file is unreferenced — so adding an endpoint without a test
-breaks the build while the existing debt stays visible and shrinkable. Bank progress with
-`--update-baseline`; never regenerate it to silence a failure, which is the one move the design cannot
-defend against. And note what it does **not** claim: a route *named* by a test is not a *tested* route. It
-measures reference, not assertion quality — a smoke detector, not a fire inspection.
+**Why the second group was the one with history**, and why the ordering matters if this ever refills:
+`/api/jar/process` had a controller test *and* no auth middleware; `/api/device/complete` was ungated outside
+development; both introspection endpoints were unauthenticated. **A controller test calls the handler
+directly and never touches the middleware chain**, so it cannot see any of that. Draining the backlog found
+one more of exactly that shape — see the `POST /api/vci/deferred/issue` row under **Known gaps** below.
+
+Two things it does **not** claim. A route *named* by a test is not a *tested* route: it measures reference,
+not assertion quality — a smoke detector, not a fire inspection. And **it reads only executable text**;
+whole-line comments are stripped before matching. That is not tidiness. A comment in the new native-SSO test
+citing `/api/jar/process` as the defect it was modelled on moved that route out of the backlog on its own,
+and fixing it revealed that `POST /api/backchannel_logout` — the endpoint this script exists because of — was
+referenced in the entire suite **only inside two comments**.
 
 **The client had the same shape of hole at the CI level**: `ci.yml` ran `npm run build` alone, and `vite
 build` does not typecheck, so `npm run typecheck` was never invoked and 16 client test files never ran. Both
