@@ -240,6 +240,35 @@ job entirely to PKCE.
 > algorithm; this module states the requirement; until 2026-08-14 nothing put them in the same sentence — in the
 > module whose deliverable is a conformance report. **When you write yours, the check is per client, and the
 > question to ask is "which principal does this requirement bind?"**
+>
+> ---
+>
+> **Why HMAC is the wrong shape here, not merely the wrong entry on a list.** *"HMAC appears nowhere in the
+> profile"* is true and is the weak version of the argument, because it invites the reply *"then add it."*
+> The real objection is that FAPI 1.0 Advanced exists to make high-value, write-access API calls
+> **non-repudiable**, and a symmetric algorithm cannot do that at all:
+>
+> | | Asymmetric (`ES256`, `PS256`) | Symmetric (`HS256`) |
+> |---|---|---|
+> | who can produce a valid signature | the OP alone — it holds the private key | **the OP *and* the client** — both hold `client_secret` |
+> | what a valid signature proves | the OP issued this token | *somebody holding the shared secret* issued it |
+> | can the client forge one? | no | **yes, trivially** |
+> | can the OP deny issuing one? | no | **yes — and truthfully** |
+>
+> An `HS256` ID token is a perfectly good *integrity* check between two parties who already trust each other.
+> It is worthless as **evidence**. If `1523514379`'s user disputes a payment, the ID token proves nothing about
+> which of the two parties minted it, because either could have. That is what non-repudiation means and why the
+> profile's algorithm list is not arbitrary: swapping in a symmetric algorithm does not weaken the guarantee by
+> a degree, it **removes the property the profile was built to provide** while leaving every field in place and
+> every signature verifying.
+>
+> Note the direction this cuts. The confidential client — the one holding a secret, the one you would assume is
+> the *more* trustworthy of the four — is the only one that can forge the OP's tokens, precisely *because* it
+> holds a secret. **Confidentiality and non-repudiation are different properties, and here they trade against
+> each other.** FAPI 2.0 Message Signing (later in this module) is the same concern one layer up: signing the
+> request, the response and the introspection so a dispute can be settled from artefacts rather than from logs.
+> Ask of any signature you meet: *who could have produced this?* If the answer is more than one party, it is
+> integrity, not proof.
 
 **§5.3.2.2 — authorization endpoint flows.** Also `shall`:
 

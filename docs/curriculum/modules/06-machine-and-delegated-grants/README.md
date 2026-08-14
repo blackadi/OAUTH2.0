@@ -531,10 +531,18 @@ Read these **after** the lesson, before the lab:
 - [`docs/TOKEN-EXCHANGE-TUTORIAL.md`](../../../TOKEN-EXCHANGE-TUTORIAL.md) — RFC 8693 and the Authlete
   configuration surface.
 
-> **Read the token-exchange tutorial critically.** Its Part 7 shows a response shape this server does not
-> actually produce, and its `act`-claim examples describe RFC 8693 rather than this implementation. The lab
-> has you check the tutorial's claims against the running server — one of the more useful habits this
-> curriculum can leave you with, and the reason Exercise 6 is written the way it is.
+> **Read the token-exchange tutorial critically — and notice that Part 7 is the part you can trust.** Its
+> `act`-claim examples describe **RFC 8693**, not this implementation, and reading them as a transcript will
+> mislead you. Part 7 is the opposite: its response block is labelled *"what this server actually returns
+> (captured 2026-08-06)"* and carries a real body, down to the two non-standard members and the missing
+> required one. **That label is the whole difference**, and it is the model to copy — a dated capture says who
+> observed it and when, so a reader can tell whether it has since drifted. An undated example says nothing
+> about whether anyone ever ran it. The lab has you check the tutorial's claims against the running server,
+> which is the reason Exercise 6 is written the way it is.
+>
+> *(This paragraph used to say Part 7 showed a shape the server does not produce. That was true when written
+> and stopped being true when the tutorial was re-captured — a warning outliving its defect is its own kind of
+> wrong answer.)*
 
 ## Then do the lab
 

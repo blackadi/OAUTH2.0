@@ -402,10 +402,30 @@ curl -s -X POST "$API/token" -d "grant_type=client_credentials" -d "scope=profil
 ```
 
 The assertion is perfectly valid. It is refused because **the client's registered authentication method is
-pinned**, and this client is registered for `client_secret_basic`. Your service metadata advertises
-`client_secret_jwt` and `private_key_jwt` in `token_endpoint_auth_methods_supported` — that is what the
-*service* supports, not what *this client* is permitted to use. Module 02's "advertised ≠ permitted" rule,
-now applied to client authentication.
+pinned**, and this client is registered for `client_secret_basic`.
+
+Read the whole advertised list before drawing a conclusion from it:
+
+```bash
+curl -s "$API/.well-known/openid-configuration" | jq -c '.token_endpoint_auth_methods_supported'
+```
+
+```json
+["none","client_secret_basic","client_secret_post","client_secret_jwt","private_key_jwt"]
+```
+
+**Five methods, and this client may use exactly one of them.** That is what the *service* supports, not what
+*this client* is permitted to use — Module 02's "advertised ≠ permitted" rule, now applied to client
+authentication. `client_secret_jwt` is on that list and the request you just sent used it correctly; the
+refusal is about identity, not about the method being unavailable.
+
+> **The list is worth knowing precisely, because it shrank.** Until 2026-08-12 this service advertised **nine**
+> methods — the five above plus `tls_client_auth`, `self_signed_tls_client_auth`, `attest_jwt_client_auth` and
+> `spiffe_jwt`. **Not one of the four could be used**: mTLS is not implemented, no Client Attester is configured
+> and nothing here speaks SPIFFE. They were withdrawn rather than implemented, and Module 07 uses that as its
+> worked example of *advertised but unusable*. So the five you see are five you can actually reach — which was
+> not true of this document a fortnight ago, and is the reason to fetch the list rather than trust a lesson that
+> quotes it.
 
 ### Now do it on a client that *is* permitted — §2.2 for real
 
