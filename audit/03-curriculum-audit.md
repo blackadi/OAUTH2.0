@@ -808,6 +808,24 @@ Batch 3a opened a register of correct labs a recommended fix would invalidate. B
 | Module 09a Ex 2, 3, 4, 5 — four `UNVERIFIED` success paths | **JARM-W1 / CIBA-W4 / 9396-W1** and a `supportedAcrs` entry | **Inverse coupling** — these fixes *complete* four labs rather than breaking them. The register needs both directions |
 | Module 09a Ex 4 — the step-up flow | **9470-W3** (the fabricated `prompt=none` event) | ✅ **checked and empty** — Ex 4 uses the interactive login path, so the fix changes nothing here (3b-F11) |
 
+**Three rows added 2026-08-14, and all three had already fired.** The register was built for *forward*
+dependencies — fixes not yet made. These are the other kind: **Phase 5's own configuration changes broke
+correct labs on the day they shipped, and nobody noticed for two commits.**
+
+| Lab / doc | Broken by | Status |
+|---|---|---|
+| **Module 09b Ex 7** — four transcripts, two observations drawn from them, two `UNVERIFIED` markers, the module README's status row and a `SPEC-INVENTORY.md` row | **DR-03** (`verifiableCredentialsEnabled: true`) | ⚠️ **was live drift for two commits** → ✅ **rebuilt 2026-08-14 from fresh probes.** The exercise is now *better*: the old lesson was "every VCI endpoint refuses because the feature is off"; the new one is **"enabling a feature is not the same as configuring it"** — `/vci/metadata` returns a conformant §12.2.4 document while `/vci/jwks` and `/vci/jwtissuer` fail `A403201`/`A417202` for want of a credential-issuer JWK Set, and the result codes changed from `NOT_FOUND` to `INTERNAL_SERVER_ERROR`, which is the honest transition |
+| **`MCP-OAUTH-TUTORIAL.md`** precondition table (2 of 3 rows) + Prerequisites §| **DR-05** (CIMD on), **DR-11** (issuer aligned) | ✅ **fixed 2026-08-14.** Both rows now read as met, with the live values named and the endpoint to re-check them from |
+| **`modules/05/README.md:302`, `modules/09a/lab.md:298`** — two `iss` values | **DR-11** | ✅ **fixed 2026-08-14.** The 09a one is **flagged inline**: it sits inside a block labelled *"verified end to end"*, and the new value comes from the live discovery document rather than from re-running the JARM flow, which needs interactive browser authorization |
+
+**The process finding, which outlives all three.** `AGENTS.md`'s rule was *"grep the curriculum for the symptom
+you changed"* — and **a configuration flag has no symptom string.** You cannot grep for output you are about
+to create. The strings that go stale are the ones that existed *because the feature was off*, so the search
+has to be for **the behaviour the flag gated**, not for a string. Recorded as a worked example in `AGENTS.md`
+with the three greps that would have caught it. This is **CUR-3b-W2's** rule, extended to configuration —
+`04-remediation-plan.md`'s requirement that a Tier 3 decision *"ship with its paired doc change in the same
+commit"* was the control that should have prevented it, and it was not followed for DR-03/DR-05/DR-11.
+
 ---
 
 # Batch 3c — the nine tutorials, and the `sd-jwt.mjs` audit

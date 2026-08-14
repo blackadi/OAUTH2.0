@@ -67,6 +67,31 @@ naming a console change with no console field, after RPL-W4 and T1-13 — *check
 answers **`UNAUTHORIZED`, `[A375304]`** — proving the endpoint is live, that the deferred path really does
 validate the access token, and that the `requestContent` this server synthesises is accepted.
 
+> ### ⚠️ These three writes shipped WITHOUT their paired doc changes, and broke three labs
+>
+> Found 2026-08-14 while scoping T1-11; **fixed the same day**. `04-remediation-plan.md` requires a Tier 3
+> decision to ship with its doc change *in the same commit*, and that control was not applied here.
+>
+> **DR-03 invalidated Module 09b Exercise 7 entirely** — four transcripts, two observations drawn from them,
+> two `UNVERIFIED` markers, the module README's status row and two `SPEC-INVENTORY.md` rows. **Rebuilt from
+> fresh probes, and the replacement lesson is better than the original**: not *"every VCI endpoint refuses
+> because the feature is off"* but **"enabling a feature is not the same as configuring it"** — `/vci/metadata`
+> returns a conformant §12.2.4 document while `/vci/jwks` and `/vci/jwtissuer` fail **`A403201`** / **`A417202`**
+> for want of a **credential-issuer JWK Set**, and the codes moved `NOT_FOUND` → `INTERNAL_SERVER_ERROR`, which
+> is the honest transition. **DR-05 and DR-11** invalidated two of three rows in `MCP-OAUTH-TUTORIAL.md`'s
+> precondition table plus two `iss` transcripts.
+>
+> **The rule that failed could not have worked, and that is the finding.** `AGENTS.md` said *"grep the
+> curriculum for the symptom you changed"* — **a configuration flag has no symptom string**, and you cannot
+> grep for output you are about to create. `AGENTS.md` now carries the three searches that do work: the flag
+> name, the vocabulary of being off, and the vendor result codes that only occur while it is off. Register
+> rows in `03-curriculum-audit.md`; full record in `PROGRESS.md`.
+>
+> **Still open and genuinely a gap, not drift:** the credential issuer has **no JWK Set** (`credentialJwks` /
+> `credentialJwksUri` unset), so `/vci/jwks` and `/vci/jwtissuer` answer 500 and no credential can be issued.
+> Setting it is a service write and needs its own decision. Module 09b now documents that boundary explicitly
+> rather than leaving it invisible.
+
 ### Where the work stands
 
 **Done:** P0 (fail-safe default, `lint` added to both CI jobs, root `.gitignore` + `logs/` untracked),

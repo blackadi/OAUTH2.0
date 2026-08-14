@@ -299,7 +299,7 @@ GET /api/authorization?client_id=…&request_uri=urn%3Aietf%3Aparams%3Aoauth%3Ar
 
 # 5. FRONT CHANNEL. The response names its issuer.
 HTTP/1.1 302 Found
-Location: http://localhost:3001/callback?state=PAR1&code=…&iss=https%3A%2F%2Fblackadi.dev
+Location: http://localhost:3001/callback?state=PAR1&code=…&iss=https%3A%2F%2Foauth2-0-ekh2.onrender.com
 #                                                            ^^^ RFC 9207 — the client MUST check this
 
 # 6. BACK CHANNEL. A DPoP proof accompanies the exchange, binding the token to a fresh key.

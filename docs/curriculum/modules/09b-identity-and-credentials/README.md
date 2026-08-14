@@ -599,7 +599,7 @@ Be clear-eyed about this — the lab is built around it, not in spite of it.
 | Capability | State here |
 |---|---|
 | **SD-JWT (RFC 9901)** | **Not in the repo — and does not need to be.** Pure JOSE. The lab ships `scripts/sd-jwt.mjs` and you run all of it locally. This is the module's core. |
-| **OID4VCI** | Nine endpoints exist (`vci.routes.ts`) and delegate to Authlete, but **verifiable credentials are disabled on this service**. Every endpoint answers with a specific refusal you will read. |
+| **OID4VCI** | Nine endpoints exist (`vci.routes.ts`) and delegate to Authlete. **Verifiable credentials are enabled on this service** (2026-08-14), so the issuer metadata document is real and conformant — but the credential issuer has no JWK Set, so `/vci/jwks` and `/vci/jwtissuer` still fail. The lab reads that gap: **enabling a feature is not the same as configuring it.** |
 | **OpenID Federation** | Endpoints exist (`federation.routes.ts`). The entity-configuration endpoint is **broken** — you will diagnose it. Registration works and rejects malformed input properly. |
 | **Identity Assurance** | Not wired. Taught from the specification. |
 | **OID4VP** | No verifier implementation. Taught from the specification; the KB-JWT half is exercised locally. |

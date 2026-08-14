@@ -1,10 +1,10 @@
 # OpenID for Verifiable Credential Issuance 1.0 (OID4VCI)
 
 - **Verdict:** ~~`MISCONFIGURED`~~ → **`IMPLEMENTED_VERIFIED`** *(2026-08-14 — DR-03 executed; the feature is enabled and the metadata document is conformant)*
-- **Severity:** ~~**S2**~~ → **S4** *(F-1 and F-6 both closed; what remains is VCI-W2's unachievable half and the nonce endpoint)*
+- **Severity:** ~~**S2**~~ → **S4** *(F-1 and F-6 both closed; what remains is VCI-W2's unachievable half, the nonce endpoint, and F-7 below)*
 - **Status:** OpenID **Final**, **16 September 2025** — re-verified against the primary source this session
 - **Authlete version:** 3.0
-- **Repo docs under test:** `README.md` feature tables, `docs/curriculum/modules/09b-identity-and-credentials/`, `client/src/components/oidc/VciSection.tsx`, `AGENTS.md` VCI paragraph
+- **Repo docs under test:** `README.md` feature tables, `docs/curriculum/modules/09b-identity-and-credentials/`, `client/src/components/vci/VciSection.tsx`, `AGENTS.md` VCI paragraph *(path corrected 2026-08-14 — this entry said `components/oidc/VciSection.tsx`, which does not exist. `check-docs.mjs` validates only `file.ts:NNN` refs, so a **bare path** with no line number is unchecked: the known gap **CUR-3a-W1**, caught here by hand)*
 
 <thinking>
 1. Requirements on the issuer: publish credential issuer metadata at `.well-known/openid-credential-issuer` with
@@ -196,6 +196,35 @@ Recorded because the code quality here is high and the verdict is about configur
 - **Table-driven action mapping** (`controllers/vci.controller.ts:14-57`, six maps) with an unmapped action falling through to 500. `01-spec-matrix.md` §6 verified the two apparent asymmetries — `BATCH_ISSUE_MAP` lacking `ACCEPTED`, `DEFERRED_ISSUE_MAP` lacking `UNAUTHORIZED` — as **correct**, because the corresponding SDK enums lack those members.
 - The `pre-authorized_code` grant is enabled service-wide and on every client, so the offer half of the flow has real configuration behind it.
 
+## Finding F-7 — the feature is enabled but the credential issuer has no signing key (S4)
+
+Probed live 2026-08-14, after DR-03, against service `3693555522`:
+
+| Endpoint | Result |
+|---|---|
+| `GET /.well-known/openid-credential-issuer` | **200** |
+| `GET /api/vci/metadata` | **200**, a conformant §12.2.4 document — all three REQUIRED members, snake_case, no `resultCode` |
+| `POST /api/vci/offer/create` (admin auth) | **201**, `A366001 CREATED` |
+| `POST /api/vci/deferred/issue` (bogus token) | **401**, `A375304 UNAUTHORIZED` — from `parse`, retiring VCI-W5's marker |
+| `GET /api/vci/jwks` | **500**, `[A403201] The JWK Set document of the credential issuer has not been set up yet.` |
+| `GET /api/vci/jwtissuer` | **500**, `[A417202] The JWT issuer metadata is not available because neither the JWK Set document of the credential issuer nor its URL has been set up.` |
+
+**`credentialJwks` / `credentialJwksUri` are unset**, so two of the three discovery endpoints cannot produce a
+document and **no credential can actually be signed**. F-1 is closed — the feature is on and its metadata is
+conformant — but *issuance* is still unreachable, for a different reason than before.
+
+**Two things make this worth its own finding rather than a footnote.** The result codes moved from
+`NOT_FOUND` to `INTERNAL_SERVER_ERROR`, and that is the **correct** transition: with the feature off the
+document does not exist (404 is right); with the feature on and its key material missing the document *should*
+exist and cannot be built, which is a server fault. Authlete distinguishes the two; most implementations would
+have kept returning 404. And the gap is **visible in two places at once** — the same missing JWK Set explains
+both the `/vci/jwks` 500 and the fact that no credential can be issued — which is what makes it teachable
+rather than merely absent. Module 09b's Exercise 7 was rebuilt around exactly this: *enabling a feature is not
+the same as configuring it.*
+
+Not escalated above S4: nothing is misreported, no security control is missing, and the endpoints fail loudly
+with accurate diagnostics. **New work item VCI-W6.**
+
 ## Documentation delta
 
 | Doc claim | Location | Reality | Verdict |
@@ -223,7 +252,8 @@ Recorded because the code quality here is high and the verdict is about configur
 | VCI-W2 | ⚠️ **HALF UNACHIEVABLE, 2026-08-14.** The *issuer* document names its endpoints and is conformant; the **AS** half cannot be done — no `Service` property surfaces `credential_issuer` in the AS discovery document (checked against all seven `credential*` fields). Third instance of a criterion naming a console change with no console field, after RPL-W4 and T1-13. Link the AS and the issuer | S | Conditional on W1: `credential_issuer` present in the AS discovery document and `authorization_servers` in the issuer document. **Blocked on the B3 issuer/host fix** — otherwise the linkage points somewhere unretrievable. |
 | VCI-W3 | Add the nonce endpoint | M | Conditional on W1: `nonce_endpoint` in the issuer metadata, returning `c_nonce` with `Cache-Control: no-store` per §7.2. |
 | VCI-W4 | ~~Keep the code as-is~~ — **withdrawn 2026-08-13** | — | **This work item was wrong, and its evidence was already in this file.** It asserted that "routing, auth tiers and action mapping are correct" nine lines below a boundary-table row recording `VciDeferredParse` as *existing and unused*. Those two facts are the same fact, and joining them is the finding. Superseded by **VCI-W5**. |
-| VCI-W5 | ~~`POST /api/vci/deferred/issue` authenticates nobody~~ **✅ FIXED 2026-08-13** | M | Was: the handler collected no access token, and `VciDeferredIssueRequest` has no `accessToken` field, so nothing on the path could validate one — a caller holding a `transactionId` reached issuance. Now: `parse` first (`UNAUTHORIZED`→401), `requestIdentifier` from `info.identifier` and never from the body, a bare `requestIdentifier` refused. **Criteria met:** `verifiableCredentials.deferredParse` is called before `deferredIssue`; no token → 401 with neither API reached; `parse`→`UNAUTHORIZED` → 401 with `deferredIssue` unreached. Live path **UNVERIFIED** (`verifiableCredentialsEnabled` is `false`). |
+| VCI-W5 | ~~`POST /api/vci/deferred/issue` authenticates nobody~~ **✅ FIXED 2026-08-13** | M | Was: the handler collected no access token, and `VciDeferredIssueRequest` has no `accessToken` field, so nothing on the path could validate one — a caller holding a `transactionId` reached issuance. Now: `parse` first (`UNAUTHORIZED`→401), `requestIdentifier` from `info.identifier` and never from the body, a bare `requestIdentifier` refused. **Criteria met:** `verifiableCredentials.deferredParse` is called before `deferredIssue`; no token → 401 with neither API reached; `parse`→`UNAUTHORIZED` → 401 with `deferredIssue` unreached. ~~Live path **UNVERIFIED** (`verifiableCredentialsEnabled` is `false`).~~ **Marker retired 2026-08-14** — probed live with a bogus token: `POST /api/vci/deferred/issue` answers **401 `A375304 UNAUTHORIZED`**, and it is `parse` that says so, since `issue` has no field to check a token with. Three claims proved by one call: the endpoint is live, the deferred path really does validate the token, and the `requestContent` this server synthesises is accepted (Authlete parsed it far enough to *reach* token validation). |
+| **VCI-W6** | Set a credential-issuer JWK Set, or document the boundary | S | **New 2026-08-14 from F-7.** `credentialJwks` / `credentialJwksUri` are unset, so `GET /api/vci/jwks` → `A403201` and `GET /api/vci/jwtissuer` → `A417202`, both 500, and **no credential can be signed**. Two paths: set one of those fields (a service write, needs its own decision — it is the last thing standing between this deployment and an end-to-end issuance) or leave it and keep the boundary documented. **The documentation half is already done**: Module 09b Exercise 7 was rebuilt around this exact gap, and its surviving `UNVERIFIED` marker names it as the reason issuing a credential is not runnable. So this item is now purely the *enablement* decision, with no doc debt attached. |
 
 **Ordering.** W1 gates everything and depends on the B3 issuer fix to be meaningful. None of these files is on
 the `AGENTS.md` **Security-critical surfaces** list, and `AGENTS.md` explicitly excludes `vci` — correctly, since

@@ -295,13 +295,21 @@ of three or four**, with everything inside a signature.
 query parameters : response          <- one parameter, not four
 JWT header       : {"kid":"1","alg":"ES256"}
 JWT claims       : ["aud","state","code","iss","exp"]
-iss / aud        : https://blackadi.dev / <your client_id>
+iss / aud        : https://oauth2-0-ekh2.onrender.com / <your client_id>
 carries code     : true | state: jarm1 | expires in 600 s
 signature verifies against jwks kid=1: true
 ```
 
-**Verified end to end 2026-08-12**, after `authorizationSignAlg = ES256` was set on `$CLIENT_ID`. Three
-things in that transcript are worth stopping on:
+**Verified end to end 2026-08-12**, after `authorizationSignAlg = ES256` was set on `$CLIENT_ID`.
+
+> **One value in that transcript was updated later, and not by re-running it.** DR-11 changed the service's
+> `issuer` on 2026-08-14, so the `iss` line now reads `https://oauth2-0-ekh2.onrender.com` where the original
+> run showed `https://blackadi.dev`. The new value is **read from the live discovery document**, not guessed —
+> but the JARM flow itself has not been re-run since, because it needs an interactive browser authorization.
+> Everything else here is as originally observed. Flagged rather than quietly edited: a transcript that says
+> *"verified end to end"* has to be honest about which of its lines were.
+
+Three things in that transcript are worth stopping on:
 
 - **One query parameter.** `code`, `state` and `iss` are all *inside* the JWT. A shoulder-surfer, a proxy log
   or a `Referer` header now sees one opaque blob instead of a usable authorization code.

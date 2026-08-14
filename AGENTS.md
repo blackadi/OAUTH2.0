@@ -211,7 +211,7 @@ The Authlete service (configured via the [Authlete web console](https://console.
 | `nbfOptional` | `false` | Enforce request object lifespan ≤60s for FAPI 1.0 compliance | Mistake #13 |
 | `unauthorizedOnClientConfigSupported` | `true` | Return proper 401 for non-existent DCR clients (RFC 7592) | Mistake #11 |
 | `idTokenReissuable` | `true` | Enable ID token reissuance during refresh token flow (OIDC Core §12.2) | Mistake #16 |
-| `clientIdMetadataDocumentSupported` | `false` | Enable OAuth Client ID Metadata Document (CIMD) — allows HTTPS URLs as client_id with auto-fetched metadata. Set `true` only if targeting MCP or CIMD-aware ecosystems. | CIMD spec |
+| `clientIdMetadataDocumentSupported` | `false` in general — **`true` here since 2026-08-14 (DR-05)** | Enable OAuth Client ID Metadata Document (CIMD) — allows HTTPS URLs as client_id with auto-fetched metadata. `false` is the right default for a service not targeting MCP; **this deployment targets it deliberately**, so do not "correct" the live value back. Verify with `GET /api/fapi/config` → `cimdSupported`, never from this table. | CIMD spec |
 
 **Brazil-specific flags** (set only if targeting Brazil's API ecosystem):
 
@@ -287,6 +287,27 @@ Log.
 
 **After any change to server behaviour**, grep the curriculum for the symptom you changed —
 `grep -rn "<the error string>" docs/curriculum/modules` — before assuming nothing else is affected.
+
+**And after any change to Authlete *configuration*, that grep does not fire — so do a different one.** A
+service flag has no error string. When you enable a feature, the strings that change are the ones that were
+there *because it was off*, and you cannot search for a string you are about to create. This is not
+hypothetical: **DR-03 enabled verifiable credentials on 2026-08-14 and silently invalidated an entire Module
+09b exercise** — four transcripts, two observations drawn from them and two `UNVERIFIED` markers — plus a
+`SPEC-INVENTORY.md` row and a status line in the module README. DR-05 and DR-11 did the same to
+`MCP-OAUTH-TUTORIAL.md` and two `iss` transcripts. Nothing in the build, the tests or `check-docs.mjs` could
+notice, because **labs are prose**. The searches that do work:
+
+```bash
+# the flag itself, and the vocabulary of it being off
+grep -rn "verifiableCredentialsEnabled\|not enabled\|switched off\|disabled on this service" docs/
+# the vendor result codes that only occur while the feature is off
+grep -rn "A364301\|A416301\|A402301" docs/
+# anything asserting the old value of a field you changed
+grep -rn "blackadi.dev" docs/          # after DR-11 moved `issuer`
+```
+
+**The rule: search for the behaviour the flag gated, not for a string.** Every transcript that shows that
+behaviour *refusing* is now wrong, and every sentence explaining *why* it refuses is wrong with it.
 
 ### Two mechanical checks — run both, and know what each cannot see
 

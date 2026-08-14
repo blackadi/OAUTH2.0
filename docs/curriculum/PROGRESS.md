@@ -115,6 +115,86 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — P0, P1, T1-19 batch 1, FAPI2-W4: a fail-open default, and the wrong Authlete service** (below, backfilled)
 - [x] **2026-08-14 — T1-19 batch 2 (FAPI1-W2, ATTR-W1, BCL-W6): and the SDK's two models do not agree** (below)
 - [x] **2026-08-14 — T1-19 batch 3 (B1-W3, 9068-W2, 9101-W5): T1-19 closes; two criteria under-counted their own defect** (below)
+- [x] **2026-08-14 — the P1 configuration changes had broken three labs, and the grep rule could not have caught it** (below)
+
+### 2026-08-14 — the P1 configuration changes had broken three labs
+
+**Why this matters to a future session:** **the three Authlete writes earlier today shipped without their
+paired doc changes, and invalidated correct curriculum on the day they landed.** `AGENTS.md` requires a
+configuration decision to ship with its doc change in the same commit; it did not happen, and the drift sat on
+`main` for two commits. Found while scoping T1-11 — not by any check.
+
+**The rule that failed, and why it could not have worked.** `AGENTS.md` said *"grep the curriculum for the
+symptom you changed"*. **A service flag has no symptom string.** The strings that go stale are the ones that
+existed *because the feature was off*, and you cannot grep for output you are about to create. The rule is now
+extended in `AGENTS.md` with the three searches that would have caught this — the flag name, the vocabulary of
+being off (*"not enabled"*, *"switched off"*, *"disabled on this service"*), and the vendor result codes that
+only occur while it is off.
+
+**What DR-03 broke (VCI enabled) — Module 09b Exercise 7, rebuilt from fresh probes.** The exercise opened
+*"**The feature is switched off at the Authlete service**, so every one of them refuses"* and was built on
+four transcripts, two observations drawn from them, and two `UNVERIFIED` markers. All of it was false. Probed
+live against service `3693555522` on a clean dev instance from current source:
+
+| Endpoint | Before | Now |
+|---|---|---|
+| `/.well-known/openid-credential-issuer` | `404` | **`200`** |
+| `/api/vci/metadata` | `A364301 \| NOT_FOUND` | **a conformant §12.2.4 document** — no `resultCode` at all |
+| `/api/vci/jwtissuer` | `A416301 \| NOT_FOUND` | **`A417202 \| INTERNAL_SERVER_ERROR`** |
+| `/api/vci/jwks` | `A402301 \| NOT_FOUND` | **`A403201 \| INTERNAL_SERVER_ERROR`** |
+| `offer/create`, no auth | reached Authlete → `A366201 FORBIDDEN` | **`401 invalid_client`** locally |
+| `offer/create`, admin auth | — | **`A366001 \| CREATED`** |
+| `deferred/issue` + bogus token | `UNVERIFIED` | **`A375304 \| UNAUTHORIZED`** |
+
+> **The replacement lesson is better than the one it replaces**, which is the argument for rebuilding a lab
+> mechanism-first rather than retiring it. The old point was *"every VCI endpoint refuses because the feature
+> is off"* — true, and shallow. The new point is **"enabling a feature is not the same as configuring it"**:
+> the flag is on, the metadata document is real and conformant, and two of three discovery endpoints still
+> fail because **a credential issuer with no JWK Set has nothing to sign with.** And the codes moved from
+> `NOT_FOUND` to `INTERNAL_SERVER_ERROR`, which is the *honest* transition — with the feature off the document
+> does not exist, so 404 is right; with the feature on and its key material missing the document should exist
+> and cannot be built, which is a server fault. Most implementations would have kept returning 404.
+>
+> A second thing fell out: the old loop printed `d['resultCode']` unconditionally, so it now **raises
+> `KeyError`** against `metadata`. When a feature comes on, the *shape* of the answer changes, not just its
+> status — the lab says so, because that is a transferable lesson about reading vendor responses.
+
+**And one transcript in that exercise had been stale even before DR-03.** It showed `offer/create` reaching
+Authlete with **no credentials**, which the `requireBasicAuth` fail-open → fail-closed fix stopped some time
+ago. So the block carried *two* independent staleness dates. The lab already had a note about the fail-open
+history; it now also records that its transcripts were rewritten, and why no mechanical check could have said
+so — **labs are prose.**
+
+**What DR-05 and DR-11 broke.** `MCP-OAUTH-TUTORIAL.md`'s precondition table asserted
+`clientIdMetadataDocumentSupported = false — CIMD is **off**` and `issuer = https://blackadi.dev` against an
+ephemeral tunnel host; both rows now read as met, with the live values and the endpoint to re-check them from
+(`GET /api/fapi/config` → `cimdSupported`). Its Prerequisites section told the reader to enable what is
+already enabled. Two `iss` transcripts moved to the Render host: `modules/05/README.md:302` (an illustrative
+composite, changed silently) and `modules/09a/lab.md:298` — **flagged inline**, because it sits in a block
+labelled *"verified end to end 2026-08-12"* and the new value is read from the live discovery document rather
+than from re-running the JARM flow, which needs interactive browser authorization. A transcript claiming
+end-to-end verification has to be honest about which of its lines were.
+
+Also corrected: the `SPEC-INVENTORY.md` OID4VCI rows (×2) and Module 09b's README status row, all of which
+said *"disabled on this service"*. And `AGENTS.md`'s flags table recommended `clientIdMetadataDocumentSupported:
+false` with no note that this deployment deliberately runs `true` — a reader following the table would have
+"corrected" a live setting.
+
+**One thing verified live and worth carrying:** `/api/fapi/config` now answers `mode: "disabled"` with
+`specs.securityProfile: "None"` — the FAPI1-W2 change from earlier today, working against the real service,
+where the old code would have said `"FAPI 2.0 Security Profile"` regardless. And
+`grant_types_supported` lists exactly the five URNs B1-W3 added to `normalizeGrantType`
+(`…:ciba`, `…:device_code`, `…:token-exchange`, `…:jwt-bearer`, `…:pre-authorized_code`), so that map's keys
+match what this AS actually advertises rather than what the RFCs merely permit.
+
+**Still open, and it is a real gap rather than drift:** the credential issuer has **no JWK Set**
+(`credentialJwks` / `credentialJwksUri` unset), so `/vci/jwks` and `/vci/jwtissuer` return 500 and no
+credential can be issued. That is now documented as the boundary of what Module 09b can verify, rather than
+being invisible. Setting it is a service write and needs its own decision.
+
+**Verification:** `check-docs` 167 files clean. No source changed, so the test suites are untouched at 1050/71
+and 109/16. Probes were read-only GETs plus one `offer/create` POST (transient issuance state, no service or
+client configuration written).
 
 ### 2026-08-14 — T1-19 batch 3: B1-W3, 9068-W2, 9101-W5 — and T1-19 closes
 
