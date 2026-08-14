@@ -272,6 +272,31 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | OpenID Federation entity configuration | OpenID Federation **1.1** §9 *("Obtaining Federation Entity Configuration Information" — same number in 1.0)* | Endpoint exists at the correct well-known path but is **broken** — the SDK call omits the request body | Diagnosed as Module 09b's Tier-3 finding; **not fixed** (server source) |
 | OID4VP | OID4VP 1.0 | No verifier implementation | Taught from the spec; the key-binding half is exercised locally via `sd-jwt.mjs` |
 
+## Vendor features — implemented here, defined by no specification
+
+**These three are Authlete features, and this table would be dishonest without them.** Every other row above
+names a specification; these name a *vendor*. They are included because the repo implements them, a reader will
+meet them, and **the most useful thing to know about each is that there is no RFC to check it against** — no
+interoperability guarantee, no second implementation, and no normative text to appeal to in a review.
+
+| Capability | Defined by | Reality here | Where |
+|---|---|---|---|
+| **Hardware Security Keys (HSK)** | Authlete only | Four admin endpoints wrapping `hardwareSecurityKeys.*`. Nothing else in the repo consumes a handle. `DELETE` destroys the handle **on the service** | `docs/API.md` → *Hardware Security Keys*; the key/`kid` concepts are Modules 00 and 05 |
+| **Parameterized scopes** | Authlete only | A `regex` attribute on a *scope* turns it into a pattern (`payment:123.50` matching `payment:.*`); the granted value returns in a **`dynamicScopes`** response field. **Not reachable through this server** — there is no scope-management endpoint, so scopes are console-only | Module 04's note; `PARAMETERIZED-SCOPES.md` |
+| **Scope & client `attributes`** | Authlete only | Key/value pairs on scopes and clients. **The namespace is not inert**: `regex` makes a parameterized scope and `fapi2=sp` makes Authlete enforce FAPI per request. Client `attributes` are validated rather than cast since 2026-08-14 | `docs/API.md` → *The `attributes` field* |
+
+> ### The one that is worth a paragraph: parameterized scopes are *"accepted but unadvertisable"*
+>
+> A parameterized scope is the **inverse** of the *advertised but unusable* pattern this audit found four times.
+> Authlete will accept `payment:123.50` against a registered `payment:.*` — the feature works — but
+> `scopes_supported` in the discovery document can only list **literal** scope strings. There is no metadata
+> member for a pattern. So a client that discovers this AS correctly, reads `scopes_supported`, and requests
+> only what it finds there **can never use the feature**, and a client that hardcodes `payment:123.50` works.
+>
+> **That inverts the usual advice.** Everywhere else in this curriculum, discovery is the trustworthy source and
+> hardcoding is the mistake. Here, conforming to discovery is what loses you the capability — which is why
+> Module 09a's taxonomy needed a fourth term rather than a footnote.
+
 **§10 corrections, 2026-07-28.** Three errors were found and fixed while writing Module 10: FAPI 2.0 Message
 Signing was dated "approved 2025-07-29" and is in fact **published 25 Sep 2025**; the FAPI 1.0 Parts had no
 dates and are both **12 Mar 2021**; and Grant Management was labelled an "OpenID 2nd Implementer's Draft",

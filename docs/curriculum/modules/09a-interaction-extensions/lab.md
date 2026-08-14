@@ -131,6 +131,30 @@ Supported-but-not-required is a security finding — the mechanism works and not
 Permitted-but-not-configured is an availability one — the mechanism is allowed and cannot run. Both look like
 a green tick in a capability matrix.
 
+> ### And there is a fourth, which runs the other way: **accepted but unadvertisable**
+>
+> The three states above all describe a capability that is *listed* and does less than the listing implies.
+> Authlete's **parameterized scopes** are the inverse. Give a scope a **`regex`** attribute — say `payment:.*` —
+> and the AS will accept `payment:123.50` in a real request; the granted value comes back in a `dynamicScopes`
+> response field. **The feature works.** But `scopes_supported` in the discovery document can only list
+> **literal** strings: there is no metadata member for a pattern, so there is nowhere to publish it.
+>
+> **So a client that discovers this AS correctly cannot use the feature, and a client that hardcodes
+> `payment:123.50` can.** That inverts the advice every other module gives you — read discovery, do not
+> hardcode. Add it to your vocabulary as a distinct row, because in a capability matrix it does not look like a
+> green tick at all: it looks like the feature is **absent**.
+>
+> | State | The listing says | The reality is | Reading it wrong costs you |
+> |---|---|---|---|
+> | supported but not required | available | available, and optional | a security finding you called a pass |
+> | permitted but not configured | available | unavailable | an afternoon debugging your own request |
+> | advertised but unusable | available | unavailable, and the AS said otherwise | trust in the metadata |
+> | **accepted but unadvertisable** | **absent** | **available** | **a capability you never knew you had** |
+>
+> This repo cannot demonstrate the last one — there is no scope-management endpoint, so scopes are console-only
+> and you cannot add a `regex` attribute through the API. Note that limitation *is* the fifth row's shape: a
+> feature the vendor supports, the documentation describes, and the deployment cannot reach.
+
 ---
 
 ## Exercise 2 — JARM

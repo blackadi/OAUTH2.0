@@ -124,6 +124,54 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-8: two of theme 2's four features were missing from README's tables entirely** (below)
 - [x] **2026-08-14 — T2-10: three of the audit's own replacement line numbers had drifted again before anyone applied them** (below)
 - [x] **2026-08-14 — T2-15: theme 3 stated honestly — PAR is conformant on the way out and not on the way in** (below)
+- [x] **2026-08-14 — T2-16: the vendor features, and a fourth capability state that runs backwards** (below)
+
+### 2026-08-14 — T2-16: the vendor-feature pass, and *accepted but unadvertisable*
+
+**Why this matters to a future session:** three things this repo implements are **Authlete features that no
+specification defines** — Hardware Security Keys, parameterized scopes, and scope/client `attributes`. A
+specification inventory that omits them is dishonest, and one that lists them like RFCs is worse. They now sit in
+their own `SPEC-INVENTORY.md` section, *Vendor features — implemented here, defined by no specification*, which
+states the reason they belong there at all: **the most useful thing to know about each is that there is no RFC to
+check it against** — no interoperability guarantee, no second implementation, no normative text to appeal to.
+
+`docs/API.md` gains the four **HSK** endpoints (shapes, required-vs-optional fields, action→status, admin auth
+that fails closed) with `DELETE` in a ⚠️ box making a point the work item did not: **deleting a handle is not
+deleting a key** — the key material lives in the HSM and this API never sees it, which is the whole reason for
+the indirection. Plus the **`attributes`** shape with *two* vendor-assigned keys rather than one (`regex` on a
+scope, and `fapi2=sp`, the second being the one `FAPI-TUTORIAL.md` Part 3 already depends on), the advice to
+**prefix your own keys**, and a two-row table naming exactly what *no scope-management endpoint* blocks.
+
+> ### The interesting half: Module 09a's taxonomy needed a fourth state, and it runs the other way
+>
+> The three it had — *supported but not required*, *permitted but not configured*, *advertised but unusable* —
+> all describe a capability that **is listed** and delivers less than the listing implies. **Parameterized
+> scopes are the inverse.** Authlete accepts `payment:123.50` against a scope registered with a `regex`
+> attribute of `payment:.*`, and returns the granted value in a `dynamicScopes` field. The feature works. But
+> `scopes_supported` can only list **literal strings** — there is no metadata member for a pattern.
+>
+> | State | The listing says | The reality is | Misreading it costs |
+> |---|---|---|---|
+> | supported but not required | available | available, and optional | a security finding you called a pass |
+> | permitted but not configured | available | unavailable | an afternoon debugging your own request |
+> | advertised but unusable | available | unavailable, and the AS said otherwise | trust in the metadata |
+> | **accepted but unadvertisable** | **absent** | **available** | **a capability you never knew you had** |
+>
+> **So a client that discovers this AS correctly can never use the feature, and a client that hardcodes
+> `payment:123.50` can** — the exact inverse of the advice every other module gives. And in a capability matrix
+> it does not look like a green tick; **it looks like the feature is absent.** The last column is what makes the
+> four legible as one taxonomy rather than four observations.
+>
+> This repo cannot demonstrate it — no scope-management endpoint, so scopes are console-only — and **that
+> limitation is itself an instance of the same shape**: a feature the vendor supports, the documentation
+> describes, and the deployment cannot reach.
+
+**One deliberate departure.** HSK-W2 asked for a separate `docs/` page and did not get one: a page for four
+endpoints nothing else in the repo consumes would be prose in search of a reader. Promote it if HSK ever gains a
+consumer.
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files, route coverage 92 with an empty baseline.
 
 ### 2026-08-14 — T2-15: the wire-format gaps, stated until Tier 3 closes them
 

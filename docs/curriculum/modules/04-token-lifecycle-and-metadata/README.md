@@ -356,6 +356,24 @@ true root in `app.ts` next to `oauthAsMetadataRoutes`, serving:
 }
 ```
 
+> ### One thing `scopes_supported` structurally cannot tell a client
+>
+> Every metadata member you have met so far is a list of **literal strings**, and `scopes_supported` is the one
+> where that constraint costs something. Authlete supports **parameterized scopes**: give a scope a **`regex`**
+> attribute — say `payment:.*` — and the AS accepts `payment:123.50` in a real request, returning the granted
+> value in a **`dynamicScopes`** response field. The feature works.
+>
+> **But there is no metadata member for a pattern.** `scopes_supported` can list `payment` or it can list
+> nothing; it cannot say *"anything matching `payment:.*`"*. So **a client that discovers this AS correctly and
+> requests only what it finds can never use the feature, while a client that hardcodes `payment:123.50` can** —
+> which is the exact opposite of the advice this module is otherwise built on.
+>
+> Two notes before you go looking for it. It is an **Authlete feature and no specification defines it**, so
+> there is no RFC to check it against and no second implementation to interoperate with. And **you cannot try
+> it here**: this repo has no scope-management endpoint, so scopes and their attributes are console-only.
+> Module 09a's capability taxonomy carries this as its fourth state, *accepted but unadvertisable*, alongside
+> *supported but not required* and *permitted but not configured*.
+
 **Why:** RFC 9728 became a published RFC in April 2025 and is how a client discovers which AS protects an API.
 The client side already consumes PRM for the Model Context Protocol's OAuth profile
 (`client/src/services/mcp.service.ts` — MCP is not taught in this curriculum; it is the unfamiliar extension

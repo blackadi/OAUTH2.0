@@ -217,7 +217,25 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (4):** T2-5, T2-14, T2-16, T2-17.
+**Tier 2 remaining (3):** T2-5, T2-14, T2-17.
+
+**T2-16 shipped 2026-08-14 — all six items, and the *"one edit for all three"* instruction was right.**
+`SPEC-INVENTORY.md` gains **one new section**, *Vendor features — implemented here, defined by no
+specification*, carrying HSK, parameterized scopes and `attributes` together, and stating why they belong in a
+specification inventory at all: **the most useful thing to know about each is that there is no RFC to check it
+against.** `docs/API.md` gains the four HSK endpoints, the `attributes` shape, and a table naming what *no
+scope management* blocks. **One deliberate departure**: HSK-W2 asked for a separate `docs/` page and did not get
+one — four endpoints nothing else consumes do not need a page; promote it if HSK gains a consumer.
+
+> **PS-W2 turned out to be the interesting half, and it earned a table rather than a sentence.** Module 09a's
+> taxonomy had three states — *supported but not required*, *permitted but not configured*, *advertised but
+> unusable* — and all three describe a capability that **is listed** and delivers less than the listing implies.
+> **Parameterized scopes are the inverse.** Authlete accepts `payment:123.50` against a registered `payment:.*`
+> and returns the granted value in `dynamicScopes`, but `scopes_supported` can only list **literal** strings —
+> there is no metadata member for a pattern. So **a client that discovers this AS correctly can never use the
+> feature, and a client that hardcodes the value can**, which inverts the advice every other module gives.
+> In a capability matrix it does not look like a green tick; **it looks like the feature is absent.** The new
+> table's last column names what misreading each state costs, which is what makes the four legible together.
 
 **T2-15 shipped 2026-08-14** — its tutorial halves rode along with T2-1, and the rest landed here. Module 05
 gains a **four-row table** separating what runs from what does not, and the pattern in it is the transferable
