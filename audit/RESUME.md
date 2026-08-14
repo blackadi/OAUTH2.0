@@ -472,7 +472,27 @@ them back**, so the two are a matched round-trip pair and all four unmodelled pr
 asserted directly in `tests/unit/services/client-roundtrip.test.ts`, because if either half changed this
 method would delete `backchannelLogoutUri` from every client it touched.
 
-**CU-W1 remains open as documentation**, not as a blocker.
+**CU-W1 is closed — proven 2026-08-14, and the answer reframes the finding.** Authlete **REPLACES**. On a
+throwaway client, **0 of 15** fields survived an update whose body carried only `clientId` and a changed
+`clientName`. Twelve cleared or zeroed. **Two reset to Authlete's non-empty defaults, and one is a security
+posture:**
+
+| Field | Was | After an update that omitted it |
+|---|---|---|
+| **`tokenAuthMethod`** | `CLIENT_SECRET_BASIC` | **`NONE`** — the client stops authenticating at all |
+| `idTokenSignAlg` | `ES256` | `RS256` |
+| `pkceRequired` / `pkceS256Required` | `true` | `false` |
+
+> **So the defect was never "data loss".** Before CU-W2, renaming a client through the admin surface could have
+> turned a confidential client into one requiring **no client authentication**, withdrawn its PKCE requirement,
+> and answered **200** with nothing in the log. *"Resets to defaults"* is the accurate phrasing, and for
+> `tokenAuthMethod` the default is the weakest available value. This is the strongest argument for CU-W2's
+> read-modify-write, and worth recording even though the code was already correct under either answer.
+
+**Two process notes.** Authlete's `client/delete` requires the **`DELETE`** method — `POST` gives **405**, and
+the probe's first cleanup silently failed on exactly that, leaving the throwaway client alive until a second
+pass removed it. *Verify a cleanup ran.* And all four real clients were re-listed afterwards and are identical
+to the pre-probe snapshot.
 
 **Then, in order:** **P4** Tier 2's 17 documentation items,
 **T2-1 first** (the `UNVERIFIED` convention across nine tutorials — six S2s collapse into one writing task) ·
@@ -802,6 +822,14 @@ string. Work items **CUR-3b-W1** (fix Module 10) and **CUR-3b-W2** (fix the rule
   at all, one of them *unmockable* because the shared Authlete mock lacked a member, and the client's entire
   test suite plus its `typecheck` script, which CI never invoked because `vite build` does not typecheck. It
   is now partly mechanical — `node scripts/check-route-coverage.mjs` ratchets against a recorded baseline.
+- **Never cite code by line number in `PROGRESS.md`** — added 2026-08-14. The file **prepends** new entries, so
+  every line-anchored reference below an insertion point rots, and T0-6 already had to re-resolve **20** of them
+  by content across three git revisions. Cite the **symbol or the comment text** instead: *"`handler.ts`'s
+  `tokenCreateRequest` literal"* is findable forever, and there is no number to go stale. The four
+  `token-exchange-response.handler.ts:NN` refs in historical Build Log entries were converted this way rather
+  than renumbered — **deletion beats renumbering** for a pointer in an append-at-top file, the same conclusion
+  CUR-3b-W4 and CUR-3c-W12 reached independently. **What must not be converted:** a reference that quotes a
+  wrong number *as the defect* (`03-curriculum-audit.md`'s rows). Those are evidence, not navigation.
 - Run `node scripts/check-docs.mjs` after writing — it validates `file.ts:NNN` refs, relative links and anchors across `audit/` too. **Three known detection gaps**, all found by this audit and all to be scoped as one change: bare paths with no line number (**CUR-3a-W1**), prose refs of the form `Line ~89` (**CUR-3b-W5**), and endpoint paths inside fenced blocks (**CUR-3c-W11**).
 
 ---

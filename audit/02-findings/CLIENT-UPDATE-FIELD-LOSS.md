@@ -1,6 +1,6 @@
 # `client.management.service.ts` — an allowlist over a replace-semantics API
 
-- **Verdict:** ~~`PARTIAL`~~ → **`RESOLVED` in code** *(2026-08-14 — CU-W2 shipped; CU-W1's live proof is still owed, and the fix is deliberately correct either way)*
+- **Verdict:** ~~`PARTIAL`~~ → **`RESOLVED` in code, and the live proof is in** *(2026-08-14 — CU-W2 shipped; **CU-W1 confirmed REPLACE semantics**, and raised the severity of what the pre-fix code could have done: see the ⚠️ note below)*
 - **Severity:** **S2** — silent data loss on an admin write path, and it can undo a security control
 - **Status:** found 2026-08-12 while shipping **T0-4** (RPL-W1). **Not fixed** — recorded by decision, see the
   scope note at the end
@@ -67,7 +67,7 @@ client.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| CU-W1 | **Establish the merge-vs-replace question** on a disposable DCR-created client | S | Create a client with a distinctive `backchannelLogoutUri`, `PUT` an unrelated single field, read back. Records the answer in `PROGRESS.md` and settles the `UNVERIFIED` row above. Cheap, non-destructive, and it gates whether CU-W2 is needed at all |
+| CU-W1 | **Establish the merge-vs-replace question** on a disposable client | S | ✅ **DONE 2026-08-14. It is REPLACE, decisively — and the answer is worse than this entry assumed.** Method: `client/create` a throwaway with 15 distinctive fields set, read back what Authlete *stored*, `client/update` with a body containing **only `clientId` and a changed `clientName`**, read back, diff, delete. **`0` of 15 probe fields survived unchanged.** Twelve were cleared or zeroed outright (`grantTypes`, `responseTypes`, `redirectUris`, `contacts`, `description`, `applicationType`, `tosUri`, `policyUri` → absent; `pkceRequired`, `pkceS256Required`, `parRequired` → `false`; `defaultMaxAge` → `0`). **The other two are the finding**: they were reset not to empty but to Authlete's **non-empty defaults** — `idTokenSignAlg: ES256 → RS256`, and **`tokenAuthMethod: CLIENT_SECRET_BASIC → NONE`.** |
 | CU-W2 | **Preserve unnamed fields in `buildClientInput`** | M | ✅ **DONE 2026-08-14, under plan mode — and it did NOT wait for CU-W1.** `update()` now fetches the current client and applies the named changes on top, so a one-field `PATCH` can only ever change that field. **The criterion said "conditional on CU-W1" and that was wrong**: preserving unnamed fields is a no-op if Authlete merges and prevents data loss if it replaces, so the code is correct under both answers and the unproven fact blocked nothing. Implemented as a plain read-modify-write rather than through `additionalProperties` as the criterion suggested — **because the escape hatch turns out to be automatic**: `Client$inboundSchema` collects unmodelled members into `additionalProperties` and `ClientInput$outboundSchema` spreads them back to the top level, so a round trip preserves all four properties SDK 1.0.0 omits without any special handling. That pairing is asserted in `tests/unit/services/client-roundtrip.test.ts`, because if either half changed this method would silently delete `backchannelLogoutUri` from every client it touched — the same defect class, reintroduced by its own fix. 7 cases in `client.management.service.test.ts`, including that renaming a client leaves `pkceRequired`, `pkceS256Required` and `tokenAuthMethod` intact. |
 | CU-W3 | **Read back after a security-relevant configuration write** | S | Any code or runbook step that writes client configuration a security control depends on verifies it by reading it back. F-4's `200`-and-discard is the worked example |
 
@@ -75,7 +75,35 @@ client.
 
 Raised during T0-4 and **deliberately not fixed there**: it is an admin write path, not the logout surface,
 and folding it in would have widened a security-critical change past its stated acceptance criteria. Recorded
-here so it is visible rather than remembered. **CU-W1 should run before CU-W2** — if Authlete merges rather
+> ### ⚠️ CU-W1's result reframes this entry: it was never only data loss
+>
+> This finding was written as *"an admin `PATCH` silently clears the rest"* — a **data-loss** defect. The live
+> probe (2026-08-14) shows two fields do not clear to empty but **reset to Authlete's defaults**, and one of
+> those defaults is a security posture:
+>
+> | Field | Set to | After an update that omitted it | What that means |
+> |---|---|---|---|
+> | `tokenAuthMethod` | `CLIENT_SECRET_BASIC` | **`NONE`** | **the client no longer authenticates at all** |
+> | `idTokenSignAlg` | `ES256` | `RS256` | a different signing algorithm than the one registered |
+> | `pkceRequired` / `pkceS256Required` | `true` | `false` | PKCE enforcement silently withdrawn |
+>
+> **So before CU-W2, renaming a client through the admin UI could have converted a confidential client into one
+> requiring no client authentication, and withdrawn its PKCE requirement, and answered `200`.** That is not
+> field loss — it is an authentication downgrade performed by an unrelated edit, with no error and nothing in
+> the log. The `AGENTS.md` note and the `PROGRESS.md` entry both said "clears fields"; **"resets to defaults" is
+> the accurate phrasing, and for `tokenAuthMethod` the default is the weakest available value.**
+>
+> **This is also the strongest possible argument for the read-modify-write in CU-W2**, which is why it is worth
+> recording even though the code was already correct: the cost of getting it wrong was not a support ticket.
+>
+> **One by-product worth keeping.** Authlete's `client/delete` requires the **`DELETE`** method — a `POST`
+> returns **405**, and the probe's first cleanup attempt silently failed on exactly that, leaving the throwaway
+> client alive until a second pass removed it (`DELETE` → `204`, then `client/get` → `404 [A001212]`). *Verify a
+> cleanup ran; do not assume it did.* All four real clients were re-listed afterwards and are byte-identical to
+> the pre-probe snapshot.
+
+here so it is visible rather than remembered. ~~**CU-W1 should run before CU-W2**~~ — **it did not, and that
+was fine** (see CU-W2's note: the fix is correct under either answer). If Authlete merges rather
 than replaces, CU-W2 is unnecessary.
 
 ## Sources consulted

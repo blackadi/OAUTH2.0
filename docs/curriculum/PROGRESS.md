@@ -126,6 +126,46 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-15: theme 3 stated honestly — PAR is conformant on the way out and not on the way in** (below)
 - [x] **2026-08-14 — T2-16: the vendor features, and a fourth capability state that runs backwards** (below)
 - [x] **2026-08-14 — T2-14: the audit's last two fetches, and both went against the audit** (below)
+- [x] **2026-08-14 — CU-W1 proven: Authlete REPLACES, and the defect was never data loss** (below)
+
+### 2026-08-14 — CU-W1: merge or replace, settled on a throwaway client
+
+**Why this matters to a future session:** this was the audit's last unproven premise about Authlete, and the
+answer changes what the `CLIENT-UPDATE-FIELD-LOSS` finding *is*.
+
+**Method.** `client/create` a throwaway with 15 distinctive fields, read back what Authlete actually **stored**
+(not what was sent), `client/update` with a body carrying **only `clientId` and a changed `clientName`**, read
+back, diff, delete. **`0` of 15 fields survived unchanged.**
+
+Twelve cleared or zeroed — `grantTypes`, `responseTypes`, `redirectUris`, `contacts`, `description`,
+`applicationType`, `tosUri`, `policyUri` → absent; `pkceRequired`, `pkceS256Required`, `parRequired` → `false`;
+`defaultMaxAge` → `0`. **The other two are the finding**: they reset not to empty but to Authlete's **non-empty
+defaults**.
+
+| Field | Was | After an update that omitted it |
+|---|---|---|
+| **`tokenAuthMethod`** | `CLIENT_SECRET_BASIC` | **`NONE`** — the client stops authenticating at all |
+| `idTokenSignAlg` | `ES256` | `RS256` |
+
+> ### The defect was never "data loss", and every document describing it said so
+>
+> `AGENTS.md`, this file and the finding entry all called it *"silently clears the rest"*. **The accurate
+> phrasing is "resets to defaults — and for client authentication the default is the weakest available value."**
+> Before CU-W2 shipped, **renaming a client through the admin surface could have converted a confidential client
+> into one requiring no client authentication, withdrawn its PKCE requirement, and answered `200`** with nothing
+> in the log. That is an authentication downgrade performed by an unrelated edit, not a support ticket.
+>
+> It is also the strongest possible argument for CU-W2's read-modify-write — worth recording even though the
+> code was already correct under **either** answer, which is why CU-W2 correctly did not wait for this probe.
+
+**Two process notes.** Authlete's `client/delete` requires the **`DELETE`** method: a `POST` returns **405**, and
+the probe's first cleanup attempt failed on exactly that, leaving the throwaway client alive until a second pass
+removed it (`DELETE` → `204`, then `client/get` → `404 [A001212]`). **Verify a cleanup ran; do not assume it
+did** — the same class of mistake as reading a status code instead of a body. And all four real clients were
+re-listed afterwards and are identical to the pre-probe snapshot.
+
+**Verification.** No source change — 1081 server tests / 73 files unchanged. The service holds four clients, as
+before.
 
 ### 2026-08-14 — T2-14: the last two fetches, and a misquotation nobody had noticed
 
@@ -2368,7 +2408,7 @@ whose fault it is" diagnosis went with it.
 
 | Finding | Evidence, 2026-08-06 |
 |---|---|
-| Four parameters silently discarded | `actor_token`, `resource`, `audience`, `requested_token_type` → four identical 200s; root cause unchanged at `token-exchange-response.handler.ts:29-34` |
+| Four parameters silently discarded | `actor_token`, `resource`, `audience`, `requested_token_type` → four identical 200s; root cause unchanged in `token-exchange-response.handler.ts`'s `tokenCreateRequest` literal |
 | `issued_token_type` missing (RFC 8693 §2.2.1 REQUIRED) | absent from the response; built at `handler.ts:48-55`, which also adds non-spec `client_id`/`subject` |
 | A live credential in `subject` | `handler.ts:27` — `result.subject \|\| subjectToken`. Confirmed live: the returned `subject` is **byte-identical** to the subject token sent, and still `active` |
 | `resource` does not audience-restrict | introspection of the resulting token → no `aud` |
@@ -2701,7 +2741,7 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   **SDK Version Pin**. **Curriculum impact:** this was Module 06 Exercise 6's entry point; the gate was
   rebuilt around the three findings that still reproduce (see the Build Log entry for 2026-08-06).
 - **The token-exchange handler discards four request parameters.**
-  `token-exchange-response.handler.ts:29-34` builds its `token.create` request from exactly `grantType`,
+  `token-exchange-response.handler.ts`'s `tokenCreateRequest` literal builds its `token.create` request from exactly `grantType`,
   `clientId`, `scopes`, `subject`. Verified live: `actor_token`, `resource`, `audience`, and
   `requested_token_type` all produce byte-identical 200 responses, and introspection of the `resource` case
   shows **no `aud`** (the same parameter does produce `aud` on the authorization-code path — Module 04). The
@@ -2709,10 +2749,10 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   `act`, no error.** RFC 8693 §1.1 defines impersonation as being *"indistinguishable from B"* — which is
   exactly what the downstream service gets.
 - **`issued_token_type` is missing from the token-exchange success response.** RFC 8693 §2.2.1 marks it
-  **REQUIRED**. `token-exchange-response.handler.ts:48-55` emits `access_token`, `token_type`, `expires_in`,
+  **REQUIRED**. `token-exchange-response.handler.ts`'s response body emits `access_token`, `token_type`, `expires_in`,
   `scope`, plus two parameters that are not in the spec (`client_id`, `subject`). Since
   `requested_token_type` is also ignored, the client has no way to learn what it actually received.
-- **A live access token is written into a `sub` claim.** `token-exchange-response.handler.ts:27` does
+- **A live access token is written into a `sub` claim.** `token-exchange-response.handler.ts`'s `result.subject || subjectToken` does
   `result.subject || subjectToken`. When Authlete resolves no subject — correct for a client-credentials
   subject token — the fallback stores **the credential string itself** as the new token's subject. Verified:
   `sub == subject_token` on the exchanged token, and that value still introspects `active: true`. It is
