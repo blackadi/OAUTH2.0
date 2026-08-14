@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { errorHandler } from "../../../src/middleware/errorHandler"
+import { errorHandler, errorStatusFrom } from "../../../src/middleware/errorHandler"
 
 const mockConfig = vi.hoisted(() => ({ nodeEnv: "development" }))
 
@@ -198,5 +198,54 @@ describe("errorHandler", () => {
     errorHandler(err, req, res, () => {})
 
     expect(loggerMock.error).toHaveBeenCalled()
+  })
+})
+
+// T2-9 / EH-W5. `errorStatusFrom` is exported so no handler re-derives
+// `err.status || err.statusCode || 500` locally — that fallback IS the defect the clamp removes, and it fails
+// silently because the wrong status is itself the symptom. Asserted directly so the contract is pinned to the
+// function rather than only to the middleware that happens to call it.
+describe("errorStatusFrom (exported for reuse)", () => {
+  it("trusts a 4xx/5xx supplied by the error", () => {
+    expect(errorStatusFrom({ status: 400 })).toBe(400)
+    expect(errorStatusFrom({ status: 401 })).toBe(401)
+    expect(errorStatusFrom({ statusCode: 503 })).toBe(503)
+    expect(errorStatusFrom({ status: 599 })).toBe(599)
+  })
+
+  it("prefers `status` over `statusCode`", () => {
+    expect(errorStatusFrom({ status: 403, statusCode: 500 })).toBe(403)
+  })
+
+  // The case the whole clamp exists for: the SDK's ResponseValidationError carries the status of the
+  // *successful* response it was reading, so a 200 body that fails Zod validation arrives as statusCode 200.
+  it("refuses a 2xx — this is the defect it was written to stop", () => {
+    expect(errorStatusFrom({ statusCode: 200 })).toBe(500)
+    expect(errorStatusFrom({ status: 204 })).toBe(500)
+  })
+
+  it("refuses 3xx, non-integers and junk", () => {
+    for (const err of [
+      { status: 302 },
+      { status: 399 },
+      { status: 0 },
+      { status: 600 },
+      { status: 404.5 },
+      { status: NaN },
+      { status: "not a number" },
+      { status: null },
+      {},
+      null,
+      undefined,
+      "a string",
+      42,
+    ]) {
+      expect(errorStatusFrom(err), `${JSON.stringify(err)} should clamp to 500`).toBe(500)
+    }
+  })
+
+  // A numeric string is what a header or query value would give you, and it is a usable status.
+  it("accepts a numeric string inside the range", () => {
+    expect(errorStatusFrom({ status: "404" })).toBe(404)
   })
 })

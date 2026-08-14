@@ -21,8 +21,13 @@ import { AppError } from "../utils/app-error";
  *
  * `status` is preferred over `statusCode`, matching the previous fallback order. Anything outside the
  * range — 2xx, 3xx, `NaN`, a non-integer — is not a usable error status and becomes 500.
+ *
+ * **Exported on purpose (T2-9 / EH-W5).** Any handler that derives an HTTP status from a thrown object needs
+ * this clamp, and a local `err.status || err.statusCode || 500` re-creates the exact defect the clamp exists
+ * to stop — silently, because the wrong status *is* the symptom. **Use this rather than re-deriving it.** If
+ * you find yourself writing that fallback chain in a `catch`, you are writing the bug.
  */
-function errorStatusFrom(err: unknown): number {
+export function errorStatusFrom(err: unknown): number {
   if (!err || typeof err !== "object") return 500;
   const candidate = err as Record<string, unknown>;
   for (const raw of [candidate.status, candidate.statusCode]) {

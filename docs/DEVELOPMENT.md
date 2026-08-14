@@ -144,7 +144,7 @@ The Authlete service (configured via the [Authlete web console](https://console.
 | `idTokenAudType` | `"string"` | Single string for `aud` claim |
 | `loopbackRedirectionUriVariable` | `true` | Variable loopback ports (RFC 8252 §7.3) |
 | `traditionalRequestObjectProcessingApplied` | `false` | Use RFC 9101 JAR processing |
-| `nbfOptional` | `false` | Enforce request object ≤60s lifespan |
+| `nbfOptional` | `false` | Require `nbf` on request objects, so their lifetime can be bounded. FAPI 1.0 Part 2 §5.2.2 sets that bound at **60 minutes**, not 60 seconds — this row said `≤60s` until 2026-08-14 |
 | `unauthorizedOnClientConfigSupported` | `true` | Return 401 for non-existent DCR clients |
 | `idTokenReissuable` | `true` | Enable ID token reissuance during refresh |
 

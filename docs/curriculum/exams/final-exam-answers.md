@@ -227,6 +227,10 @@ explicitly disallowed because it hides the reasoning.
 1. **(1) The open redirect.** Exploitable by the model's *weakest* attacker (A1 — send a link), reachable
    unauthenticated, and a **one-line fix** (exact comparison against a registered set). Best ratio on the
    list by a wide margin; also feeds phishing and, combined with a front-channel flow, token exfiltration.
+   *(As the question states, these findings are ranked **as they stood**. This one was remediated on
+   2026-08-12 — and instructively, the "one-line fix" took **three** versions before it implemented the rule
+   rather than just blocking the payloads that had been demonstrated. Module 10's Exercise 6 carries the
+   history. That does not change the ranking, which is the answer being marked.)*
 2. **(4) The BOLA.** Highest impact — every report readable by every user — and the fix is a scoped query on
    one endpoint. Ranked second only because it needs an authenticated account, so reachability is slightly
    lower than (1).
