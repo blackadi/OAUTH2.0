@@ -731,7 +731,25 @@ the `requestContent` this server synthesises (`{"transaction_id":"…"}`) is acc
 far enough to reach token validation. **`UNAUTHORIZED` → 401 is exactly the mapping `vci.controller.ts`
 implements.**
 
-### 21.5 One acceptance criterion that cannot be met — the third instance
+### 21.5 Redirect URIs — additive, and one computed field moved
+
+All four clients gained `https://oauth2-0-ekh2.onrender.com/callback`, **added to** their existing entries;
+every `localhost` and the one ngrok URI survive, because Modules 02 and 03 depend on two of these clients and
+`client/update` has replace semantics. Diffed per client: `redirectUris` and `modifiedAt` as intended — plus
+**`derivedSectorIdentifier` on three of the four**, which was *not* intended and is worth stating rather than
+waving through.
+
+It went from a value to **unset**. That is Authlete recomputing it: OIDC Core §8.1 derives the sector
+identifier from the redirect URIs' host, and a client whose URIs now span three hosts with no
+`sectorIdentifierUri` has no single host to derive from.
+
+**Impact today: none.** All four clients are `subjectType: PUBLIC`, so no pairwise `sub` is computed and the
+sector identifier is unused — checked, not assumed. **Impact later: a precondition.** Switching any of these
+clients to `PAIRWISE` now requires setting `sectorIdentifierUri` explicitly, where before the derivation would
+have supplied one. Recorded so that a future pairwise experiment does not read as a regression caused by
+something else.
+
+### 21.6 One acceptance criterion that cannot be met — the third instance
 
 **VCI-W2 wants `credential_issuer` in the AS discovery document.** It is **absent**, and there is no field to
 set: the `Service` schema's credential-related properties are `verifiableCredentialsEnabled`,
