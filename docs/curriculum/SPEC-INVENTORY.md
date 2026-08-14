@@ -197,6 +197,27 @@ Not subjects in their own right, but cited by name in the modules — so they be
 > authorization server already builds and signs the response object. A **client** consuming JARM does need new
 > code, and the dashboard SPA has none. Verified live during the Module 09a build.
 
+> **JARM update (2026-08-12) — the configuration gap is closed, and the discovery document was always the
+> louder half of the finding.** `authorizationSignAlg = ES256` is set on `1523514379`; `response_mode=query.jwt`
+> returns a single `response` parameter carrying `{aud, state, code, iss, exp}`, signed `ES256` with service key
+> `kid: "1"`, signature checked against the published JWKS. Two facts nobody predicted: the response JWT's `exp`
+> is **600 seconds**, not the service's 86400 — JARM's envelope is bounded independently of the tokens it
+> carries — and JARM introduces **no new key material**, reusing the OP's ID-token signing key.
+>
+> **What made this worth finding from metadata rather than from code.** `response_modes_supported` has advertised
+> **all four** JARM modes — `jwt`, `query.jwt`, `fragment.jwt`, `form_post.jwt` — the whole time, by Authlete
+> default, with nothing set anywhere to make them work. So this was never *"a field nobody got round to
+> setting"*; it was a **capability the AS announced to every client that read its metadata and then refused**,
+> with `[A012305]`. A client written against this document would have shipped JARM support and failed in
+> production. That is the *advertised but unusable* state Module 09a tabulates, reached by a different route than
+> the client-authentication case in Module 07 — there the fix was to withdraw the advertisement, here it was to
+> make the advertisement true. **Which fix is right depends on whether you intend to support the thing**, and
+> the wrong move in both directions is to leave the document saying yes while the server says no.
+>
+> **The remaining gap is the client's, and it is the one that matters.** JARM's protection is not that the AS
+> signs the response — it is that the RP *verifies* the signature, `iss`, `aud` and `exp` before trusting the
+> `code`. An AS signing responses nobody checks buys nothing. See `JARM-W3`.
+
 > **RFC 8693 is only partly implemented here, and the gaps are silent.** Verified during the Module 06 build:
 > `actor_token`, `resource`, `audience`, and `requested_token_type` are accepted and discarded, so a
 > delegation request returns an impersonation token with **no `act`** and HTTP 200; the REQUIRED
@@ -254,7 +275,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
-| JARM | JWT Secured Authorization Response Mode for OAuth 2.0 (JARM) *incorporating errata set 1* | OpenID **Final** | errata set 1, **17 Aug 2025** | Signed/encrypted authorization **response** (`response_mode=jwt`); `iss`/`aud`/`exp` claims; four `response_mode` values | Response tampering, mix-up (strong form), response replay | **Supported by the AS; not configured.** Needs only the client's `authorization_signed_response_alg`. No `server/src` change — see note below |
+| JARM | JWT Secured Authorization Response Mode for OAuth 2.0 (JARM) *incorporating errata set 1* | OpenID **Final** | errata set 1, **17 Aug 2025** | Signed/encrypted authorization **response** (`response_mode=jwt`); `iss`/`aud`/`exp` claims; four `response_mode` values | Response tampering, mix-up (strong form), response replay | **Configured on the AS since 2026-08-12** (`authorizationSignAlg = ES256` on `1523514379`); no `server/src` change was needed. The SPA still cannot consume a `response` JWT — see the two notes below |
 | CIBA Core 1.0 | OpenID Connect Client-Initiated Backchannel Authentication Flow – Core 1.0 | OpenID Final | Sep 2021 | Decoupled auth (poll/ping/push), `auth_req_id` | Auth without a browser redirect | `ciba.routes.ts`, `ciba.service.ts`; `docs/CIBA-TUTORIAL.md` |
 | Native SSO 1.0 | OpenID Connect Native SSO for Mobile Apps 1.0 | OpenID **2nd Implementer's Draft** (draft 07, text dated 16 Jan 2025) | approved 2025-10-17 | `device_secret`, `urn:openid:params:grant-type:device_secret` | SSO across native apps on one device | `docs/NATIVE-SSO-TUTORIAL.md`; Authlete |
 | RFC 9470 | OAuth 2.0 Step Up Authentication Challenge Protocol | Published RFC | Sep 2023 | `acr_values`/`max_age` challenge; `insufficient_user_authentication` | Force stronger auth for sensitive ops | `session.controller.ts`, `introspection.controller.ts`; `docs/STEP-UP-AUTH-TUTORIAL.md` |
@@ -314,7 +335,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 
 | Capability | Spec | Reality here | Plan |
 |---|---|---|---|
-| JARM | JARM (OpenID Final, errata set 1) | **AS side: supported, unconfigured** (one client metadata field). Client side: absent — the SPA cannot consume a `response` JWT | **Configure** on the AS (no code); a client-side consumer remains a genuine gap |
+| JARM | JARM (OpenID Final, errata set 1) | **AS side: configured and verified end to end 2026-08-12** — `authorizationSignAlg = ES256` on `1523514379`; `response_mode=query.jwt` returns a signed `response` JWT. Client side: absent — the SPA cannot consume one | ✅ AS half done (JARM-W1, no code). **A client-side consumer remains a genuine gap** — and it is the half that carries the security value, since JARM's protection is the client's verification |
 | mTLS / cert-bound tokens | RFC 8705 | Thin — registration flags only | ❌ **Declined 2026-07-28** — TLS is terminated by the platform in every deployment of this repo, so a client certificate can never reach Node. Taught from the spec in Modules 05/10, labelled not-run-here. See the decision record in Module 05 |
 | Protected Resource Metadata endpoint | RFC 9728 | ✅ **Now served** at true root | Implemented 2026-07-28; Module 04's proposal is closed |
 | Dedicated resource server endpoint | RFC 6750 | None; use UserInfo + Introspection as RS stand-ins | Teach with existing endpoints |

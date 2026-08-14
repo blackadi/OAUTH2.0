@@ -103,17 +103,65 @@ flowchart TB
 1. **HTTP request arrives** → middleware stack processes it (metrics, audit, sessions, CSRF)
 2. **Router matches** → one of 18 route modules maps the path to a controller
 3. **Controller orchestrates** → calls the appropriate service module(s)
-4. **Service calls Authlete** → via the SDK (or raw `fetch()` for 3 services)
+4. **Service calls Authlete** → via the SDK (one call excepted — see below)
 5. **Response flows back** → through middleware (audit log, metrics recorded)
 6. **SPA requests** → proxied by Vite in dev, served from `dist/` in production
 
 ### When Raw `fetch()` is Used
 
-| Service | Reason |
-|---------|--------|
-| `health.service.ts` | SDK has no health-check method |
-| `backchannel-logout.service.ts` | SDK v1.1.6 doesn't expose backchannel logout API |
-| `metrics.service.ts` | Uses `prom-client` directly (not Authlete-related) |
+**Exactly one Authlete call**, and it is stated as a *call* rather than a file on purpose:
+
+| Where | Reason |
+|---|---|
+| `backchannel-logout.service.ts` → `callAuthleteIssueToken` | SDK **1.0.0** exposes no backchannel logout token API (re-verified against 1.0.0, not assumed) |
+
+`metrics.service.ts` also uses `fetch`-free direct `prom-client` calls, but nothing there talks to Authlete, so
+it is not an exception to anything.
+
+> **Two rows used to sit here and both were wrong by 2026-08-14.** `health.service.ts` was listed as needing raw
+> `fetch()` because *"SDK has no health-check method"* — SDK 1.0.0 added
+> `lifecycle.getApiLifecycleHealthcheck()`, and that service now goes through the SDK like every other Authlete
+> call. And the backchannel row cited **"SDK v1.1.6"**, which is not the version this repo uses and is
+> specifically the version it is pinned *away* from: `1.1.5`/`1.1.6` are numerically higher but are **older
+> code**, and `@authlete/typescript-sdk@1.0.0` is pinned exactly, with a Dependabot `ignore` rule to block the
+> apparent "upgrade". See `docs/DEVELOPMENT.md` → SDK Version Pin.
+>
+> **The reason to name the call and not the file**: `backchannel-logout.service.ts` used to hand-roll
+> `/client/get/list` beside the exempt call — a second URL, a second bearer header, a second hand-written
+> response shape — none of which the SDK gap justified. **One legitimate exception in a file makes the next one
+> look like house style.** That second call was removed on 2026-08-14 (BCL-W6). Before writing a `fetch()`,
+> check the SDK first.
+
+### Where the `.well-known` documents live, and why they are not all in one place
+
+Six well-known documents are served, and **they are split across two mount points**. This looks like an
+inconsistency and is half deliberate:
+
+| Document | Path | Fixed by spec? |
+|---|---|---|
+| `openid-credential-issuer` | **root** | OID4VCI §12.2 — yes |
+| `openid-federation` | **root** | OpenID Federation 1.1 §9 — yes |
+| `oauth-authorization-server` | **root** | RFC 8414 §3 — yes |
+| `oauth-protected-resource` | **root** (two routes) | RFC 9728 §3 — yes, and the path form depends on `resource` |
+| `openid-configuration` | **under `/api`** | OIDC Discovery §4 — **yes, and this one departs** |
+| `jwks.json` | **under `/api`** | no — the URL is whatever `jwks_uri` advertises |
+
+**The four at root are there because their specifications fix the location**, and a document at the wrong URL
+is a document a discovering client cannot find. RFC 8414 §3 and RFC 9728 §3 both construct the URL from the
+identifier, so serving them under a prefix would break discovery outright.
+
+**`jwks.json` under `/api` is fine and needs no defence.** Nothing requires a particular path for a JWK Set —
+the AS *publishes* its location in `jwks_uri`, and a client follows that value rather than guessing. A key set
+is reached by reference, not by convention.
+
+**`openid-configuration` under `/api` is the real departure**, and it is why `oauth-authorization-server` exists
+at root at all: that route serves the *same document* from the location RFC 8414 fixes, so MCP and RFC 8414
+clients can find it. The consequence to know is that **this deployment answers OIDC Discovery at a non-standard
+path**, so a strict OIDC RP that constructs `{issuer}/.well-known/openid-configuration` gets the SPA catch-all
+rather than the document. Unifying them is the obvious fix and it is not free — the `/api` path is baked into
+the curriculum's transcripts and into `client/src/config.ts` — so it is recorded here as a known departure
+rather than quietly tolerated. Module 04 Exercise 5 has learners fetch both and diff the key sets, which is the
+cheapest way to notice that two URLs are serving one document.
 
 ---
 
