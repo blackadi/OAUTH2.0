@@ -68,6 +68,18 @@ docker compose up -d prometheus grafana
 
 ## Dev setup
 
+> **Check which Authlete service you are pointed at before trusting anything.** On 2026-08-14 the public
+> deployment turned out to be using a **different service** from the one the entire RFC audit was conducted
+> against — and the difference was material: the deployment's service had no RSA key (so no RS256/PS256) and
+> no `private_key_jwt`, both of which Tier 1 had "shipped". Three signals gave it away, and any one of them
+> is enough to check: the `issuer` string differed by a trailing slash, the endpoint hosts differed, and the
+> discovery document had **59 members against 62**.
+>
+> **`3693555522` is canonical** (ruled 2026-08-14). Compare
+> `GET /api/{serviceId}/service/configuration` against the document your deployment actually serves at
+> `/.well-known/openid-configuration` — **reading either alone proves nothing about the other.**
+
+
 1. Copy `.env.example` → `.env` in both `server/` and `client/`
 2. Required env vars: `AUTHLETE_BEARER_TOKEN`, `AUTHLETE_BASE_URL`, `AUTHLETE_SERVICE_ID`, `SESSION_SECRET`
 3. The `server` reads `.env` via `dotenv` (called in `src/config/app.config.ts` only)
@@ -143,7 +155,7 @@ docker compose up -d prometheus grafana
 
   Verified against SDK 1.0.0 and the vendored `docs/openapi-spec.json` (3.0.16). So `handleIssueDeferred` calls `parse` first and issues only on `OK`. **Two rules not to undo.** `requestIdentifier` comes from `parse`'s `info.identifier`, **never from `req.body`** — it names the credential request Authlete resolved from the *validated* `transaction_id`, and taking it from the body would let any valid token name any pending request (the same server-determined-fields rule `introspection.service.ts` and `userinfo.service.ts` follow). And `transactionId` is **required** while a bare `requestIdentifier` is **refused**: that was the shape which bypassed validation, and it carries no `transaction_id` for `parse` to check.
 
-  **What this looked like before**, since it is the clearest instance of a defect class this repo keeps finding: the handler collected no token at all, so a caller holding a `transactionId` — a handle, not a credential — reached issuance. Its two siblings on the same router both answered `401` without a token; **the asymmetry was the bug**, and a controller test could not see it because it never drives the route. Found by `check-route-coverage.mjs`, not by reading the code. **UNVERIFIED, and unavoidably so:** `verifiableCredentialsEnabled` is `false`, so `parse` answers `FORBIDDEN` before it would return an `info.identifier` — the `requestContent` shape comes from the 3.0.16 schema and OID4VCI 1.0 (Final, 16 Sep 2025) §9.1's REQUIRED `transaction_id`, and §9's normative sentence on authenticating the request was never quoted verbatim, so no MUST is cited. Named next action: re-run the path if VCI is ever enabled. **The request shape is still Authlete's** (`{ order: { transactionId } }`) rather than §9.1's — that is **T1-11**'s scope, and this endpoint is a fourth site for it alongside PAR, Device and DCR.
+  **What this looked like before**, since it is the clearest instance of a defect class this repo keeps finding: the handler collected no token at all, so a caller holding a `transactionId` — a handle, not a credential — reached issuance. Its two siblings on the same router both answered `401` without a token; **the asymmetry was the bug**, and a controller test could not see it because it never drives the route. Found by `check-route-coverage.mjs`, not by reading the code. **Verified live 2026-08-14, once DR-03 enabled VCI:** `POST /vci/deferred/parse` with a bogus access token answers **`UNAUTHORIZED`**, `[A375304] The access token does not exist.` So the endpoint is live, **the deferred path really does validate the token**, and the `requestContent` this server synthesises is accepted — Authlete parsed it far enough to reach token validation. `UNAUTHORIZED` → 401 is the mapping above. **Still UNVERIFIED, and narrower:** §9's normative sentence on authenticating the request was never quoted verbatim, so no MUST is cited — the design rests on the four facts above instead. **The request shape is still Authlete's** (`{ order: { transactionId } }`) rather than §9.1's — that is **T1-11**'s scope, and this endpoint is a fourth site for it alongside PAR, Device and DCR.
 - **MCP (Model Context Protocol — OAuth 2.1)**: `GET /.well-known/oauth-authorization-server` serves RFC 8414 AS metadata at root (same content as `openid-configuration`). Client UI: `McpSection.tsx` with 3 tabs (AS Metadata, Protected Resource Metadata, CIMD Metadata) + 5-step Full Flow Wizard (Discover → Register Client → Authorize with PKCE+Resource → Token Exchange → UserInfo). Service layer: `mcp.service.ts` — `fetchAsMetadata()` tries both well-known paths, `fetchProtectedResourceMetadata()` (RFC 9728), `fetchCimdMetadata()`, `buildAuthorizationUrl()` (PKCE S256 + RFC 8707 resource indicator), `exchangeCode()`, `fetchUserInfo()`. Requires CIMD enabled in Authlete (`clientIdMetadataDocumentSupported: true`). Tutorial: `docs/MCP-OAUTH-TUTORIAL.md`.
 
 ## Client SPA architecture

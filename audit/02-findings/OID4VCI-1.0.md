@@ -1,7 +1,7 @@
 # OpenID for Verifiable Credential Issuance 1.0 (OID4VCI)
 
-- **Verdict:** `MISCONFIGURED`
-- **Severity:** **S2**
+- **Verdict:** ~~`MISCONFIGURED`~~ → **`IMPLEMENTED_VERIFIED`** *(2026-08-14 — DR-03 executed; the feature is enabled and the metadata document is conformant)*
+- **Severity:** ~~**S2**~~ → **S4** *(F-1 and F-6 both closed; what remains is VCI-W2's unachievable half and the nonce endpoint)*
 - **Status:** OpenID **Final**, **16 September 2025** — re-verified against the primary source this session
 - **Authlete version:** 3.0
 - **Repo docs under test:** `README.md` feature tables, `docs/curriculum/modules/09b-identity-and-credentials/`, `client/src/components/oidc/VciSection.tsx`, `AGENTS.md` VCI paragraph
@@ -57,7 +57,18 @@
 | Enabling the feature | Service configuration | `verifiableCredentialsEnabled` — **`false`** |
 | The credential dataset itself | **This server**, in a real deployment | not implemented — there is no credential store |
 
-## Finding F-1 — the feature is disabled and `README.md` claims it works (S2)
+## Finding F-1 — the feature is disabled and `README.md` claims it works (S2 → ✅ CLOSED 2026-08-14)
+
+> **✅ CLOSED 2026-08-14 (DR-03, VCI-W1).** `verifiableCredentialsEnabled` is **`true`** and
+> `credentialIssuerMetadata` is populated. `POST /vci/metadata` answers **`OK`** with a conformant §12.2.4
+> document carrying all three REQUIRED members — `credential_issuer`, `credential_endpoint`,
+> `credential_configurations_supported`. Discovery went 62 → 64 members.
+>
+> **One trap worth carrying:** `credentialsSupported` is typed **`string`** in the 3.0.16 schema — a
+> *stringified JSON object* keyed by configuration id, not an array. Authlete changed it from an array in
+> December 2023 and the array form is refused with `[A126202]`. See `SERVICE-CONFIG-PROBE.md` §21.3.
+>
+> The paragraph below describes the pre-fix state and is kept for the record.
 
 Probe 3:
 
@@ -146,8 +157,15 @@ wallet can name which pending request it is collecting. Anyone who obtained or g
 issuance. **Not live-exploitable on this deployment**: `verifiableCredentialsEnabled` is `false`, which is why
 this is S2 rather than S1 — the same standing as `NATIVE-SSO-1.0.md` F-1.
 
-**UNVERIFIED:** §9's exact normative sentence on authenticating the Deferred Credential Request was not quoted
-verbatim from the primary source, so no MUST is cited. The finding does not need one: the two sibling
+**Live verification, 2026-08-14 — the `UNVERIFIED` marker is retired.** With VCI enabled (DR-03),
+`POST /vci/deferred/parse` with a deliberately bogus access token answers **`UNAUTHORIZED`**,
+`[A375304] The access token does not exist.` That is three confirmations at once: the endpoint is live rather
+than `FORBIDDEN`; **the deferred path really does validate the access token**, which is the whole control this
+finding is about; and the `requestContent` this server synthesises is accepted, since Authlete parsed it far
+enough to reach token validation. `UNAUTHORIZED` → 401 is the mapping `vci.controller.ts` implements.
+
+**Still UNVERIFIED, and narrower now:** §9's exact normative sentence on authenticating the Deferred Credential
+Request was not quoted verbatim from the primary source, so no MUST is cited. The finding does not need one: the two sibling
 endpoints, the unused `parse` API, and `AGENTS.md`'s own claim that the endpoint required a Bearer token are
 each independent of the spec text. §9.1's REQUIRED `transaction_id` **is** confirmed.
 
@@ -202,7 +220,7 @@ Recorded because the code quality here is high and the verdict is about configur
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | VCI-W1 | Decide: enable VCI, or stop presenting it as shipped | M | **Gate 4 decision.** If enabled: `verifiableCredentialsEnabled = true`, `credentialIssuerMetadata` configured, and `GET /.well-known/openid-credential-issuer` returns a §12.2.4 document with all three REQUIRED members. If not: `README.md` and `VciSection.tsx` say "implemented, service flag off", and Module 09b carries the same banner. |
-| VCI-W2 | Link the AS and the issuer | S | Conditional on W1: `credential_issuer` present in the AS discovery document and `authorization_servers` in the issuer document. **Blocked on the B3 issuer/host fix** — otherwise the linkage points somewhere unretrievable. |
+| VCI-W2 | ⚠️ **HALF UNACHIEVABLE, 2026-08-14.** The *issuer* document names its endpoints and is conformant; the **AS** half cannot be done — no `Service` property surfaces `credential_issuer` in the AS discovery document (checked against all seven `credential*` fields). Third instance of a criterion naming a console change with no console field, after RPL-W4 and T1-13. Link the AS and the issuer | S | Conditional on W1: `credential_issuer` present in the AS discovery document and `authorization_servers` in the issuer document. **Blocked on the B3 issuer/host fix** — otherwise the linkage points somewhere unretrievable. |
 | VCI-W3 | Add the nonce endpoint | M | Conditional on W1: `nonce_endpoint` in the issuer metadata, returning `c_nonce` with `Cache-Control: no-store` per §7.2. |
 | VCI-W4 | ~~Keep the code as-is~~ — **withdrawn 2026-08-13** | — | **This work item was wrong, and its evidence was already in this file.** It asserted that "routing, auth tiers and action mapping are correct" nine lines below a boundary-table row recording `VciDeferredParse` as *existing and unused*. Those two facts are the same fact, and joining them is the finding. Superseded by **VCI-W5**. |
 | VCI-W5 | ~~`POST /api/vci/deferred/issue` authenticates nobody~~ **✅ FIXED 2026-08-13** | M | Was: the handler collected no access token, and `VciDeferredIssueRequest` has no `accessToken` field, so nothing on the path could validate one — a caller holding a `transactionId` reached issuance. Now: `parse` first (`UNAUTHORIZED`→401), `requestIdentifier` from `info.identifier` and never from the body, a bare `requestIdentifier` refused. **Criteria met:** `verifiableCredentials.deferredParse` is called before `deferredIssue`; no token → 401 with neither API reached; `parse`→`UNAUTHORIZED` → 401 with `deferredIssue` unreached. Live path **UNVERIFIED** (`verifiableCredentialsEnabled` is `false`). |

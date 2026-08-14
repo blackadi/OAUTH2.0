@@ -20,15 +20,15 @@ decline with no trigger is a dead end rather than a decision.
 |---|---|---|---|
 | [DR-01](#dr-01--mutual-tls-rfc-8705) | Mutual TLS | **UPHELD** — decline, rationale corrected | FAPI 1.0 Part 2, FAPI 2.0's mTLS branch |
 | [DR-02](#dr-02--fapi-20-security-profile) | FAPI 2.0 Security Profile | ⬜ **open — recommend qualify, do not enable** | The most curriculum material of any record |
-| [DR-03](#dr-03--oid4vci-verifiable-credential-issuance) | OID4VCI | ⬜ open — recommend enable | Module 09b, `README.md` |
+| [DR-03](#dr-03--oid4vci-verifiable-credential-issuance) | OID4VCI | ✅ **DECIDED + EXECUTED 2026-08-14 — enabled.** `/vci/metadata` answers `OK`; F-1 closed | Module 09b, `README.md` |
 | [DR-04](#dr-04--native-sso) | Native SSO | ⬜ open — recommend do not enable | `NATIVE-SSO-TUTORIAL.md`, Module 09a |
-| [DR-05](#dr-05--cimd-and-the-mcp-claim) | CIMD / MCP | ⬜ open — recommend enable CIMD, qualify MCP | `MCP-OAUTH-TUTORIAL.md` |
+| [DR-05](#dr-05--cimd-and-the-mcp-claim) | CIMD / MCP | ✅ **DECIDED + EXECUTED 2026-08-14 — CIMD enabled; MCP still qualified** | `MCP-OAUTH-TUTORIAL.md` |
 | [DR-06](#dr-06--fapi-10-baseline-and-advanced) | FAPI 1.0 | ⬜ open — recommend document-only | Module 10 |
 | [DR-07](#dr-07--spiffe_jwt-and-the-nine-advertised-client-auth-methods) | `SPIFFE_JWT` | ✅ **DECIDED + EXECUTED 2026-08-12 — dropped; Ex 4 rebuilt, not retired** | **Module 10 Exercise 4** |
 | [DR-08](#dr-08--session-management-and-front-channel-logout) | Session Management + Front-Channel Logout | ⬜ open — recommend decline | Module 08 |
 | [DR-09](#dr-09--jwt-access-tokens-rfc-9068) | JWT access tokens | ⬜ open — recommend defer | Module 04, `STEP-UP-AUTH-TUTORIAL.md` Part 4 |
 | [DR-10](#dr-10--the-three-deliberate-token-exchange-defects) | Token-exchange defects | ⬜ open — **recommend keep** | Module 06 Ex 6a/6b/6c |
-| [DR-11](#dr-11--the-issuerhost-mismatch) | The issuer/host mismatch | ⬜ open — recommend align the issuer | Module 04, MCP, RFC 9207 |
+| [DR-11](#dr-11--the-issuerhost-mismatch) | The issuer/host mismatch | ✅ **DECIDED + EXECUTED 2026-08-14 — aligned to the Render host; §3.3 passes; 8628-W5 closed** | Module 04, MCP, RFC 9207 |
 | [DR-12](#dr-12--agentsmds-security-critical-surfaces-list) | `AGENTS.md` surfaces list | ⬜ **open — decided below, per the brief** | Every future plan-mode trigger |
 | [DR-13](#dr-13--oid4vp) | OID4VP | **UPHELD** — structurally inapplicable | — |
 | [DR-14](#dr-14--haip-10) | HAIP 1.0 | **UPHELD** — cost-declined | — |
@@ -391,7 +391,24 @@ documents — T2-10).
 
 ## DR-11 — The issuer/host mismatch
 
-**Status: ⬜ open. Recommendation: align the service `issuer` with the host that serves the document.**
+**Status: ✅ DECIDED AND EXECUTED 2026-08-14 — aligned to `https://oauth2-0-ekh2.onrender.com`.**
+
+> **What was done.** `issuer` plus all **fourteen** URL-valued service fields were set to the Render host —
+> 15 fields written, 16 changed including `modifiedAt`, **0 unexpected**. RFC 8414 §3.3 now passes: the
+> generated document's `issuer` is exactly the host and all 13 URL members sit under it.
+>
+> **The stable host was chosen over the tunnel**, which is *better* than this record's original
+> recommendation: `deviceVerificationUri` moved too, so **8628-W5 closes** rather than staying time-bombed.
+>
+> **A prerequisite surfaced during the write and is recorded in `SERVICE-CONFIG-PROBE.md` §21.1: the public
+> deployment was pointing at a *different Authlete service*** — one lacking T1-2's RSA key and T1-3's
+> `private_key_jwt` client. `3693555522` was ruled canonical and the deployment is to be repointed at it.
+> Without that ruling this write would have made a service nobody reaches conformant.
+>
+> **Still open, and not this record's:** no client has a redirect URI on the Render host, so an
+> authorization-code flow cannot complete there until they are added.
+
+The original recommendation and its reasoning follow.
 
 **The defect, now measured exactly** (`04-remediation-plan.md` §2.2):
 
