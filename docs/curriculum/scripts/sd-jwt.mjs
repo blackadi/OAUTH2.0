@@ -178,6 +178,11 @@ function cmdIssue(args) {
   // cheaper than being ambiguous.
   payload._sd_alg = 'sha-256';
 
+  // 3c-F3: `--iss` was optional here and is effectively mandatory at `verify`, whose §7.1 step 2c requires a
+  // non-empty `iss` — so `issue` without it produced a credential this same script always rejects. Required
+  // rather than defaulted: `iss` identifies who signed the credential, and inventing a plausible issuer
+  // identifier is exactly the habit a curriculum on token validation should not teach.
+  if (!args.iss && !claims.iss) die('--iss <URL> is required (RFC 9901 §7.1 step 2c: the Verifier must check `iss`)');
   if (args.iss) payload.iss = args.iss;
   payload.iat = Math.floor(Date.now() / 1000);
 
@@ -297,7 +302,14 @@ function cmdPresent(args) {
   // Disclosure and the hash changes.
   const sdPart = [issuerJwt, ...keep].join('~') + '~';
 
-  if (!args['kb-key']) { process.stdout.write(sdPart); return; }
+  // 3c-F2: `--out` used to be handled only after this early return, so on the no-Key-Binding path
+  // `present … --out fewer.txt` wrote to stdout and created no file, silently. The usage block advertises
+  // `[--out f]` for both paths, so the flag has to work on both.
+  if (!args['kb-key']) {
+    if (args.out) { writeFileSync(args.out, sdPart); console.error(`wrote ${args.out}`); }
+    else process.stdout.write(sdPart);
+    return;
+  }
 
   if (!args.aud || !args.nonce) die('--kb-key requires --aud and --nonce (both REQUIRED by §4.3)');
   const kbPayload = {

@@ -391,10 +391,10 @@ Not a forgery. Not a replay. **Remove the final `~`** and see what a verifier do
 merely *malformed*:
 
 ```bash
-node sd-jwt.mjs issue --claims claims.json \
-  --sd given_name,family_name,email,nationality --issuer-key i-priv.json --out ok.txt
+node "$SD" issue --claims claims.json --sd given_name,family_name,email,nationality \
+  --issuer-key issuer-priv.json --iss https://issuer.example --out ok.txt
 perl -pe 's/~$//' ok.txt > notilde.txt
-node sd-jwt.mjs verify notilde.txt --issuer-key i-pub.json
+node "$SD" verify notilde.txt --issuer-key issuer-pub.json
 ```
 
 ```
