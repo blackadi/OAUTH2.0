@@ -247,17 +247,33 @@ a one-line change to token issuance outweighs a large one anywhere else.
 
 | Concern | Files |
 |---------|-------|
-| Token issuance | `services/token.service.ts`, `controllers/token.controller.ts`, `services/token.operations.service.ts`, `controllers/token.management.controller.ts`, `controllers/token-exchange-response.handler.ts` |
+| Token issuance | `services/token.service.ts`, `controllers/token.controller.ts`, `services/token.operations.service.ts`, `controllers/token.management.controller.ts`, `controllers/token-exchange-response.handler.ts`, `services/jwt-verification.service.ts` |
 | Client authentication | `utils/basic-auth.ts`, `services/par.service.ts`, `middleware/require-basic-auth.ts` |
 | DPoP / proof-of-possession | `utils/dpop.ts`, `client/src/services/dpop.service.ts` |
 | Authorization & consent | `services/authorization.service.ts`, `controllers/authorization.controller.ts`, `controllers/session.controller.ts` (ACR / `auth_time` binding), `utils/validate.ts` |
-| Token presentation & introspection | `services/userinfo.service.ts`, `services/introspection.service.ts`, `controllers/introspection.controller.ts` |
+| Token presentation & introspection | `services/userinfo.service.ts`, `services/introspection.service.ts`, `controllers/introspection.controller.ts`, `controllers/introspection-standard.controller.ts` |
 | Access control | `middleware/require-grant-ownership.ts`, `middleware/csrf.ts`, `middleware/development-only.ts`, `middleware/require-basic-auth.ts`, `routes/device.routes.ts`, `controllers/jar.controller.ts` |
 | Session termination & redirect targets | `services/logout.service.ts`, `controllers/logout.controller.ts` |
+| **Failure disclosure & status derivation** | `middleware/errorHandler.ts` |
 
 Paths are under `server/src/` unless noted. **Not** on this list, despite living in the same
 directories: `metrics`, `health`, `discovery`, `jwks`, `federation`, `vci`, `hsk` — ordinary changes
-there need no special ceremony.
+there need no special ceremony. **`controllers/fapi.controller.ts` is deliberately excluded too**: it
+*reports* the security posture, it does not decide outcomes, and its tests pin it against both a hardened
+and an unhardened service — stronger protection than a review gate (ruled 2026-08-14, DR-12).
+
+> **`middleware/errorHandler.ts` has its own row on purpose, and the row title is the point** (added
+> 2026-08-14, DR-12). Every other row names a *token or authorization* decision. This file decides
+> **how a failure is reported and how much it discloses**, which is a different concern and would be
+> invisible folded into any of the others. Three grounds: it sets the HTTP status of every failure in the
+> application — all 57 SDK call sites plus every local throw, through `errorStatusFrom`; it is the **sole
+> gate on stack-trace disclosure**, emitting `err.stack` when `isDevelopment`, so a wrong edit leaks stack
+> traces in production; and **it has already produced one security-relevant defect** — every SDK validation
+> failure served as HTTP 200, invisible to any monitor watching status codes. That file was edited without a
+> plan precisely because it was not on this list.
+>
+> The objection — that a generic middleware invites ceremony over formatting — is answered by the two rules
+> below plus `CLAUDE.md`'s existing exemption for semantics-free edits.
 
 Two rules learned the hard way:
 

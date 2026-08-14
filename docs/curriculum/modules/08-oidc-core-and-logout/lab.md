@@ -375,6 +375,45 @@ computing it is the same left-half-of-a-SHA-256 construction as `at_hash`.
 > Nothing about the code flow needs `c_hash`, because there is no ID token in the front channel to bind.
 > That is one fewer thing to get wrong, and it is a large part of why FAPI 2.0 chose plain `code` + PAR.
 
+**Now look at `s_hash` in the same token, because it is the one FAPI 1.0 Advanced requirement this deployment
+can actually demonstrate.** You saw it back in Exercise 1 and skipped past it.
+
+```bash
+# Compute s_hash yourself from the `state` you sent, and compare.
+#   s_hash = base64url( first half of SHA-256(state) )
+STATE=hy1            # whatever you used above
+node -e '
+const c=require("crypto");
+const s=process.argv[1];
+const d=c.createHash("sha256").update(s,"ascii").digest();
+console.log("s_hash =", d.subarray(0,d.length/2).toString("base64url"));
+' "$STATE"
+```
+
+Compare that to the `s_hash` in the ID token you just decoded. **Same construction as `c_hash` and `at_hash`:
+SHA-256, keep the left half, base64url.** One hash function, three bindings, three different things bound.
+
+| Claim | Binds | Required by | Why |
+|---|---|---|---|
+| `at_hash` | the access token | OIDC Core §3.3.2.11 (implicit/hybrid) | an AT crossing the front channel can be swapped |
+| `c_hash` | the authorization code | OIDC Core §3.3.2.11 (hybrid) | a code crossing the front channel can be swapped |
+| **`s_hash`** | **`state`** | **FAPI 1.0 Advanced §5.2.2.2** | *"shall support signed ID tokens containing the `s_hash` claim"* — `state` is otherwise unprotected |
+
+> ### Why `s_hash` is here at all, when FAPI 1.0 is not enabled
+>
+> **`s_hash` is a FAPI 1.0 Advanced claim and Authlete emits it unconditionally**, which makes it the *only*
+> Part-2-specific behaviour observable on this deployment — mTLS, the other half of Part 2, is declined with
+> reasons (`audit/05-decision-records.md` DR-01) and cannot be demonstrated at all.
+>
+> **The point it teaches is about `state`.** Everywhere else in this curriculum `state` is described as CSRF
+> protection that the client compares locally, and it is *unsigned* — an attacker who can rewrite the front
+> channel can rewrite `state` too. `s_hash` puts it inside the signature, so the client can prove the `state`
+> it got back is the `state` it sent. **That is what JARM generalises** (Module 09a): rather than hashing one
+> parameter into the ID token, sign the whole response.
+>
+> Note what this does **not** mean: seeing `s_hash` does not make this deployment FAPI 1.0 Advanced. One emitted
+> claim is not a profile — `fapiModes` is unset, and Module 10's conformance table is where that gets counted.
+
 ### 3d — Validating against JWKS instead of a shared secret
 
 Everything above verified the signature with the **client secret**, because `$CLIENT_ID` — the confidential

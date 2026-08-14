@@ -127,6 +127,64 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-16: the vendor features, and a fourth capability state that runs backwards** (below)
 - [x] **2026-08-14 — T2-14: the audit's last two fetches, and both went against the audit** (below)
 - [x] **2026-08-14 — CU-W1 proven: Authlete REPLACES, and the defect was never data loss** (below)
+- [x] **2026-08-14 — TIER 3 COMPLETE: all 19 decision records ruled, and none of the remaining ones needed a write** (below)
+
+### 2026-08-14 — Tier 3: all 19 decision records ruled
+
+**Why this matters to a future session: no decision is outstanding.** `audit/05-decision-records.md` now opens
+with a status table. The shape: **four enabled, nine declined, one deferred, one defect kept on purpose, one
+deliberately unrecorded.**
+
+> **None of the remaining rulings needed an Authlete write.** DR-02 and DR-04 are *do not enable*, DR-06 is
+> document-only, DR-08 declines, DR-09 defers, DR-10 keeps, DR-12 is a documentation edit. Every service write
+> had already happened in DR-03/05/07/11. **"Take the Tier 3 decisions" was mostly a writing task, not a
+> configuration one** — worth knowing before budgeting a session for it.
+
+**Four items of real work shipped alongside the rulings**, each in the same commit as its decision, per
+`AGENTS.md`'s rule that a Tier 3 decision ships with its paired doc change:
+
+- **DR-12** — `middleware/errorHandler.ts` added under a **new** concern row, *Failure disclosure & status
+  derivation*, with its three grounds written into `AGENTS.md` itself: it sets the status of every failure across
+  all 57 SDK call sites, it is the **sole gate on stack-trace disclosure**, and it has **already produced one
+  security-relevant defect** (every SDK validation failure served as HTTP 200 — invisible to a monitor watching
+  status codes). A filename does not explain why a generic middleware is on that list. Also added
+  `jwt-verification.service.ts` and `introspection-standard.controller.ts`; `jar.controller.ts`'s conditional had
+  already resolved when B1-W2 shipped. **`fapi.controller.ts`'s decline is now explicit** — it *reports* posture
+  rather than deciding outcomes, and an exclusion that is only implied is one somebody will undo.
+- **8693-W1** — `resource` and `audience` look identical from the outside: both dropped, both produce no `aud`,
+  both answer 200. But `TokenCreateRequest` **has a `resources` field and no audience field at all**, so one drop
+  is **a choice this server makes** and the other is **a vendor boundary no fix can cross**. Established by
+  reading the SDK model, not by testing — a 200 looks the same either way, which is exactly how the two got
+  conflated. The characterization test's `it("drops audiences")` case now carries that reasoning, because unlike
+  its siblings it can never legitimately change.
+- **8693-W2** — the tutorial's *"Not covered by tests"* section was true when written and false since. Replaced
+  with why a **characterization** test is the stronger arrangement: a test asserting the *correct* RFC 8693
+  behaviour fails today and gets skipped within a week; a test asserting the *current* behaviour fails the moment
+  somebody changes it, and names the documents to update. The old note's point about the E2E assertion is kept as
+  its own lesson — `expect([200, 400, 429]).toContain(res.status)` is a smoke test wearing a unit test's clothes.
+- **9068-W3** — Module 04 now separates **audience restriction** (runnable here, through introspection) from
+  **self-contained tokens** (not runnable, `accessTokenSignAlg` unset), and states that the two are
+  *orthogonal*: you can audience-restrict an opaque token, and you can issue a JWT with no `aud` at all.
+- **FAPI1A-W4** — Module 08's `c_hash` exercise continues into **`s_hash`**, with a hash computation that was
+  **run before publishing** (22 base64url chars, matching the `c_hash` length in the lab's own transcript), the
+  three-way `at_hash` / `c_hash` / `s_hash` table, and why `s_hash` is the *only* FAPI 1.0 Advanced behaviour
+  observable here — mTLS, the other half of Part 2, is declined with reasons. It also says what it does **not**
+  mean: one emitted claim is not a profile.
+
+> **The recurring reason for declining, stated three times independently.** DR-02, DR-06 and DR-04 all collide
+> with the retired-grant curriculum: requiring PKCE-S256 and PAR removes the very behaviours Modules 01, 02, 03
+> and 07 exist to demonstrate. **A profile that forbids what the curriculum teaches is not a configuration this
+> deployment can hold and still be what it is.** That is not timidity; it is what auditing a *teaching* server
+> against production profiles produces.
+>
+> **And the ruling most likely to be undone by accident is DR-08.** Session Management, Front-Channel Logout,
+> back-channel logout's `sid` mode and Native SSO's `sid` share **one** prerequisite — durable OP session
+> identity — so building it for any one consumer reopens all four at once. Treating them as four independent gaps
+> was the mistake Phase 2 corrected, and it is the one most likely to recur.
+
+**Verification.** `typecheck` clean both packages, 1081 server tests / 73 files, 109 client / 16, lint unchanged
+(server's 4 pre-existing warnings), `check-docs` clean across 166 files, route coverage 92 with an empty baseline.
+The only source change is one test comment.
 
 ### 2026-08-14 — CU-W1: merge or replace, settled on a throwaway client
 

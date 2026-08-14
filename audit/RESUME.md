@@ -494,6 +494,31 @@ the probe's first cleanup silently failed on exactly that, leaving the throwaway
 pass removed it. *Verify a cleanup ran.* And all four real clients were re-listed afterwards and are identical
 to the pre-probe snapshot.
 
+### ✅ TIER 3 IS COMPLETE — all 19 decision records ruled, 2026-08-14
+
+**No decision is outstanding.** `05-decision-records.md` opens with a status table; the shape is **four enabled,
+nine declined, one deferred, one defect kept on purpose, one deliberately unrecorded**.
+
+**None of the remaining rulings needed an Authlete write** — DR-02 and DR-04 are *do not enable*, DR-06 is
+document-only, DR-08 declines, DR-09 defers, DR-10 keeps, DR-12 is a doc edit. The service writes were all in
+DR-03/05/07/11, which shipped earlier. **Worth knowing before planning a Tier 3 session: "take the decisions"
+was mostly a writing task, not a configuration one.**
+
+**Four items of real work shipped with the rulings**, each in the same commit as its decision per `AGENTS.md`:
+
+| Item | What landed |
+|---|---|
+| **DR-12** | `middleware/errorHandler.ts` under a **new** row, *Failure disclosure & status derivation* — with its three grounds written into `AGENTS.md`, because a filename does not explain why a generic middleware is listed. Plus `jwt-verification.service.ts` and `introspection-standard.controller.ts`. `jar.controller.ts`'s conditional had already resolved (B1-W2). **`fapi.controller.ts`'s decline is now explicit** — an exclusion that is only implied is one somebody will undo |
+| **DR-10 / 8693-W1** | `resource` and `audience` look identical from outside — both dropped, both no `aud`, both 200 — but `TokenCreateRequest` **has `resources` and no audience field at all**. One drop is a *choice*, the other a *vendor boundary no fix can cross*. Verified against the SDK model; the test comment now says the `audiences` case can never legitimately change |
+| **DR-10 / 8693-W2** | *"Not covered by tests"* — true when written, false since — replaced by why a **characterization** test beats one asserting the fix: a test of the *correct* behaviour fails today and gets deleted; a test of the *current* behaviour fails when somebody changes it and names the docs to update |
+| **DR-09 / 9068-W3** | Module 04 separates **audience restriction (runnable here, via introspection)** from **self-contained tokens (not runnable)** — and states they are *orthogonal*: you can audience-restrict an opaque token, and you can issue a JWT with no `aud` |
+| **DR-06 / FAPI1A-W4** | Module 08's `c_hash` exercise continues into **`s_hash`** — a runnable hash computation, the three-way `at_hash`/`c_hash`/`s_hash` table, and why it is the *only* FAPI 1.0 Advanced behaviour observable here. Also what it does **not** mean: one emitted claim is not a profile |
+
+> **The ruling most likely to be undone by accident is DR-08.** Session Management, Front-Channel Logout,
+> back-channel logout's `sid` mode and Native SSO's `sid` (DR-04) share **one** prerequisite — durable OP session
+> identity — so building it for any one consumer reopens all four. Treating them as four independent gaps was the
+> mistake Phase 2 corrected.
+
 **Then, in order:** **P4** Tier 2's 17 documentation items,
 **T2-1 first** (the `UNVERIFIED` convention across nine tutorials — six S2s collapse into one writing task) ·
 **P5** the remaining Tier 3 decisions (DR-02 qualify-don't-enable, DR-04 don't enable, DR-06/08/09/10/12 and

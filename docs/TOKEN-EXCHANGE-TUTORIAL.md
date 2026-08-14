@@ -679,9 +679,28 @@ Each returns **HTTP 200** with a byte-identical response shape, so a client cann
 | Parameter sent | RFC 8693 says | This server | Consequence |
 |---|---|---|---|
 | `actor_token` (+ `actor_token_type`) | §2.1 — requests **delegation**; result should carry `act` (§4.1) | discarded | **Delegation is silently downgraded to impersonation.** No `act` claim is ever produced |
-| `resource` | §2.1 — audience-restrict the issued token | discarded | A token minted "for the orders API" is valid **everywhere**. Introspection shows **no `aud`** |
-| `audience` | §2.1 — same, by logical name | discarded | Same |
+| `resource` | §2.1 — audience-restrict the issued token | discarded, **and forwardable** | A token minted "for the orders API" is valid **everywhere**. Introspection shows **no `aud`**. `TokenCreateRequest` *has* a `resources` field, so this one is a choice |
+| `audience` | §2.1 — same, by logical name | discarded, **and unforwardable** | Same symptom, different cause — see below |
 | `requested_token_type` | §2.1 — choose the returned token type | discarded | You always get an access token, and because `issued_token_type` is missing you cannot even detect it |
+
+> ### `resource` and `audience` look identical from the outside and are not the same defect
+>
+> Both are dropped, both produce a token with no `aud`, and both answer `200`. But **`resource` could be
+> forwarded tomorrow and `audience` could not**:
+>
+> | | Authlete's `TokenCreateRequest` | So the drop is |
+> |---|---|---|
+> | `resource` | has a **`resources`** field | **a choice this server makes** — three lines would fix it |
+> | `audience` | has **no audience field at all** — none of the request schema's properties carries the concept | **a vendor boundary.** Nothing this server can do forwards it |
+>
+> **Why the distinction matters more than it looks.** A conformance report that lists both as "not implemented"
+> implies both are on the same backlog. One is; the other requires Authlete to add a field. And it changes what
+> a fix can promise: `resource` restriction is reachable here, `audience` restriction is **not reachable at any
+> price** without the vendor. Established by reading the request schema rather than by testing — a passing
+> `200` looks the same either way, which is exactly why the two got conflated.
+>
+> This is also why the characterization test's `it("drops audiences")` case **can never legitimately change**,
+> while `it("drops resources")` might.
 
 ### A REQUIRED response parameter is missing
 
@@ -719,11 +738,22 @@ A subject identifier is a non-secret by convention, so it flows into logs, trace
 downstream `sub` claims. `||` on a missing identity substitutes whatever is to hand instead of failing;
 a client-credentials token has no subject, and the correct behavior is to refuse the exchange.
 
-### Not covered by tests
+### Locked by a characterization test — which is the opposite of what this section used to say
 
-There is no unit or integration test for `token-exchange-response.handler.ts`. The only automated
-coverage is one E2E case, and its assertion is `expect([200, 400, 429]).toContain(res.status)` — which
-passes whether or not any of the above is fixed.
+**This heading read *"Not covered by tests"* until 2026-08-14, and it was true when written.** There is now
+`server/tests/unit/controllers/token-exchange-response.handler.test.ts`, and it is a **characterization** test:
+it asserts the behaviour described above *as it is*, deliberately, and names the documents to update if it ever
+changes. So each gap on this page is pinned in code rather than only described in prose.
+
+**That is a stronger arrangement than a test that checks for the fix**, and worth understanding before you
+"improve" it. A test asserting the *correct* RFC 8693 behaviour would fail today and be skipped or deleted
+within a week. A test asserting the *current* behaviour fails the moment somebody changes it, and its failure
+message points at Module 06's lab, this tutorial and `PROGRESS.md`. **The deliberate defect and the test that
+locks it are one mechanism**; `AGENTS.md`'s *Deliberate defects* table is the index.
+
+The old note's point still stands about the E2E case, and is worth keeping as a lesson: its assertion is
+`expect([200, 400, 429]).toContain(res.status)`, which passes whether or not any of this is fixed. **An
+assertion that admits three statuses is a smoke test wearing a unit test's clothes.**
 
 ---
 

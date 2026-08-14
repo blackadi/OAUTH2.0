@@ -40,6 +40,38 @@ decline with no trigger is a dead end rather than a decision.
 
 ---
 
+## Status at a glance — all 19 records ruled as of 2026-08-14
+
+**Every decision record is now closed.** Nothing in this file is awaiting a ruling.
+
+| Ruling | Records |
+|---|---|
+| **Executed — configuration changed** | DR-03 (VCI enabled, + a credential-issuer JWK Set via VCI-W6), DR-05 (CIMD enabled), DR-07 (`SPIFFE_JWT` withdrawn, nine methods → five), DR-11 (issuer aligned) |
+| **Executed — documentation/code only** | DR-12 (five surfaces added, one exclusion made explicit), DR-17, DR-18 |
+| **Ruled: do not enable / decline** | DR-01 (mTLS), DR-02 (FAPI 2.0 — qualify, do not enable), DR-04 (Native SSO), DR-06 (FAPI 1.0, document-only), DR-08 (Session Management + Front-Channel Logout, as one), DR-13, DR-14, DR-15, DR-16 |
+| **Ruled: defer** | DR-09 (JWT access tokens) |
+| **Ruled: keep as-is** | DR-10 (the three deliberate token-exchange defects — 8693-W5 **not** approved) |
+| **Deliberately no record** | DR-19 (RFC 9901) |
+
+> ### The shape of the outcome is worth reading before the individual records
+>
+> **Four records enabled something; nine declined; one deferred; one kept a defect on purpose.** That ratio is
+> not timidity — it is what happens when a *teaching* deployment is audited against production profiles. The
+> recurring reason for declining is the same one, stated three times independently: **DR-02, DR-06 and DR-04 all
+> collide with the retired-grant curriculum**, because requiring PKCE-S256 and PAR removes the very behaviours
+> Modules 01, 02, 03 and 07 exist to demonstrate. A profile that forbids what the curriculum teaches is not a
+> configuration this deployment can hold and still be what it is.
+>
+> **The one ruling to re-read before changing anything: DR-08.** Four separate gaps — Session Management,
+> Front-Channel Logout, back-channel logout's `sid` mode, and Native SSO's `sid` (DR-04) — share **one**
+> prerequisite, durable OP session identity. Building it for any one consumer reopens all four at once. Treating
+> them as independent was the mistake Phase 2 corrected, and it is the mistake most likely to recur.
+>
+> **What is left is not decisions.** Two Tier 2 documentation batches remain (**T2-5**, **T2-17**); DR-08 owes
+> three of its consequences to T2-5. No record is blocked on either.
+
+---
+
 ## DR-01 — Mutual TLS (RFC 8705)
 
 **Status: UPHELD — decline stands, rationale corrected.** Ruled at Gate 0, re-examined in
@@ -78,7 +110,7 @@ client-certificate header per RFC 9440 — the stripping is the load-bearing hal
 
 ## DR-02 — FAPI 2.0 Security Profile
 
-**Status: ⬜ open. Recommendation: qualify the claim; do not enable the profile.**
+**Status: ✅ RULED 2026-08-14 — qualify the claim; do NOT enable the profile.** The recommendation is taken as written. **Every paired doc change had already shipped**, which is why this ruling adds no work: FAPI2-W3 landed in T2-8 (`README.md`'s row), FAPI2-W4 in T1-19 batch 1 (`getStatus` reports the whole profile), FAPI2-W6 in T2-1 (`FAPI-TUTORIAL.md` labelled, Parts 3–4 marked `UNVERIFIED`). **One measured value in this record is now stale in our favour**: `id_token_signing_alg_values_supported` gained `PS256` when T1-2 registered an RSA key, so *both* FAPI-permitted algorithms are advertised — and T2-12 turned that into Module 10's `PARTIAL` row, because `idTokenSignAlg` is per client and the labs' client is `HS256`.
 
 **The choice.** Enabling FAPI 2.0 requires, together: one client with `private_key_jwt` + a JWKS (T1-3), PAR
 required, PKCE S256 required, DPoP required, refresh-token rotation disabled, and PS256/ES256/EdDSA only.
@@ -142,7 +174,7 @@ carries the same banner — theme 2's remedy (T2-8).
 
 ## DR-04 — Native SSO
 
-**Status: ⬜ open. Recommendation: do not enable.**
+**Status: ✅ RULED 2026-08-14 — do NOT enable.** Both grounds stand unchanged, and the second is the binding one: `sid` derivation is a change to `services/authorization.service.ts`, which is on the Security-critical surfaces list, and **enabling the flag first would produce a two-app sequence that half-works** — worse teaching material than a stated gap. The paired doc change is done: `README.md` reads *"Not enabled — `nativeSsoSupported` is `false`"*, and `NATIVE-SSO-TUTORIAL.md` was rewritten under T2-1 with a whole-file `UNVERIFIED` banner naming the three settings responsible. As this record predicted, **declining and rewriting were the same commit**.
 
 **The choice.** `nativeSsoSupported = true`, or stop claiming the feature works.
 
@@ -204,7 +236,7 @@ OAuth 2.1-conformant MCP claim possible.
 
 ## DR-06 — FAPI 1.0 Baseline and Advanced
 
-**Status: ⬜ open. Recommendation: document-only. Part 2 `OUT_OF_SCOPE` by inheritance; Part 1 not claimed.**
+**Status: ✅ RULED 2026-08-14 — document-only. Part 2 `OUT_OF_SCOPE` by inheritance; Part 1 not claimed.** Taken as written, including the reasoning that Part 1's collision *is* DR-02's collision and must get the same answer, so the deployment does not hold two inconsistent positions on one trade-off. **Both "worth doing regardless" items are now done**: OIDC-W2 shipped as T1-2, and **FAPI1A-W4 shipped with this ruling** — Module 08's `c_hash` exercise now continues into `s_hash`, with a runnable hash computation, the three-way `at_hash`/`c_hash`/`s_hash` table, and the reason it is the *only* Part-2-specific behaviour observable here (mTLS, the other half, is DR-01). It also states what it does **not** mean: one emitted claim is not a profile. FAPI1-W1's 60s/60min error shipped as T2-13, in three files.
 
 **Part 2 (Advanced) — decline by inheritance.** Part 2 requires mTLS as a sender-constraining mechanism; mTLS is
 declined with reasons (DR-01); therefore Part 2 is document-only. This is **FAPI1A-W1** and its real value is
@@ -302,7 +334,7 @@ general fragility is fixed and the member could return.
 
 ## DR-08 — Session Management and Front-Channel Logout
 
-**Status: ⬜ open. Recommendation: decline both, as one decision with one shared prerequisite.**
+**Status: ✅ RULED 2026-08-14 — decline both, as one decision.** Taken as written. The grounds hold and the third has strengthened: `prompt=none` now answers *"is the user still logged in?"* correctly, because T1-7 landed — this record asked for that to come first, and it did. **The three documentation consequences (FCL-W2, FCL-W3, SM-W2) remain in T2-5**, which is still open; they are the last thing this ruling owes. The revisit trigger is unchanged and is the reason the record covers two specifications: **durable OP session identity has four consumers** — Session Management, Front-Channel Logout, back-channel logout's `sid` mode and Native SSO (DR-04) — and building it for any one reopens all four.
 
 **Why one record for two specifications.** FCL-W4 = SM-W3: both are blocked by the same missing thing —
 **durable OP session identity**. So are back-channel logout's `sid` mode and Native SSO's `sid` (DR-04). Treating
@@ -334,7 +366,7 @@ this record is reopened for all four at once. That is the point of recording the
 
 ## DR-09 — JWT access tokens (RFC 9068)
 
-**Status: ⬜ open. Recommendation: defer. Do the three documentation items now.**
+**Status: ✅ RULED 2026-08-14 — defer.** Access tokens stay opaque. Taken as written: turning `accessTokenSignAlg` on changes the format of **every** access token this deployment issues, needs a plan, has two live curriculum couplings, and activates 9068-F3's latent §3 `aud` MUST. **All three "do these now" items are done**: 9068-W2 shipped in T1-19 batch 3 (the dev fixture is `typ: at+jwt` with all seven §2.2 claims); 9068-W4 shipped in T2-1 (Part 4's payload is marked `UNVERIFIED`, naming `accessTokenSignAlg`, and points at introspection as §6.2's route); and **9068-W3 shipped with this ruling** — Module 04 now separates **audience restriction (runnable here, via introspection)** from **self-contained tokens (not runnable)**, with the point that the two are *orthogonal*: you can audience-restrict an opaque token, and you can issue a JWT with no `aud` at all.
 
 **The choice.** Set `accessTokenSignAlg` so access tokens are `at+jwt`, or keep them opaque.
 
@@ -359,7 +391,7 @@ not require JWT access tokens, but the two decisions would be taken together).
 
 ## DR-10 — The three deliberate token-exchange defects
 
-**Status: ⬜ open. Recommendation: keep all three. This record exists to make the option visible, not to take it.**
+**Status: ✅ RULED 2026-08-14 — keep all three. 8693-W5 is NOT approved.** Taken as written, and the machinery is the reason: the characterization test asserts the behaviour and names the documents to update, so a change fails loudly instead of rotting a lab. **All three safe corrections are now done.** 8693-W3 shipped in T2-10 (four documents, now content-anchored). **8693-W1 and 8693-W2 shipped with this ruling**, and W1 turned out sharper than written: `resource` and `audience` look identical from outside — both dropped, both no `aud`, both 200 — but `TokenCreateRequest` **has** a `resources` field and **no audience field at all**, so one drop is a *choice this server makes* and the other is a *vendor boundary that no fix can cross*. Verified against the SDK model. The test's `it("drops audiences")` case now carries that reasoning in a comment, because it can never legitimately change. W2 replaced *"Not covered by tests"* — true when written, false since — with an explanation of why a **characterization** test beats one asserting the fix.
 
 **The defects, confirmed against RFC 8693 and deliberately retained** — `AGENTS.md`'s **Deliberate defects**
 table, `controllers/token-exchange-response.handler.ts`:
@@ -446,7 +478,24 @@ should have the learner *observe* the §3.3 mismatch before it is fixed — a be
 
 ## DR-12 — `AGENTS.md`'s Security-critical surfaces list
 
-**Status: DECIDED below, per the Phase 4 brief. Gate 4 confirms.**
+**Status: ✅ RULED AND EXECUTED 2026-08-14.** All five additions are in `AGENTS.md`, and the conditional resolved.
+
+| File | Row | State |
+|---|---|---|
+| `middleware/errorHandler.ts` | **Failure disclosure & status derivation** — a **new** row | ✅ added |
+| `services/jwt-verification.service.ts` | Token issuance | ✅ added |
+| `controllers/introspection-standard.controller.ts` | Token presentation & introspection | ✅ added |
+| `controllers/jar.controller.ts` | Access control | ✅ **already added** — the conditional was *"once B1-W2 settles its auth posture"*, and **B1-W2 shipped 2026-08-13** |
+| `controllers/fapi.controller.ts` | — | ⬜ **declined**, and the exclusion is now *explicit* in `AGENTS.md` rather than implied |
+
+**Two things the execution added beyond the decision.** The `errorHandler.ts` row carries its three grounds in
+the file itself — it sets the status of every failure across all 57 SDK call sites, it is the **sole gate on
+stack-trace disclosure**, and it has **already produced one security-relevant defect** (every SDK validation
+failure served as HTTP 200, invisible to any monitor watching status codes) — because a list of filenames does
+not tell a future reader *why* a generic middleware is on it. And the `fapi.controller.ts` decline is written
+down: it **reports** posture rather than deciding outcomes, and its tests pin it against both a hardened and an
+unhardened service, which is stronger protection than a review gate. **An exclusion that is only implied is an
+exclusion somebody will undo.**
 
 **Re-verified against `AGENTS.md` on 2026-08-11.** `RESUME.md` §5.3 named four candidate additions and recorded
 two as landed. **Three have landed:**
@@ -583,7 +632,7 @@ the realistic one.
 
 ## DR-17 — Hardware Security Keys
 
-**Status: UPHELD — keep the code, document it, no SPA section.**
+**Status: ✅ UPHELD AND EXECUTED 2026-08-14 — keep the code, document it, no SPA section.** The documentation half shipped in **T2-16**: four endpoints in `docs/API.md` with shapes, required-vs-optional fields, the action→status map and the fail-closed admin auth, plus a `SPEC-INVENTORY.md` row in the new **vendor features** section. Two departures from HSK-W2, both deliberate: **no separate `docs/` page** (a page for four endpoints nothing else consumes is prose in search of a reader — promote it if HSK gains a consumer), and `DELETE` got its own ⚠️ box making the point that **deleting a handle is not deleting a key** — the material lives in the HSM and this API never sees it, which is the whole reason for the indirection. "No SPA section" stands.
 
 **Decision.** The four `/api/hsk/*` endpoints stay as they are. **HSK-W4 is an explicit no-op**: routing, admin
 authentication and the action mapping (including the asymmetric list map, which reads like a bug and is not) are
@@ -602,7 +651,7 @@ nothing.
 
 ## DR-18 — Parameterized scopes and scope/client attributes
 
-**Status: UPHELD — document-only. Both are vendor features, not specifications.**
+**Status: ✅ UPHELD AND EXECUTED 2026-08-14 — document-only. Both are vendor features, not specifications.** Shipped in **T2-16**, and the writing found something the record had not: parameterized scopes are the **inverse** of the *advertised but unusable* pattern this audit met four times. Authlete accepts `payment:123.50` against a `regex` scope of `payment:.*` and returns the value in `dynamicScopes` — the feature works — but `scopes_supported` can only list **literal** strings, so **a client that discovers this AS correctly can never use it while a client that hardcodes the value can.** Module 09a's capability taxonomy gained a fourth state, **accepted but unadvertisable**, in a table whose last column names what misreading each state costs. In a capability matrix this one does not look like a green tick; **it looks like the feature is absent.** `attributes` is documented in `docs/API.md` with two vendor-assigned keys (`regex`, `fapi2=sp`) and the advice to prefix your own.
 
 **Decision.** No AS code required for either; no conformance weight; document both and label them.
 

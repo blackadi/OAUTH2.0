@@ -88,6 +88,27 @@ The hotel again, but now think about the **door**, not the desk.
   line. *That is an opaque token plus introspection.*
 - **"Room 412 only."** A card that opens every door in the building is a liability, and a card that opens one
   is not. Saying which door up front is *audience restriction*.
+
+> ### Two halves of this module, and only one of them is runnable here
+>
+> The analogies above bundle two independent ideas, and it is worth separating them before the lab, because
+> **this deployment can demonstrate one and not the other.**
+>
+> | | What it is | On this deployment |
+> |---|---|---|
+> | **Audience restriction** | *"which door does this card open?"* — an `aud` the resource server checks | ✅ **runnable, through introspection.** The value is a response member; you will read it in the lab |
+> | **Self-contained tokens** | *"can the door decide without phoning the desk?"* — claims inside a signed JWT | ❌ **not runnable.** `accessTokenSignAlg` is unset, so access tokens here are **opaque**. There is no JWT to decode |
+>
+> **These are orthogonal**, and conflating them is the most common way people mis-plan a token architecture: you
+> can audience-restrict an opaque token (the AS records the audience, introspection reports it) and you can issue
+> a self-contained token with no `aud` at all (RFC 9068 §3 has something to say about that, and Module 09a's
+> `RFC9068` finding notes this deployment would fall foul of it if JWTs were switched on).
+>
+> **So when the lab asks you to verify a claim, check which half you are verifying.** Anything you read out of
+> an *introspection response* is the first column. Anything that requires `base64url -d` on a token this server
+> issued is the second, and will not work — the only decodable JWT you can obtain here is the dev-only fixture
+> from `GET /api/token/createLocalToken`. That asymmetry is a configuration choice, not a limitation of OAuth,
+> and `audit/05-decision-records.md` **DR-09** records why it has been left as it is.
 - **Cancelling a card.** You call the desk and it is dead. Notice what the desk says if you read out a number
   that was never issued: *"Done."* Not "that card doesn't exist" — because a desk that distinguishes the two
   is a free card-number-checking service for anyone with a list of guesses.
