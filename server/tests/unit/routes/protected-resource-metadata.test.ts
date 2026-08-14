@@ -49,7 +49,29 @@ describe("GET /.well-known/oauth-protected-resource (RFC 9728)", () => {
     const res = await request(app).get("/.well-known/oauth-protected-resource").expect(200);
     expect(res.body.resource).toBe("https://as.example.com/api/userinfo");
     expect(res.body.authorization_servers).toEqual(["https://as.example.com"]);
-    expect(res.body.bearer_methods_supported).toEqual(["header"]);
+    // 9728-W2: `body` too, because `extractAccessToken` reads `access_token` from a form-encoded body per
+    // RFC 6750 §2.2. Advertising `header` alone understated what this resource accepts.
+    expect(res.body.bearer_methods_supported).toEqual(["header", "body"]);
+  });
+
+  // 9728-W1. §3 builds the metadata URL by inserting the well-known segment BETWEEN the host and the path
+  // of the resource identifier. `resource` here is the UserInfo endpoint, which has a path, so a conforming
+  // client asks for the suffixed form — and only the path-less route existed, so that request fell through
+  // to the SPA catch-all and answered 200 with HTML. Success, and a web page.
+  it("serves the path-suffixed form a §3 client actually constructs", async () => {
+    const res = await request(app)
+      .get("/.well-known/oauth-protected-resource/api/userinfo")
+      .expect(200);
+
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(res.body.resource).toBe("https://as.example.com/api/userinfo");
+  });
+
+  it("serves the same document at both forms", async () => {
+    const plain = await request(app).get("/.well-known/oauth-protected-resource").expect(200);
+    const suffixed = await request(app).get("/.well-known/oauth-protected-resource/api/userinfo").expect(200);
+
+    expect(suffixed.body).toEqual(plain.body);
   });
 
   it("mirrors scopes and DPoP algorithms from the live discovery document", async () => {

@@ -27,7 +27,16 @@ export const backchannelLogoutIssueController = {
       if (result.action === "CALLER_ERROR") {
         return res.status(400).send(result);
       }
-      return res.status(500).send(result);
+      // B1-W4. Same reasoning as `revocation.controller.ts`'s default branch: this is the fall-through for an
+      // action nobody has reviewed, so the response object is echoed blind. `SERVER_ERROR` is Authlete's own
+      // and its `resultMessage` is a useful diagnostic — but it belongs in the log, not in a body shaped by
+      // whatever the vendor added last.
+      (req.logger || logger).error("Backchannel logout issue: unhandled action", {
+        action: result.action,
+        resultCode: result.resultCode,
+        resultMessage: result.resultMessage,
+      });
+      return res.status(500).json({ error: "server_error" });
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       const log = req.logger || logger;

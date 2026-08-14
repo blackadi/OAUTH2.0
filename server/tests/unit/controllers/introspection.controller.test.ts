@@ -115,6 +115,53 @@ describe("IntrospectionController — RFC 9470 step-up", () => {
     )
   })
 
+  // 9470-W6. The parser used to `split(/,\s*/)`, which splits on EVERY comma — including one inside a
+  // quoted value, which RFC 9110 §11.2 explicitly permits. On this path the description is the whole
+  // point: RFC 9470 step-up tells the client WHY it must re-authenticate, so a truncated one is a broken
+  // feature. The `error_description` below is the exact shape that used to be cut in half.
+  it("keeps a comma inside a quoted error_description intact", async () => {
+    const wwwAuth =
+      'Bearer error="insufficient_user_authentication",' +
+      'error_description="Authentication is insufficient, please re-authenticate with a stronger method",' +
+      'acr_values="urn:mace:incommon:iap:silver",max_age="300"'
+    mocks.mockProcess.mockResolvedValue({ action: "FORBIDDEN", responseContent: wwwAuth })
+    const req = mockReq()
+    const res = mockRes()
+    const next = mockNext()
+
+    await introspectionController.handleIntrospection(req, res, next)
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "insufficient_user_authentication",
+        error_description:
+          "Authentication is insufficient, please re-authenticate with a stronger method",
+        // The parameters after the comma-bearing one must still be found.
+        acr_values: "urn:mace:incommon:iap:silver",
+        max_age: "300",
+      })
+    )
+  })
+
+  it("honours a backslash-escaped quote inside a description", async () => {
+    const wwwAuth =
+      'Bearer error="insufficient_user_authentication",' +
+      'error_description="the \\"acr\\" claim did not match, try again",max_age="60"'
+    mocks.mockProcess.mockResolvedValue({ action: "FORBIDDEN", responseContent: wwwAuth })
+    const req = mockReq()
+    const res = mockRes()
+    const next = mockNext()
+
+    await introspectionController.handleIntrospection(req, res, next)
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error_description: 'the "acr" claim did not match, try again',
+        max_age: "60",
+      })
+    )
+  })
+
   it("returns 403 with structured step-up challenge on insufficient_user_authentication (max_age)", async () => {
     const wwwAuth = 'Bearer error="insufficient_user_authentication",error_description="auth_time too old",max_age="600"'
     mocks.mockProcess.mockResolvedValue({

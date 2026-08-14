@@ -42,7 +42,12 @@ export const protectedResourceMetadataController = {
       const metadata: Record<string, unknown> = {
         resource,
         authorization_servers: [discovery?.issuer].filter(Boolean),
-        bearer_methods_supported: ["header"],
+        // 9728-W2: `body` belongs here because this resource genuinely accepts it. `extractAccessToken`
+        // (`utils/dpop.ts`) reads `access_token` from a form-encoded body per RFC 6750 §2.2, so advertising
+        // `header` alone understated what UserInfo accepts. `query` is deliberately absent and must stay
+        // absent — RFC 9700 §4.3.2 forbids tokens in a URI query parameter, and this server implements
+        // §2.3 nowhere.
+        bearer_methods_supported: ["header", "body"],
       };
 
       if (Array.isArray(discovery?.scopes_supported)) {

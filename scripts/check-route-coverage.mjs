@@ -90,7 +90,26 @@ function collectRoutes() {
  */
 function referenceMatcher(path) {
   const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const withParams = escaped.replace(/\\?:[A-Za-z0-9_]+/g, "[^\"'`\\s)]+");
+  let withParams = escaped.replace(/\\?:[A-Za-z0-9_]+/g, "[^\"'`\\s)]+");
+
+  /**
+   * Express 5's brace-wildcard form, `/prefix/{*name}`, is a *path suffix* — so a test naturally writes a
+   * concrete one (`/.well-known/oauth-protected-resource/api/userinfo`) exactly as it writes a concrete id
+   * for `:param`. Without this the escaped literal `\{\*name\}` matched nothing and a genuinely covered
+   * route was reported as a regression.
+   *
+   * **The guard matters more than the rule.** `GET /{*path}` — the root catch-all — has no literal prefix
+   * at all, so treating its wildcard as "anything" would make *every* path in *every* test count as a
+   * reference to it, and the one route that answers for all unmatched URLs would become permanently
+   * unfalsifiable. Below a real prefix, the wildcard stays literal and must be named as written, which is
+   * what `root.routes.test.ts` does.
+   */
+  const WILDCARD = /\\\{\\\*[A-Za-z0-9_]+\\\}/;
+  const prefix = withParams.split(WILDCARD)[0];
+  if (WILDCARD.test(withParams) && prefix.replace(/\\/g, "").length > 1) {
+    withParams = withParams.replace(new RegExp(WILDCARD, "g"), "[^\"'`\\s)]*");
+  }
+
   return new RegExp(withParams);
 }
 
