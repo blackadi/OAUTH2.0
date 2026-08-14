@@ -112,6 +112,7 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — the two process findings became mechanisms** (below)
 - [x] **2026-08-13 — the route-coverage backlog reached zero, and the checker was counting comments** (below)
 - [x] **2026-08-13 — VCI-W5: the deferred credential endpoint authenticates somebody now** (below)
+- [x] **2026-08-14 — P0, P1, T1-19 batch 1, FAPI2-W4: a fail-open default, and the wrong Authlete service** (below, backfilled)
 - [x] **2026-08-14 — T1-19 batch 2 (FAPI1-W2, ATTR-W1, BCL-W6): and the SDK's two models do not agree** (below)
 
 ### 2026-08-14 — T1-19 batch 2: FAPI1-W2, ATTR-W1, BCL-W6
@@ -174,6 +175,116 @@ route coverage 92 routes, empty baseline. `test:e2e` not run.
 plus **9068-W2** (dev JWT §2-shaped) — which `audit/RESUME.md` §0 had grouped with the safe items, but which
 threads `client_id`/`scope` through `token.operations.service.ts` and `token.management.controller.ts`, both
 on the **Security-critical surfaces** list under Token issuance. All three need plan mode.
+
+### 2026-08-14 — P0, P1, T1-19 batch 1, FAPI2-W4
+
+> **Backfilled 2026-08-14** from commits `3725a76`, `dd7c1cd`, `ecfab07`, `960fcd6`, `3d0a736`. This day's
+> work landed without a Build Log entry, so the resume state jumped from 2026-08-13 to batch 2. Written from
+> the commits rather than from `audit/RESUME.md`, so nothing here is a paraphrase of a summary.
+
+**Why this matters to a future session:** two findings here outrank every line of code in them. A missing
+environment variable had disabled every security gate that reads one, and the audit had spent weeks
+describing a **different Authlete service** from the one the public deployment used.
+
+**P0 — `NODE_ENV` defaulted to `development`, so every gate reading it was off** (`3725a76`).
+`app.config.ts` read `process.env.NODE_ENV || "development"` and the Render dashboard did not set it.
+Verified from outside: `createLocalToken` → **401, not 404** (the dev gate did not fire), HSTS **absent**, an
+error response carrying a **full stack trace**. So `middleware/development-only.ts` never fired, leaving
+**`POST /api/device/complete` — which approves a pending device authorization as any subject the caller
+names, with no authentication of that subject — reachable on the public internet.** That is RFC 8628 §5.5,
+the S1 this audit records as *closed*: closed **in code**, disabled by deployment configuration.
+
+> **The defect is not a forgotten variable. A missing value chose the permissive branch** — the same
+> fail-open shape as `require-basic-auth.ts` returning *allow* when `MGMT_CLIENT_ID` was unset, which this
+> repo had already fixed once. The rule now sits in `app.config.ts`, because the next such flag will look
+> equally harmless: **an absent configuration value must select the safest behaviour.**
+
+Default is `"production"`; `npm run dev` sets `development` explicitly; `render.yaml` pins it rather than
+`sync: false`, so neither layer is load-bearing alone; `server.ts` warns loudly when the resolved environment
+is `development`, naming the exposed surfaces. **The new test asserts the *default itself*** — the existing
+`development-only` tests mock the config module and so could never see which value an absent `NODE_ENV`
+produces. It also mocks `dotenv`, because `server/.env` sets `NODE_ENV=development` at module scope: without
+that the cases passed alone and failed in the suite, i.e. the result depended on whose machine ran it.
+
+**Two gaps of the same shape, both found while reviewing that one.** CI ran `typecheck` and `test` but
+**never `lint`**, on either job, against `AGENTS.md`'s "all three clean" rule. The client's lint had never
+run and was failing: 4 errors, 7 warnings. Two errors were an ESLint config bug (`no-undef` from
+`js.configs.recommended` applied to TypeScript, so `JsonWebKey` and `RequestInit` were "undefined globals"
+while `tsc` was happy); two were setState-inside-an-effect in `ParSection`, fixed rather than silenced. **One
+warning was real drift:** `JarSection` still rendered `jarResult.requestObjectPayload`, a field B1-W2 had
+removed from the server's allowlist the day before — dead UI that could no longer receive data. Typing the
+response to mirror the server's `EXPOSED_FIELDS` makes that a compile error instead of an empty panel. Also:
+root `.gitignore`, and `logs/` untracked (17 files scanned for credential-shaped strings first — T0-1 holds).
+
+**P1 — the audit had been reading a different service from the deployment** (`dd7c1cd`). Found by comparing
+the document the deployment **serves** against the document the service **generates**. Five independent
+differences, which rules out caching: `issuer` differing by a trailing slash, ngrok versus Render endpoints,
+**62 members against 59**, 10 `id_token` algorithms against 4 (**no RSA at all**), 5 client-auth methods
+against 3 (**no `private_key_jwt`**). The live one lacked **T1-2's RSA key and T1-3's `private_key_jwt`
+client** — two of Tier 1's headline fixes. **`3693555522` ruled canonical**; the deployment repointed.
+**Reading either document alone proves nothing about the other.**
+
+> **The same reasoning had just corrected a false conclusion.** `POST /api/device/complete` on the deployment
+> answered **404**, which looks like the gate firing. The *body* said `[A227301] No record for the user code
+> exists` — Authlete's `USER_CODE_NOT_EXIST`. The request had **reached Authlete**; the gate had not fired.
+> **Right status, wrong reason. Check bodies whenever a status could come from two places.**
+
+Three writes, each read → write → read-back → diffed key-by-key, **0 unexpected field changes**. **DR-11**:
+`issuer` + all 14 URL fields → the Render host; **RFC 8414 §3.3 passes for the first time in this audit**, so
+`DISCOVERY-…` F-1, `8414-W1` and **`8628-W5`** close — the stable host beat the tunnel, which improves on the
+record's own recommendation. **DR-03 + DR-05**: VCI and CIMD enabled, discovery 62 → 64; `/vci/metadata`
+answers `OK` with all three §12.2.4 REQUIRED members, so `OID4VCI-1.0.md` F-1 closes and the entry drops
+`MISCONFIGURED`/S2 → `IMPLEMENTED_VERIFIED`/S4. **A trap stated only in the schema:**
+`credentialIssuerMetadata.credentialsSupported` is typed **`string`** — a *stringified JSON object* keyed by
+configuration id, not an array; Authlete changed it in December 2023 and the array form is refused with
+`[A126202]`. **And it retired an `UNVERIFIED` marker:** `/vci/deferred/parse` with a deliberately bogus token
+answers `UNAUTHORIZED`, `[A375304]` — confirming at once that the endpoint is live, that the deferred path
+really does validate the access token (the entire control VCI-W5 added), and that the `requestContent` this
+server synthesises is accepted. **VCI-W2's AS half is UNACHIEVABLE**: no `Service` property surfaces
+`credential_issuer`. **Third criterion naming a console change with no console field**, after RPL-W4 and
+T1-13 — *check the field exists before writing "set X" as a criterion.*
+
+**Client redirect URIs** (`ecfab07`). All four clients gained the Render callback **additively** — every
+`localhost` and the one ngrok URI survived, which matters because `client/update` has **replace semantics**
+and Modules 02 and 03 depend on two of these clients. One unintended change, checked rather than assumed:
+`derivedSectorIdentifier` went from a value to unset on three of the four. Authlete recomputing it — OIDC
+Core §8.1 derives the sector identifier from the redirect URIs' host, and these now span three hosts with no
+`sectorIdentifierUri` to disambiguate. **Impact today: none** — all four are `subjectType PUBLIC`, so no
+pairwise `sub` is computed. **Impact later:** switching any of them to `PAIRWISE` now requires setting
+`sectorIdentifierUri` explicitly.
+
+**T1-19 batch 1 — and three of the five were one defect** (`960fcd6`): *an endpoint answering **200 with
+HTML** where it meant "no".* **9728-W1**: RFC 9728 §3 builds the metadata URL by inserting
+`/.well-known/oauth-protected-resource` **between the host and the path** of the resource identifier, and
+this deployment's `resource` has a path — so a conforming client's request fell through to the SPA catch-all
+and got a web page with status 200, *the same failure the route was created to fix, one URL along*. Both
+forms now serve the document. **9126-W3**: a non-POST on `/api/par` is `405` with `Allow: POST`, not the
+catch-all. **9728-W2**: `bearer_methods_supported` is `["header","body"]` — `extractAccessToken` reads
+`access_token` from a form body per RFC 6750 §2.2 — and `query` stays absent, because RFC 9700 §4.3.2 forbids
+it. **9470-W6**: `parseBearerError` split on *every* comma, including one inside a quoted value, which RFC
+9110 §11.2 explicitly permits — so `error_description="Authentication is insufficient, re-authenticate"` was
+cut in half and every later parameter lost. On the step-up path the description *is* the feature. **B1-W4**:
+the two echoing `default` branches send a fixed body — a `default` branch means "an action nobody reviewed",
+and an unreviewed Authlete response on a boundary is exactly what leaked a ticket from `/api/jar/process`.
+Also `check-route-coverage.mjs` learned Express 5's `/prefix/{*name}`, **but only below a real literal
+prefix** — without that guard the root catch-all `GET /{*path}` would match every path in every test and
+become permanently unfalsifiable. 91 → 92 routes.
+
+**FAPI2-W4 — seven of eight, and the eighth recorded as unreportable** (`3d0a736`). `/api/fapi/status` now
+reports `pkceS256Required`, `tlsClientCertificateBoundAccessTokens` and `supportedTokenAuthMethods`.
+`pkceS256Required` is separate from `pkceRequired` and both matter: §5.3.2.1 wants PKCE **with** S256, and a
+deployment can require PKCE while permitting `plain`. The eighth — §5.3.2.2's PS256/ES256/EdDSA — **cannot**
+be reported: no `Service` property carries the signing algorithms; they derive from the JWK Set and appear
+only in the discovery document. `supportedSignatureAlgorithms` was tried and **the compiler refused it**,
+which is the cheapest possible version of "probe before writing", so the test asserts that member is
+**absent** to stop someone inventing it later.
+
+**Verification across the day:** 951 → **969 server tests**; typecheck, lint, `check-docs` 167 files and
+route coverage clean at each step.
+
+**Still required, and only the operator can do it:** set `NODE_ENV=production` in the Render dashboard, and
+rotate `AUTHLETE_BEARER_TOKEN`, which was invalid (`[A458101]`). **That invalid token is the only thing
+masking the device-complete oracle — fixing the token without fixing `NODE_ENV` arms it.**
 
 ### 2026-08-13 — VCI-W5: the deferred credential endpoint authenticates somebody now
 

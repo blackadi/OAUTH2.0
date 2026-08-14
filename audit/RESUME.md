@@ -99,9 +99,10 @@ which judged the *file* — `createLocalJWT.ts`, not on the surfaces list. But t
 `scope` through `token.operations.service.ts` **and** `token.management.controller.ts`, both listed under
 **Token issuance**. *The trigger is the concern, and the concern travels with the parameter.*
 
-**A gap in the record, not in the code:** the 2026-08-14 work *before* batch 2 — P0, P1, T1-19 batch 1 and
-FAPI2-W4 — landed with **no `PROGRESS.md` Build Log entry**. The newest entry before batch 2's was
-2026-08-13. The code and this file describe it; the Build Log does not.
+**A gap in the record, now closed:** the 2026-08-14 work *before* batch 2 — P0, P1, T1-19 batch 1 and
+FAPI2-W4 — had landed with **no `PROGRESS.md` Build Log entry**, so the resume state jumped from 2026-08-13
+straight to batch 2. Backfilled 2026-08-14 **from the commits** (`3725a76`, `dd7c1cd`, `ecfab07`, `960fcd6`,
+`3d0a736`) rather than from this file, so it is not a paraphrase of a summary.
 
 **Then, in order:** **P3** T1-11's wire format (PAR/Device/DCR **and now `/api/vci/deferred/issue`** — one
 batch with the SPA and lab transcripts, or the labs go stale) · **P4** Tier 2's 17 documentation items,
