@@ -112,8 +112,10 @@ Write your response. Cover: (a) what is actually different between 1.0 Advanced 
 table; (c) what you would need to know about their client population before recommending mTLS or DPoP; and
 (d) one circumstance in which you would genuinely recommend FAPI 1.0 Advanced.
 
-**Q17.** Using the FAPI 2.0 attacker model, analyse this deployment (the one from the lab: no mandatory PAR,
-no mandatory PKCE, `client_secret_basic`, 24-hour bearer tokens, an open redirect on logout, `iss` returned).
+**Q17.** Using the FAPI 2.0 attacker model, analyse this deployment **as it stood before 2026-08-12** (the one
+from the lab: no mandatory PAR, no mandatory PKCE, `client_secret_basic`, 24-hour bearer tokens, an open
+redirect on logout, `iss` returned). The open redirect has since been fixed — analyse the stated posture
+anyway, then say in one line **which row of your answer the fix changed and which it did not**.
 For **each** of A1, A1a, A2, A3a, and A5, state whether that attacker can defeat the **authorization** goal,
 and by what concrete route. Then rank the four cheapest fixes by how many attackers each one disarms.
 

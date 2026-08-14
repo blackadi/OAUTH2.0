@@ -26,7 +26,8 @@ function ParSection() {
   // here and what Authlete gives DCR-created clients.
   const [authMethod, setAuthMethod] = useState<'post' | 'basic' | 'none'>('post');
   const [useDpop, setUseDpop] = useState(false);
-  const [parResult, setParResult] = useState<{ requestUri?: string; expiresIn?: number } | null>(null);
+  // Mirrors RFC 9126 §2.2's response body. The server returned Authlete's camelCase envelope until T1-11.
+  const [parResult, setParResult] = useState<{ request_uri?: string; expires_in?: number } | null>(null);
   // Read once, lazily, at first render. This used to be an empty `useState` plus a mount effect that called
   // `setPkceVerifier` synchronously — which is a cascading render for a value that is known before the first
   // paint, and which `react-hooks` flags. Lazy initialisation is the same read with no second render.
@@ -94,7 +95,7 @@ function ParSection() {
   const handlePush = async () => {
     const { data, error: err } = await call(doParRequest);
     if (data) {
-      const d = data as { requestUri?: string; expiresIn?: number };
+      const d = data as { request_uri?: string; expires_in?: number };
       setParResult(d);
       toast.success('PAR request completed');
     } else {
@@ -105,10 +106,12 @@ function ParSection() {
   const handlePushAndRedirect = async () => {
     const { data, error: err } = await call(doParRequest);
     if (data) {
-      const d = data as { requestUri?: string };
-      if (d?.requestUri) {
+      // RFC 9126 §2.2 names this `request_uri`. The server used to hand back Authlete's camelCase
+      // `requestUri` inside its envelope; T1-11 made the response the specification's body.
+      const d = data as { request_uri?: string };
+      if (d?.request_uri) {
         const cid = clientId || parameters.match(/client_id=([^&]+)/)?.[1] || '';
-        window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.requestUri)}`;
+        window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`;
       }
     } else {
       toast.error(err);
@@ -120,8 +123,8 @@ function ParSection() {
   // dependencies, which renders twice for a string that was derivable the first time.
   const authUrl = useMemo(() => {
     const cid = clientId || parameters.match(/client_id=([^&]+)/)?.[1] || '';
-    if (!parResult?.requestUri || !cid) return '';
-    return `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(parResult.requestUri)}`;
+    if (!parResult?.request_uri || !cid) return '';
+    return `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(parResult.request_uri)}`;
   }, [parResult, clientId, parameters]);
 
   const handleRedirectToAuthorize = () => {
@@ -176,7 +179,7 @@ function ParSection() {
           <Button onClick={handlePush} loading={loading}>
             Push Authorization Request
           </Button>
-          {parResult?.requestUri && (
+          {parResult?.request_uri && (
             <>
               <Button onClick={handleRedirectToAuthorize}>
                 Authorize (redirect)
@@ -192,14 +195,14 @@ function ParSection() {
         </div>
       </div>
 
-      {parResult?.requestUri && (
+      {parResult?.request_uri && (
         <div className="mt-4 p-3 bg-slate-800 rounded-lg border border-slate-700 space-y-2">
           <p className="text-xs text-slate-300 font-mono break-all">
             <span className="text-slate-500">request_uri: </span>
-            {parResult.requestUri}
+            {parResult.request_uri}
           </p>
           <p className="text-xs text-slate-400">
-            Expires in: {parResult.expiresIn ?? '~600'}s &nbsp;|&nbsp;
+            Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp;
             Auth URL: <a href={authUrl} className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">{authUrl}</a>
           </p>
         </div>

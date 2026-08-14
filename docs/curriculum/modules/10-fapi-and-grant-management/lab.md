@@ -78,16 +78,24 @@ Now write down, in your own words and without looking:
 2. The six attackers (§7).
 3. Four things §6 and §8 put **out of scope**.
 
-Then answer: **which attacker in the list does this repo's logout open redirect (Module 08) serve?** Write
-the answer down; it is quiz material.
+Then answer: **which attacker in the list did this repo's logout open redirect (Module 08) serve?** Write the
+answer down; it is quiz material. Note the past tense — the endpoint was fixed on 2026-08-12, and the question
+is about the finding as Module 08 presents it, because *classifying* a finding by attacker capability is the
+skill, not the finding's current status.
 
 <details>
 <summary>Check yourself on the last one</summary>
 
 **A1, the plain web attacker.** No special capability is needed: A1 *"can send links to honest users that are
-then visited by these users."* That is the entire attack. The lowest-capability attacker in the model defeats
-that endpoint — which is exactly what makes it a serious finding rather than a theoretical one. §5.3.2.1 also
+then visited by these users."* That is the entire attack. The lowest-capability attacker in the model defeated
+that endpoint — which is exactly what made it a serious finding rather than a theoretical one. §5.3.2.1 also
 names it directly: *"shall not expose open redirectors."*
+
+**And that classification is why it was fixed first.** Exercise 6's remediation list ranks by
+**reachability × cost**, not by difficulty or spec order. An A1-reachable one-line fix outranks everything,
+which is precisely the judgement the attacker model exists to support. The endpoint now matches
+`post_logout_redirect_uri` with `===` against the identified client's registered set; Exercise 6 carries the
+three-version history, because the first fix was correct *and insufficient*.
 </details>
 
 ---
@@ -521,22 +529,51 @@ required mechanism is available and none is mandatory.**
 | Sender-constrained access tokens only | **FAIL** — plain Bearer issued (Ex 2) |
 | MTLS or `private_key_jwt` client auth | **FAIL** — `client_secret_basic` accepted; `none` advertised. Note the failure is *enforcement*, not capability: since 2026-08-12 one client does authenticate with `private_key_jwt`, and the service still permits every other method |
 | Reject requests without PAR | **FAIL** — `require_pushed_authorization_requests: false` |
-| Require PKCE S256 | **FAIL** — `plain` advertised; Module 03 got a token with no PKCE at all |
+| Require PKCE S256 | **PARTIAL, and the shape of the partial matters** — since 2026-08-13 `pkceRequired` + `pkceS256Required` are `true` on **two** clients (verified live: no challenge → `[A124301]`, `plain` → `[A124308]`). The **service** flag is still `false`, and two clients still permit the plain flow **deliberately**, because Modules 02 and 03 teach what it costs. FAPI 2.0 asks the AS to require it, so this is not a PASS — but "not required anywhere" stopped being true |
 | `response_type` must be `code` | **FAIL** — implicit response types advertised and working |
 | Return `iss` | **PASS** |
 | Reject reused authorization code | **PASS** — Module 02 verified |
-| No open redirectors | **FAIL** — logout endpoint (Module 08) |
+| No open redirectors | ~~**FAIL** — logout endpoint (Module 08)~~ → **PASS since 2026-08-12.** See the note below: this row is the most instructive one in the table precisely *because* it moved |
 | No refresh-token rotation | **FAIL** — rotation is on (`refreshTokenKept: false`) |
 | `request_uri` lifetime < 600 s | **FAIL** — exactly 600 |
 | Code lifetime ≤ 60 s | **NOT EVIDENCED** — `authorizationCodeDuration: 0` (service default) |
 
-**Remediation order, and the reasoning matters more than the list.** Not "hardest first" and not "spec order":
+> ### The open-redirect row moved, and that is the exercise now
+>
+> **This table said `FAIL` on "No open redirectors" until 2026-08-12, and the remediation list below ranked
+> fixing it first.** It has been fixed. `post_logout_redirect_uri` is now matched with `===` against the
+> identified client's registered set — no parsing, no prefix, no environment-wide allowlist — and a request
+> that identifies no client gets **no redirect at all**, because an unidentified client has an empty
+> registered set.
+>
+> **Read the history, not just the verdict, because the fix took three attempts and each one taught something:**
+>
+> | Version | Rule | Why it failed |
+> |---|---|---|
+> | original | `startsWith` on an allowed prefix | **Open redirect, verified both ways.** `http://localhost:3000.evil.example.com/bye` passed because the allowed origin is a *prefix of the attacker's hostname*; `http://localhost:3001@evil.example.com/` passed because everything before `@` is **userinfo**. The second survived `NODE_ENV=production` |
+> | 2026-08-10 | compare **parsed origins** exactly | Closed both payloads, but every client shared one deployment-wide allowlist — so any client could redirect to any other's URI |
+> | 2026-08-12 | `===` against **that client's registered set** | Current. RP-Initiated Logout §3's actual rule. And note: **matching whole URIs needs no parser, and a comparison with no parser has no parser bugs** |
+>
+> **Two things to take from it.** The first fix was correct *and insufficient* — closing the payloads you know
+> about is not the same as implementing the rule. And the final version is *simpler* than either predecessor:
+> the secure form removed code rather than adding it. `some(u => u === candidate)` is element equality, which
+> is a different operation from `String.prototype.includes` — the bug class began as a confusion between those
+> two.
+>
+> **Still open on this endpoint**, so the row is a PASS on redirection only: it carries no rate limiter
+> (`OIDC-RP-INITIATED-LOGOUT-1.0.md` F-1).
 
-1. **The open redirect.** Only item exploitable by the model's *weakest* attacker (A1), and it is a one-line
-   fix. Highest reachability, lowest cost.
+**Remediation order, and the reasoning matters more than the list.** Not "hardest first" and not "spec order".
+**Item 1 has since been done** — it is kept, struck through, because *why it ranked first* is the transferable
+part and a list that silently drops its completed head teaches nothing about prioritisation:
+
+1. ~~**The open redirect.**~~ ✅ **Done 2026-08-12.** Ranked first for two reasons that had nothing to do with
+   difficulty: it was the only item exploitable by the model's **weakest** attacker (A1 — send a link), and it
+   was cheap. **Highest reachability, lowest cost.** That is the ranking function; the rest of this list still
+   applies it.
 2. **Set `fapiModes`.** One setting flips the majority of the FAIL rows at once, because it converts
    "supported" into "required" across PAR, PKCE, client auth and response types. Best ratio in the list by a
-   wide margin.
+   wide margin — and now that item 1 is gone, it is also the top of the list.
 3. **Sender-constraining (DPoP).** Already proven to work here (Module 05); it is the single largest
    reduction in the value of a stolen token.
 4. **Access-token lifetime.** Cheap, and it also repairs the grant-revocation gap without touching that code.
@@ -571,7 +608,8 @@ exploitability misses both.
 Tick only what you ran and saw:
 
 - [ ] Located the **Final** attacker model and confirmed the numbering differs from the 2022 draft
-- [ ] Named which attacker the logout open redirect serves — and why that makes it worse, not better
+- [ ] Named which attacker the logout open redirect served — and why that made it worse, not better, and why
+      that classification put it first in the remediation order
 - [ ] Obtained a **24-hour Bearer token** from a flow with no PAR, no PKCE, and `client_secret_basic`
 - [ ] Confirmed `iss` **is** returned (your first PASS)
 - [ ] Measured `request_uri` `expires_in` = **600** and explained why that fails `< 600`

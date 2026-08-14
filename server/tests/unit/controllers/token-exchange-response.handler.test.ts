@@ -96,6 +96,18 @@ describe("handleTokenExchange — characterization of deliberate gaps", () => {
       ])
     })
 
+    // B1-W3 coupling, asserted from this side too. `normalizeGrantType` in token.operations.service.ts
+    // now REFUSES an unrecognised grant type with 400 instead of coercing it to AUTHORIZATION_CODE. This
+    // handler is its second caller, and it sends the camelCase `grantType` key rather than `grant_type`.
+    // If that spelling ever stopped resolving, every token exchange would 400 and Module 06 Exercise 6
+    // would break — with the mock in this file hiding it, since the mock never runs the real resolver.
+    // So the assertion here is on the literal value the real resolver has to keep accepting.
+    it("sends the grantType spelling that normalizeGrantType must keep accepting", async () => {
+      await handleTokenExchange(mockReq(), mockRes(), authleteResult, next())
+
+      expect(sentCreateRequest().grantType).toBe("TOKEN_EXCHANGE")
+    })
+
     it("drops `resources`, so the issued token cannot be audience-restricted", async () => {
       await handleTokenExchange(mockReq(), mockRes(), authleteResult, next())
       expect(sentCreateRequest().resources).toBeUndefined()

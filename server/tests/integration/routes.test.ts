@@ -371,7 +371,13 @@ describe("Integration: all API routes", () => {
       })
       const res = await request(app).post("/api/par")
         .send({ parameters: "response_type=code&client_id=c-1", clientId: "c-1", clientSecret: "s-1" }).expect(201)
-      expect(res.body.requestUri).toBe("urn:ietf:params:oauth:request_uri:abc")
+
+      // T1-11: the body is RFC 9126 §2.2's, not Authlete's envelope.
+      expect(res.body.request_uri).toBe("urn:ietf:params:oauth:request_uri:abc")
+      expect(res.body.expires_in).toBe(90)
+      expect(res.body).not.toHaveProperty("requestUri")
+      expect(res.body).not.toHaveProperty("action")
+      expect(res.body).not.toHaveProperty("resultCode")
     })
 
     it("refuses credentials on both channels — §2.3.1, inherited via RFC 9126 §2", async () => {
@@ -386,18 +392,36 @@ describe("Integration: all API routes", () => {
   })
 
   describe("POST /api/client/dcr/register", () => {
-    it("returns 201 with action CREATED", async () => {
-      mockApi.dynamicClientRegistration.register.mockResolvedValue({ action: "CREATED", responseContent: JSON.stringify({ client_id: "dcr-1" }) })
+    // T1-11 / 7591-W1. The body is RFC 7591 §3.2.1's registration response. It used to be Authlete's envelope
+    // with that response nested under `responseContent`, so a conforming client found `action` at the top
+    // level and had to know to unwrap a vendor field to reach `client_id`.
+    it("returns 201 with the RFC 7591 registration response as the body", async () => {
+      mockApi.dynamicClientRegistration.register.mockResolvedValue({ action: "CREATED", responseContent: JSON.stringify({ client_id: "dcr-1", client_secret: "s" }) })
       const res = await request(app).post("/api/client/dcr/register").auth("test-admin", "test-secret").send({ json: '{"client_name":"test"}' }).expect(201)
+
+      expect(res.body.client_id).toBe("dcr-1")
+      expect(res.body).not.toHaveProperty("action")
+      expect(res.body).not.toHaveProperty("responseContent")
+    })
+
+    // The envelope is the fallback, not an error: with no `responseContent` there is no spec-shaped body, and
+    // Authlete's `resultMessage` is more use than an empty object.
+    it("falls back to the envelope when Authlete sends no responseContent", async () => {
+      mockApi.dynamicClientRegistration.register.mockResolvedValue({ action: "CREATED", resultMessage: "[A0] created" })
+      const res = await request(app).post("/api/client/dcr/register").auth("test-admin", "test-secret").send({ json: '{"client_name":"test"}' }).expect(201)
+
       expect(res.body.action).toBe("CREATED")
+      expect(res.body.resultMessage).toContain("created")
     })
   })
 
   describe("POST /api/client/dcr/get", () => {
-    it("returns 200 with action OK", async () => {
+    it("returns 200 with the registration response as the body", async () => {
       mockApi.dynamicClientRegistration.get.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ client_id: "dcr-1" }) })
       const res = await request(app).post("/api/client/dcr/get").send({ token: "rt", clientId: "dcr-1" }).expect(200)
-      expect(res.body.action).toBe("OK")
+
+      expect(res.body.client_id).toBe("dcr-1")
+      expect(res.body).not.toHaveProperty("action")
     })
   })
 
@@ -636,7 +660,7 @@ describe("Integration: all API routes", () => {
         .set("dpop", "dpop-proof-jwt")
         .send({ parameters: "response_type=code&client_id=c-1", clientId: "c-1", clientSecret: "s-1" })
         .expect(201)
-      expect(res.body.requestUri).toBe("urn:ietf:params:oauth:request_uri:dpop-test")
+      expect(res.body.request_uri).toBe("urn:ietf:params:oauth:request_uri:dpop-test")
       // Verify the mock was called with DPoP fields forwarded
       expect(mockApi.pushedAuthorization.create).toHaveBeenCalledWith(
         expect.objectContaining({

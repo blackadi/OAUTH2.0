@@ -15,9 +15,9 @@ your own request when the answer is a service flag.
 >
 > | Precondition | What MCP requires | This deployment | Fix |
 > |---|---|---|---|
-> | **OAuth 2.1** | *"Authorization servers **MUST** implement OAuth 2.1"* (MCP Authorization, Overview) | `implicit` **and** `password` are in `supportedGrantTypes`, and PKCE is not required (`pkceRequired = false`, `pkceS256Required = false`). OAuth 2.1 removes the first two and requires the third | a differently-configured service, or scope the claim |
-> | **A self-consistent issuer** | RFC 8414 §3 — the metadata must be served from the `issuer` host, because that correspondence *is* the trust anchor discovery rests on | `issuer = https://blackadi.dev`, but the metadata is reachable only on an ephemeral tunnel host. So a client that follows §3 correctly cannot resolve this AS | pick one canonical host |
-> | **CIMD** | an HTTPS URL as `client_id`, with metadata auto-fetched | `clientIdMetadataDocumentSupported = false` — CIMD is **off**, so an HTTPS `client_id` is just an unknown client | one service flag |
+> | **OAuth 2.1** | *"Authorization servers **MUST** implement OAuth 2.1"* (MCP Authorization, Overview) | ⚠️ **still unmet.** `implicit` **and** `password` are in `grant_types_supported`, and OAuth 2.1 removes both. PKCE is required **per client, not service-wide**: `pkceRequired`/`pkceS256Required` are `true` on two clients since 2026-08-13, while the service flag stays `false` — verified live, `/api/fapi/config` answers `pkceRequired: false`. Two other clients deliberately still permit the plain flow, because Modules 02 and 03 teach what it costs | a differently-configured service, or scope the claim |
+> | **A self-consistent issuer** | RFC 8414 §3 — the metadata must be served from the `issuer` host, because that correspondence *is* the trust anchor discovery rests on | ✅ **fixed 2026-08-14 (DR-11).** `issuer` and all 14 URL fields are now `https://oauth2-0-ekh2.onrender.com`, so §3.3 passes — the issuer is exactly the host and every URL member sits under it. Until then `issuer` was `https://blackadi.dev` while the metadata lived on an ephemeral tunnel host, so a client following §3 could not resolve this AS at all | — |
+> | **CIMD** | an HTTPS URL as `client_id`, with metadata auto-fetched | ✅ **enabled 2026-08-14 (DR-05).** `clientIdMetadataDocumentSupported = true`, verified live — `/api/fapi/config` answers `cimdSupported: true`. Authlete handles CIMD entirely server-side, so no endpoint or client code was needed | — |
 >
 > One more, because it changes what the wizard can do: **`registration_endpoint` is absent** from the discovery
 > document, so there is nothing for a client to discover and Dynamic Client Registration cannot be found the way
@@ -105,7 +105,9 @@ Imagine an airport security system:
 
 ### Prerequisites
 
-Your Authlete service must have **CIMD enabled** for MCP flows. In the Authlete Console:
+Your Authlete service must have **CIMD enabled** for MCP flows. **On this deployment it already is** — DR-05
+set `clientIdMetadataDocumentSupported: true` on 2026-08-14, and `GET /api/fapi/config` reports it as
+`cimdSupported: true`, so you can check rather than assume. On a service of your own, in the Authlete Console:
 
 1. Go to your Service → Security
 2. Enable **Client ID Metadata Document (CIMD)** — set `clientIdMetadataDocumentSupported: true`

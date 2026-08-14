@@ -94,9 +94,7 @@ curl -s -X POST "$API/par" -H "Content-Type: application/json" \
 ```
 
 ```
-{"resultCode":"…","action":"CREATED",
- "requestUri":"urn:ietf:params:oauth:request_uri:-4PVrsTAHrY…",
- "responseContent":"{\"expires_in\":600,\"request_uri\":\"urn:ietf:params:oauth:request_uri:…\"}"}
+{"expires_in":600,"request_uri":"urn:ietf:params:oauth:request_uri:-4PVrsTAHrY…"}
 status=201
 ```
 
@@ -106,7 +104,7 @@ status=201
 ```bash
 RQU=$(curl -s -X POST "$API/par" -H "Content-Type: application/json" \
   -d "$(node -e 'process.stdout.write(JSON.stringify({parameters:process.argv[1],clientId:process.argv[2]}))' -- "$PARAMS" "$PUB_CLIENT_ID")" \
-  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).requestUri))')
+  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).request_uri))')
 
 AUTH_URL="$API/authorization?client_id=$PUB_CLIENT_ID&request_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$RQU")"
 echo "$AUTH_URL"
@@ -401,9 +399,20 @@ jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", over: {nbf: Ma
 [A006339] The request object passed by the 'request' parameter has already expired: now=1785860069, exp=1785859769, skew=0
 ```
 
-Note `skew=0`. This service allows no clock tolerance, and `AGENTS.md` records `nbfOptional: false` — a request
-object must carry `nbf` and live no longer than 60 seconds. A signed object is a bearer artifact until it
-expires, so the window is deliberately tiny.
+Note `skew=0`. This service allows no clock tolerance, and `AGENTS.md` records `nbfOptional: false` — so a
+request object **must carry `nbf`**, which is what lets its lifetime be bounded at all.
+
+> **What the bound actually is, corrected 2026-08-14.** This paragraph said *"no longer than 60 seconds"*.
+> [FAPI 1.0 Part 2 §5.2.2](https://openid.net/specs/openid-financial-api-part-2-1_0.html) says **60 minutes**,
+> in both directions: *"shall require the request object to contain an `exp` claim that has a lifetime of no
+> longer than **60 minutes** after the `nbf` claim"* and *"an `nbf` claim that is no longer than **60 minutes**
+> in the past."* A 60× error, and it was in `AGENTS.md`, `docs/DEVELOPMENT.md` and here — the same wrong number
+> copied three times, which is how a single unchecked figure becomes a repo-wide claim. The **reason** for the
+> flag was right all along: a signed request object is a bearer artifact until it expires, so bounding the
+> window matters. Only the size of the window was wrong.
+>
+> Note the transcript above is unaffected — it shows an object that had *already* expired, which fails at any
+> bound.
 
 ```bash
 # Break 4 — get it right

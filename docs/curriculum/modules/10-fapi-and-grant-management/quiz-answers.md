@@ -274,8 +274,18 @@ choosing 1.0 for a *new* ecosystem on the grounds that it has more mechanisms.
 
 ### Q17 — Attacker-by-attacker analysis
 
-Deployment: no mandatory PAR, no mandatory PKCE, `client_secret_basic`, 24-hour bearer tokens, open redirect
-on logout, `iss` returned.
+Deployment **as stated in the question — the pre-2026-08-12 posture**: no mandatory PAR, no mandatory PKCE,
+`client_secret_basic`, 24-hour bearer tokens, open redirect on logout, `iss` returned.
+
+> **What the fix changed, which the question also asks for.** The open redirect was closed on 2026-08-12
+> (`===` against the identified client's registered `post_logout_redirect_uris`). **That changes exactly one
+> row — A1 — and it does not change A2, A3a or A5 at all**, because none of them depended on it: they turn on
+> sender-constraining, PAR/PKCE and token lifetime respectively. A1a loses its *inherited* A1 route while its
+> AS-specific route stays closed, so its verdict softens without flipping. **The lesson is the shape of that
+> answer**: fixing the cheapest, most-reachable finding removed one attacker and left four untouched, which is
+> why "disarms the most attackers" and "fix first" are different rankings — the lab's remediation order picks
+> by **reachability × cost**, not by attacker count. Two clients also gained mandatory PKCE-S256 on
+> 2026-08-13, which narrows A3a without closing it, since the service still does not require it.
 
 | Attacker | Defeats the authorization goal? | Route |
 |---|---|---|
@@ -290,8 +300,11 @@ on logout, `iss` returned.
 1. **Set `fapiModes`** (one console setting). Makes PAR and PKCE mandatory and restricts client auth and
    response types in one move — disarms **A3a** directly and removes A1's easiest code-theft path. Best
    ratio by a wide margin.
-2. **Fix the open redirect** (one line, exact-match comparison). Disarms the only route available to
-   **A1** and closes A1a's non-AS route. Cheapest absolutely.
+2. ~~**Fix the open redirect**~~ ✅ **done 2026-08-12** (exact match against the client's registered set —
+   and it took three versions; the lab's Exercise 6 carries the history, including that the first fix was
+   correct *and insufficient*). Disarmed the only route available to **A1** and closed A1a's non-AS route.
+   **Cheapest absolutely**, which is why the lab ranked it first even though item 1 above disarms more
+   attackers — reachability × cost, not attacker count.
 3. **Require DPoP** (already proven working here in Module 05). Disarms **A2** and **A5** together, because
    both depend on a stolen token being usable by its holder.
 4. **Shorten `accessTokenDuration`.** Disarms nobody outright but reduces the value of every successful

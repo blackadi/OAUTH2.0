@@ -286,27 +286,45 @@ curl -X POST http://localhost:3000/api/device/authorization \
 **Response (200):**
 ```json
 {
-  "deviceCode": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
-  "userCode": "WDJBMJHT",
-  "verificationUri": "http://localhost:3000/device",
-  "verificationUriComplete": "http://localhost:3000/device?user_code=WDJBMJHT",
-  "expiresIn": 600,
+  "device_code": "GmRhmhcxhwAzkoEqiMEg_DnyEysNkuNhszIySk9eS",
+  "user_code": "WDJBMJHT",
+  "verification_uri": "http://localhost:3000/device",
+  "verification_uri_complete": "http://localhost:3000/device?user_code=WDJBMJHT",
+  "expires_in": 600,
   "interval": 5
 }
 ```
 
 **Reading the response:**
 
-| Field | RFC 8628 §3.2 name | Notes |
-|-------|--------------------|-------|
-| `deviceCode` | `device_code` (REQUIRED) | High entropy, secret. Never show this to the user. |
-| `userCode` | `user_code` (REQUIRED) | What the user types. |
-| `verificationUri` | `verification_uri` (REQUIRED) | Comes straight from your **Verification URI** service setting. |
-| `verificationUriComplete` | `verification_uri_complete` (OPTIONAL) | **Absent** unless you configured Verification URI with Placeholder. |
-| `expiresIn` | `expires_in` (REQUIRED) | Mirrors your **Verification Code Duration** setting — there is no built-in default. |
-| `interval` | `interval` (OPTIONAL) | **Absent** if Polling Interval is `0`; clients then assume 5 seconds. |
+| Field | RFC 8628 | Notes |
+|-------|----------|-------|
+| `device_code` | §3.2 REQUIRED | High entropy, secret. Never show this to the user. |
+| `user_code` | §3.2 REQUIRED | What the user types. |
+| `verification_uri` | §3.2 REQUIRED | Comes straight from your **Verification URI** service setting. |
+| `verification_uri_complete` | §3.3.1 OPTIONAL | **Absent** unless you configured Verification URI with Placeholder. |
+| `expires_in` | §3.2 REQUIRED | Mirrors your **Verification Code Duration** setting — there is no built-in default. |
+| `interval` | §3.2 OPTIONAL | **Absent** if Polling Interval is `0`; clients then assume 5 seconds. |
 
-Note that the Authlete-facing fields are camelCase (`deviceCode`), while the values a real RFC 8628 device authorization endpoint returns to the client are snake_case (`device_code`). This server exposes the Authlete shape directly so you can see what the SDK returns; a production device authorization endpoint would rename them.
+> ### The boundary is still there — the server now stands on the right side of it
+>
+> **Until 2026-08-14 this endpoint returned Authlete's own shape**: `deviceCode`, `userCode`,
+> `verificationUri`, `expiresIn`, alongside an `action` and a `resultCode`. This tutorial documented that and
+> excused it — *"This server exposes the Authlete shape directly so you can see what the SDK returns; a
+> production device authorization endpoint would rename them."* **A device implementing RFC 8628 §3.2 reads
+> `device_code`. It would have found nothing.** That was work item **8628-W3**.
+>
+> **The renaming was never needed.** Authlete's response carries a `responseContent` member which *is* §3.2's
+> JSON, snake_case and complete — the server was returning the envelope *around* the answer instead of the
+> answer. Forwarding `responseContent` is a one-line change, and `token.controller.ts` had always done it.
+>
+> **The distinction the old note was reaching for is still worth having**, so here it is properly: Authlete
+> speaks camelCase because its API is a *vendor* API, and every endpoint in this repo that faces a client has
+> to translate. What changed is which side of that boundary the client sees. You can still watch the vendor
+> shape go past — set `LOG_LEVEL=debug` and the service logs the Authlete response — and the two endpoints
+> with **no** specification shape (`/api/device/verification`, `/api/device/complete`) still return the
+> envelope, because there is no RFC body for them to be. Their Authlete responses have no `responseContent`
+> member at all.
 
 ### Step 2: Display to User
 
@@ -557,8 +575,8 @@ DEVICE_RESP=$(curl -s -X POST http://localhost:3000/api/device/authorization \
     "clientSecret": "YOUR_SEC"
   }')
 
-DEVICE_CODE=$(echo $DEVICE_RESP | jq -r '.deviceCode')
-USER_CODE=$(echo $DEVICE_RESP | jq -r '.userCode')
+DEVICE_CODE=$(echo $DEVICE_RESP | jq -r '.device_code')
+USER_CODE=$(echo $DEVICE_RESP | jq -r '.user_code')
 
 echo "User code: $USER_CODE"
 
@@ -602,11 +620,11 @@ DEVICE_RESP=$(curl -s -X POST http://localhost:3000/api/device/authorization \
   -H "Content-Type: application/json" \
   -d '{"parameters": "client_id=YOUR_CID&scope=openid", "clientId": "YOUR_CID", "clientSecret": "YOUR_SEC"}')
 
-USER_CODE=$(echo $DEVICE_RESP | jq -r '.userCode')
+USER_CODE=$(echo $DEVICE_RESP | jq -r '.user_code')
 
 # Wait for expiration — read the real lifetime off the response, don't hardcode it.
-# expiresIn mirrors your "Verification Code Duration" service setting.
-EXPIRES_IN=$(echo $DEVICE_RESP | jq -r '.expiresIn')
+# expires_in mirrors your "Verification Code Duration" service setting.
+EXPIRES_IN=$(echo $DEVICE_RESP | jq -r '.expires_in')
 sleep $((EXPIRES_IN + 1))
 
 # Try to verify — fails

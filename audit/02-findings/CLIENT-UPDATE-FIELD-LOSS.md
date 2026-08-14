@@ -1,6 +1,6 @@
 # `client.management.service.ts` — an allowlist over a replace-semantics API
 
-- **Verdict:** `PARTIAL`
+- **Verdict:** ~~`PARTIAL`~~ → **`RESOLVED` in code** *(2026-08-14 — CU-W2 shipped; CU-W1's live proof is still owed, and the fix is deliberately correct either way)*
 - **Severity:** **S2** — silent data loss on an admin write path, and it can undo a security control
 - **Status:** found 2026-08-12 while shipping **T0-4** (RPL-W1). **Not fixed** — recorded by decision, see the
   scope note at the end
@@ -48,7 +48,7 @@ complete client body would lose the fields the SDK does not model — which, as
 **T0-4 made a client field load-bearing for a security decision.** The per-client
 `post_logout_redirect_uris` registry lives in `POST_LOGOUT_REDIRECT_URIS` rather than in Authlete (F-4), so
 *that* particular value is out of reach of this defect. But the general shape stands: an admin using
-`PUT /api/client/:clientId` to change one field may silently clear others, and nothing in the response says so.
+`PATCH /api/client/update/:clientId` to change one field may silently clear others, and nothing in the response says so.
 
 ## What is established, and what is not
 
@@ -68,7 +68,7 @@ client.
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | CU-W1 | **Establish the merge-vs-replace question** on a disposable DCR-created client | S | Create a client with a distinctive `backchannelLogoutUri`, `PUT` an unrelated single field, read back. Records the answer in `PROGRESS.md` and settles the `UNVERIFIED` row above. Cheap, non-destructive, and it gates whether CU-W2 is needed at all |
-| CU-W2 | **Preserve unnamed fields in `buildClientInput`** — route them through the SDK's `additionalProperties` escape hatch | M | A client update that changes one field leaves all others intact, asserted against a mocked SDK. Conditional on CU-W1 |
+| CU-W2 | **Preserve unnamed fields in `buildClientInput`** | M | ✅ **DONE 2026-08-14, under plan mode — and it did NOT wait for CU-W1.** `update()` now fetches the current client and applies the named changes on top, so a one-field `PATCH` can only ever change that field. **The criterion said "conditional on CU-W1" and that was wrong**: preserving unnamed fields is a no-op if Authlete merges and prevents data loss if it replaces, so the code is correct under both answers and the unproven fact blocked nothing. Implemented as a plain read-modify-write rather than through `additionalProperties` as the criterion suggested — **because the escape hatch turns out to be automatic**: `Client$inboundSchema` collects unmodelled members into `additionalProperties` and `ClientInput$outboundSchema` spreads them back to the top level, so a round trip preserves all four properties SDK 1.0.0 omits without any special handling. That pairing is asserted in `tests/unit/services/client-roundtrip.test.ts`, because if either half changed this method would silently delete `backchannelLogoutUri` from every client it touched — the same defect class, reintroduced by its own fix. 7 cases in `client.management.service.test.ts`, including that renaming a client leaves `pkceRequired`, `pkceS256Required` and `tokenAuthMethod` intact. |
 | CU-W3 | **Read back after a security-relevant configuration write** | S | Any code or runbook step that writes client configuration a security control depends on verifies it by reading it back. F-4's `200`-and-discard is the worked example |
 
 ## Scope note

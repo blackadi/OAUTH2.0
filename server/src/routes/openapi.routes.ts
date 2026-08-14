@@ -609,8 +609,22 @@ const spec: Record<string, unknown> = {
           },
         },
         responses: {
-          "201": { description: "PAR created with request_uri" },
-          "400": { description: "Bad request" },
+          "201": {
+            description: "PAR created. The body is RFC 9126 §2.2's, not Authlete's envelope (T1-11).",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    request_uri: { type: "string", description: "RFC 9126 §2.2 — use as the `request_uri` authorization parameter" },
+                    expires_in: { type: "integer", description: "Seconds until the request URI expires" },
+                  },
+                  required: ["request_uri", "expires_in"],
+                },
+              },
+            },
+          },
+          "400": { description: "Bad request. The body is Authlete's `responseContent`, i.e. the RFC's error object." },
         },
       },
     },
@@ -995,7 +1009,7 @@ const spec: Record<string, unknown> = {
       get: {
         summary: "Create local JWT",
         description:
-          "Creates a locally-signed JWT (development only, no Authlete call). Returns the JWT and the public key for verification.",
+          "Creates a locally-signed RFC 9068 JWT access token (development only, no Authlete call). Returns the JWT and the public key for verification. The token carries `typ: at+jwt` and all seven claims RFC 9068 §2.2 marks REQUIRED — it is the repo's worked example of that section, so `client_id` is required here even though the endpoint is a fixture.",
         parameters: [
           {
             name: "sub",
@@ -1006,23 +1020,45 @@ const spec: Record<string, unknown> = {
           {
             name: "aud",
             in: "query",
+            required: true,
             schema: { type: "string" },
+            description: "Space-delimited; becomes the `aud` array",
+          },
+          {
+            name: "client_id",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+            description: "REQUIRED — RFC 9068 §2.2 marks `client_id` a required claim of a JWT access token",
+          },
+          {
+            name: "iss",
+            in: "query",
+            schema: { type: "string" },
+            description: "Defaults to the JWT_ISSUER environment value when omitted",
+          },
+          {
+            name: "scope",
+            in: "query",
+            schema: { type: "string" },
+            description: "Space-delimited. RFC 9068 §2.2.3 makes `scope` a SHOULD, so it is omitted from the token rather than emitted empty",
           },
           {
             name: "acr",
             in: "query",
             schema: { type: "string" },
-            description: "ACR claim to embed in the JWT",
+            description: "ACR claim to embed in the JWT (RFC 9068 §2.2.1, OPTIONAL)",
           },
           {
             name: "authTime",
             in: "query",
             schema: { type: "integer" },
-            description: "Authentication time (epoch seconds) to embed as auth_time claim",
+            description: "Authentication time (epoch seconds) to embed as auth_time. Ignored unless it parses as a positive integer — an unparseable value stamps no claim rather than the Unix epoch",
           },
         ],
         responses: {
           "200": { description: "Local JWT created with token and publicKey" },
+          "400": { description: "Missing iss, sub, aud or client_id" },
           "404": { description: "Not available in production mode" },
         },
       },
@@ -1447,18 +1483,21 @@ const spec: Record<string, unknown> = {
         },
         responses: {
           "200": {
-            description: "Device code issued",
+            description: "Device code issued. The body is RFC 8628 §3.2's, not Authlete's envelope (T1-11).",
             content: {
               "application/json": {
                 schema: {
                   type: "object",
+                  // RFC 8628 §3.2's members. These were the camelCase envelope spellings until T1-11.
                   properties: {
-                    deviceCode: { type: "string" },
-                    userCode: { type: "string" },
-                    verificationUri: { type: "string" },
-                    expiresIn: { type: "integer" },
-                    interval: { type: "integer" },
+                    device_code: { type: "string" },
+                    user_code: { type: "string" },
+                    verification_uri: { type: "string" },
+                    verification_uri_complete: { type: "string", description: "Optional, per §3.3.1" },
+                    expires_in: { type: "integer" },
+                    interval: { type: "integer", description: "Omitted when deviceFlowPollingInterval is 0" },
                   },
+                  required: ["device_code", "user_code", "verification_uri", "expires_in"],
                 },
               },
             },
@@ -1873,7 +1912,7 @@ const spec: Record<string, unknown> = {
                 schema: {
                   type: "object",
                   properties: {
-                    mode: { type: "string", enum: ["sp", "ms", "disabled"], description: "FAPI mode: sp=Security Profile, ms=Message Signing, disabled" },
+                    mode: { type: "string", enum: ["sp", "ms", "fapi1-advanced", "fapi1-baseline", "unknown", "disabled"], description: "FAPI mode derived from the service's fapiModes. sp=FAPI 2.0 Security Profile, ms=FAPI 2.0 Message Signing, fapi1-advanced/fapi1-baseline=the FAPI 1.0 parts. 'disabled' means no mode is set; 'unknown' means a mode is set that this server does not recognise — the two are deliberately distinct, so an unrecognised profile is never reported as off." },
                     dpopEnabled: { type: "boolean", description: "The service's dpopNonceRequired flag. NOT 'is DPoP available' — DPoP works without nonces, so false does not mean DPoP is off." },
                     supportedTokenAuthMethods: { type: "array", items: { type: "string" }, description: "Client authentication methods the service permits. FAPI 2.0 requires mTLS or private_key_jwt; which one a given client must use is pinned per client, so there is no service-level 'required' method." },
                     certificateBoundAccessTokens: { type: "boolean", description: "The service's tlsClientCertificateBoundAccessTokens flag — mTLS sender-constraining. DPoP binding is a per-client setting and is not reported here." },

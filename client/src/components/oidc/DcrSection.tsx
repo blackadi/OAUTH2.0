@@ -54,15 +54,13 @@ function DcrSection() {
     const { data, error: err } = await call(fn);
     if (data) {
       if (activeOp === 'register') {
-        const raw = data as Record<string, unknown>;
-        const parsed =
-          typeof raw.responseContent === 'string'
-            ? JSON.parse(raw.responseContent as string)
-            : raw;
-        const clientId = (parsed.client_id || parsed.clientId || '') as string;
-        const regAccessToken = (
-          parsed.registration_access_token || parsed.registrationAccessToken || ''
-        ) as string;
+        // T1-11: the server now returns RFC 7591 §3.2.1's registration response as the body, so there is no
+        // vendor envelope to unwrap. The `responseContent` branch this replaced existed only because the body
+        // used to be Authlete's envelope with the real response nested inside it — and the camelCase
+        // fallbacks existed because it was ambiguous which you would get.
+        const parsed = data as Record<string, unknown>;
+        const clientId = (parsed.client_id || '') as string;
+        const regAccessToken = (parsed.registration_access_token || '') as string;
         if (clientId) {
           setGetClientId(clientId);
           setUpdateClientId(clientId);

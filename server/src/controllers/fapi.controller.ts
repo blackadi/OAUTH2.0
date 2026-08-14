@@ -2,22 +2,56 @@ import { NextFunction, Request, Response } from "express";
 import { authleteApi, serviceId } from "../services/authlete.service";
 import logger from "../utils/logger";
 
+export type FapiModeSummary =
+  | "sp"
+  | "ms"
+  | "fapi1-advanced"
+  | "fapi1-baseline"
+  | "unknown"
+  | "disabled";
+
+// FAPI1-W2. Authlete's `fapiModes` is a six-member closed enum (SDK 1.0.0 `FapiMode`) spanning BOTH
+// FAPI generations: FAPI1_BASELINE, FAPI1_ADVANCED, FAPI2_SECURITY and three FAPI2_MESSAGE_SIGNING_*
+// members. This mapper recognised only the FAPI 2.0 half, so a service configured for FAPI 1.0 was
+// reported as having FAPI switched **off** — the repo's own posture instrument could not see half of
+// what `SPEC-INVENTORY.md` lists and Module 10 teaches (`FAPI-1.0-PART-1-BASELINE.md` F-2).
+//
+// Two return values that are easy to conflate, and conflating them was the defect:
+//   * `"disabled"` — the service set no mode at all. A statement about configuration.
+//   * `"unknown"` — the service set a mode this mapper does not recognise. Reporting *that* as
+//     `"disabled"` asserts a posture nobody checked, which is FAPI2-W1's hardcoded-literal defect one
+//     layer down. A seventh enum member added by Authlete lands here rather than silently off.
+//
+// Precedence within a generation, because `fapiModes` is a list and may carry several:
+//   * message signing outranks the security profile — FAPI 2.0 Message Signing sits on top of the
+//     Security Profile's requirements, so reporting "sp" for a service that has both under-reports it.
+//     (Behaviour unchanged: the previous three-branch form was equivalent.)
+//   * Advanced outranks Baseline for the same reason — Part 2 is Part 1 plus further requirements.
 function computeFapiMode(
   fapiModes: Array<string> | undefined,
-): "sp" | "ms" | "disabled" {
+): FapiModeSummary {
   if (!fapiModes || fapiModes.length === 0) return "disabled";
 
-  const hasSecurityProfile = fapiModes.includes("FAPI2_SECURITY");
-  const hasMessageSigning = fapiModes.some((m) =>
-    m.startsWith("FAPI2_MESSAGE_SIGNING_"),
-  );
+  if (fapiModes.some((m) => m.startsWith("FAPI2_MESSAGE_SIGNING_"))) return "ms";
+  if (fapiModes.includes("FAPI2_SECURITY")) return "sp";
 
-  if (hasSecurityProfile && hasMessageSigning) return "ms";
-  if (hasSecurityProfile) return "sp";
-  if (hasMessageSigning) return "ms";
+  if (fapiModes.includes("FAPI1_ADVANCED")) return "fapi1-advanced";
+  if (fapiModes.includes("FAPI1_BASELINE")) return "fapi1-baseline";
 
-  return "disabled";
+  return "unknown";
 }
+
+// The profile the mode names. This was the literal string "FAPI 2.0 Security Profile" regardless of
+// mode, which is wrong the moment `mode` can be a FAPI 1.0 value — the same reason the six posture
+// fields stopped being constants in FAPI2-W1.
+const SPEC_TITLES: Record<FapiModeSummary, string> = {
+  sp: "FAPI 2.0 Security Profile",
+  ms: "FAPI 2.0 Message Signing",
+  "fapi1-advanced": "FAPI 1.0 Part 2: Advanced",
+  "fapi1-baseline": "FAPI 1.0 Part 1: Baseline",
+  unknown: "Unrecognised FAPI mode",
+  disabled: "None",
+};
 
 export const fapiController = {
   getConfig: async (_req: Request, res: Response, next: NextFunction) => {
@@ -60,7 +94,7 @@ export const fapiController = {
         scopeRequired: service.scopeRequired ?? false,
         cimdSupported,
         specs: {
-          securityProfile: "FAPI 2.0 Security Profile",
+          securityProfile: SPEC_TITLES[mode],
           messageSigning: mode === "ms",
         },
       });

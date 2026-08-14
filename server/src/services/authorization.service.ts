@@ -16,6 +16,30 @@ import crypto from "crypto";
 export class AuthorizationService {
   constructor(private authleteApi: Authlete = defaultApi) {}
 
+  /**
+   * Forward an authorization request to Authlete's `/auth/authorization` API.
+   *
+   * **9101-W5. This used to send the request object itself.** `reqBody` *is* `req.query` (or `req.body`),
+   * and it was mutated with a `parameters` key and then passed straight through as the
+   * `AuthorizationRequest` — so every parameter the client sent was also offered to Authlete as a
+   * top-level field of the vendor request.
+   *
+   * **Not exploitable, and establishing that is why this was S4 rather than higher.** `AuthorizationRequest`
+   * has exactly three members — `parameters`, `context`, `cimdOptions` — and the SDK's outbound `z.object`
+   * strips the rest. There is **no `clientCertificate` member on this request type**, so the RFC 8705
+   * injection that would matter here is impossible. What did survive was `context`:
+   * `GET /api/authorization?context=…` set the arbitrary text Authlete attaches to the ticket.
+   *
+   * It is still the anti-pattern the repo deliberately removed from `userinfo.service.ts` and
+   * `introspection.service.ts`, and **`jar.service.ts` already did it right** — so this makes two siblings
+   * that call the same Authlete API agree, rather than inventing a rule. **Build the Authlete request from
+   * named fields; never by handing over client input.** The next member Authlete adds to this request type
+   * is then a decision somebody makes, not a query parameter somebody discovers.
+   *
+   * The `req.query` mutation is gone with it. Nothing read it — `authorization.controller.ts` reads
+   * `req.query.prompt` and `req.query.properties` directly — and a service that quietly rewrites the Express
+   * request it was handed is a trap for the next reader.
+   */
   async process(req: Request): Promise<AuthorizationResponse> {
     // Convert Express request into a query string
     const reqBody =
@@ -31,11 +55,10 @@ export class AuthorizationService {
       }
     }
 
-    reqBody.parameters = params.toString();
     // Call Authlete /authorization API
     const response = await this.authleteApi.authorization.processRequest({
       serviceId: serviceId,
-      authorizationRequest: reqBody,
+      authorizationRequest: { parameters: params.toString() },
     });
 
     return response;

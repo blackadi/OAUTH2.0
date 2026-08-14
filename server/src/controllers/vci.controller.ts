@@ -3,6 +3,7 @@ import { VciService } from "../services/vci.service";
 import { requireBasicAuth } from "../middleware/require-basic-auth";
 import { handleControllerError } from "../utils/controller-error";
 import { extractAccessToken } from "../utils/dpop";
+import { sendSpecBody } from "../utils/http-utils";
 
 const checkAuth = requireBasicAuth("vci");
 
@@ -17,6 +18,31 @@ const checkAuth = requireBasicAuth("vci");
  */
 function extractBearerToken(req: Request): string | null {
   return extractAccessToken(req)?.token ?? null;
+}
+
+/**
+ * Relay Authlete's token-presentation failure as a challenge, not as a vendor envelope (T1-11).
+ *
+ * `/vci/deferred/parse`'s `responseContent` on `UNAUTHORIZED` is a `WWW-Authenticate` value — confirmed live:
+ * `Bearer error="invalid_token", error_description="[A375304] The access token does not exist."` — so it
+ * belongs in the header per RFC 6750 §3, which is where `userinfo.controller.ts` already puts the identical
+ * shape. The body carries the OAuth-shaped error so a client that reads bodies is not left guessing, and
+ * `resultMessage` rides along because it names the specific Authlete condition, which is this repo's
+ * pedagogical value. `action`/`resultCode` are dropped: they are vendor control flow, not the client's.
+ */
+function sendChallenge(
+  res: Response,
+  status: number,
+  result: { responseContent?: string | null; resultMessage?: string }
+): void {
+  if (typeof result.responseContent === "string" && result.responseContent !== "") {
+    res.setHeader("WWW-Authenticate", result.responseContent);
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.status(status).json({
+    error: status === 401 ? "invalid_token" : "invalid_request",
+    error_description: result.resultMessage ?? "The deferred credential request was refused.",
+  });
 }
 
 function statusForAction(action: string | undefined, mapping: Record<string, number>, fallback = 500): number {
@@ -280,7 +306,12 @@ export function createVciControllers(serviceInstance = new VciService()) {
           );
           const parseStatus = statusForAction(parsed.action, DEFERRED_PARSE_MAP);
           if (parseStatus !== 200) {
-            res.status(parseStatus).json(parsed);
+            // T1-11, and this one is not a JSON body. On `UNAUTHORIZED` Authlete's `responseContent` here is a
+            // **`WWW-Authenticate` challenge string** — verified live: `Bearer error="invalid_token",
+            // error_description="[A375304] The access token does not exist."` — not an object. RFC 6750 §3
+            // puts that in the header, which is what `userinfo.controller.ts` already does with the same
+            // shape, so it goes in the header and the body carries the OAuth-shaped error.
+            sendChallenge(res, parseStatus, parsed);
             return;
           }
 
@@ -292,8 +323,9 @@ export function createVciControllers(serviceInstance = new VciService()) {
             ...callerOrder,
             requestIdentifier: parsed.info?.identifier,
           });
+          // OID4VCI §9's credential response, not Authlete's envelope (T1-11).
           const status = statusForAction(result.action, DEFERRED_ISSUE_MAP);
-          res.status(status).json(result);
+          sendSpecBody(res, status, result);
         } catch (err) {
           handleControllerError(err, req, res, next, "IssueDeferred");
         }

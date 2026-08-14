@@ -41,7 +41,34 @@ describe("deviceAuthorizationController", () => {
     expect(res.json).toHaveBeenCalledWith({ error: "invalid_request", error_description: "Missing required field: parameters" })
   })
 
-  it("returns 200 on OK action", async () => {
+  // T1-11. The body is RFC 8628 §3.2's — snake_case, no vendor envelope. Probe-confirmed (8628-W6) that
+  // Authlete's own `responseContent` here is exactly that shape, so this forwards rather than constructs.
+  it("returns 200 with RFC 8628 §3.2's body, not Authlete's envelope", async () => {
+    const specBody = JSON.stringify({
+      device_code: "dc-1",
+      user_code: "uc-1",
+      verification_uri: "https://as.example/device",
+      expires_in: 600,
+      interval: 5,
+    })
+    mockDeviceService.authorization.mockResolvedValue({
+      action: "OK", deviceCode: "dc-1", userCode: "uc-1", responseContent: specBody,
+    })
+    const req = mockReq({ body: { parameters: "client_id=c-1&scope=openid" } })
+    const res = mockRes()
+    const next = mockNext()
+
+    await authorization.handle(req, res, next)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.send).toHaveBeenCalledWith(specBody)
+    // The camelCase envelope must not be what the device receives.
+    expect(res.json).not.toHaveBeenCalled()
+  })
+
+  // The fallback: no `responseContent` means no spec-shaped body exists, and the envelope carries Authlete's
+  // diagnosis, which beats an empty response.
+  it("falls back to the envelope when Authlete sends no responseContent", async () => {
     mockDeviceService.authorization.mockResolvedValue({ action: "OK", deviceCode: "dc-1", userCode: "uc-1" })
     const req = mockReq({ body: { parameters: "client_id=c-1&scope=openid" } })
     const res = mockRes()
@@ -51,6 +78,16 @@ describe("deviceAuthorizationController", () => {
 
     expect(res.status).toHaveBeenCalledWith(200)
     expect(res.json).toHaveBeenCalledWith({ action: "OK", deviceCode: "dc-1", userCode: "uc-1" })
+  })
+
+  // The two device endpoints that do NOT change, because they have no specification shape: their SDK
+  // response models carry no `responseContent` member at all. Applying the pattern here would send undefined.
+  it("leaves verification and complete on the envelope", async () => {
+    mockDeviceService.verification.mockResolvedValue({ action: "VALID", clientName: "CLI" })
+    const res = mockRes()
+    await verification.handle(mockReq({ body: { userCode: "uc-1" } }), res, mockNext())
+
+    expect(res.json).toHaveBeenCalledWith({ action: "VALID", clientName: "CLI" })
   })
 
   it("returns 400 on BAD_REQUEST action", async () => {

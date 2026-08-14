@@ -14,6 +14,17 @@ function safeParseJSON(str: string): unknown {
   try { return JSON.parse(str); } catch { return str; }
 }
 
+/**
+ * T1-11 / 7591-W1. This used to return `{ ...result, responseContent: <parsed> }` — Authlete's envelope with
+ * the specification's body **nested inside it**. So an RFC 7591 client looking for `client_id` at the top
+ * level found `action`, `resultCode` and `resultMessage` instead, and had to know to unwrap a vendor field
+ * to reach the registration response §3.2.1 defines.
+ *
+ * The parsed content is now the body itself. `responseContent` is a JSON *string* on the wire, so it is
+ * parsed and re-serialised by `res.json` rather than passed through — that costs a round trip through the
+ * parser but keeps the DELETE/204 branch and the error branches on one code path.
+ */
+
 const checkAuth = requireBasicAuth("dcr");
 
 function mapActionToStatus(action?: string): number {
@@ -34,9 +45,9 @@ function buildResponse(result: any) {
   if (status === 204) {
     return { status, body: undefined };
   }
-  const body = result.responseContent
-    ? { ...result, responseContent: safeParseJSON(result.responseContent) }
-    : result;
+  // The envelope is the fallback, not the norm: with no `responseContent` there is no spec-shaped body, and
+  // Authlete's `resultMessage` is more use to the caller than an empty object.
+  const body = result.responseContent ? safeParseJSON(result.responseContent) : result;
   return { status, body };
 }
 

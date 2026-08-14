@@ -3,6 +3,7 @@ import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
+import { clientAttributesSchema, validateOrThrow } from "../utils/validation";
 import {
   ClientGetListResponse,
   ClientSecretRefreshResponse,
@@ -92,9 +93,33 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    const clientInput: ClientInput = this.buildClientInput(clientPayload || body);
+    // CU-W2 — read, modify, write. Authlete's `client/update` takes a **complete** client object, and
+    // `buildClientInput` names roughly 40 of the `Client` schema's 108 properties, so building the request
+    // from scratch sent an object missing ~68 fields. Changing one field could therefore clear the rest —
+    // including `tokenAuthMethod`, `pkceRequired` and `redirectUris`, i.e. **silently undoing a security
+    // control** — and the 200 response says nothing about it.
+    //
+    // The current object is fetched and the named changes applied on top, so an update only ever *changes*
+    // what the caller asked to change. `ecfab07` did exactly this by hand for the Render callback write; this
+    // makes the safe procedure the default rather than something to remember.
+    //
+    // **This preserves even the four properties SDK 1.0.0 does not model** (`backchannelLogoutUri`,
+    // `backchannelLogoutSessionRequired`, `spiffeId`, `spiffeBundleEndpoint`), because `Client$inboundSchema`
+    // collects them into `additionalProperties` and `ClientInput$outboundSchema` spreads them back to the top
+    // level — a matched pair, asserted in `tests/unit/services/client-roundtrip.test.ts`. If that ever stops
+    // being true, this method would delete those fields from every client it touched, so the assertion is not
+    // decoration.
+    //
+    // Two accepted costs: an update makes **two** Authlete calls, and a non-existent client now fails on the
+    // read rather than the write — a better error either way.
+    const current = await this.authleteApi.client.get({ serviceId, clientId });
+    const changes: ClientInput = this.buildClientInput(clientPayload || body);
+    const clientInput: ClientInput = { ...current, ...changes };
 
-    log("ClientUpdateService: calling Authlete client update endpoint", { clientId });
+    log("ClientUpdateService: calling Authlete client update endpoint", {
+      clientId,
+      changedFields: Object.keys(changes),
+    });
 
     const response = await this.authleteApi.client.update({
       serviceId,
@@ -484,9 +509,12 @@ export class ClientManagementService {
     if (payload.bcRequestSignAlg !== undefined) input.bcRequestSignAlg = String(payload.bcRequestSignAlg) as any;
     if (payload.bcUserCodeRequired !== undefined) input.bcUserCodeRequired = Boolean(payload.bcUserCodeRequired);
 
-    // Attributes — accept array of {key, value} objects
-    if (payload.attributes !== undefined && Array.isArray(payload.attributes)) {
-      input.attributes = payload.attributes as any;
+    // Attributes — an array of {key, value} pairs, validated rather than cast (ATTR-W1). This was the
+    // only field in this mapper that reached Authlete through `as any`, so any array at all was
+    // forwarded verbatim, and a non-array was silently dropped — a write that answers 200 and stores
+    // nothing. Both shapes are now 400s; see `clientAttributesSchema` for why a keyless pair is one.
+    if (payload.attributes !== undefined) {
+      input.attributes = validateOrThrow(clientAttributesSchema, payload.attributes);
     }
 
     // Locked

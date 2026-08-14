@@ -385,6 +385,51 @@ language object and re-encodes it before hashing — a perfectly natural thing t
 digests for every credential it did not itself create. The rule is: **treat a disclosure as an opaque string
 from the moment you receive it.** Decode it to read the value; never to re-encode it.
 
+### 5d-bis — Delete one character
+
+Not a forgery. Not a replay. **Remove the final `~`** and see what a verifier does with a credential that is
+merely *malformed*:
+
+```bash
+node "$SD" issue --claims claims.json --sd given_name,family_name,email,nationality \
+  --issuer-key issuer-priv.json --iss https://issuer.example --out ok.txt
+perl -pe 's/~$//' ok.txt > notilde.txt
+node "$SD" verify notilde.txt --issuer-key issuer-pub.json
+```
+
+```
+  FAIL  7.1/1  MALFORMED — the final element "WyJqX2VLV2xaVUJzMlN4aF9V…" is not a JWS (no "."), so it is
+               a Disclosure and the trailing "~" was omitted. §4: with no KB-JWT the last element MUST be
+               an empty string and the last separating tilde MUST NOT be omitted
+RESULT: REJECTED.
+```
+
+**Until 2026-08-14 this script printed `RESULT: ACCEPTED`** — and `nationality` was simply gone from the
+processed payload. Work through why, because the failure is more interesting than the fix:
+
+`splitSdJwt` decided whether a KB-JWT was present by asking *"is the final `~`-separated element non-empty?"*
+Strip the tilde and the last **Disclosure** becomes the final non-empty element, so it was reclassified as a
+Key Binding JWT and removed from the Disclosure list. Then **every subsequent step passed honestly**:
+`7.1/5` — *"every Disclosure presented is referenced by a digest"* — passed because the three *surviving*
+Disclosures genuinely were all referenced. The fourth had been discarded before counting began. And `7.1/1`,
+the step whose entire job is *"separate the SD-JWT into its parts"*, was **hardcoded `PASS`**.
+
+Three things to take away:
+
+1. **A step that cannot fail is not a check.** `step('7.1/1', true, …)` looked like verification in the output
+   trace and verified nothing. Read your own PASS lines and ask which of them could ever print FAIL.
+2. **Silently discarding data is worse than rejecting it.** A verifier that says "no" is a bug report. A
+   verifier that says "yes" while dropping a claim is a *security* bug — the application downstream sees a
+   credential that the holder never presented, and nothing anywhere says so.
+3. **The fix had to be structural, not a guess.** "Assume a KB-JWT if it looks long" would be a heuristic. A
+   KB-JWT is a JWS — three base64url segments, **two dots**. A Disclosure is base64url of a JSON array and
+   contains **no** dot. So a non-empty final element with no dots *cannot* be a KB-JWT, and the omitted tilde
+   becomes detectable rather than merely suspected. When you enforce a format rule, find the property that
+   makes the two cases distinguishable in principle.
+
+`AUDIT-PASS-A.md` recorded this script as *"CLEAN, 0 defects"*. It had three, and this was the one with a
+security consequence.
+
 ### 5e — The `exp` that was never disclosed
 
 §9.7 warns that issuers **MUST NOT** make validity-critical claims selectively disclosable. Build a credential
@@ -499,9 +544,14 @@ issuer/verifier unlinkability against a coerced verifier, they are wrong, and th
 
 Now to the server. Start it if it is not running (`npm --prefix server run dev`).
 
-This repo implements nine OID4VCI endpoints. **The feature is switched off at the Authlete service**, so
-every one of them refuses — but each refuses differently, and reading refusals precisely is a skill this
-curriculum keeps drilling.
+This repo implements nine OID4VCI endpoints, and **verifiable credentials are now enabled on the Authlete
+service** — so this exercise is about a distinction you cannot see when a feature is simply off:
+
+> **Enabling a feature is not the same as configuring it.**
+
+The flag is on. The issuer metadata document is real and conformant. And two of the three discovery endpoints
+still fail — for a completely different reason than they used to. Reading refusals precisely is the skill this
+curriculum keeps drilling, and this is the version of the exercise where precision actually pays.
 
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{content_type}\n" \
@@ -509,36 +559,105 @@ curl -s -o /dev/null -w "%{http_code} %{content_type}\n" \
 
 for p in metadata jwtissuer jwks; do
   printf '%-10s ' "$p"
-  curl -s "$API/vci/$p" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['resultCode'],'|',d['action'])"
+  curl -s "$API/vci/$p" \
+    | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('resultCode') or '(document, no resultCode)','|',d.get('action') or '')"
 done
 ```
 
 ```
-404 application/json; charset=utf-8
-metadata   A364301 | NOT_FOUND
-jwtissuer  A416301 | NOT_FOUND
-jwks       A402301 | NOT_FOUND
+200 application/json; charset=utf-8
+metadata   (document, no resultCode) | 
+jwtissuer  A417202 | INTERNAL_SERVER_ERROR
+jwks       A403201 | INTERNAL_SERVER_ERROR
 ```
 
+Note the loop had to change to read this. The old version printed `d['resultCode']` unconditionally, because
+every endpoint used to return an Authlete *error envelope*. **`metadata` now returns a document instead**, and
+a document has no `resultCode` — so the old one-liner raises `KeyError`. When a feature comes on, the shape of
+the answer changes, not just its status.
+
+Look at what `metadata` actually returns:
+
 ```bash
+curl -s "$API/vci/metadata" | python3 -m json.tool | head -12
+```
+
+```json
+{
+    "credential_issuer": "https://oauth2-0-ekh2.onrender.com",
+    "credential_endpoint": "https://oauth2-0-ekh2.onrender.com/api/vci/credential/issue",
+    "batch_credential_endpoint": "https://oauth2-0-ekh2.onrender.com/api/vci/credential/batch",
+    "deferred_credential_endpoint": "https://oauth2-0-ekh2.onrender.com/api/vci/deferred/issue",
+    "credential_configurations_supported": {
+        "IdentityCredential": {
+            "format": "vc+sd-jwt",
+            "vct": "https://credentials.example.com/identity_credential",
+```
+
+That is OID4VCI 1.0 §12.2.4's document, with all three REQUIRED members present — `credential_issuer`,
+`credential_endpoint` and `credential_configurations_supported` — and **snake_case throughout**, because this
+is a specification-defined document rather than Authlete's internal envelope. Hold onto that contrast; it is
+the subject of Exercise 8.
+
+Now read the two failures, because their result codes say exactly what is missing:
+
+```bash
+curl -s "$API/vci/jwks" -w '\n[%{http_code}]\n'
+```
+
+```
+{"resultCode":"A403201","resultMessage":"[A403201] The JWK Set document of the credential issuer has not been set up yet.","action":"INTERNAL_SERVER_ERROR", …}
+[500]
+```
+
+`jwtissuer` fails for the same root cause and says so differently: `[A417202] The JWT issuer metadata is not
+available because **neither the JWK Set document of the credential issuer nor its URL** has been set up.`
+
+**A credential issuer signs credentials.** Turning the feature on gave it endpoints and a metadata document;
+it did not give it a signing key. Until `credentialJwks` (or `credentialJwksUri`) is set on the service, there
+is nothing to publish at `/vci/jwks` and nothing to describe at `/vci/jwtissuer`. The metadata document
+survives because it describes *what the issuer offers*, which needs no key.
+
+Offers need admin credentials — they mint issuance state, so they are in the admin tier
+(`AGENTS.md`, VCI auth category 2). `MGMT_CLIENT_ID` and `MGMT_CLIENT_SECRET` are the two values from your own
+`server/.env`; export them into your shell first, or paste them into the `-u` argument. Try it both ways:
+
+```bash
+# no credentials
 curl -s -X POST -H 'Content-Type: application/json' \
   -d '{"credentialConfigurationIds":["IdentityCredential"]}' \
   "$API/vci/offer/create" -w '\n[%{http_code}]\n'
+
+# with them
+curl -s -X POST -u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET" -H 'Content-Type: application/json' \
+  -d '{"credentialConfigurationIds":["IdentityCredential"],"subject":"admin"}' \
+  "$API/vci/offer/create" \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['resultCode'],'|',d['action'],'|',d['resultMessage'])"
 ```
 
 ```
-{"resultCode":"A366201","resultMessage":"[A366201] Because the feature of Verifiable Credential is not enabled on this service, the /vci/offer/create API is not usable.","action":"FORBIDDEN"}
-[403]
+{"error":"invalid_client","error_description":"Client authentication required"}
+[401]
+
+A366001 | CREATED | [A366001] A credential offer was created successfully.
 ```
 
-Three observations worth writing down:
+Four observations worth writing down:
 
-1. **Three different result codes for one root cause.** `A364301`, `A416301`, `A402301` all mean "VCI is
-   off," but each names the specific document it could not produce. That precision is what makes Authlete
-   error codes worth reading rather than pattern-matching on the HTTP status.
-2. **The action-to-status mapping is consistent** with `AGENTS.md`: discovery gives `NOT_FOUND` → 404, offers
-   give `FORBIDDEN` → 403.
-3. **Some validation happens before Authlete is consulted.** All three credential endpoints refuse an
+1. **Two different result codes, one root cause, and neither is the one you would guess.** `A403201` and
+   `A417202` both mean "the credential issuer has no JWK Set", but each names the specific document it could
+   not produce. That precision is what makes Authlete error codes worth reading rather than pattern-matching
+   on the HTTP status — and it is why the codes changed when the flag did. They used to be `A364301` /
+   `A416301` / `A402301`, all `NOT_FOUND`, all meaning *"VCI is off"*. **Same endpoints, same failure status
+   class, entirely different diagnosis.**
+2. **`NOT_FOUND` → `INTERNAL_SERVER_ERROR` is the honest transition.** With the feature off, the document does
+   not exist and 404 is correct. With the feature on and its key material missing, the document *should*
+   exist and cannot be built — which is a server fault, not a missing resource. Authlete gets this right, and
+   most implementations would have kept returning 404.
+3. **`offer/create` refuses locally before Authlete is consulted**, with an OAuth-shaped
+   `invalid_client` rather than a vendor envelope. That gate **fails closed**: if `MGMT_CLIENT_ID` or
+   `MGMT_CLIENT_SECRET` is unset, it returns 401 rather than allowing the request through.
+4. **Some validation happens before Authlete is consulted.** All three credential endpoints refuse an
    unauthenticated caller locally, without a round trip:
 
 ```bash
@@ -599,33 +718,55 @@ So the fixed handler makes **two** calls, and takes `requestIdentifier` from `pa
 the request body — otherwise any valid token could name any pending request. Same rule you met in Module 04:
 **a field the server can determine must not be readable from the client.**
 
-> **`UNVERIFIED` — that the two-call flow completes.** With `verifiableCredentialsEnabled` false, `parse`
-> answers `FORBIDDEN` before it would return the identifier `issue` needs. The 401s above are local and real;
-> everything past them is asserted only against mocked tests
-> (`server/tests/integration/vci.routes.test.ts`).
+**Verify it yourself — the control is now observable.** With verifiable credentials enabled, present a token
+that does not exist and watch which of the two calls answers:
 
-> **`UNVERIFIED` — everything past the refusal.** Enabling verifiable credentials on the Authlete service
-> would let you create a real credential offer and issue against it. That is a console change on your own
-> service and nothing in this lab claims to show its output. What the exercise *does* verify is the endpoint
-> surface, the auth model, and the refusal semantics.
+```bash
+curl -s -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer bogus' \
+  -d '{"order":{"transactionId":"anything"}}' "$API/vci/deferred/issue" \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['resultCode'],'|',d['action'])"
+```
 
-> **A note on the auth model, and a correction this lab has to make about itself.** `AGENTS.md` documents the
-> offer endpoints as requiring admin Basic auth, and the `403` above arrived *without* credentials — so how?
+```
+A375304 | UNAUTHORIZED
+```
+
+`[A375304] The access token does not exist.` — and it is **`parse`** that said so, because `issue` has no
+field to check a token with. Three things are proved at once by that one line: the endpoint is live rather
+than refusing for configuration reasons; the deferred path really does validate the access token, which is
+the entire control this fix added; and the `requestContent` this server synthesises is accepted, since
+Authlete parsed it far enough to *reach* token validation. Before the flag went on, this was marked
+`UNVERIFIED` and rested on mocked tests alone.
+
+> **`UNVERIFIED` — issuing an actual credential.** Everything above is real. What is still not runnable here
+> is the *end* of the flow: a wallet obtaining an access token against the offer and receiving a signed
+> credential. That needs the credential issuer's JWK Set, which is exactly what `A403201` and `A417202` above
+> say is missing — so the same gap blocks `/vci/jwks` and blocks issuance, and you can see it in both places.
+
+> **A note on the auth model, and two corrections this lab has to make about itself.** Both are worth more
+> than the facts they correct, because they are the two ways a lab goes stale.
 >
-> **When this exercise was written, `require-basic-auth.ts` returned *allow* if `MGMT_CLIENT_ID` /
-> `MGMT_CLIENT_SECRET` were unset.** Fail-open: an omitted configuration value silently disabled
-> authentication on every admin route, including one that returns a confidential client's secret in
-> plaintext. That was described here as *"documented, intentional, developer-convenience behaviour"*, which
-> is exactly the sentence a reader should distrust.
+> **First: it once showed an unauthenticated call reaching Authlete.** An earlier version of this exercise
+> printed a `403` from `/vci/offer/create` sent with *no credentials at all* — which contradicts `AGENTS.md`
+> putting the offer endpoints behind admin Basic auth. Both were accurate when written, because
+> **`require-basic-auth.ts` returned *allow* if `MGMT_CLIENT_ID` / `MGMT_CLIENT_SECRET` were unset.**
+> Fail-open: an omitted configuration value silently disabled authentication on every admin route, including
+> one that returns a confidential client's secret in plaintext. This lab described that as *"documented,
+> intentional, developer-convenience behaviour"* — exactly the sentence a reader should distrust.
 >
-> **It fails closed now.** Unset credentials mean every admin route answers `401`, and the 401 body is
-> deliberately identical to the wrong-password one, because telling an anonymous caller that admin auth is
-> misconfigured is free reconnaissance. So with `MGMT_*` unset you will now get `401` from the two offer
-> endpoints and never reach the `403` shown above; set both to reproduce it.
+> **It fails closed now**, which is why the run above answers `401 invalid_client` without credentials. The
+> 401 body is deliberately identical to the wrong-password one, because telling an anonymous caller that admin
+> auth is misconfigured is free reconnaissance. Keep the shape in your Module 07 audit template:
+> **fail-open on a missing configuration value** is the pattern, and the reason it survived so long is that
+> nothing *looked* wrong — the calls succeeded, the tests passed, and a lab wrote it down as intentional.
 >
-> Keep the shape in your Module 07 audit template regardless — **fail-open on a missing configuration value**
-> is the pattern, and the reason it survived so long is that nothing *looked* wrong: the calls succeeded, the
-> tests passed, and a lab wrote it down as intentional.
+> **Second: the transcripts in this exercise were rewritten on 2026-08-14** because a configuration change
+> invalidated them. Enabling verifiable credentials turned four outputs into four different outputs, and
+> nothing in the build, the tests or `check-docs.mjs` could have noticed — **labs are prose.** The repo's
+> standing rule is *"grep the curriculum for the symptom you changed"*, and it would not have fired here:
+> the symptom was a **service flag**, not an error string, so there was no string to grep for. When you change
+> a flag, the search term is the *behaviour* it gated, and the place to look is every transcript that shows
+> that behaviour refusing.
 
 ---
 
@@ -783,7 +924,10 @@ Tick each only if you ran it and saw it:
 - [ ] A whitespace-only re-serialization rejected — same value, different digest
 - [ ] An expired credential accepted with `exp` withheld, then rejected via `--require-claims exp`
 - [ ] Two presentations with disjoint claims shown to share a **byte-identical** issuer-signed JWT
-- [ ] Five distinct VCI refusal codes read and mapped to their HTTP statuses
+- [ ] A conformant OID4VCI §12.2.4 metadata document read, and the **two** remaining refusal codes
+      (`A403201`, `A417202`) traced to the one thing the enabled feature still lacks
+- [ ] `A375304` obtained from `deferred/issue` with a bogus token — proving which of its **two** Authlete calls
+      checks the token
 - [ ] The federation endpoint's real cause (`A316201`) obtained, and the one-line code fault located
 
 If any is unticked, do not move to Module 10 — every one of these is load-bearing for the FAPI attacker

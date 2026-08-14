@@ -306,14 +306,19 @@ This is why RFC 9700 §2.1.2 says clients SHOULD NOT use the implicit grant, and
 curl -s -X POST "$API/device/authorization" -H "Content-Type: application/json" \
   -d "{\"parameters\":\"scope=openid&client_id=$CLIENT_ID\",\"clientId\":\"$CLIENT_ID\",\"clientSecret\":\"$CLIENT_SECRET\"}" \
   > /tmp/device.json
-node -e 'const j=require("/tmp/device.json");console.log(JSON.stringify({action:j.action,userCode:j.userCode,verificationUri:j.verificationUri,expiresIn:j.expiresIn,interval:j.interval},null,1))'
+node -e 'const j=require("/tmp/device.json");console.log(JSON.stringify({user_code:j.user_code,verification_uri:j.verification_uri,expires_in:j.expires_in,interval:j.interval},null,1))'
 ```
 
 ```json
-{ "action": "OK", "userCode": "NRHSJMBS",
-  "verificationUri": "https://…/api/device/verification",
-  "expiresIn": 600, "interval": 5 }
+{ "user_code": "NRHSJMBS",
+  "verification_uri": "https://…/api/device/verification",
+  "expires_in": 600, "interval": 5 }
 ```
+
+**These are RFC 8628 §3.2's names, and `action` is gone.** Until 2026-08-14 this endpoint returned Authlete's
+envelope — `userCode`, `verificationUri`, an `action` and a `resultCode` — so a device implementing §3.2 found
+none of the fields it was looking for (work item **8628-W3**). Authlete's response has always carried the
+§3.2-shaped JSON in a `responseContent` member; the server was returning the wrapper instead of the contents.
 
 Now poll the token endpoint **before** approving anything:
 
