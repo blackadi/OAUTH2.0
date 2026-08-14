@@ -217,7 +217,25 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (5):** T2-5, T2-14, T2-15, T2-16, T2-17.
+**Tier 2 remaining (4):** T2-5, T2-14, T2-16, T2-17.
+
+**T2-15 shipped 2026-08-14** — its tutorial halves rode along with T2-1, and the rest landed here. Module 05
+gains a **four-row table** separating what runs from what does not, and the pattern in it is the transferable
+part: **PAR is conformant on the way out and non-conformant on the way in.** Reading only the response tells you
+nothing about whether a conformant client could have reached the endpoint. `AGENTS.md`'s CIBA paragraph now
+states both §7.1 and §7.3 departures and cross-references the two siblings, so theme 3 reads as one finding.
+
+> **Two of the five criteria were stale.** **9101-W4** said *"object signing symmetric-only until W3"* — W3
+> shipped 2026-08-12, so JAR **by value** now runs *asymmetrically* against `2176571218`'s ES256 key; only
+> **by reference** is unavailable. And **8628-W5** was already closed by DR-11. That is the fourth, fifth and
+> sixth stale criterion this session: see also T2-12's FAIL, T2-10's three line numbers, and CU-W2's phantom
+> dependency. **Assume a Tier 2 criterion is stale until re-derived** — the plan was written before Tier 1 ran.
+
+> **7592-W3 is the sharpest of the five and worth reading if you touch DCR.** Every RFC 7592 *operation* is
+> reachable and **none of its HTTP surface is**: no per-registration client configuration endpoint, no
+> `GET`/`PUT`/`DELETE`, no `registration_client_uri`; four `POST` routes taking the registration access token in
+> a JSON body. It sits directly beside the RFC 7591 half that **was** fixed on 2026-08-14, which makes the pair
+> easy to misread as done. `SPEC-INVENTORY.md` now says both: **the body is conformant, the endpoint is not.**
 
 **T2-10 shipped 2026-08-14, and the item's own advice was the finding.** The plan noted *"prefer anchoring on
 the ⚠️ comment text — these have drifted once already."* **Three of the bundle's replacement numbers had drifted

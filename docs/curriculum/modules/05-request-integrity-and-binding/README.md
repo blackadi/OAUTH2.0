@@ -263,6 +263,26 @@ compares DPoP with mTLS as a design decision. That is what is here.
 - **`server/src/services/par.service.ts`** — note lines ~29–34: for `client_secret_post` clients the secret is
   merged **into the `parameters` string**, not sent as a separate field. That is Authlete's PAR API contract,
   not RFC 9126, and it is exactly the kind of vendor detail worth labelling.
+
+  > ### Which halves of PAR and JAR this deployment can actually run
+  >
+  > Two of these three are open gaps rather than simplifications, and knowing which is which decides what your
+  > own conformance notes can claim. Re-checked **2026-08-14**.
+  >
+  > | | Status here |
+  > |---|---|
+  > | PAR **response** | ✅ **RFC 9126 §2.2's body exactly** — `{"expires_in":600,"request_uri":"urn:…"}`, since 2026-08-14. It used to be Authlete's envelope with a camelCase `requestUri` |
+  > | PAR **request** | ❌ **not §2's wire format.** §2 specifies a form-encoded POST whose body *is* the authorization parameters, with client authentication as at the token endpoint. `/api/par` requires a JSON body with an Authlete-shaped `parameters` field, and answers `400 Missing required body field: parameters` to a conformant request |
+  > | JAR **by value** (`request=<JWS>`) | ✅ **runs, and asymmetrically** — client `2176571218` has `requestSignAlg: ES256` and a registered JWK Set since 2026-08-12, so an ES256-signed request object validates against a real key. Before that the only signing available here was symmetric |
+  > | JAR **by reference** (`request_uri=<client-hosted URL>`) | ❌ **cannot be run** — no client registers a `requestUris` entry, and `require_request_uri_registration` is in force. Note this is a *different* `request_uri` from PAR's: PAR's is minted by the AS, JAR's §5.2 one is hosted by the client |
+  >
+  > **The pattern in rows 1 and 2 is the one to take away**: an endpoint can be conformant on the way out and
+  > non-conformant on the way in, and reading only the response tells you nothing about whether a conformant
+  > client could have reached it. **The same split holds at CIBA and the device flow** — see
+  > [`CIBA-TUTORIAL.md`](../../../CIBA-TUTORIAL.md) and
+  > [`DEVICE-FLOW-TUTORIAL.md`](../../../DEVICE-FLOW-TUTORIAL.md), where the request shape departs the same way
+  > for the same reason. Three endpoints, one vendor-envelope habit, and the audit counts it as **one** systemic
+  > finding rather than three.
 - **`server/src/services/token.service.ts`** (~line 74) and **`par.service.ts`** — both read the `DPoP` header
   and pass `dpop`, `htm`, `htu` to Authlete. Note the server computes `htu` from its own `Host` header.
 - **`server/src/utils/dpop.ts`** — relays Authlete's `DPoP-Nonce`, and holds all access-token presentation

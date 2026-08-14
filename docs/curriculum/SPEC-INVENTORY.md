@@ -109,7 +109,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | RFC 8414 | OAuth 2.0 Authorization Server Metadata | Published RFC | Jun 2018 | `/.well-known/oauth-authorization-server` | Client auto-config | `oauth-as-metadata.routes.ts` (root); see path quirk below |
 | RFC 9728 | OAuth 2.0 Protected Resource Metadata | Published RFC | Apr 2025 | `/.well-known/oauth-protected-resource` | RS advertises its AS(es)/scopes; MCP discovery | **Served** at true root — `protected-resource-metadata.routes.ts` + controller (added 2026-07-28); also consumed client-side (`mcp.service.ts`) |
 | RFC 7591 | OAuth 2.0 Dynamic Client Registration Protocol | Published RFC | Jul 2015 | Programmatic client registration | Onboarding without console | `dcr.routes.ts` (`/api/client/dcr/register`), `dcr.service.ts` |
-| RFC 7592 | OAuth 2.0 Dynamic Client Registration Management Protocol | Published RFC (**Experimental** — *not* Standards Track) | Jul 2015 | Read/update/delete a registration | Lifecycle of DCR clients | `dcr.routes.ts` (`get`/`update`/`delete`) |
+| RFC 7592 | OAuth 2.0 Dynamic Client Registration Management Protocol | Published RFC (**Experimental** — *not* Standards Track) | Jul 2015 | Read/update/delete a registration | Lifecycle of DCR clients | `dcr.routes.ts` — **Authlete's management APIs are wired; RFC 7592's HTTP surface is not served.** See the note below |
 | RFC 9068 | JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens | Published RFC | Oct 2021 | Structured `at+jwt` access tokens | Interop for self-contained ATs | JWT ATs via Authlete |
 | RFC 8707 | Resource Indicators for OAuth 2.0 | Published RFC | Feb 2020 | `resource` parameter | Audience-restricting tokens per API | MCP `resource` (RFC 8707) in `mcp.service.ts`; Authlete |
 
@@ -118,6 +118,19 @@ Not subjects in their own right, but cited by name in the modules — so they be
 > Track specification."* This is not pedantry — it is why an authorization server may implement `register`
 > and not `get`/`update`/`delete`, and why the registration access token is the least portable thing in the
 > DCR story. Do not present the pair as equivalent in a review.
+>
+> **And this deployment implements the *capability* without serving the *protocol*** (7592-W3, stated
+> 2026-08-14). RFC 7592 defines a **client configuration endpoint**: one URL per registration, addressed with
+> `GET`, `PUT` and `DELETE`, authorized by the `registration_access_token` as a Bearer token, and discoverable
+> as `registration_client_uri` in the registration response. What this repo serves instead is **four `POST`
+> routes** — `/api/client/dcr/{register,get,update,delete}` — taking the registration access token in a JSON
+> body. Every RFC 7592 *operation* is reachable; **none of RFC 7592's HTTP surface is**, so a conformant DCR
+> client cannot manage its own registration here even though the underlying Authlete APIs are wired.
+>
+> Note this is the same shape as theme 3's wire-format findings and **not** the same thing as the RFC 7591
+> half, which *was* fixed: since 2026-08-14 `register` returns §3.2.1's registration response as the body
+> rather than nested inside a vendor envelope. **The body is conformant; the endpoint is not.** Keeping those
+> two claims apart is the whole reason this row now says both.
 
 > **Discovery-path divergence — this deployment is non-conformant, and you should recognise why.**
 > `/.well-known/openid-configuration` is served under the **`/api`** prefix here, while RFC 8414's

@@ -123,6 +123,46 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — VCI-W6 closed: the credential issuer has a key, and Module 09b Ex 7 is a three-state exercise now** (below)
 - [x] **2026-08-14 — T2-8: two of theme 2's four features were missing from README's tables entirely** (below)
 - [x] **2026-08-14 — T2-10: three of the audit's own replacement line numbers had drifted again before anyone applied them** (below)
+- [x] **2026-08-14 — T2-15: theme 3 stated honestly — PAR is conformant on the way out and not on the way in** (below)
+
+### 2026-08-14 — T2-15: the wire-format gaps, stated until Tier 3 closes them
+
+**Why this matters to a future session:** theme 3 of the audit is *"Authlete's envelope crossing the boundary"* —
+PAR, CIBA and the device flow speak the vendor's shape on endpoints that advertise an RFC. T1-11 closed the
+**response** half at PAR and Device on 2026-08-14. The **request** half is deferred, deliberately, so the honest
+interim is to say so where a learner will read it. The tutorial halves shipped with T2-1; this is the rest.
+
+**Module 05 gains a four-row table**, and the pattern in it is the point:
+
+| | Status |
+|---|---|
+| PAR **response** | ✅ RFC 9126 §2.2's body exactly, since 2026-08-14 |
+| PAR **request** | ❌ not §2's wire format — JSON with an Authlete-shaped `parameters` field; a conformant request gets `400 Missing required body field: parameters` |
+| JAR **by value** | ✅ runs, and **asymmetrically** — `2176571218` has `requestSignAlg: ES256` + a JWK Set |
+| JAR **by reference** | ❌ no client registers a `requestUris` entry, and `require_request_uri_registration` is in force |
+
+> **An endpoint can be conformant on the way out and non-conformant on the way in**, and reading only the
+> response tells you nothing about whether a conformant client could have reached it. That is the generalisation
+> worth carrying out of theme 3, and it applies identically at CIBA and the device flow.
+
+**Two of the five criteria were stale.** **9101-W4** said *"object signing symmetric-only until W3"* — but W3
+shipped on 2026-08-12, so JAR by value now validates an **ES256** request object against a real registered key;
+only by reference is unavailable. And **8628-W5** had already been closed by DR-11. The table also adds a
+distinction no item asked for: **JAR's §5.2 `request_uri` is a different artefact from PAR's** — the client hosts
+one, the AS mints the other.
+
+**`AGENTS.md`'s CIBA paragraph** now states both departures — §7.1's form-encoded request, §7.3's `auth_req_id`
+from the backchannel endpoint itself rather than a `ticket` plus a second call — and cross-references PAR and
+Device, so theme 3 reads as one systemic finding rather than three unrelated notes.
+
+> **7592-W3 is the sharpest of the five.** Every RFC 7592 *operation* is reachable and **none of its HTTP
+> surface is**: no per-registration client configuration endpoint, no `GET`/`PUT`/`DELETE`, no
+> `registration_client_uri`; four `POST` routes taking the registration access token in a JSON body instead. It
+> sits beside the RFC 7591 half that **was** fixed the same week, which makes the pair easy to misread as
+> finished — so `SPEC-INVENTORY.md` now says both: **the body is conformant, the endpoint is not.**
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files.
 
 ### 2026-08-14 — T2-10: the stale line numbers, and the corrections that went stale too
 
