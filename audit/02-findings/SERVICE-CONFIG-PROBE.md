@@ -765,6 +765,76 @@ a rule: **check that the field exists before writing "set X" as a criterion.** V
 
 ---
 
+# Probe 10 — T2-17 batch 8, 2026-08-14 (read-only)
+
+## 22. Two work items answered without a single write
+
+Both were listed as needing a probe. Neither needed a change, and one of them contradicts the finding it
+belongs to. **No service or client field was modified in this pass** — every call below is a read or an
+`/auth/authorization` evaluation, which creates a ticket and nothing else.
+
+### 22.1 8707-W3 — RFC 8707 §2's remaining two rules, both satisfied
+
+Five `/auth/authorization` calls against `1678274156`, varying only `resource`:
+
+| `resource` | `action` | Result |
+|---|---|---|
+| one absolute URI | `INTERACTION` | accepted |
+| **two values** | `INTERACTION` | **accepted** |
+| **one carrying a query component** (`…/orders?v=1`) | `INTERACTION` | **accepted** |
+| one carrying a fragment (control) | `LOCATION` | `error=invalid_target`, `[A251308] The value of a 'resource' includes a fragment component.` |
+| a relative reference (control) | `LOCATION` | `error=invalid_target`, `[A251307] The value of a 'resource' is not an absolute URI.` |
+
+**Both values survive, and so does the query component.** A request carrying
+`resource=https://api.example.com/orders?v=1` **and** `resource=https://api.example.com/payments` comes back
+with the AS echoing exactly:
+
+```json
+"resources": ["https://api.example.com/orders?v=1", "https://api.example.com/payments"]
+```
+
+That completes §2's rule set. §2 permits a query component and forbids only a fragment, and Authlete
+implements precisely that distinction — the two controls prove the checks are live rather than absent, which
+is what makes the two acceptances meaningful. **The multi-value case matters most**: RFC 8707 §2 allows more
+than one `resource`, and an AS that silently kept only the first would produce a token audience-restricted to
+half of what was asked for, with no error.
+
+### 22.2 JARM-W2 — the anomaly is **not** error-path-only; it is one error code
+
+JARM-W2 asked whether F-2's `form_post.jwt` anomaly is general or confined to the error path. **The lab's
+careful caveat turns out to be too broad in one direction and too narrow in the other.** Six calls, varying
+the client and the path:
+
+| Client | `response_mode` | Path | `action` | `responseContent` |
+|---|---|---|---|---|
+| `4277838306` — no `authorizationSignAlg` | `form_post.jwt` | error `[A012305]` | **`LOCATION`** | **an HTML document** ← the anomaly |
+| `4277838306` — no `authorizationSignAlg` | `query.jwt` | error `[A012305]` | `LOCATION` | a URL ✅ |
+| `1523514379` — `ES256` | `form_post.jwt` | **success** | **`FORM`** | an HTML document ✅ |
+| `1523514379` — `ES256` | `form_post.jwt` | **error** (`invalid_target`) | **`FORM`** | an HTML document ✅ |
+| `1523514379` — `ES256` | `query.jwt` | success | `LOCATION` | a URL ✅ |
+| `1523514379` — `ES256` | `query.jwt` | error | `LOCATION` | a URL ✅ |
+
+**The success path is correct and so is the configured error path.** Row 3 and row 4 both answer `FORM`,
+which is right: a `form_post` response mode is delivered as an HTML auto-submitting form with 200, not as a
+redirect. This server handles it — `authorization.controller.ts` has a `case "FORM"`.
+
+**The defect is one error code.** `[A012305]` is *"the authorization request required the authorization
+response be encoded as JWT … but `authorization_signed_response_alg` … is not set"*. On that path alone
+Authlete builds the `form_post` HTML body and then labels it `LOCATION`, so a compliant caller puts a whole
+HTML document in a `Location` header. Every other combination picks the right action.
+
+**Why the lab recorded it as it did, and why that is now the interesting part.** The lab's probe ran *before*
+JARM-W1 set `authorizationSignAlg` on 2026-08-12, so **every** `form_post.jwt` request it could make was an
+`[A012305]` request — the anomaly looked like the response mode's error path because no other error path was
+reachable. Configuring JARM removed the only trigger. **A defect that disappears when you configure the
+feature correctly is easy to mistake for a defect in the feature**, and the way to tell them apart was to
+find a *second* error on the same mode, which row 4 is.
+
+**Consequence for JARM-W6 (report upstream):** it now has a minimal reproduction — one client with
+`responseModes` including `FORM_POST_JWT` and no `authorizationSignAlg`, one authorization request with
+`response_mode=form_post.jwt`, observe `action: LOCATION` carrying `<html>…`. That is a better bug report
+than the original observation, which could not say which of two conditions caused it.
+
 ## Sources
 
 - Live probe 1: `GET /api/{serviceId}/service/get` — HTTP 200, 129 fields, 2026-08-10, authorised, read-only
