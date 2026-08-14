@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { parService } from '@/services';
 import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
@@ -27,15 +27,12 @@ function ParSection() {
   const [authMethod, setAuthMethod] = useState<'post' | 'basic' | 'none'>('post');
   const [useDpop, setUseDpop] = useState(false);
   const [parResult, setParResult] = useState<{ requestUri?: string; expiresIn?: number } | null>(null);
-  const [pkceVerifier, setPkceVerifier] = useState('');
-  const [authUrl, setAuthUrl] = useState('');
+  // Read once, lazily, at first render. This used to be an empty `useState` plus a mount effect that called
+  // `setPkceVerifier` synchronously — which is a cascading render for a value that is known before the first
+  // paint, and which `react-hooks` flags. Lazy initialisation is the same read with no second render.
+  const [pkceVerifier, setPkceVerifier] = useState(() => sessionStorage.getItem('pkce_code_verifier') ?? '');
 
   const doc = getDoc('par', 'create');
-
-  useEffect(() => {
-    const stored = sessionStorage.getItem('pkce_code_verifier');
-    if (stored) setPkceVerifier(stored);
-  }, []);
 
   const handleGeneratePkce = useCallback(async () => {
     try {
@@ -118,22 +115,22 @@ function ParSection() {
     }
   };
 
-  useEffect(() => {
+  // `authUrl` is a pure function of three values already in scope, so it is computed during render rather
+  // than mirrored into state by an effect. The effect version wrote state on every change of its
+  // dependencies, which renders twice for a string that was derivable the first time.
+  const authUrl = useMemo(() => {
     const cid = clientId || parameters.match(/client_id=([^&]+)/)?.[1] || '';
-    if (parResult?.requestUri && cid) {
-      setAuthUrl(`${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(parResult.requestUri)}`);
-    } else {
-      setAuthUrl('');
-    }
+    if (!parResult?.requestUri || !cid) return '';
+    return `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(parResult.requestUri)}`;
   }, [parResult, clientId, parameters]);
 
   const handleRedirectToAuthorize = () => {
     if (authUrl) window.location.href = authUrl;
   };
 
+  // `authUrl` is derived, so clearing `parResult` clears it too — there is nothing else to reset.
   const handleReset = () => {
     setParResult(null);
-    setAuthUrl('');
   };
 
   return (

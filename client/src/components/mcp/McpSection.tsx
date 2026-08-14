@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { mcpService, fapiService, dcrService } from '@/services';
+import { mcpService, dcrService } from '@/services';
 import { useAsyncCall, useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { SectionPanel } from '@/components/layout/SectionPanel';
@@ -82,7 +82,8 @@ function McpSection() {
   const [wizResource, setWizResource] = useState('');
   const [wizCode, setWizCode] = useState('');
   const [wizCodeVerifier, setWizCodeVerifier] = useState('');
-  const [wizPkcePair, setWizPkcePair] = useState<{ codeVerifier: string; codeChallenge: string } | null>(null);
+  // No `wizPkcePair` state: it was written on every authorize step and never read. `wizCodeVerifier` below
+  // holds the only half the token exchange needs, and the challenge is consumed inline by the URL builder.
   const [wizAuthUrl, setWizAuthUrl] = useState('');
   const [wizTokenResult, setWizTokenResult] = useState<Record<string, unknown> | null>(null);
   const [wizUserinfoResult, setWizUserinfoResult] = useState<Record<string, unknown> | null>(null);
@@ -181,7 +182,6 @@ function McpSection() {
 
   const wizStepAuthorize = useCallback(async () => {
     const pair = await createPkcePair();
-    setWizPkcePair(pair);
     setWizCodeVerifier(pair.codeVerifier);
 
     const authUrl = mcpService.buildAuthorizationUrl({

@@ -31,6 +31,11 @@ jobs:
 
       - run: npm run typecheck
 
+      # AGENTS.md's working rule is "typecheck && lint && test, all three clean". CI ran two of the three
+      # until 2026-08-14 — the same shape as the client job running `vite build`, which does not typecheck.
+      # A rule with no mechanism behind it is a preference.
+      - run: npm run lint
+
       - run: npm run test -- --run
 
   # Documentation drift. Offline checks run on every push; external links only on the weekly
@@ -82,6 +87,13 @@ jobs:
       # client test files never ran in CI at all. The server job has gated all three from the start; the
       # client job gating only the bundler was the asymmetry that hid them.
       - run: npm run typecheck
+
+      # Added 2026-08-14, and it had never run: `npm run lint` existed in package.json from the start and
+      # CI never invoked it. It was failing with 4 errors and 7 warnings — two of the errors were an ESLint
+      # config bug (`no-undef` applied to TypeScript, which does not know the TS lib types), and the other
+      # two were setState-inside-an-effect in ParSection. Same shape as the typecheck gap above: the script
+      # existed, the mechanism did not.
+      - run: npm run lint
 
       - run: npm run test
 

@@ -1,0 +1,25 @@
+# Root .gitignore.
+#
+# There was none until 2026-08-14, so the repository-root `logs/` directory was **tracked**: 17 runtime log
+# files, dirtied by every test run, and past commits swept 852 lines of log churn into the history.
+#
+# That matters more here than it would elsewhere. RFC 9700 §4.2.4 (T0-1) was a finding about credentials
+# reaching `logs/app-*.log` — client secrets, ROPC passwords, authorization codes, PKCE verifiers, refresh
+# tokens — so committing that directory is the same defect one layer out. The tracked files were scanned
+# when this was added and contained no credential-shaped strings, which is evidence that T0-1's fix holds;
+# it is not a reason to keep committing them.
+#
+# `server/.gitignore` has ignored `server/logs/*` from the start. This is the sibling that was missing.
+logs/*
+!logs/.gitkeep
+
+node_modules/
+dist/
+coverage/
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log

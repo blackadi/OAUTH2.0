@@ -36,7 +36,7 @@ const POLL_INTERVALS = [
 
 function DeviceSection() {
   const [activeOp, setActiveOp] = useState<DeviceOp | null>(null);
-  const { loading, result, error, call, reset } = useAsyncCall();
+  const { loading, result, error, call } = useAsyncCall();
 
   const [parameters, setParameters] = useState('client_id=3322138582&scope=openid');
   const [clientId, setClientId] = useState('');

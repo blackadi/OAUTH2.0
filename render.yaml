@@ -28,8 +28,12 @@ services:
         sync: false
       - key: MORGAN_FORMAT
         sync: false
+      # Pinned, not `sync: false`. This was unset in the dashboard, and `app.config.ts` used to default it
+      # to "development" — so `middleware/development-only.ts` never fired and POST /api/device/complete,
+      # a token-minting oracle, was reachable on the public internet. The default now fails safe; this
+      # makes the intent explicit as well, so neither layer alone is load-bearing.
       - key: NODE_ENV
-        sync: false
+        value: production
       - key: PORT
         sync: false
       - key: AUTHLETE_SERVICE_ID
