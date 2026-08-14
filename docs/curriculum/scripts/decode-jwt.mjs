@@ -108,6 +108,10 @@ if (parts.length === 3) {
 }
 
 if (wantAth) {
+  // `update(token)` encodes the string as utf8, and RFC 9449 §4.3 asks for the ASCII bytes.
+  // Equivalent here: an access token is base64url or a JWS, so every character is ASCII, and
+  // utf8 encodes ASCII byte-for-byte. Not equivalent in general — do not copy this to a hash
+  // over attacker-controlled text, where a non-ASCII character makes the two encodings differ.
   const ath = createHash('sha256').update(token).digest('base64url');
   console.log(`\nath (RFC 9449 §4.3) = base64url(SHA-256(token)) = ${ath}`);
 }

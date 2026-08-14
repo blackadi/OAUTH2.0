@@ -714,6 +714,34 @@ implementations to return it. This server does not:
 
 Two non-standard members (`client_id`, `subject`) are added; the one required member is dropped.
 
+> ### The sharpest version of this module's thesis, and it is about where a value has to come from
+>
+> It is tempting to read the missing `issued_token_type` as an oversight — one line the handler forgot. It is
+> not, and the reason is the most transferable thing in this tutorial.
+>
+> **Authlete's documentation tells implementations to return `issued_token_type`. Authlete does not supply it.**
+> `TokenCreateResponse` — the model for `/auth/token/create`, the API this server calls to mint the exchanged
+> token — carries **20 properties**, and not one of them is `issuedTokenType`. Every occurrence of the word
+> *"issued"* in that model is prose in a doc comment (*"the newly issued access token"*), never a field. So there
+> is no value to forward, no field to map, and no configuration that would produce one.
+>
+> **The AS must synthesize it.** The authorization server knows what it just minted — it asked for an access
+> token — so it is the party that can state `urn:ietf:params:oauth:token-type:access_token`. The vendor cannot,
+> because `/auth/token/create` is a general-purpose minting API that does not model RFC 8693's vocabulary at all.
+>
+> **Why this is the module's thesis rather than a footnote.** Everywhere else in this repo, "delegate to
+> Authlete" is the right instinct, and the four dropped request parameters in Part 12 are genuinely *this
+> server's* choice — `TokenCreateRequest` has a `resources` field it declines to use. This one is the opposite:
+> **the vendor boundary ends before the specification does.** Delegation covers the protocol Authlete implements,
+> and RFC 8693's response envelope is not that protocol. When you integrate any authorization-server product,
+> the question is not *"does it support this RFC"* but **"which side of the boundary does each required field
+> fall on"** — and the answer differs field by field within a single response.
+>
+> Compare the two failure modes in Part 12's table: `resource` is dropped by a choice that could be reversed
+> tomorrow, `audience` is dropped by a vendor boundary that cannot be crossed at all, and `issued_token_type` is
+> a third thing again — **absent because nobody was asked for it.** Three identical-looking symptoms, three
+> different fixes, one HTTP 200.
+
 ### `expires_in` is the service default, not a short lifetime
 
 The handler passes no lifetime to `/auth/token/create`, so exchanged tokens inherit the service's

@@ -2,6 +2,35 @@
 
 > **The short version:** Grant Management lets clients explicitly query, merge, replace, and revoke their authorizations — giving them full control over what permissions they have, rather than just having tokens with no visibility.
 
+> ### Read this first: the five actions live in two different places
+>
+> This deployment advertises **five** grant-management actions, and a reader who assumes they are five features
+> of one API will look for three endpoints that do not exist. They are **two mechanisms that share a
+> vocabulary**:
+>
+> | Action | Where it happens | What implements it |
+> |---|---|---|
+> | `create` | on the **authorization request** | **Authlete.** No code in this repo |
+> | `merge` | on the **authorization request** | **Authlete.** No code in this repo |
+> | `replace` | on the **authorization request** | **Authlete.** No code in this repo |
+> | `query` | `GET /api/gm/:grantId` | this server's management API |
+> | `revoke` | `DELETE /api/gm/:grantId` | this server's management API |
+>
+> **The authorization-request half needs no server code and it works.** `grant_management_action` and `grant_id`
+> ride inside the opaque `parameters` string of an authorization request; Authlete processes them; the resulting
+> `grant_id` comes back in the token response, which `token.controller.ts` already forwards verbatim. Verified
+> end to end on **2026-08-12** — including `GET /api/gm/{id}` returning 200 for a grant created that way, which
+> was the first live exercise of the ownership check on a real grant.
+>
+> **This matters because the two halves fail differently.** If `create` does not work, the problem is service
+> configuration or the request. If `query` returns 403, the problem is almost certainly the ownership gate in
+> `middleware/require-grant-ownership.ts` — this server requires the token's own grant to equal `:grantId`,
+> which is **stricter than the specification** and is explained in Part 5. Do not debug one against the other's
+> documentation, and do not schedule code for the first three: it exists, in Authlete.
+>
+> **One consequence worth stating plainly:** a client-credentials token has no grant, so machine-to-machine
+> grant management is not supported here. That is a deliberate cost of the ownership gate, not an omission.
+
 ---
 
 ## Table of Contents
