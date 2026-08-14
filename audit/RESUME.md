@@ -13,6 +13,33 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 
 ## 0. START HERE — the next piece of work, and why it is that one
 
+> ### ⏭️ NEXT: exactly two items remain in the whole plan — **T2-5** and **T2-17**
+>
+> **Tier 0, Tier 1 and Tier 3 are complete. Tier 2 is 15 of 17.** Every decision record is ruled, every
+> Authlete probe the audit owed is spent, and CU-W1 is proven. What is left is two documentation batches.
+>
+> **T2-5 — one `SPEC-INVENTORY.md` pass, 15 IDs, each row carrying its fetched URL and header line.**
+> IDs: HAIP-W2, NSSO-W3 *(already done in T2-14 — verify rather than redo)*, FED-W3, CIMD-W1, FCL-W2, SM-W2,
+> ATT-W1, 9701-W4, 9901-W1, VP-W2, HSK-W2 *(done in T2-16)*, PS-W1 *(done in T2-16)*, ATTR-W3, MDL-W3, plus
+> §2.1's outcome *(done in T2-4)*. **Five of the fifteen have already shipped inside other items — check each
+> before fetching anything.** DR-08 owes FCL-W2, FCL-W3 and SM-W2 to this batch.
+>
+> > **Do T2-5 in one commit or not at all, and here is the specific reason.** The item's whole point is
+> > *citation provenance* — a row that says "URL fetched" when it was not is precisely the defect it exists to
+> > remove. **A half-finished provenance pass is worse than none**, because the finished rows make the unfinished
+> > ones look verified. Budget for the fetches up front; there are roughly ten left after the five already done.
+>
+> **T2-17 — the remaining documentation items**, ~40 IDs, listed on its row in `04-remediation-plan.md`.
+> **Batch by file, not by ID** — that is what the row says and it is right; many touch the same three or four
+> documents. Several are already closed by other work (RPL-W5, CUR-3b-W14, 6749-W1, 8693-W1/W2, 9068-W3/W4,
+> CUR-3c-W13's premise), so **the first task is a coverage sweep of the list, not writing.**
+>
+> **And carry this from the nine Tier 2 items shipped on 2026-08-14: eight of nine had criteria that were
+> WRONG, not merely vague** — see the table under *Tier 2 progress* below. The plan predates Tier 1. **Re-derive
+> every value an item hands you**, including its replacement line numbers and its "already established" facts.
+
+
+
 *(Rewritten 2026-08-14. Everything the previous version described as "next" is done and merged. Read this
 before §1.)*
 
