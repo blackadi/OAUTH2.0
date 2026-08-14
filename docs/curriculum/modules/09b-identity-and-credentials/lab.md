@@ -385,6 +385,51 @@ language object and re-encodes it before hashing — a perfectly natural thing t
 digests for every credential it did not itself create. The rule is: **treat a disclosure as an opaque string
 from the moment you receive it.** Decode it to read the value; never to re-encode it.
 
+### 5d-bis — Delete one character
+
+Not a forgery. Not a replay. **Remove the final `~`** and see what a verifier does with a credential that is
+merely *malformed*:
+
+```bash
+node sd-jwt.mjs issue --claims claims.json \
+  --sd given_name,family_name,email,nationality --issuer-key i-priv.json --out ok.txt
+perl -pe 's/~$//' ok.txt > notilde.txt
+node sd-jwt.mjs verify notilde.txt --issuer-key i-pub.json
+```
+
+```
+  FAIL  7.1/1  MALFORMED — the final element "WyJqX2VLV2xaVUJzMlN4aF9V…" is not a JWS (no "."), so it is
+               a Disclosure and the trailing "~" was omitted. §4: with no KB-JWT the last element MUST be
+               an empty string and the last separating tilde MUST NOT be omitted
+RESULT: REJECTED.
+```
+
+**Until 2026-08-14 this script printed `RESULT: ACCEPTED`** — and `nationality` was simply gone from the
+processed payload. Work through why, because the failure is more interesting than the fix:
+
+`splitSdJwt` decided whether a KB-JWT was present by asking *"is the final `~`-separated element non-empty?"*
+Strip the tilde and the last **Disclosure** becomes the final non-empty element, so it was reclassified as a
+Key Binding JWT and removed from the Disclosure list. Then **every subsequent step passed honestly**:
+`7.1/5` — *"every Disclosure presented is referenced by a digest"* — passed because the three *surviving*
+Disclosures genuinely were all referenced. The fourth had been discarded before counting began. And `7.1/1`,
+the step whose entire job is *"separate the SD-JWT into its parts"*, was **hardcoded `PASS`**.
+
+Three things to take away:
+
+1. **A step that cannot fail is not a check.** `step('7.1/1', true, …)` looked like verification in the output
+   trace and verified nothing. Read your own PASS lines and ask which of them could ever print FAIL.
+2. **Silently discarding data is worse than rejecting it.** A verifier that says "no" is a bug report. A
+   verifier that says "yes" while dropping a claim is a *security* bug — the application downstream sees a
+   credential that the holder never presented, and nothing anywhere says so.
+3. **The fix had to be structural, not a guess.** "Assume a KB-JWT if it looks long" would be a heuristic. A
+   KB-JWT is a JWS — three base64url segments, **two dots**. A Disclosure is base64url of a JSON array and
+   contains **no** dot. So a non-empty final element with no dots *cannot* be a KB-JWT, and the omitted tilde
+   becomes detectable rather than merely suspected. When you enforce a format rule, find the property that
+   makes the two cases distinguishable in principle.
+
+`AUDIT-PASS-A.md` recorded this script as *"CLEAN, 0 defects"*. It had three, and this was the one with a
+security consequence.
+
 ### 5e — The `exp` that was never disclosed
 
 §9.7 warns that issuers **MUST NOT** make validity-critical claims selectively disclosable. Build a credential

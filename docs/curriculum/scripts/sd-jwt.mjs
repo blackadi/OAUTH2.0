@@ -209,19 +209,53 @@ function cmdIssue(args) {
 // inspect — see the structure without verifying anything
 // ---------------------------------------------------------------------------
 
+/**
+ * Split a compact SD-JWT, and REFUSE the one malformed shape that silently changes its meaning.
+ *
+ * §4: the two formats *"can be distinguished by the final ~ character"*, and with no KB-JWT
+ * *"the last element MUST be an empty string and the last separating tilde character MUST NOT be omitted."*
+ *
+ * **This function quoted that rule and did not enforce it (3c-F1).** Inferring the KB-JWT from "is the final
+ * element non-empty" means that **omitting the trailing tilde reclassifies the last Disclosure as a
+ * Key Binding JWT** and drops it from the Disclosure list. Every verification step then passed — including
+ * `7.1/5`, because the surviving Disclosures genuinely *are* all referenced by a digest — and the script
+ * printed `ACCEPTED` for a malformed credential with a claim silently missing from the processed payload.
+ * A verifier that accepts a claim-losing mutation is worse than one that rejects valid input.
+ *
+ * **The discriminator is structural, not heuristic.** A KB-JWT is a JWS: three base64url segments joined by
+ * two dots. A Disclosure is base64url of a JSON array and contains **no** dot. So a non-empty final element
+ * with no dots cannot be a KB-JWT, which makes the omitted tilde detectable rather than merely suspected.
+ *
+ * @returns `{ issuerJwt, disclosures, kbJwt, malformed }` — `malformed` carries the reason when set, so the
+ *          caller can report it as the failure of §7.1 step 1 instead of the step asserting `true`.
+ */
 function splitSdJwt(s) {
-  const parts = s.split('~');
+  const parts = s.trim().split('~');
   const issuerJwt = parts[0];
   const last = parts[parts.length - 1];
-  // §4: the two formats "can be distinguished by the final ~ character that is
-  // present on an SD-JWT". An empty final element means no KB-JWT.
-  const kbJwt = last === '' ? null : last;
-  const disclosures = parts.slice(1, parts.length - 1);
-  return { issuerJwt, disclosures, kbJwt };
+
+  if (parts.length < 2) {
+    return { issuerJwt, disclosures: [], kbJwt: null, malformed: 'no "~" present — this is a bare JWT, not an SD-JWT (§4)' };
+  }
+
+  let malformed = null;
+  if (last !== '' && !last.includes('.')) {
+    malformed =
+      `the final element "${last.slice(0, 24)}${last.length > 24 ? '…' : ''}" is not a JWS (no "."), so it is a ` +
+      'Disclosure and the trailing "~" was omitted. §4: with no KB-JWT the last element MUST be an empty ' +
+      'string and the last separating tilde MUST NOT be omitted';
+  }
+
+  // On the malformed shape, keep the final element as a Disclosure — that is what it is. The credential is
+  // rejected either way, and treating it correctly means the reported Disclosure count is the true one.
+  const kbJwt = malformed || last === '' ? null : last;
+  const disclosures = malformed ? parts.slice(1) : parts.slice(1, parts.length - 1);
+  return { issuerJwt, disclosures, kbJwt, malformed };
 }
 
 function cmdInspect(args) {
-  const { issuerJwt, disclosures, kbJwt } = splitSdJwt(readMaybeStdin(args._[0]));
+  const { issuerJwt, disclosures, kbJwt, malformed } = splitSdJwt(readMaybeStdin(args._[0]));
+  if (malformed) console.log(`!! MALFORMED per §4: ${malformed}\n`);
   const payload = jwsPayload(issuerJwt);
   console.log('=== Issuer-signed JWT ===');
   console.log('header :', JSON.stringify(jwsHeader(issuerJwt)));
@@ -302,7 +336,7 @@ function cmdVerify(args) {
   // from policy set BEFORE looking at the input. That is the whole point.
   console.log(`  ----  7.3/1 Key Binding required by policy? ${requireKb ? 'YES' : 'no'}  (decided before parsing — §9.5)`);
 
-  const { issuerJwt, disclosures, kbJwt } = splitSdJwt(raw);
+  const { issuerJwt, disclosures, kbJwt, malformed: splitError } = splitSdJwt(raw);
 
   // §7.3 step 2
   if (requireKb) step('7.3/2', kbJwt !== null, kbJwt ? 'SD-JWT+KB provided' : 'Key Binding required but a bare SD-JWT was presented — REJECT');
@@ -310,7 +344,13 @@ function cmdVerify(args) {
 
   // ---- §7.1 ----
   console.log('=== RFC 9901 §7.1 — Verification of the SD-JWT ===');
-  step('7.1/1', true, `split into 1 Issuer-signed JWT + ${disclosures.length} Disclosure(s)${kbJwt ? ' + KB-JWT' : ''}`);
+  // Was hardcoded `true`, which reported a miscount as a PASS (3c-F1). Step 1 is "separate the SD-JWT into
+  // its parts" — a step that cannot fail is not a check.
+  step('7.1/1', !splitError,
+    splitError
+      ? `MALFORMED — ${splitError}`
+      : `split into 1 Issuer-signed JWT + ${disclosures.length} Disclosure(s)${kbJwt ? ' + KB-JWT' : ''}`);
+  if (failed) return finish();
 
   const header = jwsHeader(issuerJwt);
   step('7.1/2a', header.alg !== 'none' && /^(ES|RS|PS|EdDSA)/.test(header.alg), `alg=${header.alg} ("none" MUST NOT be accepted)`);
@@ -323,13 +363,13 @@ function cmdVerify(args) {
 
   // §7.1 step 3a: digest every Disclosure we were given.
   const byDigest = new Map();
-  let malformed = false;
+  let undecodable = false;
   for (const d of disclosures) {
     let arr;
-    try { arr = JSON.parse(unb64u(d).toString('utf8')); } catch { malformed = true; continue; }
+    try { arr = JSON.parse(unb64u(d).toString('utf8')); } catch { undecodable = true; continue; }
     byDigest.set(digestOf(d, alg), { arr, str: d });
   }
-  step('7.1/3a', !malformed, `computed ${byDigest.size} digest(s) over the Disclosure strings as received`);
+  step('7.1/3a', !undecodable, `computed ${byDigest.size} digest(s) over the Disclosure strings as received`);
 
   // §7.1 step 3b/3c, restricted to top-level object properties, which is all
   // this teaching tool issues. Nested and recursive Disclosures (§4.2.6, §6)
