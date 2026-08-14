@@ -116,7 +116,7 @@ it always passes.
 **Why S2 and not S1.** On this path the user has just authenticated, so `auth_time = now` is *correct* and no
 wrong token is issued. Nothing is currently mis-attested. What is wrong is that the repo's `max_age`
 enforcement is decorative: the branch exists, is tested by no test, is documented as a working control
-(`STEP-UP-AUTH-TUTORIAL.md:186-188` shows "Check maxAge requirement" as a step in the sequence diagram), and
+(`STEP-UP-AUTH-TUTORIAL.md`, **Part 4**'s sequence diagram shows "Check maxAge requirement" as a step), and
 cannot fire. The moment session reuse is introduced — which F-3 is about — it is the only thing standing
 between a stale authentication and a token that claims freshness, and it will not stand.
 
@@ -190,7 +190,7 @@ Actual structure: §3 challenge · §4 authorization request · §5 authorizatio
 |---|---|---|
 | "RFC 9470 §2: Check if the authorization request requires specific ACRs" | `session.controller.ts:118` | §4 (request) / §6 (claims). §2 is "Protocol Overview" |
 | "RFC 9470 §3: Check maxAge" | `session.controller.ts:140` | §4. §3 is the challenge, which this code does not emit |
-| "Check ACR requirements (RFC 9470 §2)" / "Check maxAge requirement (RFC 9470 §3)" | `STEP-UP-AUTH-TUTORIAL.md:186-188` | same |
+| "Check ACR requirements (RFC 9470 §2)" / "Check maxAge requirement (RFC 9470 §3)" | `STEP-UP-AUTH-TUTORIAL.md`, **Part 4**'s sequence diagram | same |
 
 ## Finding F-5 — `acr_values_supported` is not advertised (S3)
 
@@ -213,14 +213,14 @@ aware; this parser is not.
 
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
-| The challenge, twice, as `HTTP/1.1 403 Forbidden`, "conforming to RFC 9470" | `STEP-UP-AUTH-TUTORIAL.md:196-234` | §3's examples are both 401; 403 appears nowhere in §3 | `DOC_INCORRECT` / **S2** — F-1 |
-| "What the client learns" table treats the 403 body as the client's input | `STEP-UP-AUTH-TUTORIAL.md:238-244` | Makes the RS/AS conflation explicit | `DOC_INCORRECT` / S2 |
-| Sequence diagram step "Check maxAge requirement (RFC 9470 §3)" | `STEP-UP-AUTH-TUTORIAL.md:186-188` | The check exists and cannot fail — F-2; and the citation is wrong — F-4 | `DOC_INCORRECT` / **S2** |
-| "`session.controller.ts` records `authTime` (current epoch) and `acr` ('pwd' for password auth)" | `STEP-UP-AUTH-TUTORIAL.md:166` | Accurate for the login path | **Accurate** |
-| "Authlete embeds these claims in the JWT access token (when `accessTokenSignAlg` is configured)" | `STEP-UP-AUTH-TUTORIAL.md:168` | Correct caveat; on this deployment the claims arrive via §6.2 introspection instead | **Accurate**, cross-ref `RFC9068-…` |
+| The challenge, twice, as `HTTP/1.1 403 Forbidden`, "conforming to RFC 9470" | `STEP-UP-AUTH-TUTORIAL.md`, **Part 5** — ✅ **fixed 2026-08-14 (T2-11)** | §3's examples are both 401; 403 appears nowhere in §3 | `DOC_INCORRECT` / **S2** — F-1 |
+| "What the client learns" table treats the 403 body as the client's input | `STEP-UP-AUTH-TUTORIAL.md`, **Part 5 → What the client learns** — ✅ **fixed 2026-08-14 (T2-11)**, and *split*: the §3 parameters hang off the 401, `acr`/`auth_time` are labelled Response 1 only | Makes the RS/AS conflation explicit | `DOC_INCORRECT` / S2 |
+| Sequence diagram step "Check maxAge requirement (RFC 9470 §3)" | `STEP-UP-AUTH-TUTORIAL.md`, **Part 4**'s sequence diagram | The check exists and cannot fail — F-2; and the citation is wrong — F-4 | `DOC_INCORRECT` / **S2** |
+| "`session.controller.ts` records `authTime` (current epoch) and `acr` ('pwd' for password auth)" | `STEP-UP-AUTH-TUTORIAL.md`, **Part 4 → How this server binds them** | Accurate for the login path | **Accurate** |
+| "Authlete embeds these claims in the JWT access token (when `accessTokenSignAlg` is configured)" | `STEP-UP-AUTH-TUTORIAL.md`, **Part 4 → How this server binds them**, step 3 | Correct caveat; on this deployment the claims arrive via §6.2 introspection instead | **Accurate**, cross-ref `RFC9068-…` |
 | `acr` and `auth_time` visible on introspection | `modules/04…/lab.md:180-184` | **Verified live** — §6.2 satisfied | **Accurate** |
 | "Where do `acr` and `auth_time` come from? … For a JWT access token they are claims in the token; for [an opaque one, introspection]" | `modules/09a…/README.md:304` | Correct, and the clearest statement of §6.1 vs §6.2 in the repo | **Accurate** |
-| `AGENTS.md`'s RFC 9470 paragraph: ACR/`auth_time` binding, `ACR_NOT_SATISFIED`, `EXCEEDS_MAX_AGE`, `introspection.controller.ts:47` parsing | `AGENTS.md` | Behaviour described correctly, but `EXCEEDS_MAX_AGE` is unreachable (F-2) and the line reference is stale — `parseBearerError` is at `:20-36`, the FORBIDDEN branch at `:76` | `DOC_INCORRECT` / S3 |
+| `AGENTS.md`'s RFC 9470 paragraph: ACR/`auth_time` binding, `ACR_NOT_SATISFIED`, `EXCEEDS_MAX_AGE`, `introspection.controller.ts:47` parsing | `AGENTS.md` | ✅ **fixed 2026-08-14 (T2-10).** `EXCEEDS_MAX_AGE`'s reachability was settled by T1-7 (it fails on the `prompt=none` path only), and the ref now names the **`case "FORBIDDEN"`** branch at `:142-167` with `parseBearerError` at `:45`. **Note the correction written here was itself stale by the time it was applied** — `:20-36` and `:76` were right in early August and the file has grown since, which is why the fix anchors on the branch name as well as the number | ~~`DOC_INCORRECT` / S3~~ → **fixed** |
 | Nothing anywhere notes that the `prompt=none` step-up path fabricates the authentication event | all docs; `PROGRESS.md:1508-1517` records the dead code but not what it *does* | F-3 | **Omission** / **S2**, latent S1 |
 
 ## Sources consulted

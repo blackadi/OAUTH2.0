@@ -595,9 +595,15 @@ Roll it up:
 | `audience` | Same, logical name | discarded | Same |
 | `requested_token_type` | Choose the returned token type | discarded | You get an access token; `issued_token_type` is absent, so you cannot even tell |
 
-One root cause explains all four. `token-exchange-response.handler.ts:29-34` builds its request to Authlete
-from exactly four fields — `grantType`, `clientId`, `scopes`, `subject` — and throws away everything else
-Authlete resolved. Read those six lines; the whole table above follows from them.
+One root cause explains all four. `token-exchange-response.handler.ts:47-52` — **the `tokenCreateRequest`
+literal**, directly under the ⚠️ comment that begins *"four request parameters are dropped here"* — builds the
+request to Authlete from exactly four fields (`grantType`, `clientId`, `scopes`, `subject`) and throws away
+everything else Authlete resolved. **Read the create-request literal**; the whole table above follows from it.
+
+> **Find it by the comment, not by the number.** This lab cited `:29-34` until 2026-08-14 — which was the
+> ⚠️ *comment block* rather than the literal — and the audit's own correction to `:47-52` had to be re-checked
+> before being applied, because two other line numbers in the same work item had drifted again in the
+> meantime. **A `path:line` reference is a pointer that rots; a quoted comment is one that does not.**
 
 ### 6c — Find the credential in the identity field
 
@@ -633,7 +639,7 @@ active = true
 ```
 
 **A live access token is sitting in a `sub` claim.** The cause is one line —
-`token-exchange-response.handler.ts:27`:
+`token-exchange-response.handler.ts:32`:
 
 ```js
 const subject = result.subject || subjectToken;

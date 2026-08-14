@@ -217,7 +217,31 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (6):** T2-5, T2-10, T2-14, T2-15, T2-16, T2-17.
+**Tier 2 remaining (5):** T2-5, T2-14, T2-15, T2-16, T2-17.
+
+**T2-10 shipped 2026-08-14, and the item's own advice was the finding.** The plan noted *"prefer anchoring on
+the ⚠️ comment text — these have drifted once already."* **Three of the bundle's replacement numbers had drifted
+a second time, before anyone applied them:**
+
+| Item's correction | Actual, 2026-08-14 | Why it moved |
+|---|---|---|
+| `parseBearerError` at `:20-36` | **`:45`** | T1-1's auth gate and the DPoP-nonce relay grew the controller |
+| RFC 9470 branch at `:81-97` | **`case "FORBIDDEN"` at `:142-167`** | same |
+| `ParSection.tsx:43` (the PKCE write) | **`:41`** (read back at `:34`) | the component shifted by two lines |
+
+**Every reference fixed now carries a content anchor** — *"the `tokenCreateRequest` literal"*, *"the
+`case \"FORBIDDEN\"` branch"*, *"written there; read back at `:34`"* — so the next drift leaves them findable
+rather than silently wrong. **CUR-3c-W12 was closed by deleting its numbers rather than correcting them**: T2-1
+and T2-11 had already invalidated `:391` and `:182-183`, so seven tutorial citations across two findings now
+name a **section**, which is `04-remediation-plan.md` §6.3's option (b) applied to findings instead of to
+`PROGRESS.md`. **CUR-3b-W4 turned out already satisfied, by deletion** — Module 05 carries no
+`dpop.service.ts:NNN` reference at all now, which is more durable than renumbering a file that had drifted
+twice. One ref no item had named: `STEP-UP-AUTH-TUTORIAL.md`'s appendix cited `:114`, the *validation-error*
+branch. `03-curriculum-audit.md`'s copies were deliberately left — they quote the wrong numbers **as** the defect.
+
+> **The rule worth carrying: never cite a line number in a file you are actively rewriting.** A section heading
+> survives insertion above it; a line number does not. And when a work item hands you a replacement number,
+> **re-derive it** — three of five here were wrong.
 
 **T2-8 shipped 2026-08-14, and theme 2 had drifted in the direction nobody was watching.** The finding was
 *"four features claimed as working while their service flag is off"* — Native SSO, FAPI 2.0, VCI, MCP/CIMD. Two

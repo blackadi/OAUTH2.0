@@ -284,8 +284,8 @@ RFC 8252 redirect hardening and the refresh-token rule — neither of which the 
   > exploitable, not worth a CVE — but you should be able to *spot* it and then correctly decline to panic.
   > (Note also that `AGENTS.md` and the spec inventory previously listed this file under
   > `client/src/services/`; it is at `client/src/pkce.ts`.)
-- **`client/src/components/fapi/FapiSection.tsx:134`** and **`components/oidc/ParSection.tsx:38`** — the
-  verifier is stashed in `sessionStorage` across the redirect. Note *where* it lives and ask yourself what an
+- **`client/src/components/fapi/FapiSection.tsx:134`** and **`components/oidc/ParSection.tsx:41`** (written
+  there; read back at `:34`) — the verifier is stashed in `sessionStorage` across the redirect. Note *where* it lives and ask yourself what an
   XSS bug would do to it; that question is the heart of Tier 4.
 - **Authlete** performs the §4.6 verification. This server never sees a `code_verifier` except to forward it.
 

@@ -657,7 +657,7 @@ them away.
 
 ### The root cause, in six lines
 
-`server/src/controllers/token-exchange-response.handler.ts:29-34` builds its `/auth/token/create` request
+`server/src/controllers/token-exchange-response.handler.ts:47-52` — the `tokenCreateRequest` literal — builds its `/auth/token/create` request
 from exactly four fields:
 
 ```ts
@@ -756,7 +756,7 @@ sequenceDiagram
 |------|------|
 | `server/src/services/token.service.ts` | Forwards the raw request to Authlete's `/auth/token` |
 | `server/src/controllers/token.controller.ts:147` | `case "TOKEN_EXCHANGE"` → `handleTokenExchange()` |
-| `server/src/controllers/token-exchange-response.handler.ts:29-34` | Builds the `/auth/token/create` request — and where the four parameters are lost |
+| `server/src/controllers/token-exchange-response.handler.ts:47-52` | Builds the `/auth/token/create` request — and where the four parameters are lost. `:29-34` is the ⚠️ comment *above* it, which is what earlier revisions of this table cited |
 | `server/src/services/token.operations.service.ts` | Token management wrapper (`/auth/token/create`) |
 
 ### Test Coverage

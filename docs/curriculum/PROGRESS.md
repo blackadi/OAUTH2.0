@@ -122,6 +122,45 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-4 + T2-12: TLS 1.3 has a new RFC number, and Module 10's missing conformance row is PARTIAL rather than FAIL** (below)
 - [x] **2026-08-14 — VCI-W6 closed: the credential issuer has a key, and Module 09b Ex 7 is a three-state exercise now** (below)
 - [x] **2026-08-14 — T2-8: two of theme 2's four features were missing from README's tables entirely** (below)
+- [x] **2026-08-14 — T2-10: three of the audit's own replacement line numbers had drifted again before anyone applied them** (below)
+
+### 2026-08-14 — T2-10: the stale line numbers, and the corrections that went stale too
+
+**Why this matters to a future session:** the plan's note on this item read *"prefer anchoring on the ⚠️ comment
+text — these have drifted once already."* That was the finding, not a stylistic preference. **Three of the
+bundle's replacement numbers had drifted a second time before anyone applied them:**
+
+| The audit's correction | Actual, 2026-08-14 | Why it moved |
+|---|---|---|
+| `parseBearerError` at `introspection.controller.ts:20-36` | **`:45`** | T1-1's auth gate and the DPoP-nonce relay grew the file |
+| the RFC 9470 branch at `:81-97` | **`case "FORBIDDEN"` at `:142-167`** | same |
+| `ParSection.tsx:43` (the PKCE write) | **`:41`**, read back at `:34` | the component shifted by two lines |
+
+So every reference fixed here carries a **content anchor** alongside the number — *"the `tokenCreateRequest`
+literal"*, *"the `case \"FORBIDDEN\"` branch"*, *"under the ⚠️ comment naming §2.2.1"*. A `path:line` pointer
+rots; a quoted comment does not.
+
+**What landed:** the three token-exchange handler refs (`:47-52`, `:69-76`, `:32`) in `AGENTS.md`,
+`TOKEN-EXCHANGE-TUTORIAL.md` ×2 and Module 06's lab ×2 — and Module 06's *"read those six lines"* becomes
+**"read the create-request literal"**, because *six lines* was counting the ⚠️ comment the old number pointed
+at. The introspection refs in `AGENTS.md`, Module 09a's lab and — a site no work item named — the step-up
+tutorial's appendix, which cited `:114`, the **validation-error** branch. And Module 03's `ParSection.tsx` ref.
+
+> **Two closures worth the detail.** **CUR-3c-W12 was closed by deleting its line numbers, not correcting
+> them**: T2-1 and T2-11 had already invalidated the replacements (`:391`, `:182-183`) the week they were
+> written, so seven tutorial citations across two findings now name a **section** — *"Part 5 → What the client
+> learns"*. That is `audit/04-remediation-plan.md` §6.3's option (b), applied to findings rather than to this
+> file. **CUR-3b-W4 was already satisfied, by deletion**: Module 05 carries no `dpop.service.ts:NNN` reference
+> at all any more, which is more durable than renumbering a file that had already drifted twice.
+>
+> `03-curriculum-audit.md`'s copies of the wrong numbers were **deliberately left** — they quote them *as* the
+> defect, the same reason `check-docs.mjs` needs a `PATHS_DISCUSSED_NOT_REFERENCED` list.
+
+**Two rules for anyone doing this again:** *never cite a line number in a file you are actively rewriting*, and
+*when a work item hands you a replacement number, re-derive it* — three of five here were wrong.
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files.
 
 ### 2026-08-14 — T2-8: the claimed-working/flag-off table, and the drift nobody was watching
 

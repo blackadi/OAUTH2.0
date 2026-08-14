@@ -580,7 +580,7 @@ WWW-Authenticate: Bearer error="insufficient_user_authentication",
   acr_values="mfa"
 ```
 
-Then check what this repo does with it: `introspection.controller.ts:47` parses Authlete's `WWW-Authenticate`
+Then check what this repo does with it: `introspection.controller.ts:142-167` — the `case "FORBIDDEN"` branch — parses Authlete's `WWW-Authenticate`
 for `insufficient_user_authentication` and re-shapes it into JSON carrying `acr_values`/`max_age`, so a
 browser client can read the requirement without parsing an HTTP header.
 

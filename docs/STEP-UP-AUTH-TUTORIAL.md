@@ -480,7 +480,7 @@ When ACR can't be satisfied, the server calls `/auth/authorization/fail` with `r
 | `src/services/authorization.service.ts:59` | Passes `acr`/`authTime` from `session.stepUp` to Authlete |
 | `src/controllers/authorization.controller.ts:55` | Stores `acrs`, `acrEssential`, `maxAge` from Authlete in session |
 | `src/controllers/session.controller.ts:59` | Checks ACR/maxAge requirements on login; sets `stepUp` in session |
-| `src/controllers/introspection.controller.ts:114` | Parses `insufficient_user_authentication` into structured JSON (`parseBearerError`, defined at `:45`) |
+| `src/controllers/introspection.controller.ts:142-167` | The `case "FORBIDDEN"` branch — parses `insufficient_user_authentication` into structured JSON (`parseBearerError`, defined at `:45`). This row read `:114` until 2026-08-14, which is the *validation-error* branch |
 | `src/services/introspection.service.ts:38` | Passes `acrValues`/`maxAge` to Authlete introspection API |
 | `src/controllers/device.controller.ts:87` | Passes `acr`/`authTime` to device flow complete |
 | `src/controllers/ciba.controller.ts:106` | Passes `acr`/`authTime` to CIBA complete |
