@@ -308,6 +308,33 @@ describe("Integration: all API routes", () => {
       const res = await request(app).get("/api/.well-known/jwks.json").expect(200)
       expect(res.body.keys).toHaveLength(1)
     })
+
+    // JOSE-W5. "No keys" is a server fault, not an empty-but-valid JWK Set. All three shapes below used to
+    // answer `200 {"keys":[]}`, which tells a relying party this OP publishes no keys — so the RP caches an
+    // empty set and rejects every token for an unknown `kid`, indistinguishable from forged tokens. A 5xx
+    // makes a well-built RP retry and keep serving from its cached set instead.
+    it("fails rather than serving an empty key set when Authlete returns nothing", async () => {
+      mockApi.jwkSetEndpoint.serviceJwksGetApi.mockResolvedValue(undefined)
+      const res = await request(app).get("/api/.well-known/jwks.json")
+      expect(res.status).toBeGreaterThanOrEqual(500)
+      expect(res.body.keys).toBeUndefined()
+    })
+
+    it("fails when the response carries no `keys` array", async () => {
+      mockApi.jwkSetEndpoint.serviceJwksGetApi.mockResolvedValue({} as never)
+      const res = await request(app).get("/api/.well-known/jwks.json")
+      expect(res.status).toBeGreaterThanOrEqual(500)
+      expect(res.body.keys).toBeUndefined()
+    })
+
+    it("fails on Authlete's 204 rather than translating it to an empty set", async () => {
+      mockApi.jwkSetEndpoint.serviceJwksGetApi.mockRejectedValue(
+        Object.assign(new Error("No Content"), { statusCode: 204 }),
+      )
+      const res = await request(app).get("/api/.well-known/jwks.json")
+      expect(res.status).toBeGreaterThanOrEqual(500)
+      expect(res.body.keys).toBeUndefined()
+    })
   })
 
   describe("POST /api/ciba/authentication", () => {

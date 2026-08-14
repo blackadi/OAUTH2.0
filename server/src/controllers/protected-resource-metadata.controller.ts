@@ -20,7 +20,18 @@ export const protectedResourceMetadataController = {
     const log = req.logger || logger;
     try {
       const raw = await new DiscoveryService().getConfiguration(req);
-      // Authlete's discovery API may hand back the document as a JSON string or as an object.
+      // The string branch is **defensive, not required** — 8414-W4, settled 2026-08-14.
+      //
+      // SDK 1.0.0 types this call `Promise<{ [k: string]: any }>`, i.e. an object, never a string. The
+      // comment that used to sit here claimed "Authlete's discovery API may hand back the document as a
+      // JSON string or as an object", which is a statement about vendor behaviour that the SDK's own type
+      // contradicts and that nobody had observed.
+      //
+      // Kept rather than deleted, and the reason is the blast radius rather than the branch itself:
+      // `services/logout.service.ts` carries the same guard for this document *and* for the JWK Set, that
+      // file is a **Security-critical surface** (session termination), and a unit test asserts this
+      // endpoint accepts a stringified document. Deleting one arm of a triple is how the two halves drift.
+      // The guard costs a `typeof` and cannot misfire — if the SDK's contract ever loosens, it is correct.
       const discovery: Record<string, unknown> =
         typeof raw === "string" ? JSON.parse(raw) : ((raw ?? {}) as Record<string, unknown>);
 
