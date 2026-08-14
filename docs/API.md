@@ -233,6 +233,23 @@ Register new OAuth client (RFC 7591).
 
 **Response:** 201 (CREATED), 400, 401
 
+> **Admin Basic auth here is a deliberate departure from RFC 7591 §3, not an attempt at it.** §3 says the
+> registration endpoint *"SHOULD allow registration requests with no authorization"*, and MAY instead require an
+> **initial access token** — which the RFC specifies is *"in the form of an OAuth 2.0 access token"*. This
+> deployment does **neither**: it refuses open registration and gates the endpoint on this server's management
+> credentials, so a client holding a legitimately obtained initial access token still cannot register.
+>
+> The reason is what this deployment *is*. An open `register` endpoint on a public teaching server is a free
+> client factory for anyone who finds it. **The body is conformant even though the gate is not** — since
+> 2026-08-14 the 201 carries RFC 7591 §3.2.1's registration response at the top level rather than nested inside
+> Authlete's envelope (T1-11), so `client_id` is where a conforming client looks for it.
+>
+> `get`/`update`/`delete` are a different case: they present the **registration access token**, which is RFC
+> 7592's own mechanism. Their departure is the HTTP surface — four `POST` routes taking the token in a JSON body,
+> where §2 wants `GET`/`PUT`/`DELETE` on a per-registration client configuration endpoint, and there is no
+> `registration_client_uri` to reach one by. See `SPEC-INVENTORY.md` (7592-W3): **the body is conformant, the
+> endpoint is not**, and the pair is easy to misread as done because the RFC 7591 half beside it *was* fixed.
+
 ### `POST /api/client/dcr/get`
 Get client by registration access token.
 
@@ -467,12 +484,34 @@ All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth. **Authentication f
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/token/list` | GET | List all tokens |
-| `/api/token/create` | POST | Create token programmatically |
+| `/api/token/create` | POST | Create token programmatically. **Accepts `grant_type=implicit`** — see the note below |
 | `/api/token/delete/:accessTokenIdentifier` | DELETE | Delete token by identifier |
 | `/api/token/update` | PATCH | Update token scopes/metadata |
 | `/api/token/revoke` | POST | Revoke token via management API |
 | `/api/token/reissue` | POST | Reissue ID token |
 | `/api/token/createLocalToken` | GET | Create a local **RFC 9068** JWT access token (dev only, returns 404 in production). Requires `sub`, `aud` and `client_id`; `iss` defaults to `JWT_ISSUER`. Optional `scope`, `acr`, `authTime`. The token carries `typ: at+jwt` and all seven claims §2.2 marks REQUIRED — `client_id` is required *because* of that, since this token is the repo's worked example of the section |
+
+> ### `POST /api/token/create` accepts `implicit`, and that is not a client-facing grant
+>
+> `normalizeGrantType` (`services/token.operations.service.ts`) maps ten values, and `implicit` is one of them.
+> A reader who finds it there could reasonably conclude the implicit grant is available to clients at
+> `/api/token`. **It is not, and the two surfaces are answering different questions.**
+>
+> | | `POST /api/token` | `POST /api/token/create` |
+> |---|---|---|
+> | who calls it | any registered client | **admin only** — `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` |
+> | `grant_type` means | *"authorize me by this flow"* | *"record this as what authorized the token"* |
+> | `implicit` | never reaches here — the implicit flow returns a token from the **authorization** endpoint, not the token endpoint, by definition | accepted, and stored as the token's provenance |
+>
+> The admin API mints a token directly and stamps `grantType` on it as a **historical fact**, so its value set is
+> Authlete's ten-member `GrantType` enum rather than the grants a client may request. `implicit` is in that enum
+> because Authlete must be able to represent tokens that *were* issued that way.
+>
+> **This is why `normalizeGrantType` refuses rather than defaulting** (B1-W3): a value in this field is an
+> assertion about the past, and coercing an unrecognised one to `AUTHORIZATION_CODE` did not fail to answer the
+> question — it answered it wrongly, for the life of the token. Whether the implicit *flow* should be enabled at
+> all is a separate matter, ruled deliberately: it is on, because Modules 01 and 07 teach why RFC 9700 §2.1.2
+> retired it. See the `README.md` departures table.
 
 ---
 
