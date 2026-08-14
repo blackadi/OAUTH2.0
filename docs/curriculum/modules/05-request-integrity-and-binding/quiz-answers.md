@@ -69,8 +69,9 @@ which are wrong. The tell is the signature *length*: decode the third segment an
 `client/src/services/dpop.service.ts` needs no conversion — and why this bug appears almost exclusively in
 Node or OpenSSL-based clients.
 
-**Q12.** **Violates RFC 9101 §5:** *"The authorization server supporting this specification MUST only use the
-parameters included in the Request Object."* This code spreads the query parameters *and* the object into one
+**Q12.** **Violates RFC 9101 §6.3** (*Request Parameter Assembly and Validation*): *"The authorization server
+MUST only use the parameters in the Request Object, even if the same parameter is provided in the query
+parameter."* This code spreads the query parameters *and* the object into one
 bag. **Attack:** the object wins on collisions here, but any parameter the client did **not** put in the
 signed object can be injected by whoever controls the URL — the browser, a malicious extension, or a crafted
 link. So an attacker adds `resource=`, or `scope=` if the object omitted it, or a `claims` parameter, and

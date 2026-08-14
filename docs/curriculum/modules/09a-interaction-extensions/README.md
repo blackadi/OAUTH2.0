@@ -386,8 +386,12 @@ authentication: the first app's token response includes a `device_secret`, which
 (together with the first app's ID token) via
 `grant_type=urn:openid:params:grant-type:device_secret` for its own tokens.
 
-> **Status caveat, and it matters.** This is an **OpenID 2nd Implementer's Draft** (draft 07, approved
-> 2025-10-17) — **not** a Final specification. Do not cite it as normative. On this deployment
+> **Status caveat, and it matters.** This is an **OpenID 2nd Implementer's Draft** — **draft 07, whose own
+> header is dated 16 January 2025, approved as the 2nd Implementer's Draft on 2025-10-17** — and **not** a Final
+> specification. Do not cite it as normative. **Give both dates, because they answer different questions:** the
+> header date tells you which text you read, the approval date tells you what standing it has. Citing only one
+> is how a reader ends up unable to tell whether they have the revision you meant. `SPEC-INVENTORY.md` states
+> the rule generally. On this deployment
 > `nativeSsoSupported` is `false`, so this module teaches it from the spec and from
 > [`docs/NATIVE-SSO-TUTORIAL.md`](../../../NATIVE-SSO-TUTORIAL.md) and runs nothing.
 
@@ -429,7 +433,7 @@ guarantee outside OAuth's model entirely.
 | CIBA Core 1.0 | OpenID Final, Sep 2021 | Backchannel authentication endpoint, `auth_req_id`, poll/ping/push | No standard decoupled authentication |
 | RFC 9470 | Published RFC, Sep 2023 | `insufficient_user_authentication` + `acr_values`/`max_age` challenge | RS can refuse but cannot say what would suffice |
 | RFC 9396 | Published RFC, May 2023 | `authorization_details`; five common data fields; `invalid_authorization_details` | Structured authority smuggled into scope strings |
-| Native SSO 1.0 | OpenID **2nd Implementer's Draft** (draft 07, approved 2025-10-17) | `device_secret`, the device-secret grant | Every sibling app runs its own browser flow |
+| Native SSO 1.0 | OpenID **2nd Implementer's Draft** (draft 07, text dated 16 Jan 2025; approved 2025-10-17) | `device_secret`, the device-secret grant | Every sibling app runs its own browser flow |
 
 ## Where this sits in the dependency graph
 

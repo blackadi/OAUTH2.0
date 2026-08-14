@@ -8,8 +8,9 @@
 <thinking>
 1. RFC 8252 is a BCP addressed almost entirely to **native app clients**, not to authorization servers:
    use an external user-agent, not an embedded webview; choose among private-use URI scheme, claimed
-   `https`, or loopback redirect. The single obligation it places on the AS is §7.3: for loopback
-   redirects the AS should treat the **port as variable**, because the app cannot reserve a port in
+   `https`, or loopback redirect. The single obligation it places on the AS is §7.3, and it is a **MUST**,
+   not a "should" (this line read *"should"* until 2026-08-14 — see 8252-W1): the AS **MUST** allow any port
+   for loopback redirects, because the app cannot reserve a port in
    advance.
 2. Authlete boundary: that obligation maps to exactly one flag, `Service.loopbackRedirectionUriVariable`.
    Everything else in RFC 8252 is unenforceable by an AS and untestable here — this repo has no native
@@ -26,7 +27,7 @@
 
 | # | Requirement | Source | Status |
 |---|---|---|---|
-| 1 | Treat the port as variable when matching loopback redirection URIs | §7.3 | ✅ **Verified live** — `loopbackRedirectionUriVariable = True` |
+| 1 | **MUST** allow any port for loopback redirection URIs | §7.3 (fetched 2026-08-14) | ✅ **Verified live** — `loopbackRedirectionUriVariable = True` |
 | 2 | Use an external user-agent; never an embedded webview | §4, §8.12 | ⊘ Binds the **client**. No native app in this repo. Taught in Module 03. |
 | 3 | Choose among private-use scheme / claimed `https` / loopback | §7 | ⊘ Binds the client |
 | 4 | PKCE for public clients | §8.1, and RFC 9700 §2.1.1 | ⚠️ **Not required on this service** — `pkceRequired = False`. See `RFC7636-pkce.md` (`MISCONFIGURED`/S1) |
@@ -57,7 +58,7 @@ problem. Cross-referenced rather than double-counted.
 
 ## Sources consulted
 
-- RFC 8252 §7.3 (variable loopback port), §4/§7/§8.12 (client obligations) — carried from `SPEC-INVENTORY.md:93` and corroborated by Authlete's flags-page description. **RFC 8252 text not fetched directly this session** — see source gap
+- RFC 8252 §7.3 *"Loopback Interface Redirection"* (variable loopback port — **fetched 2026-08-14**, `https://www.rfc-editor.org/rfc/rfc8252.html`; the requirement is a **MUST**), §4/§7/§8.12 (client obligations) — the §7.3 wording was previously carried from `SPEC-INVENTORY.md:93` and Authlete's flags-page description. **The source gap is closed** (8252-W1)
 - Authlete flags page — `https://developers.authlete.com/configuration-reference/error-handling-debugging/flags-supported-in-authlete.md`
 - `llms.txt` — confirmed no RFC 8252 page
 - Live probe: `loopbackRedirectionUriVariable = True` (`SERVICE-CONFIG-PROBE.md`)
@@ -78,5 +79,5 @@ sources. If the Phase 3 pass cannot fetch RFC 8252, this entry should be downgra
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 8252-W1 | Fetch RFC 8252 §7.3 and confirm the requirement wording | S | Either this entry is confirmed, or the verdict is corrected |
+| 8252-W1 | Fetch RFC 8252 §7.3 and confirm the requirement wording | S | ✅ **DONE 2026-08-14 (T2-14) — the entry is confirmed and its own wording was corrected.** Fetched `https://www.rfc-editor.org/rfc/rfc8252.html`. §7.3 is titled **"Loopback Interface Redirection"** and the requirement is: *"The authorization server **MUST** allow any port to be specified at the time of the request for loopback IP redirect URIs, to accommodate clients that obtain an available ephemeral port from the operating system at the time of the request."* **This entry's `<thinking>` block said the AS "should" treat the port as variable** — an understatement of a MUST, in an entry whose verdict rests on that one obligation. Corrected. The verdict `IMPLEMENTED_VERIFIED` **stands and is now stronger**: `loopbackRedirectionUriVariable = True` satisfies a MUST rather than a recommendation, and the *"source gap — RFC 8252 text not fetched directly"* note below is closed. **This was one of the audit's last two outstanding fetches**, and like the other (CUR-3b-W12) it changed a claim the audit had been carrying from a vendor page rather than the RFC. |
 | — | No code or configuration change | — | The one AS-side requirement is already satisfied. Recording that is the finding. |

@@ -125,6 +125,55 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-10: three of the audit's own replacement line numbers had drifted again before anyone applied them** (below)
 - [x] **2026-08-14 — T2-15: theme 3 stated honestly — PAR is conformant on the way out and not on the way in** (below)
 - [x] **2026-08-14 — T2-16: the vendor features, and a fourth capability state that runs backwards** (below)
+- [x] **2026-08-14 — T2-14: the audit's last two fetches, and both went against the audit** (below)
+
+### 2026-08-14 — T2-14: the last two fetches, and a misquotation nobody had noticed
+
+**Why this matters to a future session: the audit's fetch budget is spent.** `RESUME.md` recorded *"two fetches
+remain in the whole audit."* Both were made, and **both contradicted the audit rather than the curriculum**:
+
+| Fetch | Result |
+|---|---|
+| **RFC 9101 §10.1** | *"Choice of Algorithms"* — and it carries **verbatim** the MUST-be-signed sentence Module 05 attributes to it. The Phase 2 entry had mapped that requirement to §6.2, *"JWS-Signed Request Object"*, which is a validation rule for a server *receiving* an object. Both sections are real; Module 05 cites the one carrying its quote. §10.8 *"Cross-JWT Confusion"* exists, settling a second claim |
+| **RFC 8252 §7.3** | *"Loopback Interface Redirection"*, and the obligation is a **MUST**: *"The authorization server MUST allow any port to be specified at the time of the request for loopback IP redirect URIs…"* The finding's own reasoning had said the AS **"should"** treat the port as variable — an understatement of a MUST, in an entry whose whole verdict rests on that one obligation. `IMPLEMENTED_VERIFIED` stands and is stronger |
+
+> ### A by-product neither item predicted, and it is the best find in the batch
+>
+> Asking the same RFC 9101 document *where the precedence rule actually lives* established three things at once:
+> it is **§6.3** (*Request Parameter Assembly and Validation*), not §5; the phrase occurs **exactly once** in the
+> whole document; and **the repo's quotation carried an extra word** — the RFC reads *"the parameters in the
+> Request Object"*, and Module 05 had *"the parameters **included** in the Request Object"*.
+>
+> **Module 05's lab had it right and its README did not.** The lesson and the lab disagreed for a fortnight, and
+> the lab was correct — the fifth time in this audit that the curriculum beat the audit's own reasoning, and
+> again in a place where the audit worked from an earlier fetch list while the curriculum had read the document.
+>
+> The mnemonic now in the README: **§5 is where a request is *passed*; §6.3 is where the server *assembles and
+> validates* it** — which is the only place a precedence rule could live. That makes the right section memorable
+> instead of arbitrary.
+
+**Two items reached files their criteria could not have named.** 9470-W4's code comments include
+`utils/step-up.ts`, which **T1-7 created** after the item was written. Both of its code edits are
+**comment-only**, so `session.controller.ts`'s plan-mode requirement does not apply — `CLAUDE.md` exempts a
+semantics-free edit, and a citation in a comment is exactly that. The old numbers were wrong for a reason worth
+keeping: **§2 is *Protocol Overview*, narrative with nothing to check against, and §3 is the challenge — a
+message this code never sends.** Citing §3 for a *check* is the same AS/RS conflation T2-11 fixed, one layer down.
+
+> **9449-W5 is the one with a live consequence.** RFC 9449 **§8 gives the AS `400 use_dpop_nonce`**; **§9 gives a
+> resource server `401`**. `AGENTS.md` documented **401 for both**. A client that retries only on a 401 never
+> retries at the token endpoint — so the wrong status does not mislabel the error, **it stops the nonce dance
+> from ever starting.** Also corrected: a stale or mismatched nonce is refused with `use_dpop_nonce`, not
+> `invalid_dpop_proof`. None of it is exercisable here — `dpopNonceRequired` is `false` — and the bullet now
+> says so rather than reading as an observation.
+
+Also landed: the Native SSO **two dates** (text 16 Jan 2025, approved 2025-10-17) with the reason both are
+needed; **RFC 9440** named in Module 05's mTLS revisit trigger, with what its *Informational* status means — it
+standardises the header, not any obligation to trust it, and §4 requires the origin to accept it only from a
+proxy it authenticates; and the **six** attacker archetypes corrected in the audit's own entry, where the prose
+said five while its table listed six and Module 10 had it right.
+
+**Verification.** `typecheck` clean, 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files. The only source changes are two comments.
 
 ### 2026-08-14 — T2-16: the vendor-feature pass, and *accepted but unadvertisable*
 

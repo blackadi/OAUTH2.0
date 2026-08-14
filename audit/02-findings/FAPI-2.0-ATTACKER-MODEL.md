@@ -7,7 +7,7 @@
 - **Repo docs under test:** `docs/curriculum/SPEC-INVENTORY.md`, `docs/curriculum/modules/10-fapi-and-grant-management/`, `01-spec-matrix.md` §7
 
 <thinking>
-1. What the document is: an analysis document defining five attacker archetypes (A1 web attacker, A1a web attacker
+1. What the document is: an analysis document defining **six** attacker archetypes (A1 web attacker, A1a web attacker
    as AS, A2 network attacker, A3a authorization-endpoint attacker, A4 token-endpoint attacker, A5 resource-server
    attacker) that justify FAPI 2.0's requirements. It is not an implementation profile. One normative statement
    touches implementations: the token endpoint address must be obtained from an authoritative source over a
@@ -84,7 +84,7 @@ one. Recorded rather than resolved, with the specific next check named.
 
 ## Sources consulted
 
-- FAPI 2.0 Attacker Model — `https://openid.net/specs/fapi-attacker-model-2_0-final.html`, fetched this session. **Title, Final status and date (22 February 2025) confirmed.** The five archetypes and the single implementation-facing statement about the token endpoint address are quoted above.
+- FAPI 2.0 Attacker Model — `https://openid.net/specs/fapi-attacker-model-2_0-final.html`, fetched this session. **Title, Final status and date (22 February 2025) confirmed.** The **six** archetypes and the single implementation-facing statement about the token endpoint address are quoted above. **This line and the `<thinking>` block both said *five* while the normative table below lists six** — A1, A1a, A2, A3a, A4, A5 — and Module 10 had it right. Corrected 2026-08-14 (CUR-3b-W15 / 3b-F13); the count is the fifth Phase 3 finding that corrects this audit rather than the curriculum.
 - FAPI 2.0 Security Profile — `https://openid.net/specs/fapi-security-profile-2_0-final.html` (and the 404 at `fapi-2_0-security-profile-final.html`)
 - Live probe 2 (2026-08-10): `issuer` versus `token_endpoint` — `SERVICE-CONFIG-PROBE.md` §5
 - Cross-references: `DISCOVERY-rfc8414-oidc-discovery.md` (B3), `RFC9207-issuer-identification.md` F-2

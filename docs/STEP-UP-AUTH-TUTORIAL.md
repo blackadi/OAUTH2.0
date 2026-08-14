@@ -225,13 +225,21 @@ sequenceDiagram
     Authz-->>Client: Redirect to login
     Client->>Login: POST /api/session/login<br/>username, password
     Login->>Login: Record authTime=now<br/>Record acr="pwd"
-    Login->>Login: Check ACR requirements<br/>(RFC 9470 §2)
-    Login->>Login: Check maxAge requirement<br/>(RFC 9470 §3)
+    Login->>Login: Check ACR requirements<br/>(RFC 9470 §4)
+    Login->>Login: Check maxAge requirement<br/>(RFC 9470 §4)
     Login->>Authz: POST consent approved
     Authz->>Authlete: /auth/authorization/issue<br/>(subject, acr="pwd", authTime=...)
     Authlete->>Authlete: Embed acr + auth_time<br/>in JWT access token
     Authlete-->>Client: Tokens with acr + auth_time
 ```
+
+> **The two "Check …" steps cite §4, and they used to cite §2 and §3.** RFC 9470 §2 is *Protocol Overview* —
+> narrative, nothing normative to check against — and **§3 is the challenge**, which this server does not emit
+> (see [Part 5](#part-5-the-step-up-challenge-response)). The rule an AS applies when *handling a request that
+> carries `acr_values` or `max_age`* is **§4**, and the rule for conveying the resulting claims to a resource
+> server is **§6** (§6.1 in a JWT access token, §6.2 on introspection — and on this deployment only §6.2 is
+> available). Corrected 2026-08-14. **Citing §3 for a check rather than for a challenge is the same conflation
+> Part 5 fixes**, one layer down: §3 governs a message this code never sends.
 
 ---
 

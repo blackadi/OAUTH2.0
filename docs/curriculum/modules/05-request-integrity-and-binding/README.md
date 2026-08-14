@@ -137,10 +137,18 @@ object *"MUST be either signed using JWS [RFC7515] or signed and then encrypted 
 [RFC7516]."* §4: *"If signed, the Authorization Request Object SHOULD contain the Claims 'iss' (issuer) and
 'aud' (audience)… The value of 'aud' should be the value of the authorization server (AS) 'issuer'."*
 
-The rule that surprises people, §5: *"The authorization server supporting this specification MUST only use the
-parameters included in the Request Object"* — even when the same parameter also appears in the query string.
-The signed object wins outright; there is no merge. Get that wrong in a client and you will spend an afternoon
-wondering why your query parameter is ignored.
+The rule that surprises people, **§6.3** (*Request Parameter Assembly and Validation*): *"The authorization
+server MUST only use the parameters in the Request Object, even if the same parameter is provided in the query
+parameter."* The signed object wins outright; there is no merge. Get that wrong in a client and you will spend
+an afternoon wondering why your query parameter is ignored.
+
+> **This paragraph cited §5 and misquoted the sentence until 2026-08-14, and both halves are worth noticing.**
+> §5 is *Authorization Request* — where the request is **passed**; §6.3 is where the server **assembles and
+> validates** it, which is the only place a precedence rule could live. And the quote carried an extra word:
+> the RFC says *"the parameters in the Request Object"*, not *"the parameters included in"*. This module's own
+> **lab had it right all along**, citing §6.3 verbatim — so the lesson and the lab disagreed for a fortnight,
+> and the lab was correct. Verified against `rfc9101.txt` on 2026-08-14: the phrase occurs **exactly once** in
+> the whole document.
 
 On typing, §10.8 notes that existing deployments use untyped request objects but that *"requiring explicit
 typing would be a good idea for new OAuth deployment profiles"* using `"typ": "oauth-authz-req+jwt"`.
@@ -423,9 +431,16 @@ the Authlete configuration surface**, clearly labelled as not-run-here, and DPoP
 and verified end to end here) demonstrates the same sender-constraining idea.
 
 **Revisit if any of these becomes true:** the deployment moves behind something that forwards the client
-certificate (an ALB or nginx passing `x-amzn-mtls-clientcert` / `X-Client-Cert`, or Render gaining the
-feature); an ecosystem this repo targets mandates FAPI 1.0 Advanced, which requires mTLS; or the teaching
-goal changes to needing a hands-on mTLS lab specifically, in which case scope it as roughly a day —
+certificate — and **that forwarding has a specification now: RFC 9440, *Client-Cert HTTP Header Field*
+(Informational, July 2023)**, which defines `Client-Cert` and `Client-Cert-Chain` for exactly this
+proxy-to-origin hop. Cite RFC 9440 rather than a vendor header name: the ad-hoc ones you will meet in the wild
+(`x-amzn-mtls-clientcert`, `X-Client-Cert`, `X-SSL-Client-Cert`) all predate it and none is interoperable.
+**Note what its Informational status means here** — it standardises the *header*, not any obligation to trust
+it, and RFC 9440 §4 is emphatic that an origin server must only accept it from a proxy it authenticates,
+because a header is trivially forgeable by anyone who can reach the origin directly. That caveat is the whole
+reason this condition is a *revisit trigger* and not a plan. Other triggers: an ecosystem this repo targets
+mandates FAPI 1.0 Advanced, which requires mTLS; or the teaching goal changes to needing a hands-on mTLS lab
+specifically, in which case scope it as roughly a day —
 local-CA script, second HTTPS listener behind an env flag, certificate pass-through on three service calls,
 `cnf["x5t#S256"]` in introspection output, `mtls_endpoint_aliases` in discovery, plus flipping
 `tlsClientCertificateBoundAccessTokens` on the service.

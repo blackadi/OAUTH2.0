@@ -217,7 +217,33 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (3):** T2-5, T2-14, T2-17.
+**Tier 2 remaining (2):** T2-5, T2-17.
+
+**T2-14 shipped 2026-08-14, and it spent the audit's last two fetches — both of which went against the audit.**
+
+| Fetch | Result |
+|---|---|
+| **RFC 9101 §10.1** (CUR-3b-W12) | *"Choice of Algorithms"*, and it carries **verbatim** the MUST-be-signed sentence Module 05 attributes to it. The Phase 2 entry's mapping to §6.2 (*"JWS-Signed Request Object"*) was the incomplete one. §10.8 *"Cross-JWT Confusion"* exists, settling claim 9 |
+| **RFC 8252 §7.3** (8252-W1) | *"Loopback Interface Redirection"*, and the requirement is a **MUST** — *"The authorization server MUST allow any port to be specified…"* — where the entry's own `<thinking>` block said **"should"**. Verdict `IMPLEMENTED_VERIFIED` stands and is now stronger; the *source gap* note is closed |
+
+> **A by-product neither item predicted closed CUR-3b-W3.** Asking the same document where the *precedence* rule
+> lives established that it is **§6.3** (*Request Parameter Assembly and Validation*), that the phrase occurs
+> **exactly once** in RFC 9101, and that **the repo's quotation carried an extra word** — the RFC says *"the
+> parameters in the Request Object"*, not *"the parameters **included** in"*. Module 05's **lab had it right and
+> its README did not**, so the lesson and the lab disagreed for a fortnight and the lab was correct. **§5 is
+> where a request is *passed*; §6.3 is where the server *assembles and validates* it** — which makes the right
+> section memorable rather than arbitrary.
+
+**Two other items reached files their criteria could not have named.** 9470-W4's two code comments include
+`utils/step-up.ts`, which **T1-7 created** after the item was written; both edits are **comment-only**, so
+`session.controller.ts`'s plan-mode requirement does not apply (`CLAUDE.md` exempts a semantics-free edit). And
+CUR-3b-W7's introspection fix, in T2-10, reached the step-up tutorial's appendix.
+
+> **9449-W5 is the one with a live consequence.** RFC 9449 **§8 gives the AS `400 use_dpop_nonce`** and **§9
+> gives a resource server `401`** — and `AGENTS.md` documented **401 for both**. A client that retries only on a
+> 401 never retries at the token endpoint, so the wrong status does not merely mislabel the error, **it stops
+> the nonce dance from ever starting**. Also corrected: a stale nonce is refused with `use_dpop_nonce`, not
+> `invalid_dpop_proof`. None of it is exercisable here (`dpopNonceRequired` is `false`), and the bullet now says so.
 
 **T2-16 shipped 2026-08-14 — all six items, and the *"one edit for all three"* instruction was right.**
 `SPEC-INVENTORY.md` gains **one new section**, *Vendor features — implemented here, defined by no
@@ -550,6 +576,13 @@ OID4VP 1.0 (9 Jul 2025) · **HAIP 1.0 (24 Dec 2025)** · OpenID Federation **1.0
 FAPI 1.0 Part 1 & Part 2 (12 Mar 2021) · FAPI 2.0 SP (22 Feb 2025) · FAPI 2.0 Attacker Model (22 Feb 2025) ·
 FAPI 2.0 Message Signing (25 Sep 2025) · CIMD **draft-02 (6 Jul 2026)** ·
 attestation-based client auth **draft-10 (6 Jul 2026)** · MCP Authorization (`draft`)
+
+**The audit's fetch budget is now spent.** RESUME §1 recorded *"two fetches remain in the whole audit —
+CUR-3b-W12 (RFC 9101 §10.1) and 8252-W1 (RFC 8252 §7.3)."* **Both were made on 2026-08-14 (T2-14) and both
+contradicted the audit rather than the curriculum**: §10.1 is *"Choice of Algorithms"* and says what Module 05
+said it says, and §7.3 is a **MUST** where the finding's own reasoning said *"should"*. A third question to the
+same RFC 9101 document settled the precedence rule as **§6.3** and caught a misquotation. **Nothing further is
+owed.**
 
 **Not fetched, deliberately:** ISO/IEC 18013-5 (paywalled — `MDL-MDOC-ISO18013-5.md` F-1 records why and cites
 nothing from it). **Still unverified:** RFC 8446 and RFC 9110 dates cited at `modules/00…/README.md:87-88`
