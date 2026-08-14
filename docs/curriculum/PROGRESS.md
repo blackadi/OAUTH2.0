@@ -121,6 +121,45 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-11: the step-up challenge is a 401, in all five places it is drawn — one of which nobody had checked** (below)
 - [x] **2026-08-14 — T2-4 + T2-12: TLS 1.3 has a new RFC number, and Module 10's missing conformance row is PARTIAL rather than FAIL** (below)
 - [x] **2026-08-14 — VCI-W6 closed: the credential issuer has a key, and Module 09b Ex 7 is a three-state exercise now** (below)
+- [x] **2026-08-14 — T2-8: two of theme 2's four features were missing from README's tables entirely** (below)
+
+### 2026-08-14 — T2-8: the claimed-working/flag-off table, and the drift nobody was watching
+
+**Why this matters to a future session:** theme 2 of the audit was *"four features claimed as working while
+their service flag is off"* — Native SSO, FAPI 2.0, verifiable credentials, MCP/CIMD — recorded as **one**
+systemic defect rather than four documentation slips, because nothing in the build, the tests or
+`check-docs.mjs` can see a service flag.
+
+**By the time the item was executed, two of the four had been switched on** (VCI via DR-03 + VCI-W6, CIMD via
+DR-05) — so the live defect had inverted. It was no longer a false claim but **an absent one: `README.md` had
+no VCI row and no MCP row at all.** *A feature missing from the table cannot be caught by re-reading the
+table*, which is why this direction of drift survived a documentation pass that fixed the other two rows.
+
+Both rows added, with the qualifications that make them honest rather than green:
+
+| Row | Status |
+|---|---|
+| Verifiable Credentials (OID4VCI) | **Working** — flag on, credential issuer has a JWK Set, three discovery endpoints answer. **Issuance is not exercised**: it needs a wallet, and this repo does not contain one |
+| MCP / CIMD | **Partial** — CIMD works (`clientIdMetadataDocumentSupported: true`). **MCP end to end does not**: OAuth 2.1's first MUST is that the AS reject `implicit` and `password`, both enabled here deliberately, and there is no `registration_endpoint` in the discovery document |
+
+> ### The deliverable is the derivation, not the rows
+>
+> A note under the table names the five service fields every status depends on, gives the **read-only** command
+> that prints them, and records the captured values with a date. Three details in that command are deliberate:
+>
+> - **It was run before being published**, and prints exactly the values the prose quotes. The first draft
+>   printed Python's `False`/`True` while the prose said `false`/`true` — a mismatch a careful reader would
+>   have caught and a sloppy one would have copied. `json.dumps` fixed it.
+> - **It prints `<set>` rather than `credentialJwks` itself**, because that field holds a private scalar. A
+>   diagnostic command in a public README should not teach people to `echo` their signing key.
+> - **It is not a CI check**, on purpose. A service configuration change is not a reason to fail somebody's
+>   pull request — the same argument that puts external link checking on a weekly schedule rather than per
+>   push. `audit/04-remediation-plan.md` §7.3's scheduled discovery-diff check is the right mechanism and is
+>   **still unbuilt**; it remains the only proposal in that plan that would have caught a defect *before* the
+>   audit did.
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files.
 
 ### 2026-08-14 — VCI-W6: the credential-issuer JWK Set, verified rather than assumed
 

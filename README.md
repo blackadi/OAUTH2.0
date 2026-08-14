@@ -147,6 +147,44 @@ npm --prefix client run dev    # SPA on :3001 (proxies /api → :3000)
 | Native SSO | **Not enabled** — `nativeSsoSupported` is `false` on the service | [Native SSO Tutorial](docs/NATIVE-SSO-TUTORIAL.md) |
 | Grant Management | **Working** — both halves verified end to end, including `grant_management_action=create` on the authorization request | [Grant Management](docs/GRANT-MANAGEMENT.md) |
 | OpenID Federation | **Not enabled** — no federation JWK Set is configured, so the entity statement cannot be generated | — |
+| Verifiable Credentials (OID4VCI) | **Working** — `verifiableCredentialsEnabled: true` and the credential issuer has a JWK Set, so `/vci/metadata`, `/vci/jwks` and `/vci/jwtissuer` all answer. **Issuance itself is not exercised**: it needs a wallet, and this repo does not contain one | [Module 09b](docs/curriculum/modules/09b-identity-and-credentials/README.md) |
+| MCP / CIMD | **Partial** — `clientIdMetadataDocumentSupported: true`, so an HTTPS `client_id` works. **MCP end to end does not**: OAuth 2.1 requires the AS to reject `implicit` and `password`, and both are enabled here deliberately, and there is no `registration_endpoint` in the discovery document | [MCP Tutorial](docs/MCP-OAUTH-TUTORIAL.md) |
+
+> ### These statuses are derived, and here is the command — because four of them were wrong at once
+>
+> **The four rows most likely to be wrong are the ones whose feature is code-complete and switched off at the
+> service**, because nothing in the build, the tests or `check-docs.mjs` can see a service flag. Native SSO,
+> FAPI 2.0, verifiable credentials and MCP/CIMD were **all four claimed as working while their flag was off** —
+> one systemic defect, not four documentation slips. Two of them have since been switched **on** (VCI on
+> 2026-08-14, CIMD the same day), which drifted the table in the *opposite* direction. It will drift again.
+>
+> **So check it rather than trusting it.** Every status above is one call away — read all 190-odd service
+> properties, or the generated discovery document, and compare:
+>
+> ```bash
+> # The flags behind the four rows above. Read-only.
+> curl -s -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" \
+>   "$AUTHLETE_BASE_URL/api/$AUTHLETE_SERVICE_ID/service/get" \
+>   | python3 -c "
+> import sys, json
+> d = json.load(sys.stdin)
+> for k in ('nativeSsoSupported','fapiModes','verifiableCredentialsEnabled',
+>           'credentialJwks','clientIdMetadataDocumentSupported'):
+>     if k not in d:                 out = '<absent>'
+>     elif k == 'credentialJwks':    out = '<set>'          # never print the key: it holds a private scalar
+>     else:                          out = json.dumps(d[k]) # json.dumps, so booleans read false/true not False/True
+>     print(f'{k:38} {out}')"
+> ```
+>
+> **Values behind this table, captured 2026-08-14** against service `3693555522`: `nativeSsoSupported: false` ·
+> `fapiModes: <absent>` · `verifiableCredentialsEnabled: true` · `credentialJwks: <set>` ·
+> `clientIdMetadataDocumentSupported: true`. Two of the deployment's own endpoints report a subset of the same
+> posture without any credential: `GET /api/fapi/config` and `GET /api/fapi/status`.
+>
+> **Why this is a note and not a CI check.** A service configuration change is not a reason to fail somebody's
+> pull request — the same argument that puts external link checking on a weekly schedule rather than per push.
+> A scheduled discovery-diff check is proposed in [`audit/04-remediation-plan.md`](audit/04-remediation-plan.md)
+> §7.3 and is the only proposal in that plan that would have caught a defect *before* the audit did.
 
 ### Operations
 

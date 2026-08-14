@@ -217,7 +217,26 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (7):** T2-5, T2-8, T2-10, T2-14, T2-15, T2-16, T2-17.
+**Tier 2 remaining (6):** T2-5, T2-10, T2-14, T2-15, T2-16, T2-17.
+
+**T2-8 shipped 2026-08-14, and theme 2 had drifted in the direction nobody was watching.** The finding was
+*"four features claimed as working while their service flag is off"* — Native SSO, FAPI 2.0, VCI, MCP/CIMD. Two
+of the four have since been switched **on** (VCI via DR-03 + VCI-W6, CIMD via DR-05), so the live defect was no
+longer a false claim but **an absent one: `README.md` had no VCI row and no MCP row at all.** A feature missing
+from the table cannot be caught by re-reading the table.
+
+Both rows added — VCI **Working** with *issuance needs a wallet this repo does not contain*; MCP/CIMD
+**Partial**, because CIMD works while MCP end to end does not (OAuth 2.1's first MUST is that the AS reject
+`implicit` and `password`, and both are enabled here deliberately, plus there is no `registration_endpoint`).
+
+> **The deliverable is the derivation, not the rows.** A note under the table names the five service fields the
+> statuses depend on, gives the read-only command that prints them, and records the captured values with a date.
+> **The command was run before being published** and prints exactly what the prose quotes — it emits `<set>`
+> rather than `credentialJwks` itself, because that field holds a private scalar, and uses `json.dumps` so
+> booleans read `false`/`true` rather than Python's `False`/`True`. **Deliberately not a CI check:** a service
+> configuration change is not a reason to fail somebody's pull request, the same argument that schedules
+> `--links` weekly. **§7.3's discovery-diff check is still unbuilt** and is the only proposal in the plan that
+> would have caught a defect before this audit did — worth doing if Tier 3 leaves budget.
 
 **T2-4 and T2-12 shipped 2026-08-14, and both corrected the audit's own criteria rather than the curriculum's
 text.** T2-4 applied §2.1's four fetches to Module 00 (**RFC 9846** leads, RFC 8446 named as the superseded
