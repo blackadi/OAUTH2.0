@@ -53,10 +53,33 @@ Each tutorial explains **why** the feature was created, **how** it works, and **
 | [CIBA](./CIBA-TUTORIAL.md) | "How do I authorize without redirecting the user?" |
 | [JWT Bearer](./JWT-BEARER-TUTORIAL.md) | "Can I use a JWT instead of a client secret?" |
 | [Token Exchange](./TOKEN-EXCHANGE-TUTORIAL.md) | "How do I let one service act on behalf of another?" |
+| [Step-Up Auth](./STEP-UP-AUTH-TUTORIAL.md) | "How does a resource say 'your token isn't strong enough'?" |
 | [Native SSO](./NATIVE-SSO-TUTORIAL.md) | "How do I share login state across my mobile apps?" |
 | [Backchannel Logout](./BACKCHANNEL-LOGOUT-TUTORIAL.md) | "How do I log out the user from all my services?" |
 | [Grant Management](./GRANT-MANAGEMENT.md) | "How do I let users see and revoke what they've authorized?" |
 | [FAPI 2.0](./FAPI-TUTORIAL.md) | "How do I meet financial-grade security requirements?" |
+| [MCP OAuth 2.1](./MCP-OAUTH-TUTORIAL.md) | "How does an AI client get authorized to call my tools?" |
+
+### How to read the transcripts in these tutorials
+
+**A request or response printed in a tutorial is evidence of one of three different things, and confusing
+them costs you an afternoon.** Every transcript in the nine tutorials audited below is labelled as one of:
+
+| Label | What it means | What you can rely on |
+|---|---|---|
+| **captured** | Run against this deployment on the date given, and reproduced as it came back | The values. If the configuration has changed since the date, the shape still holds |
+| *illustrative* | The shape is right; the values are placeholders and **nothing was run** | The field names and their arrangement — not the numbers, ids or tokens |
+| **`UNVERIFIED`** | This deployment **cannot** produce it, and the marker names the setting responsible | The specification. Change the named setting and the block becomes runnable |
+
+The third label is the one that matters, and it is borrowed from the curriculum, where it has been in use
+for longer — see [`modules/09a…/lab.md`](./curriculum/modules/09a-interaction-extensions/lab.md) for the
+rule and four worked examples. **A marker always names the field, and always carries a date**, because a
+marker whose premise has silently changed is worse than no marker at all.
+
+> **Scope, so the label list is not itself an overclaim.** The convention was applied on **2026-08-14** to
+> the nine tutorials the RFC audit examined line by line: PAR, RAR, Device Flow, CIBA, Token Exchange,
+> Step-Up Auth, Native SSO, FAPI 2.0 and MCP. **PKCE, JWT Bearer, Backchannel Logout and Grant Management
+> have not been swept** — treat their transcripts as unlabelled until they are.
 
 ### I want to build or test something
 - [API Reference](./API.md) — Every endpoint, every parameter, every response

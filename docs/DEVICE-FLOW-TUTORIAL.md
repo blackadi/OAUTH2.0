@@ -2,6 +2,39 @@
 
 > **The short version:** Device Flow lets devices without keyboards (smart TVs, game consoles, IoT) get authorization by showing a code on screen while the user completes login on their phone.
 
+> ### How the transcripts below were verified
+>
+> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials).
+>
+> **The device flow runs end to end on this deployment**, and unlike most features in this repo it needs
+> nothing turned on. Live values re-checked **2026-08-14**: `DEVICE_CODE` is in `supportedGrantTypes` and on
+> three of four clients, `deviceVerificationUri` is set, `deviceFlowCodeDuration` is **600**,
+> `deviceFlowPollingInterval` is **5**, `userCodeCharset` is `BASE20` and `userCodeLength` is `0` — which
+> Authlete resolves to **8** characters. Those are the numbers you will see in the `expires_in`, `interval`
+> and `user_code` fields below.
+>
+> This file already carries two `UNVERIFIED` markers, at [Part 5](#part-5-step-by-step-api-flow) and
+> [Part 7](#part-7-token-endpoint--polling). Both are about **undocumented Authlete behaviour** rather than
+> configuration — whether user codes are normalised before matching, and whether an expired code reports
+> `EXPIRED` forever — and neither is resolvable without a probe. They are the right shape: each says what is
+> unknown, gives the safe reading, and does not guess.
+>
+> ### ⚠️ One gap worth knowing before you build a device client
+>
+> RFC 8628 §3.1 specifies a **form-encoded** device authorization request whose parameters are `client_id`
+> and `scope` at the top level. **`POST /api/device/authorization` does not accept that.** It requires a JSON
+> (or form) body with an Authlete-shaped `parameters` field holding the URL-encoded string, and answers
+> `400 Missing required body field: parameters` otherwise — so a conformant §3.1 client cannot call it. This
+> is an open finding, deliberately deferred rather than fixed, and it is the last of three sibling
+> non-conformances of the same kind; see [PAR](PAR-TUTORIAL.md) and [CIBA](CIBA-TUTORIAL.md) for the others.
+>
+> **The *response* is conformant**, and has been since 2026-08-14: the 200 body is exactly §3.2's snake_case
+> JSON — `device_code`, `user_code`, `verification_uri`, `verification_uri_complete`, `expires_in`,
+> `interval` — with no `action` or `resultCode` beside it. It used to be Authlete's envelope with camelCase
+> names. Everything downstream of the request — the polling loop, the error codes, the user-facing leg — is
+> the specification's, which is why the rest of this file transfers to a conformant implementation unchanged.
+
 ---
 
 ## Table of Contents
@@ -692,8 +725,8 @@ RFC 8628 is [published as a Proposed Standard](https://datatracker.ietf.org/doc/
 
 | RFC 8628 Section | Requirement | Status | Who provides it |
 |------------------|-------------|:------:|-----------------|
-| §3.1 Device Authorization Request | Endpoint accepts `POST` with `application/x-www-form-urlencoded` | ✅ | Authlete |
-| §3.1 | Accepts `client_id` and `scope` | ✅ | Authlete |
+| §3.1 Device Authorization Request | Endpoint accepts `POST` with `application/x-www-form-urlencoded` | ⚠️ | **Authlete's API does; this server's endpoint does not.** `/api/device/authorization` requires a JSON-or-form body with an Authlete-shaped `parameters` field, so a conformant §3.1 request gets `400 Missing required body field: parameters`. See the box at the top of this file |
+| §3.1 | Accepts `client_id` and `scope` | ⚠️ | Same boundary — both are accepted, but *inside* the `parameters` string rather than as top-level form fields |
 | §3.2 Device Authorization Response | Includes REQUIRED `device_code`, `user_code`, `verification_uri`, `expires_in` | ✅ | Authlete |
 | §3.2 | `verification_uri_complete` is OPTIONAL — emitted only when configured | ✅ | Authlete |
 | §3.2 | `interval` is OPTIONAL; default 5 when absent | ✅ | Authlete |

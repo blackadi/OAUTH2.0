@@ -145,7 +145,52 @@ FAPI2-W4 — had landed with **no `PROGRESS.md` Build Log entry**, so the resume
 straight to batch 2. Backfilled 2026-08-14 **from the commits** (`3725a76`, `dd7c1cd`, `ecfab07`, `960fcd6`,
 `3d0a736`) rather than from this file, so it is not a paraphrase of a summary.
 
-### Tier 2 progress, 2026-08-14 — 6 of 17 done
+### Tier 2 progress, 2026-08-14 — 7 of 17 done
+
+**T2-1 is done — the highest-leverage single item in the plan, and its premise had rotted in the *good*
+direction.** 5 `UNVERIFIED` markers across 3 tutorials → **29 across 9**. Three labels — **captured** /
+*illustrative* / **`UNVERIFIED`** — defined **once** in `docs/README.md`, with each tutorial carrying only its
+own facts, so nine near-duplicate boxes cannot drift apart. **None of the three words was coined**:
+`UNVERIFIED` is the curriculum's, *illustrative* is FAPI2-W6's own acceptance criterion, and **captured** is
+`TOKEN-EXCHANGE-TUTORIAL.md`'s existing *"what this server actually returns (captured 2026-08-06)"* — that
+file already had the convention and batch 3c graded it exemplary, so the convention was never really *"three
+files away in the curriculum"*: there was an in-tutorial precedent nobody had generalised.
+
+> **Batch 3c's reproducibility table was stale in four of nine files, every one of them now *runnable*.**
+> T1-6 registered `payment_initiation`, so RAR's three "cannot have been produced" transcripts come from the
+> live 2026-08-12 round trip instead; T1-6 also set `bcDeliveryMode = POLL`, so CIBA runs; T1-3's
+> `private_key_jwt` client makes half of FAPI Part 4 runnable; DR-05 enabled CIMD. **Writing
+> "unreproducible" from the audit's own table would have been wrong four times** — which is why the probe
+> came before the prose. Only **Native SSO** is still wholly unrunnable (`nativeSsoSupported = false`), and
+> it is the one file marked that way throughout.
+
+**Three defects surfaced that no work item had named**, all found by checking a transcript against live
+configuration rather than by reading it:
+
+- **`CIBA-TUTORIAL.md`'s every worked example 401s against the configuration the tutorial tells you to
+  build.** Part 2 recommends `CLIENT_SECRET_BASIC`, citing Authlete's own guide; the one client here with
+  `bcDeliveryMode` set is that; and the examples all passed credentials in the **body**, which earns
+  `[A157357]` for the *channel* before the secret is examined. That also means Part 6's *"Wrong Client
+  Secret"* demo **passed for the wrong reason** — a negative test that cannot distinguish a wrong secret from
+  a wrong channel is not a test.
+- **`RAR-TUTORIAL.md` carried a PAR response shape that never existed** — `{"action":"CREATED",
+  "request_uri":…}`, half Authlete's envelope and half RFC 9126 §2.2's body. A T1-11 residue: the pass that
+  fixed six tutorials did not reach a seventh file that quoted PAR incidentally. **When a wire format
+  changes, grep for the *shape*, not just for the endpoint's own tutorial.**
+- **`MCP-OAUTH-TUTORIAL.md` told you to set `resourceIndicatorsSupported`, which is not an Authlete field** —
+  no `Service` property in 3.0.16 matches `resource` except `resourceSignatureKeyId`, and the string appears
+  nowhere in the vendored OpenAPI document. **The fourth instance** of a documented "set X in the console"
+  with no X, after RPL-W4, T1-13 and VCI-W2's AS half. Struck through rather than deleted, so nobody re-adds
+  it.
+
+**Six stale literals went with them**: five `expires_in: 3600` where `accessTokenDuration` is **86400**, and
+PAR's `expires_in: 90` where `pushedAuthReqDuration` is **600**. **T2-1 also discharged four other IDs** —
+9396-W4, FAPI2-W6 ⊃ 9126-W5 = CUR-3c-W7 (cluster 22, the `/api/authorize` path in two files), and the
+tutorial halves of 9126-W6 and CIBA-W5, whose `AGENTS.md`/Module 05 halves stay in T2-15. **FAPI2-W6 had no
+tier row at all** — it was reachable only through §5.2's cluster list, so the plan's mechanical coverage check
+counted it without ever scheduling it. Worth knowing that the check can do that.
+
+### Tier 2 progress, 2026-08-14 — the first six
 
 **Shipped:** **T2-2** (Module 10 taught the *fixed* logout open redirect as live — rebuilt mechanism-first
 around the fix's three-version history, since the first fix was correct *and insufficient*) · **T2-3** (the
@@ -172,17 +217,37 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (11):** T2-1 (the `UNVERIFIED` convention across nine tutorials — still the
-highest-leverage single item in the plan), T2-4, T2-5, T2-8, T2-10, T2-11, T2-12, T2-14, T2-15, T2-16, T2-17.
+**Tier 2 remaining (10):** T2-4, T2-5, T2-8, T2-10, T2-11, T2-12, T2-14, T2-15, T2-16, T2-17.
+**T2-15 and T2-17 are each one item lighter** — T2-1 took the tutorial halves of 9126-W6 and CIBA-W5, and
+`docs/README.md` gained the two index rows CUR-3c-W14 wants for `STEP-UP-AUTH-TUTORIAL.md` and
+`MCP-OAUTH-TUTORIAL.md` (the `TICKET-PARAMETER.md` / `AUDIT-PASS-A/B.md` / `CHANGELOG.md` rows are still owed).
+**Do T2-11 next if you want the cheapest win**: it is the step-up 403→401 correction, and
+`STEP-UP-AUTH-TUTORIAL.md` was deliberately left carrying its wrong challenge status so that T2-11 remains one
+reviewable change rather than being half-absorbed here.
 
 ### ⚠️ Blocked, needs the operator
 
-**VCI-W6 — the credential-issuer JWK Set.** `credentialJwks`/`credentialJwksUri` are unset, so `/vci/jwks`
-and `/vci/jwtissuer` answer **500** (`A403201` / `A417202`) and **no credential can be signed**. An EC P-256
-key was generated and the read → write → read-back → diff script written, but **the Authlete `service/update`
-call is refused by this environment's permission classifier** (reads succeed — that is how everything above
-was probed). Not worked around, per the guidance. To finish it, either grant the write or run
-`scratchpad/authlete/set-credential-jwks.mjs` yourself.
+**VCI-W6 — the credential-issuer JWK Set. ⚠️ THE WRITE HAS LANDED; THE VERIFICATION HAS NOT.** Observed by
+read-only probe on 2026-08-14 during T2-1: **`credentialJwks` is now set** on service `3693555522` — one EC
+P-256 key, `kid: vc-issuer-1`, `alg: ES256`, `use: sig`. `credentialJwksUri` remains absent, which is fine.
+The operator applied it; this session did not, and the `service/update` refusal described below still stands
+for any *further* write.
+
+**So VCI-W6 is unblocked but NOT closed.** Three things must be checked before it is, and none has been:
+
+| # | Check | Why it is not a formality |
+|---|---|---|
+| 1 | `GET /api/vci/jwks` stops returning **500 `A403201`** | This is the symptom the JWK Set exists to fix |
+| 2 | `GET /api/vci/jwtissuer` stops returning **500 `A417202`** | A *different* code from a *different* API — one passing does not prove the other |
+| 3 | **`/vci/jwks` exposes only the public half** | The stored value contains the private `d` member. A credential-issuer JWKS endpoint that echoes `d` publishes the signing key. **Check the response body, not the status** |
+
+Then close VCI-W6 and update **Module 09b Exercise 7**, whose surviving `UNVERIFIED` marker names this gap as
+the reason issuance is not runnable — the lab is currently correct and will become wrong the moment these pass.
+
+*(Original blocker, kept because the refusal still applies to new writes:* an EC P-256 key was generated and
+the read → write → read-back → diff script written, but the Authlete `service/update` call is refused by this
+environment's permission classifier — reads succeed, which is how everything above was probed. Not worked
+around, per the guidance.*)*
 
 **P0's two operator actions are CLOSED — verified live 2026-08-14, not assumed.** They were carried as "still
 owed" and both had already resolved:

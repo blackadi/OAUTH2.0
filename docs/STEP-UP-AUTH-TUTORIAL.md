@@ -4,6 +4,34 @@
 
 **The short version:** A resource server checks the `acr` and `auth_time` bound to an access token. If they don't meet the resource's requirements, it returns an `insufficient_user_authentication` error telling the client exactly what's needed. The client then makes a new authorization request with those stronger requirements.
 
+> ### How the transcripts below were verified
+>
+> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials). Live values re-checked
+> **2026-08-14**.
+>
+> **The ACR machinery runs here. The JWT access token does not.**
+>
+> | What the file shows | Live status | What to do about it |
+> |---|---|---|
+> | [Part 4](#part-4-binding-auth-info-to-access-tokens)'s **JWT access-token payload** | **`UNVERIFIED`** — `accessTokenSignAlg` is **unset**, so this deployment issues opaque access tokens and there is no JWT to decode | The claims are still recorded against the token: the SDK's `IntrospectionResponse` models `acr` and `authTime`, which is RFC 9470 §6.2's other route. Set `accessTokenSignAlg` to make Part 4 literal |
+> | `urn:mace:incommon:iap:silver`, used as the strong ACR throughout | **not a registered ACR here.** `supportedAcrs` is `["pwd", "mfa"]` | Use **`mfa`** to reproduce anything in this file. An *unregistered* value fails earlier and for a different reason than an unsatisfiable one — see [`modules/09a…/lab.md` 4b](curriculum/modules/09a-interaction-extensions/lab.md) |
+> | the essential-ACR refusal | **runnable** — `mfa` is registered and deliberately unsatisfiable, which is exactly what makes the refusal path reachable | Request `mfa` as an essential `acr` and watch `ACR_NOT_SATISFIED` |
+> | [Part 5](#part-5-the-step-up-challenge-response)'s **max-age challenge** | **reachable, but only on one path** | See the note directly below |
+>
+> **`max_age` cannot fail on the login path, and that is not a bug.** On a login POST the End-User has just
+> actively authenticated, so *any* maximum age is satisfied by construction. `EXCEEDS_MAX_AGE` is genuinely
+> reachable only where authentication is **not** re-performed — the `prompt=none` silent-renewal path. Both
+> paths share one check, `checkStepUpRequirements` in `server/src/utils/step-up.ts`, since 2026-08-12; before
+> that the `prompt=none` path **invented** an authentication event (`acr: "pwd"`, `auth_time: now`) when the
+> session had recorded none, which would have let a resource server accept fabricated freshness. The rule now
+> is that **absence is answered as "no"**: an unknown `acr` does not satisfy an essential request, and an
+> unknown `auth_time` does not satisfy a `max_age`.
+>
+> **The `error_description` strings in Part 5 are *illustrative*.** The bracketed `[A34xxxx]` codes and the
+> `error` values are the stable, spec-defined part; the surrounding prose is Authlete's and changes between
+> versions. Do not parse it.
+
 ---
 
 ## Table of Contents
@@ -140,6 +168,13 @@ Set in DCR. Used as a fallback when the authorization request doesn't include `m
 For step-up to work, the access token must carry the authentication context. Authlete embeds two claims in JWT access tokens:
 
 ### JWT access token payload
+
+> **`UNVERIFIED` on this deployment (2026-08-14)** — `accessTokenSignAlg` is unset, so access tokens here are
+> opaque and no payload like the one below can be decoded. It is a correct RFC 9068 §2.2 shape and a correct
+> statement of what Authlete *would* embed; it is not a specimen from this service. The one JWT you can obtain
+> and decode here is the dev-only fixture from `GET /api/token/createLocalToken` (admin auth, non-production).
+
+
 
 ```json
 {

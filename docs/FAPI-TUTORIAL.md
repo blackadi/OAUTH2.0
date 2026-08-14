@@ -2,6 +2,35 @@
 
 > **The short version:** FAPI 2.0 SP is a security profile that adds PAR, PKCE, DPoP sender-constrained tokens, and `private_key_jwt` client authentication to standard OAuth — making token theft virtually impossible.
 
+> ### ⚠️ This file is two documents, and only one of them was run
+>
+> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials).
+>
+> | Part | Status |
+> |---|---|
+> | [Part 5](#part-5-client-demo-walkthrough) (the reporting endpoints) and [Part 6](#part-6-failure-demonstrations) (the DPoP failure demos) | **captured** — every response in Part 6 was run against this server, and Part 5 identified the hardcoded-literal bug before the audit did |
+> | [Part 3](#part-3-authlete-console-setup) (console setup) and [Part 4](#part-4-step-by-step-fapi-flow) (the flow) | **`UNVERIFIED`** — they describe a *correctly configured* FAPI 2.0 service, which this deployment is not |
+>
+> **Nothing distinguished those two halves for a reader until 2026-08-14.** The precise gaps, live as of that
+> date:
+>
+> | FAPI 2.0 SP requires | Live value here | Effect on Part 4 |
+> |---|---|---|
+> | `fapiModes` including `FAPI2_SECURITY` | **absent** — `/api/fapi/config` reports `mode: "disabled"` | Authlete enforces no FAPI rule anywhere in the flow |
+> | a scope carrying the `fapi2=sp` attribute | **`fapi_scope` is not a registered scope** | unknown scopes are silently dropped (`scopeRequired` is `false`), so the request *succeeds* with no FAPI enforcement and no error |
+> | PAR required | `parRequired` **`false`** on the service and on all four clients | PAR works, but nothing obliges a client to use it |
+> | `dpopNonceRequired` for the nonce dance | **`false`** (`dpopNonceDuration` 0) | **the `DPoP-Nonce` response headers shown in Part 4 cannot appear** |
+>
+> **Two of Part 3's prerequisites *are* satisfied**, and were not when this file was written: client
+> `2176571218` has `tokenAuthMethod = PRIVATE_KEY_JWT` with a registered JWK Set (created 2026-08-12), and
+> `pkceRequired`/`pkceS256Required` are `true` on it (2026-08-13). So Steps 1, 2, 3 and 5 of Part 4 are
+> runnable against that client; what is not runnable is *FAPI enforcement* of them.
+>
+> **The second row is the trap.** A missing FAPI mode produces an error you can look up. A missing scope
+> attribute produces a **200** and a flow that quietly is not FAPI at all. Part 5's closing line applies to
+> your own service as much as to this endpoint: *a status page that cannot fail is not reporting anything.*
+
 ---
 
 ## Table of Contents
@@ -371,25 +400,34 @@ DPoP: <parProof>
 }
 ```
 
-Response:
+Response — RFC 9126 §2.2's body, which is what `/api/par` returns since 2026-08-14 (T1-11):
 
 ```http
 HTTP/1.1 201 Created
-DPoP-Nonce: <serverNonce>
 
 {
   "request_uri": "urn:ietf:params:oauth:request_uri:<id>",
-  "expires_in": 90
+  "expires_in": 600
 }
 ```
+
+> **Two corrections to what this block used to say.** It showed `expires_in: 90`; the live value is the
+> service's `pushedAuthReqDuration`, **600**. And it showed a `DPoP-Nonce: <serverNonce>` response header —
+> **`UNVERIFIED`, and not producible here**: `dpopNonceRequired` is `false`, so this server never issues a
+> nonce and never demands one. The nonce dance in [Part 4's later steps](#step-5-exchange-code-for-token) is
+> the specification's, not this deployment's. Turn the flag on to see it.
 
 ### Step 4: Authorize
 
 Redirect the user:
 
 ```
-GET /api/authorize?client_id=<clientId>&request_uri=urn:ietf:params:oauth:request_uri:<id>
+GET /api/authorization?client_id=<clientId>&request_uri=urn:ietf:params:oauth:request_uri:<id>
 ```
+
+**The path is `/api/authorization`, not `/api/authorize`.** This line read `/api/authorize` until
+2026-08-14 — a path that matches no route, so it falls through to the SPA catch-all and returns **HTML with
+a 200**, which is the most expensive kind of wrong: nothing in the response says "no such endpoint."
 
 The server shows login → consent → redirects back with authorization code.
 
@@ -425,19 +463,29 @@ Response:
 
 ```http
 HTTP/1.1 200 OK
-DPoP-Nonce: <newNonce>
 Cache-Control: no-store
 
 {
   "access_token": "DPoP-bound-token",
   "token_type": "DPoP",
-  "expires_in": 3600,
+  "expires_in": 86400,
   "refresh_token": "refresh-token",
-  "scope": "fapi_scope openid"
+  "scope": "openid"
 }
 ```
 
 The `token_type: "DPoP"` confirms the token is sender-constrained.
+
+> **Three things this block used to get wrong about *this* deployment**, all corrected 2026-08-14:
+> `expires_in` was 3600 where the service's `accessTokenDuration` is **86400**; the `DPoP-Nonce` header
+> cannot appear while `dpopNonceRequired` is `false`; and `scope` echoed `fapi_scope`, which **is not a
+> registered scope here** — so it would be silently dropped from the granted scope rather than returned.
+> `token_type: "DPoP"` is the one member to actually assert on, and it is real: it appears whenever the token
+> was issued against a valid proof, and it is what makes every request in [Part 6](#part-6-failure-demonstrations)
+> fail the way it does.
+>
+> **86400 is not a FAPI-appropriate lifetime.** FAPI 1.0 Baseline suggests ten minutes; this service uses 24
+> hours so lab tokens outlive a lab session. If you copy one number out of this file, do not copy that one.
 
 ### Step 6: Call Userinfo with DPoP
 

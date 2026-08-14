@@ -21,6 +21,15 @@
 > and each affected section below points there. Verified against the running server on 2026-08-06.
 > `docs/curriculum/modules/06-machine-and-delegated-grants/lab.md` Exercise 6 walks you through
 > reproducing all of them.
+>
+> **Labels: captured / *illustrative* / `UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials). This file was the repo's
+> first tutorial to distinguish them, and it is the model the other eight were brought up to on 2026-08-14:
+> a dated *"what this server actually returns"* transcript in
+> [Part 7](#part-7-testing-with-curl), and a marker in
+> [Part 10](#part-10-error-scenarios) saying which half of an error response you may rely on. Two facts behind
+> those labels were re-checked on **2026-08-14** and still hold: `accessTokenDuration` is **86400**, so the
+> 24-hour `expires_in` in Part 7 is current, and `TOKEN_EXCHANGE` is still in `supportedGrantTypes`.
 
 ---
 

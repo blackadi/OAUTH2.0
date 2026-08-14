@@ -10,8 +10,10 @@ your own request when the answer is a service flag.
 >
 > This guide used to open by saying the server *"supports MCP flows out of the box"*. That was wrong, and it is
 > the kind of wrong that costs an afternoon: the wiring is complete, so the failures look like your bugs.
-> Verified against the live service on **2026-08-10** and against the full 62-member discovery document on
-> **2026-08-11**.
+> Verified against the live service on **2026-08-10**, against the discovery document on **2026-08-11**, and
+> re-checked on **2026-08-14** — when the document had grown to **64 members**. Labels below are
+> **captured** / *illustrative* / **`UNVERIFIED`**, defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials).
 >
 > | Precondition | What MCP requires | This deployment | Fix |
 > |---|---|---|---|
@@ -19,10 +21,22 @@ your own request when the answer is a service flag.
 > | **A self-consistent issuer** | RFC 8414 §3 — the metadata must be served from the `issuer` host, because that correspondence *is* the trust anchor discovery rests on | ✅ **fixed 2026-08-14 (DR-11).** `issuer` and all 14 URL fields are now `https://oauth2-0-ekh2.onrender.com`, so §3.3 passes — the issuer is exactly the host and every URL member sits under it. Until then `issuer` was `https://blackadi.dev` while the metadata lived on an ephemeral tunnel host, so a client following §3 could not resolve this AS at all | — |
 > | **CIMD** | an HTTPS URL as `client_id`, with metadata auto-fetched | ✅ **enabled 2026-08-14 (DR-05).** `clientIdMetadataDocumentSupported = true`, verified live — `/api/fapi/config` answers `cimdSupported: true`. Authlete handles CIMD entirely server-side, so no endpoint or client code was needed | — |
 >
-> One more, because it changes what the wizard can do: **`registration_endpoint` is absent** from the discovery
-> document, so there is nothing for a client to discover and Dynamic Client Registration cannot be found the way
-> RFC 7591 clients find it. This repo's DCR routes are at `/api/client/dcr/*` behind admin Basic auth — use
-> those directly (see [DCR](API.md)).
+> Two more, both about members that are **absent** from the 64-member document (re-checked 2026-08-14):
+>
+> - **`registration_endpoint`** — so there is nothing for a client to discover and Dynamic Client Registration
+>   cannot be found the way RFC 7591 clients find it. This repo's DCR routes are at `/api/client/dcr/*` behind
+>   admin Basic auth — use those directly (see [DCR](API.md)).
+> - **`resource_indicators_supported`** — and this one cannot be fixed from the console. Of the `Service`
+>   schema's properties in Authlete 3.0.16, **none** carries the word `resource` except
+>   `resourceSignatureKeyId`, and the string `resource_indicators_supported` appears nowhere in Authlete's own
+>   OpenAPI document. So the row for it in [Required Authlete Configuration](#required-authlete-configuration)
+>   names **a setting that does not exist** — corrected below. **`UNVERIFIED`:** whether RFC 8707 registers
+>   such a metadata member at all was not checked against the RFC for this note; what *is* established is that
+>   this deployment does not emit it and Authlete offers no field to make it do so. The `resource` **request**
+>   parameter is a separate question and is forwarded normally.
+>
+> That is the **fourth** time in this audit that an instruction said "set X in the console" for an X with no
+> console field. The habit worth copying: check the field exists before writing the step.
 >
 > **The retired grants are enabled deliberately.** The curriculum uses `implicit` and `password` as the
 > *"here is what OAuth 2.1 removed, and why"* exhibit — see
@@ -116,13 +130,20 @@ set `clientIdMetadataDocumentSupported: true` on 2026-08-14, and `GET /api/fapi/
 
 ### Required Authlete Configuration
 
-| Setting | Value | Where |
-|---------|-------|-------|
-| `clientIdMetadataDocumentSupported` | `true` | Service → Security |
-| `pkceRequired` | `true` | Service → Security (recommended) |
-| `supportedGrantTypes` | `AUTHORIZATION_CODE` | Service → Supported Grant Types |
-| `supportedResponseTypes` | `CODE` | Service → Supported Response Types |
-| `resourceIndicatorsSupported` | `true` | Service → Security (if using resource indicators) |
+| Setting | Value | Where | Live here (2026-08-14) |
+|---------|-------|-------|---|
+| `clientIdMetadataDocumentSupported` | `true` | Service → Security | ✅ `true` |
+| `pkceRequired` | `true` | Service → Security (recommended) | ⚠️ `false` at the service; `true` on clients `4277838306` and `2176571218` |
+| `supportedGrantTypes` | `AUTHORIZATION_CODE` | Service → Supported Grant Types | ✅ present — alongside `implicit` and `password`, which OAuth 2.1 removes |
+| `supportedResponseTypes` | `CODE` | Service → Supported Response Types | ✅ present |
+| ~~`resourceIndicatorsSupported`~~ | — | — | ❌ **no such Authlete field.** Struck rather than deleted so nobody re-adds it; see the box at the top |
+
+**Scopes are the row that is missing from every table like this one.** `scopes_supported` here is
+`address`, `email`, `openid`, `offline_access`, `phone`, `profile`, `grant_management_query`,
+`grant_management_revoke` — so the `mcp:tools` and `mcp:resources` scopes used throughout this guide are
+**not registered**, and `scopeRequired` is `false`. An unregistered scope is not an error: OAuth drops
+unknown scopes, so the request succeeds and the granted scope silently omits them. Register them before
+expecting a token to carry them.
 
 ### Server Endpoints Used by MCP
 
@@ -161,6 +182,17 @@ The AI client first discovers the authorization server. MCP clients support two 
 │  }                                                          │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **`UNVERIFIED` — this is what a *conformant* AS returns, not what this one does.** Two of the six members
+> shown are **absent** from this deployment's 64-member document: `registration_endpoint` and
+> `resource_indicators_supported` (see the box at the top for why the second one cannot be added).
+> `code_challenge_methods_supported` is present but reads `["plain", "S256"]`, not `["S256"]` — the service
+> still permits `plain`, deliberately, because two teaching clients need it. Fetch the real thing rather than
+> trusting this block:
+>
+> ```bash
+> curl -s https://oauth2-0-ekh2.onrender.com/.well-known/oauth-authorization-server | python3 -m json.tool
+> ```
 
 ### Step 2: Client Registration (CIMD)
 
@@ -229,16 +261,22 @@ grant_type=authorization_code
 &code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
 ```
 
-Response:
+Response — *illustrative*:
 ```json
 {
   "access_token": "eyJhbGciOiJSUz...",
   "token_type": "Bearer",
-  "expires_in": 3600,
+  "expires_in": 86400,
   "scope": "mcp:tools mcp:resources",
   "refresh_token": "tGzv3JOkF0XG5Qx2TlKWIA"
 }
 ```
+
+> Two values to distrust here. `expires_in` is this service's `accessTokenDuration` — **86400**, a 24-hour
+> token, which is not what an MCP client should be handed and is deliberate only because the curriculum needs
+> it. And `scope` echoes `mcp:tools mcp:resources`, which **would not appear**: neither is a registered scope
+> on this service, so both are dropped silently. `access_token` is shown as a JWT for illustration;
+> `accessTokenSignAlg` is unset here, so real access tokens are opaque.
 
 ### Step 5: Call MCP Server
 

@@ -117,6 +117,86 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T1-19 batch 3 (B1-W3, 9068-W2, 9101-W5): T1-19 closes; two criteria under-counted their own defect** (below)
 - [x] **2026-08-14 — the P1 configuration changes had broken three labs, and the grep rule could not have caught it** (below)
 - [x] **2026-08-14 — T1-11 + CU-W2: four endpoints stopped speaking the vendor's shape, and an admin PATCH stopped clearing what it did not name** (below)
+- [x] **2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention, and four of the audit's own "unreproducible" verdicts turned out to be stale** (below)
+
+### 2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention
+
+**Why this matters to a future session:** the audit called this *the single highest-leverage item in the
+plan* — the aggregate behind **six S2 findings** — and its whole point is that a tutorial must say which of
+its transcripts were **run** and which were **reasoned**. **5 markers across 3 files → 29 across 9.**
+
+**The convention is defined once, in `docs/README.md`**, as three labels: **captured** (run on a stated date),
+*illustrative* (right shape, placeholder values, nothing run), **`UNVERIFIED`** (this deployment cannot
+produce it, and the marker names the setting responsible). Each tutorial then carries only its own facts, so
+there are not nine near-duplicate boxes to drift apart. **None of the three words was invented here** —
+`UNVERIFIED` is the curriculum's (`modules/09a…/lab.md`), *illustrative* is FAPI2-W6's own acceptance
+criterion, and **captured** is `TOKEN-EXCHANGE-TUTORIAL.md`'s existing *"what this server actually returns
+(captured 2026-08-06)"*. **That file was already the model**, which corrects the finding's own framing: the
+convention was not "three files away in the curriculum", it was in a tutorial nobody had generalised from.
+
+> ### The load-bearing step was probing, not writing
+>
+> Batch 3c's reproducibility table is dated **2026-08-13 and earlier**, and Tier 1 changed the deployment
+> underneath it. **Four of nine verdicts were stale, every one in the *runnable* direction:**
+>
+> | File | 3c said | Live 2026-08-14 |
+> |---|---|---|
+> | `RAR-TUTORIAL.md` | three transcripts "cannot have been produced" — no type registered | **T1-6 registered `payment_initiation`.** The transcripts now come from the real 2026-08-12 round trip |
+> | `CIBA-TUTORIAL.md` | "unreproducible — `bcDeliveryMode` unset on all three clients" | **T1-6 set `POLL` on `1523514379`.** The flow runs — on that client |
+> | `FAPI-TUTORIAL.md` | "no client has a JWKS or `private_key_jwt`" | **T1-3 created `2176571218`** with both, so four of Part 4's six steps are runnable |
+> | `MCP-OAUTH-TUTORIAL.md` | CIMD does nothing; issuer inconsistent | **DR-05 and DR-11 fixed both** |
+>
+> **Writing "unreproducible" from the audit's own table would have been wrong four times.** Only
+> `NATIVE-SSO-TUTORIAL.md` is still wholly unrunnable, and it is the file marked that way throughout.
+
+**Three defects no work item had named**, each found by checking a transcript against live configuration
+rather than by reading it:
+
+1. **`CIBA-TUTORIAL.md`'s every worked example 401s against the configuration the tutorial tells you to
+   build.** Part 2 recommends `CLIENT_SECRET_BASIC` — citing Authlete's own guide, and because the
+   backchannel and token endpoints must agree — and the one client here with `bcDeliveryMode` set is exactly
+   that. Every example passed `clientId`/`clientSecret` in the **body**, which earns `[A157357]` for the
+   *channel* before the secret is looked at. The Basic form is now primary, with a three-row channel table
+   copied from `PAR-TUTORIAL.md`'s (which is excellent and was the model). **A consequence worth keeping:**
+   Part 6's *"Wrong Client Secret"* demo therefore **passed for the wrong reason** — against a Basic client it
+   401s whether the secret is right or wrong. A negative test that cannot distinguish its two failure causes
+   is not a test.
+2. **`RAR-TUTORIAL.md` showed a PAR response shape that has never existed** — `{"action":"CREATED",
+   "request_uri":…}`, half Authlete's envelope and half RFC 9126 §2.2's body. A **T1-11 residue**: that pass
+   updated six tutorials and did not reach a seventh file quoting PAR incidentally. **When a wire format
+   changes, grep for the shape, not only for the endpoint's own tutorial.**
+3. **`MCP-OAUTH-TUTORIAL.md` instructed you to set `resourceIndicatorsSupported`, which is not an Authlete
+   field.** No `Service` property in 3.0.16 matches `resource` except `resourceSignatureKeyId`, and the string
+   appears nowhere in the vendored OpenAPI document. **The fourth instance** of "set X in the console" for an
+   X with no console field, after RPL-W4, T1-13 and VCI-W2's AS half. Struck through rather than deleted, so
+   nobody re-adds it. Its sibling `resource_indicators_supported` is absent from the discovery document too —
+   and **whether RFC 8707 registers such a member at all is marked `UNVERIFIED`** rather than asserted, since
+   the RFC was not re-fetched for it.
+
+**Six stale literals corrected**: five `expires_in: 3600` where the service's `accessTokenDuration` is
+**86400**, and `FAPI-TUTORIAL.md`'s PAR `expires_in: 90` where `pushedAuthReqDuration` is **600**. Plus
+`RAR-TUTORIAL.md`'s introspection block, which showed `authorization_details` at the top level where the live
+response is `authorizationDetails.elements[]` with RFC 9396's common data fields flattened into an
+**`otherFields` string** — so the tutorial taught one parser for two incompatible shapes.
+
+**Four other IDs discharged**: 9396-W4 · FAPI2-W6 ⊃ 9126-W5 = CUR-3c-W7 (the `/api/authorize` →
+`/api/authorization` path in two files) · the tutorial halves of 9126-W6 and CIBA-W5, whose `AGENTS.md` and
+Module 05 halves stay in T2-15. **`FAPI2-W6` had no tier row of its own** — it existed in the plan only inside
+§5.2's cluster 22 — so the coverage check counted it as covered without anything scheduling it. That failure
+mode is now recorded in the plan.
+
+**One thing deliberately not done.** `STEP-UP-AUTH-TUTORIAL.md` still prints its step-up challenge as **403**
+where RFC 9470 §3 requires **401**, including the sequence-diagram arrow. That is **T2-11**, and leaving it
+keeps T2-11 one reviewable change instead of half-absorbed here. The file's new box says what *is* and is not
+runnable — `accessTokenSignAlg` is unset so Part 4's JWT payload cannot exist, and
+`urn:mace:incommon:iap:silver` is not a registered ACR (`supportedAcrs` is `["pwd","mfa"]`, so use `mfa`) —
+and records the T1-7 correction that `max_age` can only genuinely fail on the `prompt=none` path, because on a
+login POST the user has just authenticated.
+
+**Verification.** 1081 server tests / 73 files, 109 client / 16 — unchanged, this is a documentation change.
+`check-docs.mjs` clean across **166 files**, now validating **1037 endpoint paths** (up from 997) and 274
+anchors. Route coverage 92 routes, empty baseline. `docs/README.md` also gained the two tutorial-index rows
+`STEP-UP-AUTH-TUTORIAL.md` and `MCP-OAUTH-TUTORIAL.md` were missing, which is part of CUR-3c-W14.
 
 ### 2026-08-14 — T1-11 + CU-W2: the wire format, and the client update that cleared fields
 
