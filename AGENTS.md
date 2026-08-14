@@ -312,7 +312,7 @@ behaviour *refusing* is now wrong, and every sentence explaining *why* it refuse
 ### Two mechanical checks — run both, and know what each cannot see
 
 ```bash
-node scripts/check-docs.mjs           # offline: source refs, relative links, anchors. CI runs this on every push
+node scripts/check-docs.mjs           # offline: source refs, bare paths, md line refs, prose pointers, endpoint paths, links, anchors. CI runs this on every push
 node scripts/check-docs.mjs --links   # also fetches external URLs. CI runs this weekly, not per-push
 node scripts/check-route-coverage.mjs # every route is named by some test. CI runs this on every push
 ```
@@ -356,8 +356,36 @@ asking how to fix it.**
 
 ### Documentation drift check
 
-Covers 104 markdown files. It catches the mechanically detectable drift only — `file.ts:NNN` references
-past the end of the file, broken relative links, anchors matching no heading, and dead external links.
+Covers **166 markdown files and ~1,400 references**. It catches the mechanically detectable drift only, and
+**five of its six reference forms were added 2026-08-14** (T2-7 ⊃ CUR-3a-W1, CUR-3b-W5, CUR-3c-W11) — before
+that it validated `file.ts:NNN` refs, relative links, anchors and external links, which was 103 references
+out of the 1,400 now checked:
+
+| Form | Example | Why it was missing |
+|---|---|---|
+| `file.ts:NNN` | `token.service.ts:59` | the original check |
+| **bare path** | `client/src/pkce.ts` | no colon, so the original regex never saw it. This is how the audit cited `components/oidc/VciSection.tsx` for weeks while the file lived under `components/vci/` |
+| **`file.md:NNN`** | `modules/05…/lab.md:97` | nothing validated markdown line refs at all — 216 of them |
+| **prose pointer** | `Line ~89`, `(~line 74)` | no colon and no path adjacency the old form recognised. Caught two pointers **past end-of-file** on its first run |
+| **endpoint path** | `/api/client/update/:clientId` | checked against the routes `routes/*.ts` mounts. Caught ~~`PUT /api/client/:clientId`~~ — wrong **method and path** — in two documents |
+| external URL | `[text](https://…)` | opt-in, `--links` |
+
+**Three conventions the checker had to learn, because rejecting them would mean rejecting the repo's own
+documentation style.** Abbreviated paths come in two forms — an explicit ellipsis (`modules/09a…/lab.md`) and
+a silent prefix (`modules/05/README.md`) — both resolved by unique-prefix matching per segment. Endpoints are
+routinely named as **stems** without their parameters (`/api/client/update`), so a stem that prefixes a real
+route passes. And a path or endpoint quoted **as wrong** must not be flagged: file paths use the small
+`PATHS_DISCUSSED_NOT_REFERENCED` list, endpoints use **`~~strikethrough~~`**, which is better because the
+document declares its intent at the point of use instead of in a list somebody must remember to prune.
+
+> **What it still cannot see: 465 context-relative `file.md:NNN` refs.** A bare `lab.md:520` means *"the lab
+> of the module this entry is about"*, and resolving it means guessing the subject. **The count is printed on
+> every run** rather than omitted, so nobody mistakes the check for complete coverage.
+
+**And one thing worth knowing about writing acceptance criteria.** CUR-3a-W1's read: *"A reference to
+`client/src/utils/pkce.ts` fails the check."* Implementing it makes **the sentence stating it** one of the
+references that fails. A criterion phrased as an example of the defect cannot distinguish itself from the
+defect.
 
 Two design decisions worth keeping:
 

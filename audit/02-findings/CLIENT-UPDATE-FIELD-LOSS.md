@@ -48,7 +48,7 @@ complete client body would lose the fields the SDK does not model — which, as
 **T0-4 made a client field load-bearing for a security decision.** The per-client
 `post_logout_redirect_uris` registry lives in `POST_LOGOUT_REDIRECT_URIS` rather than in Authlete (F-4), so
 *that* particular value is out of reach of this defect. But the general shape stands: an admin using
-`PUT /api/client/:clientId` to change one field may silently clear others, and nothing in the response says so.
+`PATCH /api/client/update/:clientId` to change one field may silently clear others, and nothing in the response says so.
 
 ## What is established, and what is not
 

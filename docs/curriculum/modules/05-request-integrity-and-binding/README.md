@@ -251,8 +251,15 @@ compares DPoP with mTLS as a design decision. That is what is here.
 ## Where this lives in the code
 
 - **`client/src/services/dpop.service.ts`** — the reference implementation, and the best file in the repo for
-  reading a JWS being built by hand. Line ~89 sets the `jwk` header member; ~81–83 computes `ath`; ~95–101
-  handles the raw P1363 signature. Every one of the three bugs above is a comment away.
+  reading a JWS being built by hand. Line ~70 sets the `jwk` header member; ~59–60 attaches `ath` (computed
+  by `computeAth` at ~26); ~76–84 handles the raw P1363 signature. Every one of the three bugs above is a
+  comment away.
+
+  > **Those three pointers were wrong until 2026-08-14**, and how they were found is the point. They read
+  > `~89`, `~81–83` and `~95–101` against an **87-line** file — two of them past end-of-file entirely. The
+  > form carries no colon, so `check-docs.mjs`'s `path.ts:NNN` check never looked at it; it was **CUR-3b-W5**,
+  > and teaching the checker this form caught it on the first run. A reference style that no tool validates
+  > is a reference style that rots.
 - **`server/src/services/par.service.ts`** — note lines ~29–34: for `client_secret_post` clients the secret is
   merged **into the `parameters` string**, not sent as a separate field. That is Authlete's PAR API contract,
   not RFC 9126, and it is exactly the kind of vendor detail worth labelling.

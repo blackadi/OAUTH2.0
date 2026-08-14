@@ -1600,7 +1600,7 @@ far arose where the audit reasoned from a name it had inferred rather than one i
 
 A third is recorded but not fixed: `audit/02-findings/CLIENT-UPDATE-FIELD-LOSS.md`. `buildClientInput` names
 roughly forty of Authlete's 108 `Client` fields, and the SDK's `ClientInput` strips unknown keys — so an admin
-`PUT /api/client/:clientId` may silently clear what it does not name. The full-object round trip is
+`PATCH /api/client/update/:clientId` may silently clear what it does not name. The full-object round trip is
 **verified** lossless; whether a *partial* update clears the rest is marked **`UNVERIFIED`**, because the test
 is destructive on a shared service. **CU-W1 settles it on a throwaway DCR client and gates whether CU-W2 is
 needed at all.**
