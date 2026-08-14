@@ -150,6 +150,19 @@ describe("FAPI routes", () => {
     expect(res.body.dpopNonceRequired).toBe(true);
     expect(res.body.dpopNonceDuration).toBe(3600);
     expect(res.body.clientIdMetadataDocumentSupported).toBe(true);
+
+    // FAPI2-W4: the controls the endpoint used to be silent about. `pkceS256Required` is separate from
+    // `pkceRequired` and both matter — §5.3.2.1 wants PKCE *with* S256, and a deployment can require PKCE
+    // while still permitting `plain`.
+    expect(res.body).toHaveProperty("pkceS256Required");
+    expect(res.body).toHaveProperty("tlsClientCertificateBoundAccessTokens");
+    expect(res.body).toHaveProperty("supportedTokenAuthMethods");
+
+    // And the one it CANNOT report: no `Service` property carries the signing algorithms — they are
+    // derived from the JWK Set and appear only in the discovery document. Asserted as absent so nobody
+    // "fixes" it by inventing a field, which is what the compiler already refused once.
+    expect(res.body).not.toHaveProperty("supportedSignatureAlgorithms");
+
     expect(mockServiceGet).toHaveBeenCalledOnce();
   });
 

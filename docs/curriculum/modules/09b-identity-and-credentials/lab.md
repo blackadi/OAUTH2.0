@@ -538,31 +538,94 @@ Three observations worth writing down:
    error codes worth reading rather than pattern-matching on the HTTP status.
 2. **The action-to-status mapping is consistent** with `AGENTS.md`: discovery gives `NOT_FOUND` → 404, offers
    give `FORBIDDEN` → 403.
-3. **Some validation happens before Authlete is consulted.** Compare:
+3. **Some validation happens before Authlete is consulted.** All three credential endpoints refuse an
+   unauthenticated caller locally, without a round trip:
 
 ```bash
-curl -s -X POST -H 'Content-Type: application/json' -d '{}' "$API/vci/credential/batch"
-curl -s -X POST -H 'Content-Type: application/json' -d '{}' "$API/vci/deferred/issue"
+curl -s -X POST -H 'Content-Type: application/json' -d '{}' "$API/vci/credential/issue"  -w ' [%{http_code}]\n'
+curl -s -X POST -H 'Content-Type: application/json' -d '{}' "$API/vci/credential/batch"  -w ' [%{http_code}]\n'
+curl -s -X POST -H 'Content-Type: application/json' -d '{}' "$API/vci/deferred/issue"    -w ' [%{http_code}]\n'
 ```
 
 ```
-{"error":"invalid_request","error_description":"Access token is required. Provide via Authorization: Bearer header or accessToken field in body."}
-{"error":"invalid_request","error_description":"Missing order with transactionId for deferred credential retrieval."}
+{"error":"invalid_token","error_description":"Access token is required. Provide via Authorization: Bearer header or accessToken field in body."} [401]
+{"error":"invalid_token","error_description":"Access token is required. Provide via Authorization: Bearer header or accessToken field in body."} [401]
+{"error":"invalid_token","error_description":"Access token is required. Provide via Authorization: Bearer header or accessToken field in body."} [401]
 ```
 
 Local checks, clean OAuth-shaped errors, no Authlete round trip. That layering is correct and worth noticing
 — it is what the federation endpoint in the next exercise fails to do.
+
+### Why all three agree, and what it cost to make them
+
+**Until 2026-08-13 the third line was different**, and the difference was a security defect rather than a
+style inconsistency. `deferred/issue` answered:
+
+```
+{"error":"invalid_request","error_description":"Missing order with transactionId for deferred credential retrieval."} [400]
+```
+
+It was complaining about the **order**, because it never looked for a token at all. Supply a `transactionId`
+and it issued a credential — to anyone. A `transaction_id` is a *handle*, not a credential: OID4VCI §9.1 makes
+it REQUIRED so the wallet can name which pending request it is collecting, and it is not evidence of who is
+asking.
+
+**Three things about how this was found are worth more than the fix.**
+
+**It was found by asking a question, not by reading code.** `node scripts/check-route-coverage.mjs --triage`
+answers *"which routes does no test mention?"*. This endpoint had a unit-tested controller and **nothing
+driving the route** — and a controller test calls the handler directly, so it can never see a missing gate.
+The endpoint's two siblings were already correct, so nothing looked wrong in isolation. **The asymmetry was
+the bug**, and you only see an asymmetry by looking at the set.
+
+**The documentation asserted the control that was missing.** Both `AGENTS.md` and the server's own route index
+described this endpoint as *"requires Bearer token"*. Neither was true. When you audit, a claim in the docs is
+a hypothesis to test, never evidence — Module 07's template makes this point and here is a live instance.
+
+**The vendor's API shape is why it happened.** Look at what each Authlete API accepts:
+
+| Authlete API | Takes | Where the token is checked |
+|---|---|---|
+| `/vci/single/issue` | `accessToken` **+** `order` | on that call |
+| `/vci/batch/issue` | `accessToken` **+** `orders` | on that call |
+| `/vci/deferred/issue` | `order` **only** | nowhere — there is no field for it |
+| `/vci/deferred/parse` | `accessToken` + `requestContent` | **here, and only here** |
+
+Two endpoints could be written the obvious way and be safe. The third could not, because Authlete splits
+authentication (`parse`) away from the operation (`issue`) on the deferred path only. Writing it by analogy
+with its siblings produced an endpoint that looked complete and authenticated nobody.
+
+So the fixed handler makes **two** calls, and takes `requestIdentifier` from `parse`'s answer rather than from
+the request body — otherwise any valid token could name any pending request. Same rule you met in Module 04:
+**a field the server can determine must not be readable from the client.**
+
+> **`UNVERIFIED` — that the two-call flow completes.** With `verifiableCredentialsEnabled` false, `parse`
+> answers `FORBIDDEN` before it would return the identifier `issue` needs. The 401s above are local and real;
+> everything past them is asserted only against mocked tests
+> (`server/tests/integration/vci.routes.test.ts`).
 
 > **`UNVERIFIED` — everything past the refusal.** Enabling verifiable credentials on the Authlete service
 > would let you create a real credential offer and issue against it. That is a console change on your own
 > service and nothing in this lab claims to show its output. What the exercise *does* verify is the endpoint
 > surface, the auth model, and the refusal semantics.
 
-> **A note on the auth model.** `AGENTS.md` documents the offer endpoints as requiring admin Basic auth. On
-> this deployment `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` are unset, and `require-basic-auth.ts` returns
-> *allow* when they are — so those calls above went through with no credentials. That is documented,
-> intentional, developer-convenience behaviour, but note its shape: **an omitted configuration value silently
-> disables authentication on every admin route.** Fail-open. Add it to your Module 07 audit template.
+> **A note on the auth model, and a correction this lab has to make about itself.** `AGENTS.md` documents the
+> offer endpoints as requiring admin Basic auth, and the `403` above arrived *without* credentials — so how?
+>
+> **When this exercise was written, `require-basic-auth.ts` returned *allow* if `MGMT_CLIENT_ID` /
+> `MGMT_CLIENT_SECRET` were unset.** Fail-open: an omitted configuration value silently disabled
+> authentication on every admin route, including one that returns a confidential client's secret in
+> plaintext. That was described here as *"documented, intentional, developer-convenience behaviour"*, which
+> is exactly the sentence a reader should distrust.
+>
+> **It fails closed now.** Unset credentials mean every admin route answers `401`, and the 401 body is
+> deliberately identical to the wrong-password one, because telling an anonymous caller that admin auth is
+> misconfigured is free reconnaissance. So with `MGMT_*` unset you will now get `401` from the two offer
+> endpoints and never reach the `403` shown above; set both to reproduce it.
+>
+> Keep the shape in your Module 07 audit template regardless — **fail-open on a missing configuration value**
+> is the pattern, and the reason it survived so long is that nothing *looked* wrong: the calls succeeded, the
+> tests passed, and a lab wrote it down as intentional.
 
 ---
 

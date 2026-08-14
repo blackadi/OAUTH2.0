@@ -48,10 +48,20 @@ export const revocationController = {
           res.setHeader("Pragma", "no-cache");
           return res.status(500).send(result.responseContent ?? "");
 
+        // B1-W4. A fixed body, not `result`. This branch means "Authlete returned an action this server does
+        // not recognise", so by construction nobody has reviewed what that response object contains — and on
+        // this boundary an unreviewed Authlete response is exactly what leaked a `ticket` from
+        // `/api/jar/process`. The diagnosis goes to the log, where it belongs; the caller gets a shape that
+        // cannot surprise us. `/revocation` is also RFC 7009 §2.2, where the client is told almost nothing
+        // on purpose.
         default: {
           const log = req.logger || logger;
-          log.error("Unknown revocation action", { action: result.action });
-          return res.status(500).send(result);
+          log.error("Unknown revocation action", {
+            action: result.action,
+            resultCode: result.resultCode,
+            resultMessage: result.resultMessage,
+          });
+          return res.status(500).json({ error: "server_error" });
         }
       }
     } catch (err) {

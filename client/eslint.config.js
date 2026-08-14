@@ -30,6 +30,12 @@ export default [
       ...tseslint.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      // `no-undef` comes from js.configs.recommended and is wrong on TypeScript: it does not know the TS
+      // lib types, so `JsonWebKey` and `RequestInit` were reported as undefined globals while `tsc` was
+      // perfectly happy with both. typescript-eslint's own guidance is to disable it — TypeScript already
+      // performs this check, and does it better. Enumerating each lib type in `globals` would be a
+      // never-ending list that silently rots.
+      'no-undef': 'off',
     },
   },
   {

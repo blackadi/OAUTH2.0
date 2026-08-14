@@ -30,6 +30,13 @@ export function useServerStatus(options?: UseServerStatusOptions): UseServerStat
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
+  // Extracted so the effect depends on the *flip* rather than on every `status` transition — polling should
+  // change cadence when connectivity changes, not when 'checking' becomes 'checking' again. It was inlined
+  // as `status === 'connected'` in the dependency array, which does the same thing but cannot be checked
+  // statically, so `react-hooks/exhaustive-deps` reported both a missing dependency and a complex
+  // expression. Same behaviour, now verifiable.
+  const isConnected = status === 'connected';
+
   useEffect(() => {
     mountedRef.current = true;
 
@@ -67,7 +74,7 @@ export function useServerStatus(options?: UseServerStatusOptions): UseServerStat
 
     check();
 
-    const pollMs = status === 'connected' ? interval : retryInterval;
+    const pollMs = isConnected ? interval : retryInterval;
     const intervalId = setInterval(check, pollMs);
 
     return () => {
@@ -75,7 +82,7 @@ export function useServerStatus(options?: UseServerStatusOptions): UseServerStat
       abortRef.current?.abort();
       clearInterval(intervalId);
     };
-  }, [status === 'connected', interval, retryInterval, timeout]);
+  }, [isConnected, interval, retryInterval, timeout]);
 
-  return { status, isOnline: status === 'connected', uptime, lastCheck };
+  return { status, isOnline: isConnected, uptime, lastCheck };
 }

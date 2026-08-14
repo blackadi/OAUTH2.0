@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { processJar } from '@/services/jar.service';
+import { processJar, type JarProcessResult } from '@/services/jar.service';
 import { generateSigningKeyPair, getJwkSetDisplay, type SigningKeyPair } from '@/services/client-assertion.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
@@ -83,7 +83,7 @@ function JarSection() {
   const [claimsJson, setClaimsJson] = useState('');
   const [signedJwt, setSignedJwt] = useState('');
   const [clientId, setClientId] = useState('');
-  const [jarResult, setJarResult] = useState<any>(null);
+  const [jarResult, setJarResult] = useState<JarProcessResult | null>(null);
 
   const doc = getDoc('jar', 'process');
 
@@ -251,18 +251,16 @@ function JarSection() {
           <Button onClick={handleProcess} loading={loading} disabled={!canProcess}>
             Process JAR
           </Button>
+          {/*
+            `requestObjectPayload` used to be decoded and rendered here. It can no longer arrive: since
+            2026-08-13 the endpoint returns a five-field allowlist, because the full Authlete response
+            carried a `ticket` — a credential — and this panel was the reason nobody noticed the rest of it
+            was being shipped to the browser too. `resultMessage` and `scopes` are the pedagogical payload
+            now, and both are inside `jarResult`.
+          */}
           {jarResult && (
             <div className="space-y-4">
               <JsonBlock data={jarResult} label="Authlete Response" />
-              {jarResult.requestObjectPayload && (
-                <JsonBlock
-                  data={(() => {
-                    try { return JSON.parse(jarResult.requestObjectPayload); }
-                    catch { return jarResult.requestObjectPayload; }
-                  })()}
-                  label="Decoded requestObjectPayload"
-                />
-              )}
             </div>
           )}
           {result !== null && !jarResult && (

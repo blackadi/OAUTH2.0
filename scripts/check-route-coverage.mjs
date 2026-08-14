@@ -44,6 +44,10 @@ const TEST_DIRS = [join(REPO, "server/tests/unit"), join(REPO, "server/tests/int
  * Removing a line from the baseline is how you bank progress — `--update-baseline` rewrites it, and the
  * diff shows what changed. Never regenerate it to make a failure go away; that is the one move this design
  * cannot defend against.
+ *
+ * **The backlog reached zero on 2026-08-13**, so the file is now `{"unreferenced": []}`. That is the
+ * intended terminal state, not a missing baseline: with nothing carried, any unreferenced route is a
+ * regression and fails the build. Do not repopulate it to accommodate a new endpoint.
  */
 
 /**
@@ -86,13 +90,48 @@ function collectRoutes() {
  */
 function referenceMatcher(path) {
   const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const withParams = escaped.replace(/\\?:[A-Za-z0-9_]+/g, "[^\"'`\\s)]+");
+  let withParams = escaped.replace(/\\?:[A-Za-z0-9_]+/g, "[^\"'`\\s)]+");
+
+  /**
+   * Express 5's brace-wildcard form, `/prefix/{*name}`, is a *path suffix* — so a test naturally writes a
+   * concrete one (`/.well-known/oauth-protected-resource/api/userinfo`) exactly as it writes a concrete id
+   * for `:param`. Without this the escaped literal `\{\*name\}` matched nothing and a genuinely covered
+   * route was reported as a regression.
+   *
+   * **The guard matters more than the rule.** `GET /{*path}` — the root catch-all — has no literal prefix
+   * at all, so treating its wildcard as "anything" would make *every* path in *every* test count as a
+   * reference to it, and the one route that answers for all unmatched URLs would become permanently
+   * unfalsifiable. Below a real prefix, the wildcard stays literal and must be named as written, which is
+   * what `root.routes.test.ts` does.
+   */
+  const WILDCARD = /\\\{\\\*[A-Za-z0-9_]+\\\}/;
+  const prefix = withParams.split(WILDCARD)[0];
+  if (WILDCARD.test(withParams) && prefix.replace(/\\/g, "").length > 1) {
+    withParams = withParams.replace(new RegExp(WILDCARD, "g"), "[^\"'`\\s)]*");
+  }
+
   return new RegExp(withParams);
 }
 
+/**
+ * Comment lines are stripped before matching, and the reason is a live false positive: a test written for
+ * `/api/nativesso` carried a comment citing `/api/jar/process` as the defect it was modelled on, and that
+ * prose mention alone moved `/jar/process` out of the backlog. A route "covered" by someone else's comment
+ * is the one failure mode this check cannot afford — the whole point is to be crude but never wrong about
+ * the narrow thing it asserts.
+ *
+ * Only whole-line comments are removed (`// …`, and ` * …` inside a block). Trailing comments are left
+ * alone deliberately: stripping from the first `//` on a line would also eat the tail of any line
+ * containing a URL.
+ */
+const WHOLE_LINE_COMMENT = /^[ \t]*(?:\/\/|\/\*|\*).*$/gm;
+
 const testSources = TEST_DIRS.flatMap((d) => {
   try {
-    return walk(d).map((f) => ({ file: relative(REPO, f), text: readFileSync(f, "utf8") }));
+    return walk(d).map((f) => ({
+      file: relative(REPO, f),
+      text: readFileSync(f, "utf8").replace(WHOLE_LINE_COMMENT, ""),
+    }));
   } catch {
     return [];
   }

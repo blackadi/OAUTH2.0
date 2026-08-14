@@ -342,6 +342,26 @@ describe("Integration: all API routes", () => {
     })
   })
 
+  // 9126-W3. RFC 9126 §2 makes this a POST endpoint. Anything else used to fall through to the root
+  // catch-all and answer 200 with an HTML page, so a client using the wrong verb was told it had
+  // succeeded. RFC 9110 §15.5.6 requires `Allow` on a 405, which is what makes the answer actionable.
+  describe("non-POST on /api/par", () => {
+    it.each(["get", "put", "patch", "delete"] as const)("%s answers 405 with Allow: POST", async (verb) => {
+      const res = await request(app)[verb]("/api/par")
+
+      expect(res.status).toBe(405)
+      expect(res.headers["allow"]).toBe("POST")
+      expect(res.body.error).toBe("invalid_request")
+      expect(mockApi.pushedAuthorization.create).not.toHaveBeenCalled()
+    })
+
+    it("does not answer HTML", async () => {
+      const res = await request(app).get("/api/par")
+
+      expect(res.headers["content-type"]).toMatch(/application\/json/)
+    })
+  })
+
   describe("POST /api/par", () => {
     it("returns 201 with request_uri", async () => {
       mockApi.pushedAuthorization.create.mockResolvedValue({

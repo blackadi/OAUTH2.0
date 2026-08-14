@@ -374,9 +374,15 @@ Request multiple verifiable credentials in a single API call. Maps to the OID4VC
 #### `POST /api/vci/deferred/issue`
 Retrieve a credential after deferred issuance. Maps to the OID4VCI Deferred Credential Endpoint (§9). Called when the Credential Endpoint returned 202 with a `transaction_id`.
 
-**Body:** `order` (optional JSON with `requestIdentifier`, `transactionId`, etc.)
+**Requires an access token** — `Authorization: Bearer <token>` (or `DPoP`, or an `accessToken` JSON body field), the same token used at the Credential Endpoint.
 
-**Response:** 200 (OK), 202 (still pending — keep polling), 400, 403, 500
+**Body:** `order.transactionId` (**required** — from the 202 response). Optionally `order.credentialPayload`, `order.credentialDuration`, `order.signingKeyId`.
+
+`order.requestIdentifier` is **ignored if supplied**: the server takes it from Authlete's deferred *parse* response, so issuance is bound to the credential request the validated `transaction_id` resolves to. A body carrying `requestIdentifier` with no `transactionId` is refused with 400 — it is the shape that bypassed validation before 2026-08-13.
+
+**Two Authlete calls.** Unlike the Credential and Batch endpoints, whose Authlete APIs accept the access token alongside the order, `/vci/deferred/issue` takes only an `order` and cannot validate a token. The server therefore calls `/vci/deferred/parse` first — the only API on this path that accepts one — and issues only when it answers `OK`.
+
+**Response:** 200 (OK), 202 (still pending — keep polling), 400, **401 (no token, or Authlete rejected it)**, 403, 500
 
 ---
 

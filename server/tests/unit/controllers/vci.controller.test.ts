@@ -10,6 +10,7 @@ const mockVciService = {
   getOfferInfo: vi.fn(),
   issueSingle: vi.fn(),
   batchIssue: vi.fn(),
+  parseDeferred: vi.fn(),
   issueDeferred: vi.fn(),
 }
 
@@ -282,11 +283,18 @@ describe("VCI controllers", () => {
     })
   })
 
+  // Two Authlete calls since 2026-08-13: `/vci/deferred/parse` authenticates, `/vci/deferred/issue` issues.
+  // Before that this handler collected no token at all and `VciDeferredIssueRequest` has no `accessToken`
+  // field, so nothing on the path could authenticate. The route-level equivalents of these cases live in
+  // `tests/integration/vci.routes.test.ts`.
   describe("credential.handleIssueDeferred", () => {
-    it("returns 200 on OK action", async () => {
+    const parsedOk = { action: "OK", info: { identifier: "req-from-parse" } }
+
+    it("parses first, then issues with the identifier parse returned", async () => {
+      mockVciService.parseDeferred.mockResolvedValue(parsedOk)
       mockVciService.issueDeferred.mockResolvedValue({ action: "OK", credential: "eyJ..." })
       const req = mockReq({
-        body: { order: { requestIdentifier: "def123" } },
+        body: { accessToken: "token123", order: { transactionId: "tx-1" } },
       })
       const res = mockRes()
       const next = mockNext()
@@ -294,7 +302,94 @@ describe("VCI controllers", () => {
       await credential.handleIssueDeferred(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(200)
-      expect(mockVciService.issueDeferred).toHaveBeenCalledWith({ requestIdentifier: "def123" })
+      expect(mockVciService.parseDeferred).toHaveBeenCalledWith(
+        "token123",
+        JSON.stringify({ transaction_id: "tx-1" }),
+      )
+      expect(mockVciService.issueDeferred).toHaveBeenCalledWith({ requestIdentifier: "req-from-parse" })
+    })
+
+    it("returns 401 and calls no Authlete API when no token is presented", async () => {
+      const req = mockReq({ body: { order: { transactionId: "tx-1" } } })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueDeferred(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(401)
+      expect(mockVciService.parseDeferred).not.toHaveBeenCalled()
+      expect(mockVciService.issueDeferred).not.toHaveBeenCalled()
+    })
+
+    it("stops at parse when Authlete rejects the token, and never issues", async () => {
+      mockVciService.parseDeferred.mockResolvedValue({ action: "UNAUTHORIZED" })
+      const req = mockReq({ body: { accessToken: "bad", order: { transactionId: "tx-1" } } })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueDeferred(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(401)
+      expect(mockVciService.issueDeferred).not.toHaveBeenCalled()
+    })
+
+    // The bypass shape. A bare `requestIdentifier` is what reached issuance unauthenticated, and it carries
+    // no `transaction_id` for parse to validate, so there is nothing to check it against.
+    it("refuses a requestIdentifier with no transactionId", async () => {
+      const req = mockReq({ body: { accessToken: "token123", order: { requestIdentifier: "def123" } } })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueDeferred(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(mockVciService.parseDeferred).not.toHaveBeenCalled()
+    })
+
+    it("never lets the body choose the requestIdentifier", async () => {
+      mockVciService.parseDeferred.mockResolvedValue(parsedOk)
+      mockVciService.issueDeferred.mockResolvedValue({ action: "OK" })
+      const req = mockReq({
+        body: {
+          accessToken: "token123",
+          order: { transactionId: "tx-1", requestIdentifier: "someone-elses-request" },
+        },
+      })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueDeferred(req, res, next)
+
+      expect(mockVciService.issueDeferred).toHaveBeenCalledWith({ requestIdentifier: "req-from-parse" })
+    })
+
+    it("forwards the allowlisted order fields and nothing else", async () => {
+      mockVciService.parseDeferred.mockResolvedValue(parsedOk)
+      mockVciService.issueDeferred.mockResolvedValue({ action: "OK" })
+      const req = mockReq({
+        body: {
+          accessToken: "token123",
+          order: {
+            transactionId: "tx-1",
+            credentialPayload: '{"extra":"claim"}',
+            credentialDuration: 3600,
+            signingKeyId: "rsa-1",
+            issuanceDeferred: true,
+            somethingTheSdkAddsLater: "nope",
+          },
+        },
+      })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueDeferred(req, res, next)
+
+      expect(mockVciService.issueDeferred).toHaveBeenCalledWith({
+        credentialPayload: '{"extra":"claim"}',
+        credentialDuration: 3600,
+        signingKeyId: "rsa-1",
+        requestIdentifier: "req-from-parse",
+      })
     })
   })
 

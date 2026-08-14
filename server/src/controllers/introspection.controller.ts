@@ -49,13 +49,50 @@ function parseBearerError(responseContent: string): {
   max_age?: string;
 } {
   const result: Record<string, string> = {};
-  const pairs = responseContent.replace(/^Bearer\s+/i, "").split(/,\s*/);
-  for (const pair of pairs) {
+
+  // 9470-W6. This used to be `split(/,\s*/)`, which splits on EVERY comma — including the ones inside a
+  // quoted value. RFC 9110 §11.2 gives auth-params as comma-separated `token "=" ( token / quoted-string )`,
+  // and a comma is perfectly legal inside the quoted form. So an Authlete challenge carrying
+  //
+  //     error_description="Authentication is insufficient, re-authenticate"
+  //
+  // was cut in half: the client received "Authentication is insufficient and the rest became a stray
+  // parameter. On this path that text is the whole point — RFC 9470 step-up tells the client *why* it must
+  // re-authenticate — so a truncated description is a broken feature, not cosmetics.
+  //
+  // Scan instead of split: track whether we are inside quotes, and only treat a comma as a separator when
+  // we are not. Backslash escapes inside a quoted-string are honoured per §5.6.4.
+  const src = responseContent.replace(/^Bearer\s+/i, "");
+  const parts: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes && ch === "\\" && i + 1 < src.length) {
+      current += src[i + 1];
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      current += ch;
+      continue;
+    }
+    if (ch === "," && !inQuotes) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+
+  for (const pair of parts) {
     const eqIdx = pair.indexOf("=");
     if (eqIdx === -1) continue;
     const key = pair.slice(0, eqIdx).trim();
-    const val = pair.slice(eqIdx + 1).replace(/^"|"$/g, "").trim();
-    result[key] = val;
+    const val = pair.slice(eqIdx + 1).trim().replace(/^"|"$/g, "");
+    if (key) result[key] = val;
   }
   return result;
 }

@@ -120,7 +120,7 @@ being enforced.** Now observed, not just reported.
 |---|---|---|
 | `supportedAcrs` | `UNVERIFIED` — `modules/09a…/lab.md:533` | **absent** — confirmed unset |
 | `supportedAuthorizationDetailsTypes` | `UNVERIFIED` — `modules/09a…/lab.md:610` | **absent** — confirmed unset |
-| `authorizationCodeDuration: 0` | "NOT EVIDENCED" — `PROGRESS.md:1737` | **`0`** — confirmed |
+| `authorizationCodeDuration: 0` | "NOT EVIDENCED" — `PROGRESS.md:1865` | **`0`** — confirmed |
 
 The five Module 09a console settings were indeed never applied. Those lab exercises remain correctly
 marked `UNVERIFIED`; the probe converts "we could not check" into "we checked, and it is unset."
@@ -322,7 +322,7 @@ Four of these are load-bearing for later verdicts:
 1. **`id_token_signing_alg_values_supported` omits RS256**, which OIDC Discovery §3 makes a MUST (*"The algorithm RS256 MUST be included."*). See `OIDC-CORE-1.0.md` F-2 — and note B3's discovery entry does not mention it.
 2. **`backchannel_logout_supported` and `frontchannel_logout_supported` are both absent** while the repo implements three back-channel logout endpoints plus a receiver. Carried to the logout batch.
 3. **`registration_endpoint` is absent** while four DCR endpoints exist. Carried to the DCR entry for a follow-up.
-4. **`introspection_endpoint_auth_methods_supported` is an empty array** — independent corroboration of the unauthenticated-introspection finding in B2, and the *"three-source divergence"* `PROGRESS.md:1964-1967` records for revocation.
+4. **`introspection_endpoint_auth_methods_supported` is an empty array** — independent corroboration of the unauthenticated-introspection finding in B2, and the *"three-source divergence"* `PROGRESS.md:2092-2095` records for revocation.
 
 ## 9. CIBA, device flow, RAR and grant management — service side
 
@@ -644,6 +644,124 @@ array-`aud` ID tokens on exactly one code path while every other ID token stayed
 can silently reverse a configuration decision for a single call site** — set this beside §15's `readOnly`
 surprise and T0-4's silent discard: three different ways the vendor's shape does not match its documentation's
 implication.
+
+---
+
+## 21. The ninth pass — and the discovery that **this audit has been reading a different service than the public deployment**
+
+*Written 2026-08-14, executing DR-11, DR-03 and DR-05. Three writes, each read → write → read-back → diffed
+key-by-key. **Zero unexpected field changes across all three.***
+
+### 21.1 The finding that had to come first
+
+Probing the live Render deployment before writing anything showed its discovery document disagreeing with the
+service this audit reads. Not slightly — **three independent ways**, which is what rules out a caching or
+timing explanation:
+
+| | Audited service **`3693555522`** | The live deployment's service |
+|---|---|---|
+| `issuer` | `https://blackadi.dev` | `https://blackadi.dev/` — **trailing slash** |
+| endpoints | the ngrok tunnel | the Render host |
+| discovery members | **62** | **59** |
+| `id_token_signing_alg_values_supported` | 10, including **RS256/PS256** | 4 — **no RSA at all** |
+| `token_endpoint_auth_methods_supported` | 5, including **`private_key_jwt`** | 3 — **no `private_key_jwt`** |
+| `grant_management_actions_supported` | 5 | 3 — no `query`, no `revoke` |
+| `scopes_supported` | — | carries `digital_credential`, which the audited service lacks |
+
+**The live service lacks T1-2's RSA key and T1-3's `private_key_jwt` client** — two of Tier 1's headline
+configuration fixes. So every configuration finding in this audit describes `3693555522`, and a reader who
+assumed "the deployment" would have been wrong about which service was fixed.
+
+**Ruled 2026-08-14: `3693555522` is canonical**, and the deployment is to be repointed at it
+(`AUTHLETE_SERVICE_ID` + `AUTHLETE_BEARER_TOKEN` in the Render dashboard). No re-probing is owed; the audit's
+evidence stands as written.
+
+**The transferable lesson is about verification, not configuration.** The check that found this was comparing
+*the document the deployment serves* against *the document the service generates* — two sources that should be
+identical and were not. **Reading either one alone proves nothing about the other.** The same reasoning
+retired a false conclusion minutes earlier: `POST /api/device/complete` on the deployment answered **404**,
+which looks like `developmentOnly` firing, and the body said `[A227301] No record for the user code exists` —
+Authlete's `USER_CODE_NOT_EXIST`. **The request had reached Authlete; the gate had not fired.** Right status,
+wrong reason. Status codes are not evidence about which code path produced them.
+
+### 21.2 DR-11 — `issuer` and every endpoint aligned
+
+**15 fields written, 16 changed** (the fifteenth is `modifiedAt`), **0 unexpected**. `issuer` and all fourteen
+URL-valued fields moved from `https://blackadi.dev` / the ngrok tunnel to `https://oauth2-0-ekh2.onrender.com`,
+including **`deviceVerificationUri`** and `deviceVerificationUriComplete` — which closes **8628-W5**, since
+RFC 8628 §3.2's human-facing URI is no longer on an ephemeral tunnel.
+
+**Verified:** the generated document's `issuer` is exactly the host, and **all 13 URL members sit under it**, so
+RFC 8414 §3.3 passes for the first time in this audit. **`DISCOVERY-…` F-1 and `8414-W1` close.**
+
+Note the method: `service/update` has **replace semantics**, so the write sends the whole 132-field object
+back with fifteen fields mutated. That is the same hazard `CLIENT-UPDATE-FIELD-LOSS` describes for clients —
+here it is handled by construction rather than by an allowlist, which is why the diff shows nothing collateral.
+
+### 21.3 DR-03 + DR-05 — VCI and CIMD enabled
+
+**4 fields changed, 0 unexpected**: `verifiableCredentialsEnabled` false → **true**,
+`clientIdMetadataDocumentSupported` false → **true**, `credentialIssuerMetadata` absent → populated,
+`modifiedAt`. Discovery grew **62 → 64** members.
+
+**One trap, and the schema is the only place it is stated.** `credentialIssuerMetadata.credentialsSupported`
+is typed **`string`**, not an array — a *stringified* JSON object keyed by configuration id. Authlete's own
+description says why: *"Due to a breaking change in December 2023, this was changed from a JSON array to a JSON
+object."* The obvious array-of-objects shape is refused with **`[A126202]`**. `authorizationServers` is
+deliberately omitted, per the schema's *"When the credential issuer works as an authorization server for
+itself, this property should be omitted."*
+
+**Verified:** `POST /vci/metadata` now answers **`OK`** with a conformant OID4VCI §12.2.4 document carrying all
+three REQUIRED members — `credential_issuer`, `credential_endpoint`, `credential_configurations_supported`.
+**`OID4VCI-1.0.md` F-1 closes**, and with it the second member of the *claimed-working / flag-off* pattern.
+
+### 21.4 The verification that retires an `UNVERIFIED` marker
+
+`POST /vci/deferred/parse` with a deliberately bogus access token now answers:
+
+```
+action: UNAUTHORIZED
+[A375304] The access token does not exist.
+```
+
+Three things at once, and all three were `UNVERIFIED` when **VCI-W5** shipped on 2026-08-13. The endpoint is
+live (`FORBIDDEN` would mean the feature is still off). **The deferred path validates the access token** —
+which is the entire control VCI-W5 added, and the reason the two-call `parse → issue` shape was necessary. And
+the `requestContent` this server synthesises (`{"transaction_id":"…"}`) is accepted, since Authlete parsed it
+far enough to reach token validation. **`UNAUTHORIZED` → 401 is exactly the mapping `vci.controller.ts`
+implements.**
+
+### 21.5 Redirect URIs — additive, and one computed field moved
+
+All four clients gained `https://oauth2-0-ekh2.onrender.com/callback`, **added to** their existing entries;
+every `localhost` and the one ngrok URI survive, because Modules 02 and 03 depend on two of these clients and
+`client/update` has replace semantics. Diffed per client: `redirectUris` and `modifiedAt` as intended — plus
+**`derivedSectorIdentifier` on three of the four**, which was *not* intended and is worth stating rather than
+waving through.
+
+It went from a value to **unset**. That is Authlete recomputing it: OIDC Core §8.1 derives the sector
+identifier from the redirect URIs' host, and a client whose URIs now span three hosts with no
+`sectorIdentifierUri` has no single host to derive from.
+
+**Impact today: none.** All four clients are `subjectType: PUBLIC`, so no pairwise `sub` is computed and the
+sector identifier is unused — checked, not assumed. **Impact later: a precondition.** Switching any of these
+clients to `PAIRWISE` now requires setting `sectorIdentifierUri` explicitly, where before the derivation would
+have supplied one. Recorded so that a future pairwise experiment does not read as a regression caused by
+something else.
+
+### 21.6 One acceptance criterion that cannot be met — the third instance
+
+**VCI-W2 wants `credential_issuer` in the AS discovery document.** It is **absent**, and there is no field to
+set: the `Service` schema's credential-related properties are `verifiableCredentialsEnabled`,
+`credentialJwksUri`, `credentialOfferDuration`, `credentialTransactionDuration`, `credentialJwks`,
+`credentialDuration` and `credentialIssuerMetadata` — **none of which surfaces `credential_issuer` on the AS
+side.** Setting `credentialIssuerMetadata.credentialIssuer` populates the *issuer* document, not the AS one.
+
+**This is the third time an acceptance criterion has named a console change with no console field behind it** —
+after **RPL-W4** (`postLogoutRedirectUris` is not an Authlete 3.0 client field) and **T1-13** (no service field
+controls the userinfo/introspection signing-algorithm lists). The pattern is now established well enough to be
+a rule: **check that the field exists before writing "set X" as a criterion.** VCI-W2's AS half is
+`UNACHIEVABLE`; its issuer half is satisfied.
 
 ---
 

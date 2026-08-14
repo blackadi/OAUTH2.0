@@ -104,7 +104,7 @@ enumerates the only four acceptable errors. This returns none of them.
 
 **Failure scenario.** `prompt=none` is how every SPA performs a silent session check. A client here receives a
 302 to nowhere: it cannot classify the outcome as "still signed in", "needs login", or "needs consent", so
-silent renewal is impossible and the failure is unattributable. `PROGRESS.md:1388-1389` puts it well — *"breaks
+silent renewal is impossible and the failure is unattributable. `PROGRESS.md:1516-1517` puts it well — *"breaks
 every client that relies on silent renewal, in a way the client cannot classify."*
 
 **Two things make this more than a one-line fix**, and both must be in the same change:
@@ -161,7 +161,7 @@ verified by any third party — acceptable for a confidential-client demo.
 `idTokenDuration = 86400` (probe 2). An ID Token is an authentication receipt consumed once at sign-in; a
 24-hour lifetime turns it into a long-lived bearer of identity claims, and §3.1.3.7 step 9 (*"Check `iat` claim
 isn't too distant"*) becomes the only thing bounding replay — a check the spec leaves to client policy.
-`PROGRESS.md:1938` records this as *"flagged as a Module 07 report item rather than a Module 08 finding"*, which
+`PROGRESS.md:2066` records this as *"flagged as a Module 07 report item rather than a Module 08 finding"*, which
 is a reasonable call; it is recorded here so the OIDC Core row is complete. Note `accessTokenDuration` is also
 86400 and `refreshTokenDuration` 864000 (10 days).
 

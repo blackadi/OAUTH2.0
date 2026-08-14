@@ -128,6 +128,28 @@ export class VciService {
     return response;
   }
 
+  /**
+   * `/vci/deferred/parse` — **the only place an access token can be validated on the deferred path.**
+   *
+   * `VciDeferredIssueRequest` is `{ order? }`: no `accessToken` field, verified against SDK 1.0.0 and the
+   * vendored `docs/openapi-spec.json` (3.0.16). Its siblings differ — `/vci/single/issue` and
+   * `/vci/batch/issue` both take `accessToken` *alongside* `order`, so Authlete authenticates on that one
+   * call and `issueSingle`/`batchIssue` above need no parse step. Only this path lacks the field, which is
+   * why it is the only one that makes two calls. Do not "simplify" the pair back into one.
+   *
+   * `requestContent` is the message body of the deferred credential request — OID4VCI 1.0 §9.1's
+   * `transaction_id` object. `UNAUTHORIZED` is a member of `VciDeferredParseResponseAction` precisely so a
+   * bad or absent token can be reported from here.
+   */
+  async parseDeferred(accessToken: string, requestContent: string): Promise<any> {
+    const response = await this.authleteApi.verifiableCredentials.deferredParse({
+      serviceId,
+      vciDeferredParseRequest: { accessToken, requestContent },
+    });
+
+    return response;
+  }
+
   async issueDeferred(order?: any): Promise<any> {
     const response = await this.authleteApi.verifiableCredentials.deferredIssue({
       serviceId,
