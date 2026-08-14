@@ -184,9 +184,22 @@ call is refused by this environment's permission classifier** (reads succeed —
 was probed). Not worked around, per the guidance. To finish it, either grant the write or run
 `scratchpad/authlete/set-credential-jwks.mjs` yourself.
 
-**Also still owed by the operator, from P0:** `NODE_ENV=production` in the Render dashboard and a rotated
-`AUTHLETE_BEARER_TOKEN`. **The invalid token is currently the only thing masking the device-complete oracle —
-fixing the token without fixing `NODE_ENV` arms it.**
+**P0's two operator actions are CLOSED — verified live 2026-08-14, not assumed.** They were carried as "still
+owed" and both had already resolved:
+
+| Check | Result |
+|---|---|
+| `Strict-Transport-Security` on `/api/health` | **present** (`max-age=31536000; includeSubDomains; preload`) — production only |
+| `POST /api/device/complete` | **`404 {"error":"not_found"}`** — *our* gate, **not** Authlete's `[A227301]` |
+| `GET /api/token/createLocalToken` | **404** |
+| `GET /api/.well-known/openid-configuration` | **64 members**, `issuer = https://oauth2-0-ekh2.onrender.com` |
+| `GET /api/fapi/config` | live values — so `service.get()` works |
+
+So **`NODE_ENV` is effectively `production`** — the fail-safe default (`|| "production"`) did it, and
+`render.yaml` pins it as a second layer — and **the `AUTHLETE_BEARER_TOKEN` is valid**, since discovery and
+`service.get()` both succeed. The device-complete oracle is closed by the gate itself rather than by a broken
+token, which is the outcome P0 was aiming for. Setting `NODE_ENV` in the Render dashboard explicitly is now
+belt-and-braces, not a requirement. **Re-check with the five probes above rather than trusting this table.**
 
 ### ✅ TIER 1 IS COMPLETE — T1-11 and CU-W2 shipped 2026-08-14, under plan mode
 
