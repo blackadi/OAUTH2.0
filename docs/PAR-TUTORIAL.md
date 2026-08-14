@@ -106,7 +106,7 @@ sequenceDiagram
     Client->>AuthServer: POST /api/par<br/>parameters: response_type=code&client_id=...&scope=...
     AuthServer->>Authlete: /pushed_auth_req (with client auth)
     Authlete->>Authlete: Validate, authenticate client, store request
-    Authlete->>AuthServer: { requestUri: "urn:ietf:params:oauth:request_uri:..." }
+    Authlete->>AuthServer: { requestUri, responseContent: "{request_uri, expires_in}" }
     AuthServer->>Client: 201 Created + request_uri
 
     Note over Client,Browser: Step 2: Redirect (browser)
@@ -200,9 +200,8 @@ curl -X POST http://localhost:3000/api/par \
 **Response (201):**
 ```json
 {
-  "action": "CREATED",
-  "requestUri": "urn:ietf:params:oauth:request_uri:UymBrux4ZEMrBRKx9UyKyIm98zpX1cHmAPGAGNofmm4",
-  "responseContent": "{\"expires_in\":600,\"request_uri\":\"urn:ietf:params:oauth:request_uri:UymBrux4ZEMrBRKx9UyKyIm98zpX1cHmAPGAGNofmm4\"}"
+  "expires_in": 600,
+  "request_uri": "urn:ietf:params:oauth:request_uri:UymBrux4ZEMrBRKx9UyKyIm98zpX1cHmAPGAGNofmm4"
 }
 ```
 
@@ -256,7 +255,7 @@ PAR_RESP=$(curl -s -X POST http://localhost:3000/api/par \
     \"clientId\": \"${CID}\",
     \"clientSecret\": \"${SEC}\"
   }")
-REQUEST_URI=$(echo "$PAR_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['requestUri'])")
+REQUEST_URI=$(echo "$PAR_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['request_uri'])")
 
 # 3. Open in browser
 echo "http://localhost:3000/api/authorization?client_id=${CID}&request_uri=${REQUEST_URI}"
@@ -441,8 +440,8 @@ const response = await fetch('/api/par', {
     clientId: '...',
   }),
 });
-const { requestUri } = await response.json();
-window.location.href = `/api/authorization?client_id=...&request_uri=${requestUri}`;
+const { request_uri } = await response.json();
+window.location.href = `/api/authorization?client_id=...&request_uri=${request_uri}`;
 ```
 
 ### Mobile Apps

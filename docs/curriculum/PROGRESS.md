@@ -116,6 +116,75 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T1-19 batch 2 (FAPI1-W2, ATTR-W1, BCL-W6): and the SDK's two models do not agree** (below)
 - [x] **2026-08-14 — T1-19 batch 3 (B1-W3, 9068-W2, 9101-W5): T1-19 closes; two criteria under-counted their own defect** (below)
 - [x] **2026-08-14 — the P1 configuration changes had broken three labs, and the grep rule could not have caught it** (below)
+- [x] **2026-08-14 — T1-11 + CU-W2: four endpoints stopped speaking the vendor's shape, and an admin PATCH stopped clearing what it did not name** (below)
+
+### 2026-08-14 — T1-11 + CU-W2: the wire format, and the client update that cleared fields
+
+**Why this matters to a future session:** **T1-11 was the last open Tier 1 item, and it is closed.** Four
+endpoints that advertise an RFC were answering with Authlete's internal envelope. And `CU-W2`, the
+highest-severity open finding (S2, silent data loss on an admin write), is fixed — **without** waiting for the
+live proof its own criteria said it was conditional on.
+
+**T1-11 — the endpoints were returning the wrapper instead of the answer.** `/api/par`,
+`/api/device/authorization`, `/api/client/dcr/*` and `/api/vci/deferred/issue` all sent camelCase field names
+beside `action`, `resultCode` and `resultMessage`. A client reading RFC 9126 §2.2 looks for `request_uri`; it
+received `requestUri`. **Authlete's `responseContent` already *is* the specification's body** — probe-confirmed
+for device by 8628-W6 — so this forwards what the vendor produced rather than translating anything, which
+`token.controller.ts` had done since the beginning. Extracted as `sendSpecBody` rather than copied four times.
+
+**Four rules in that helper, and three of them are about when *not* to apply the pattern:**
+
+1. **The envelope is the fallback, not an error.** No `responseContent` means no spec-shaped body exists, and
+   Authlete's `resultMessage` beats an empty response.
+2. **Error bodies go through it too** — `responseContent` on a failure carries the RFC's error object, the part
+   a client is *required* to parse. Spec shape on success and envelope on failure is the worst of both.
+3. **An endpoint with no specification shape keeps the envelope.** Only `DeviceAuthorizationResponse` has a
+   `responseContent` member; `DeviceVerificationResponse` and `DeviceCompleteResponse` have **none** (2, 0, 0
+   across the three SDK models), because those two are internal AS operations. **Applying the pattern to all
+   three device endpoints would have sent `undefined`** — the audit's work item did not say this, and a
+   grep of the SDK is what caught it.
+4. **One of the four is not JSON.** `/api/vci/deferred/issue`'s `responseContent` on `UNAUTHORIZED` is a
+   **`WWW-Authenticate` challenge string** — `Bearer error="invalid_token", error_description="[A375304] …"`,
+   confirmed by live probe earlier today. RFC 6750 §3 puts that in the *header*, which is what
+   `userinfo.controller.ts` already does with the identical shape. **"Return `responseContent` as the body" is
+   the wrong instruction for exactly one of the four**, and only reading what the string contains reveals it.
+
+The SPA moved in the same commit — `ParSection.tsx` (**five** sites, not the one the audit named),
+`DeviceSection.tsx`, and `DcrSection.tsx`, whose unwrap and camelCase fallbacks are now deleted because the
+ambiguity they existed for is gone. Six tutorials and two labs too, including two shell extractors that read
+`['requestUri']` and `.deviceCode` and would have silently produced empty strings.
+
+> **Two documentation outcomes worth noting.** `modules/05…/README.md` had printed
+> `{"expires_in":600,"request_uri":…}` all along — **one doc was *ahead* of the code**, and this made it true
+> rather than breaking it. And `DEVICE-FLOW-TUTORIAL.md` contained a note that *excused* the defect:
+> *"This server exposes the Authlete shape directly so you can see what the SDK returns; a production device
+> authorization endpoint would rename them."* The renaming was never needed — `responseContent` was right
+> there. That note is now the boundary lesson it was reaching for, which is a better paragraph than either the
+> excuse or a deletion.
+
+**CU-W2 — `buildClientInput` names ~40 of 108 properties against a replace-semantics API.** So a `PATCH`
+changing a client's name sent an object missing ~68 fields, and could clear `tokenAuthMethod`, `pkceRequired`
+or `redirectUris` — **silently, with a 200**. `update()` is now read-modify-write.
+
+> **The criterion said "conditional on CU-W1" and that was wrong.** CU-W1 is the live proof that Authlete
+> replaces rather than merges, and it was never run. But **preserving unnamed fields is a no-op if Authlete
+> merges and prevents data loss if it replaces** — the code is correct under both answers, so the unproven
+> fact blocked nothing. An S2 sat open for two days behind a dependency it did not have.
+>
+> **And the SDK does the hard part already.** The criterion suggested routing fields through
+> `additionalProperties` by hand; that is unnecessary, because `Client$inboundSchema` collects unmodelled
+> members *into* it and `ClientInput$outboundSchema` ends in a `.transform` that spreads them *back* to the top
+> level. The two are a **matched round-trip pair**, so all four properties SDK 1.0.0 omits survive with no
+> special handling. `tests/unit/services/client-roundtrip.test.ts` asserts that pairing directly — because if
+> either half changed, this method would delete `backchannelLogoutUri` from every client it touched, which is
+> the same defect class reintroduced by its own fix.
+
+**Verification:** typecheck both packages · lint (server 4 pre-existing warnings, client clean at
+`--max-warnings 0`) · **1081 server tests / 73 files** (1067 before) · 109 client / 16 · `check-docs` 166 files ·
+route coverage 92 routes. No `test:e2e`, no Authlete writes.
+
+**Tier 1 is complete.** What remains in the plan is Tier 2's 11 open documentation items (T2-1 first — the
+`UNVERIFIED` convention across nine tutorials) and Tier 3's decisions.
 
 ### 2026-08-14 — the P1 configuration changes had broken three labs
 

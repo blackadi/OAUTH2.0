@@ -378,7 +378,7 @@ HTTP/1.1 201 Created
 DPoP-Nonce: <serverNonce>
 
 {
-  "requestUri": "urn:ietf:params:oauth:request_uri:<id>",
+  "request_uri": "urn:ietf:params:oauth:request_uri:<id>",
   "expires_in": 90
 }
 ```
@@ -572,7 +572,8 @@ The wizard walks through the complete FAPI 2.0 SP flow:
 **Step 1: Push PAR**
 - The wizard generates a fresh `private_key_jwt` assertion and DPoP proof
 - Sends the PAR request with both embedded in the `parameters` string
-- Displays the PAR response with `requestUri` and `expiresIn`
+- Displays the PAR response with `request_uri` and `expires_in` — RFC 9126 §2.2's names, since the
+  server returns the specification's body rather than Authlete's envelope (T1-11)
 
 **Step 2: Authorize**
 - Redirects to the authorization page with the `request_uri` from PAR

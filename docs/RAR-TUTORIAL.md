@@ -282,7 +282,7 @@ curl -X POST http://localhost:3000/api/par \
 ```json
 {
   "action": "CREATED",
-  "requestUri": "urn:ietf:params:oauth:request_uri:abc123..."
+  "request_uri": "urn:ietf:params:oauth:request_uri:abc123..."
 }
 ```
 

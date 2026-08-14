@@ -299,6 +299,50 @@ describe("Integration: VCI routes", () => {
       expect(vc().deferredIssue).not.toHaveBeenCalled()
     })
 
+    // T1-11. Authlete's `responseContent` on this action is a WWW-Authenticate CHALLENGE STRING, not JSON —
+    // verified live: `Bearer error="invalid_token", error_description="[A375304] …"`. RFC 6750 §3 puts that in
+    // the header, which is what userinfo.controller.ts already does with the identical shape. Sending it as a
+    // JSON body would have been the naive reading of "return responseContent as the body".
+    it("relays the parse failure as a WWW-Authenticate challenge, not as a JSON body", async () => {
+      vc().deferredParse.mockResolvedValue({
+        action: "UNAUTHORIZED",
+        resultMessage: "[A375304] The access token does not exist.",
+        responseContent: 'Bearer error="invalid_token", error_description="[A375304] The access token does not exist."',
+      })
+
+      const res = await request(app)
+        .post("/api/vci/deferred/issue")
+        .set("Authorization", "Bearer bad-token")
+        .send({ order: { transactionId: "tx-1" } })
+        .expect(401)
+
+      expect(res.headers["www-authenticate"]).toContain('error="invalid_token"')
+      expect(res.headers["www-authenticate"]).toContain("A375304")
+      expect(res.body.error).toBe("invalid_token")
+      // The specific Authlete condition survives — it is this repo's pedagogical value — but the vendor
+      // control-flow fields do not.
+      expect(res.body.error_description).toContain("A375304")
+      expect(res.body).not.toHaveProperty("action")
+      expect(res.body).not.toHaveProperty("resultCode")
+    })
+
+    it("returns the OID4VCI credential response as the body on success", async () => {
+      vc().deferredParse.mockResolvedValue(parsedOk)
+      vc().deferredIssue.mockResolvedValue({
+        action: "OK",
+        responseContent: JSON.stringify({ credential: "eyJ…" }),
+      })
+
+      const res = await request(app)
+        .post("/api/vci/deferred/issue")
+        .set("Authorization", "Bearer at-1")
+        .send({ order: { transactionId: "tx-1" } })
+        .expect(200)
+
+      expect(res.body.credential).toBe("eyJ…")
+      expect(res.body).not.toHaveProperty("action")
+    })
+
     it("forwards the token to parse as the §9.1 request content", async () => {
       vc().deferredParse.mockResolvedValue(parsedOk)
       vc().deferredIssue.mockResolvedValue({ action: "OK", responseContent: "{}" })

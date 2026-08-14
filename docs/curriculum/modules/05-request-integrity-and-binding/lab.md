@@ -94,9 +94,7 @@ curl -s -X POST "$API/par" -H "Content-Type: application/json" \
 ```
 
 ```
-{"resultCode":"…","action":"CREATED",
- "requestUri":"urn:ietf:params:oauth:request_uri:-4PVrsTAHrY…",
- "responseContent":"{\"expires_in\":600,\"request_uri\":\"urn:ietf:params:oauth:request_uri:…\"}"}
+{"expires_in":600,"request_uri":"urn:ietf:params:oauth:request_uri:-4PVrsTAHrY…"}
 status=201
 ```
 
@@ -106,7 +104,7 @@ status=201
 ```bash
 RQU=$(curl -s -X POST "$API/par" -H "Content-Type: application/json" \
   -d "$(node -e 'process.stdout.write(JSON.stringify({parameters:process.argv[1],clientId:process.argv[2]}))' -- "$PARAMS" "$PUB_CLIENT_ID")" \
-  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).requestUri))')
+  | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write(JSON.parse(d).request_uri))')
 
 AUTH_URL="$API/authorization?client_id=$PUB_CLIENT_ID&request_uri=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$RQU")"
 echo "$AUTH_URL"

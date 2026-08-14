@@ -93,9 +93,33 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    const clientInput: ClientInput = this.buildClientInput(clientPayload || body);
+    // CU-W2 — read, modify, write. Authlete's `client/update` takes a **complete** client object, and
+    // `buildClientInput` names roughly 40 of the `Client` schema's 108 properties, so building the request
+    // from scratch sent an object missing ~68 fields. Changing one field could therefore clear the rest —
+    // including `tokenAuthMethod`, `pkceRequired` and `redirectUris`, i.e. **silently undoing a security
+    // control** — and the 200 response says nothing about it.
+    //
+    // The current object is fetched and the named changes applied on top, so an update only ever *changes*
+    // what the caller asked to change. `ecfab07` did exactly this by hand for the Render callback write; this
+    // makes the safe procedure the default rather than something to remember.
+    //
+    // **This preserves even the four properties SDK 1.0.0 does not model** (`backchannelLogoutUri`,
+    // `backchannelLogoutSessionRequired`, `spiffeId`, `spiffeBundleEndpoint`), because `Client$inboundSchema`
+    // collects them into `additionalProperties` and `ClientInput$outboundSchema` spreads them back to the top
+    // level — a matched pair, asserted in `tests/unit/services/client-roundtrip.test.ts`. If that ever stops
+    // being true, this method would delete those fields from every client it touched, so the assertion is not
+    // decoration.
+    //
+    // Two accepted costs: an update makes **two** Authlete calls, and a non-existent client now fails on the
+    // read rather than the write — a better error either way.
+    const current = await this.authleteApi.client.get({ serviceId, clientId });
+    const changes: ClientInput = this.buildClientInput(clientPayload || body);
+    const clientInput: ClientInput = { ...current, ...changes };
 
-    log("ClientUpdateService: calling Authlete client update endpoint", { clientId });
+    log("ClientUpdateService: calling Authlete client update endpoint", {
+      clientId,
+      changedFields: Object.keys(changes),
+    });
 
     const response = await this.authleteApi.client.update({
       serviceId,

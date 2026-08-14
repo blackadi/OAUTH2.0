@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { DeviceService } from "../services/device.service";
-import { sendApiResponse } from "../utils/http-utils";
+import { sendApiResponse, sendSpecBody } from "../utils/http-utils";
 import {
   validateOrThrow,
   deviceAuthorizationSchema,
@@ -65,7 +65,15 @@ export function createDeviceControllers(deviceService = new DeviceService()) {
         try {
           validateOrThrow(deviceAuthorizationSchema, req.body);
           const result = await deviceService.authorization(req);
-          sendApiResponse(res, mapAuthActionToStatus(result.action), result);
+          // RFC 8628 §3.2's body, not Authlete's envelope (T1-11). The device reads `device_code`,
+          // `user_code`, `verification_uri`, `expires_in` and `interval`; it used to receive the camelCase
+          // spellings beside an `action`. Probe-confirmed (8628-W6): Authlete's own `responseContent` here is
+          // exactly §3.2's snake_case JSON.
+          //
+          // NOTE this is the ONLY device endpoint that changes. `/device/verification` and `/device/complete`
+          // are internal AS operations with no RFC-defined wire format, and their SDK response models have no
+          // `responseContent` member at all — applying this pattern there would send `undefined`.
+          sendSpecBody(res, mapAuthActionToStatus(result.action), result);
         } catch (err) {
           if (handleValidationError(err, req, res)) return;
           handleControllerError(err, req, next, "Authorization");

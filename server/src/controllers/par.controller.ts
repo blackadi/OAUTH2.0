@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { PushedAuthorizationResponseAction } from "@authlete/typescript-sdk/models";
 import { ParService } from "../services/par.service";
-import { sendApiResponse } from "../utils/http-utils";
+import { sendSpecBody } from "../utils/http-utils";
 import { validateOrThrow, parSchema } from "../utils/validation";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
@@ -39,7 +39,9 @@ export function createParControllers(parServiceInstance = new ParService()) {
         const result = await parServiceInstance.process(req);
         // DPoP nonce — relay to client if Authlete returned one
         setDpopNonce(res, result.dpopNonce);
-        sendApiResponse(res, mapActionToStatus(result.action), result);
+        // RFC 9126 §2.2's body, not Authlete's envelope (T1-11). A conforming client reads `request_uri`
+        // and `expires_in`; it used to receive `requestUri` beside an `action` and a `resultCode`.
+        sendSpecBody(res, mapActionToStatus(result.action), result);
       } catch (err) {
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Pragma", "no-cache");

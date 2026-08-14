@@ -609,8 +609,22 @@ const spec: Record<string, unknown> = {
           },
         },
         responses: {
-          "201": { description: "PAR created with request_uri" },
-          "400": { description: "Bad request" },
+          "201": {
+            description: "PAR created. The body is RFC 9126 §2.2's, not Authlete's envelope (T1-11).",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    request_uri: { type: "string", description: "RFC 9126 §2.2 — use as the `request_uri` authorization parameter" },
+                    expires_in: { type: "integer", description: "Seconds until the request URI expires" },
+                  },
+                  required: ["request_uri", "expires_in"],
+                },
+              },
+            },
+          },
+          "400": { description: "Bad request. The body is Authlete's `responseContent`, i.e. the RFC's error object." },
         },
       },
     },
@@ -1469,18 +1483,21 @@ const spec: Record<string, unknown> = {
         },
         responses: {
           "200": {
-            description: "Device code issued",
+            description: "Device code issued. The body is RFC 8628 §3.2's, not Authlete's envelope (T1-11).",
             content: {
               "application/json": {
                 schema: {
                   type: "object",
+                  // RFC 8628 §3.2's members. These were the camelCase envelope spellings until T1-11.
                   properties: {
-                    deviceCode: { type: "string" },
-                    userCode: { type: "string" },
-                    verificationUri: { type: "string" },
-                    expiresIn: { type: "integer" },
-                    interval: { type: "integer" },
+                    device_code: { type: "string" },
+                    user_code: { type: "string" },
+                    verification_uri: { type: "string" },
+                    verification_uri_complete: { type: "string", description: "Optional, per §3.3.1" },
+                    expires_in: { type: "integer" },
+                    interval: { type: "integer", description: "Omitted when deviceFlowPollingInterval is 0" },
                   },
+                  required: ["device_code", "user_code", "verification_uri", "expires_in"],
                 },
               },
             },

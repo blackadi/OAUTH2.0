@@ -156,8 +156,11 @@ function DeviceSection() {
     const { data, error: err } = await call(fn);
     if (data) {
       if (activeOp === 'authorization') {
-        const code = (data as Record<string, unknown>).userCode as string | undefined;
-        const dc = (data as Record<string, unknown>).deviceCode as string | undefined;
+        // RFC 8628 §3.2 names these `user_code` and `device_code`. The server returned Authlete's camelCase
+        // envelope until T1-11; the response is now §3.2's body, so these are the spec spellings.
+        const body = data as Record<string, unknown>;
+        const code = body.user_code as string | undefined;
+        const dc = body.device_code as string | undefined;
         if (code) {
           setVerifyUserCode(code);
           setCompleteUserCode(code);
