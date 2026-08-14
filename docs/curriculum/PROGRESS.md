@@ -119,6 +119,59 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T1-11 + CU-W2: four endpoints stopped speaking the vendor's shape, and an admin PATCH stopped clearing what it did not name** (below)
 - [x] **2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention, and four of the audit's own "unreproducible" verdicts turned out to be stale** (below)
 - [x] **2026-08-14 — T2-11: the step-up challenge is a 401, in all five places it is drawn — one of which nobody had checked** (below)
+- [x] **2026-08-14 — T2-4 + T2-12: TLS 1.3 has a new RFC number, and Module 10's missing conformance row is PARTIAL rather than FAIL** (below)
+
+### 2026-08-14 — T2-4 and T2-12: two citation corrections, both against the audit's own criteria
+
+**T2-4 — the TLS reconciliation.** Phase 4 §2.1's four fetches (2026-08-11) are now applied to Module 00.
+Its two TLS citations lead with **RFC 9846 (Jul 2026)** and name RFC 8446 (Aug 2018) as the superseded number
+most readers will recognise; RFC 9110 is sharpened to **Internet Standard, STD 97**. The edit comes with a note
+that teaches the distinction instead of just making it: **the wire protocol did not change** — RFC 9846 is
+`rfc8446bis`, same version number, backward compatible — so a document citing RFC 8446 is not wrong about TLS,
+only about which document to point at. *Obsolescence lives in the Datatracker metadata, not in the RFC text*,
+and a 2018 document cannot carry a forward reference to a 2026 one.
+
+> **`SPEC-INVENTORY.md`'s TLS rows were correct and were left alone, as the item instructed — but its RFC 9864
+> annotation was wrong twice, and this item is how that surfaced.** The date read **Oct 2025** against §2.1's
+> verified **Dec 2025**, and the scope read *"updates RFC 7518"* where the header block says **7518, 8037 and
+> 9053**. RFC 9864 now has a row of its own. **A date carried from recall, in the one file whose entire job is
+> citation provenance** — exactly the defect that file exists to prevent, and a direct argument for T2-5's
+> per-row *"URL fetched + header line read"* discipline. `alg: "none"` is not polymorphic, so Module 00's
+> citation of RFC 7518 §3.6 stands unchanged.
+
+**T2-12 — and its acceptance criteria were stale twice over.** The criterion said Module 10's missing
+§5.3.2.1 row should read **FAIL**. It was already wrong when written — Phase 4 §2.2 had recorded `ES256` as
+advertised — and became more wrong on 2026-08-12, when T1-2's single RSA key added **`PS256`**. The live list
+is ten algorithms carrying **both** algorithms the profile permits:
+
+```
+id_token_signing_alg_values_supported =
+  [PS384, RS384, HS256, HS512, ES256, RS256, HS384, PS256, PS512, RS512]
+```
+
+**So the service-level list cannot settle the row at all**, because `idTokenSignAlg` is pinned **per client**:
+`ES256` on `4277838306`, `1678274156` and `2176571218`, and **`HS256` on `1523514379`** — the confidential
+client the labs run on, using a symmetric algorithm that appears nowhere in the profile. The verdict is
+**PARTIAL**.
+
+> **The finding is better than the row it corrects: a conformance report written from discovery metadata alone
+> scores this PASS.** So `lab.md`'s Exercise 7 now names **PARTIAL** and **NOT REACHABLE** as verdicts distinct
+> from NOT EVIDENCED — *partial* means some principals satisfy it and others do not, *not reachable* means this
+> configuration admits no measurement either way (§5.3.2.1 row 7, a requirement about a pushed request's
+> contents on a service where PAR is optional), *not evidenced* means a measurement exists and you did not make
+> it. Picking the wrong one is itself a reporting error.
+>
+> **The habit: ask which principal each `shall` binds.** Roughly half of §5.3.2's bind the **AS** (metadata,
+> code lifetime, `iss`); the rest bind a **client configuration** (`tokenAuthMethod`, `pkceRequired`,
+> `dpopRequired`, `idTokenSignAlg`). `/.well-known` answers only the first kind, and one `client/get/list`
+> answers the second.
+
+**And the evidence was already in the curriculum, unjoined.** `modules/05…/lab.md` explains that its Exercise 5
+needs the confidential client because *"this service signs ID tokens with HS256, and Authlete refuses a
+symmetric algorithm for a public client."* Module 05 had the algorithm, Module 10 had the requirement, and no
+document put them in one sentence — in the module whose deliverable is a conformance report.
+
+**Verification.** Documentation only; suites unchanged at 1081/73 and 109/16, `check-docs` clean across 166 files.
 
 ### 2026-08-14 — T2-11: the step-up challenge status, and a fifth carrier
 

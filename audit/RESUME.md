@@ -217,7 +217,26 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (9):** T2-4, T2-5, T2-8, T2-10, T2-12, T2-14, T2-15, T2-16, T2-17.
+**Tier 2 remaining (7):** T2-5, T2-8, T2-10, T2-14, T2-15, T2-16, T2-17.
+
+**T2-4 and T2-12 shipped 2026-08-14, and both corrected the audit's own criteria rather than the curriculum's
+text.** T2-4 applied §2.1's four fetches to Module 00 (**RFC 9846** leads, RFC 8446 named as the superseded
+number, RFC 9110 sharpened to **Internet Standard STD 97**) — and found `SPEC-INVENTORY.md`'s RFC 9864
+annotation wrong **twice**: dated **Oct 2025** against a verified **Dec 2025**, and scoped to RFC 7518 where the
+header block says **7518, 8037 and 9053**. *A date carried from recall, in the file whose entire job is citation
+provenance* — which is the argument for T2-5's per-row "URL fetched + header line read" discipline, and T2-5 is
+the next item.
+
+**T2-12's criteria were stale twice over.** They said Module 10's missing §5.3.2.1 signing row should read
+**FAIL**; §2.2 had already recorded `ES256` as advertised, and **T1-2 then added `PS256`**, so the live list
+carries *both* permitted algorithms. The row is **PARTIAL**, because `idTokenSignAlg` is pinned **per client** —
+`ES256` on three, **`HS256` on `1523514379`**, the client the labs use.
+
+> **The generalisation, and it belongs in any conformance work that follows:** a report written from discovery
+> metadata alone scores that row **PASS**. Roughly half of FAPI §5.3.2's `shall` statements bind the **AS**
+> (metadata, code lifetime, `iss`); the rest bind a **client configuration** (`tokenAuthMethod`,
+> `pkceRequired`, `dpopRequired`, `idTokenSignAlg`), and `/.well-known` cannot see those. Module 10's Exercise 7
+> now separates **PARTIAL** / **NOT REACHABLE** / **NOT EVIDENCED** as three distinct reporting errors.
 
 **T2-11 shipped 2026-08-14 — and "everywhere" was five locations, not the plan's four.**
 `STEP-UP-AUTH-TUTORIAL.md`'s Part 1 diagram arrow and both Part 5 transcripts, Module 09a's *"❌ 403 for a

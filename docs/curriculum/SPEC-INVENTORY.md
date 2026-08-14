@@ -59,10 +59,11 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | RFC 7515 | JSON Web Signature (JWS) | Published RFC | May 2015 | Detached/compact signatures over JSON | Integrity + origin auth for tokens | ID tokens, JWT ATs, DPoP proofs, JAR (via Authlete + `client/src/services/dpop.service.ts`) |
 | RFC 7516 | JSON Web Encryption (JWE) | Published RFC | May 2015 | Encrypted JSON payloads | Confidentiality of claims/request objects | Encrypted request objects (Brazil flags in `AGENTS.md`) |
 | RFC 7517 | JSON Web Key (JWK) | Published RFC | May 2015 | Key representation + JWK Set | Publishing/consuming signing keys | JWKS via Authlete; `utils/jwksClient` |
-| RFC 7518 | JSON Web Algorithms (JWA) | Published RFC — **updated by RFC 9864** (Oct 2025) | May 2015 | `alg`/`enc` registry (ES256, RS256, …) | Names the algorithms JWS/JWE use | DPoP ES256 (`dpop.service.ts`) |
+| RFC 7518 | JSON Web Algorithms (JWA) | Published RFC — **updated by RFC 9864** (Dec 2025) | May 2015 | `alg`/`enc` registry (ES256, RS256, …) | Names the algorithms JWS/JWE use | DPoP ES256 (`dpop.service.ts`) |
 | RFC 7519 | JSON Web Token (JWT) | Published RFC — **updated by RFC 8725** (BCP 225) | May 2015 | Claims container + registered claims | `iss/sub/aud/exp/iat/nbf` semantics | ID tokens, JWT ATs, assertions |
 | **RFC 8725** | JSON Web Token Best Current Practices | Published RFC (**BCP 225**, updates RFC 7519) | Feb 2020 | The normative countermeasures: §2.1 explicit typing, §3.1 *"Perform Algorithm Verification"*, §3.2 *"Use Appropriate Algorithms"*, §3.8 substitution attacks | Turns "pin the algorithm, never trust the header" from folklore into a citable requirement | Module 00's threat notes; Module 08 step 7; Module 06's `kid`/`jku` exercise |
 | RFC 7638 | JSON Web Key (JWK) Thumbprint | Published RFC | Sep 2015 | Canonical hash of a JWK | DPoP `jkt` binding; key IDs | DPoP proof binding (RFC 9449) |
+| **RFC 9864** | Fully-Specified Algorithms for JSON Object Signing and Encryption (JOSE) and CBOR Object Signing and Encryption (COSE) | Published RFC (Proposed Standard) — **updates RFC 7518, 8037, 9053** | **Dec 2025** | Algorithm identifiers that name *every* parameter, rather than leaving the curve to be negotiated | Removes the ambiguity in polymorphic identifiers like `ECDH-ES` | Nothing yet — see the note below |
 
 > **RFC 8725 is the one to reach for in a review.** Modules 00, 06 and 08 all teach its content — reject
 > `alg: none`, pin the algorithm from configuration rather than reading it from the header, never resolve a
@@ -70,11 +71,18 @@ Not subjects in their own right, but cited by name in the modules — so they be
 > who wants to "just use the library default." Cite **RFC 8725 §3.1** for algorithm verification and **§3.2**
 > for algorithm choice.
 >
-> **RFC 9864 barely matters here, and it is worth knowing why.** It updates RFC 7518 with *fully-specified*
-> algorithm identifiers and deprecates `ES256` — **in COSE registries only**. JOSE's `ES256` is unaffected,
-> and RFC 9864 explicitly declines to register fully-specified RSA variants. Nothing in this curriculum's
-> `ES256`/`RS256` usage changes. The row is annotated because the inventory promises to track updates, not
-> because you need to act.
+> **RFC 9864 barely matters here, and it is worth knowing why.** It updates RFC 7518, **RFC 8037 and RFC
+> 9053** with *fully-specified* algorithm identifiers and deprecates `ES256` — **in COSE registries only**.
+> JOSE's `ES256` is unaffected, and RFC 9864 explicitly declines to register fully-specified RSA variants.
+> Nothing in this curriculum's `ES256`/`RS256` usage changes, and **`alg: "none"` is not polymorphic**, so
+> Module 00's citation of RFC 7518 §3.6 stands. It now has a row of its own because it updates three RFCs
+> rather than one. **The row is annotated because the inventory promises to track updates, not because you
+> need to act** — which is the honest reason to carry a row, and the reason to say so on it.
+>
+> **Its date was wrong here until 2026-08-14** — recorded as Oct 2025 against a verified **December 2025** —
+> and so was its scope, given as RFC 7518 alone. Both were corrected from the header block of
+> `https://www.rfc-editor.org/info/rfc9864`, fetched 2026-08-11. A date carried from recall in the file whose
+> job is citation provenance is the defect this file exists to prevent.
 
 ## 2. OAuth 2.0 core & threat model (Modules 01–02)
 
@@ -274,7 +282,7 @@ one-time "verified" stamp.
 | Federation 1.1 described as "of the same date" as 1.0 | 1.0 = 17 Feb 2026, **1.1 = 5 May 2026** | The claim that they share a date is what made "either is fine" look safe |
 | Discovery `/api` prefix called a "path quirk" | Labelled a **non-conformance** against RFC 8414 §3 and OIDC Discovery §4.1/§4.3 | A learner told it was a free routing choice would reproduce it |
 | **RFC 8725 (BCP 225) absent entirely** | Added to §1, and noted on the RFC 7519 row it updates | Modules 00/06/08 teach its content as reasoned practice with no citable BCP behind it |
-| RFC 7518 carried no update note | **Updated by RFC 9864** (Oct 2025), with a note that the `ES256` deprecation is **COSE-only** and changes nothing here | Completeness — deliberately annotated *without* overstating the impact |
+| RFC 7518 carried no update note | **Updated by RFC 9864** (**Dec 2025** — the Oct 2025 date carried here until 2026-08-14 was wrong), with a note that the `ES256` deprecation is **COSE-only** and changes nothing here. RFC 9864 now has its own §1 row, since it updates RFC 7518, 8037 and 9053 | Completeness — deliberately annotated *without* overstating the impact |
 | FAPI 2.0 row read "**forbids** refresh-token rotation" | Quotes the actual §5.3.2.1 text, including *"except in extraordinary circumstances"* | The carve-out exists and is operationally real (infrastructure migration) |
 | Four logout rows had no dates; Back-Channel Logout's title dropped its errata suffix | RP-Initiated dated **12 Sep 2022**; Back-Channel **15 Dec 2023** and retitled *"incorporating errata set 1"*; the two unverified rows marked *(see note)* rather than guessed | Same errata-suffix precision this file already applies to JARM and OIDC Core |
 

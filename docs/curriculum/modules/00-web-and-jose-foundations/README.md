@@ -84,8 +84,8 @@ Now the same ideas in precise terms, with each analogy element mapped to its for
 | Plain-language element | Formal concept | Defining reference |
 |------------------------|----------------|--------------------|
 | The courier who reads everything | **User agent / front channel** — data relayed via browser redirects | OAuth uses this in RFC 6749 §1.3.1 |
-| Armored pneumatic tube | **TLS 1.3** transport encryption between two endpoints | RFC 8446 (Aug 2018) |
-| Direct post-office-to-post-office line | **Back channel** — direct server-to-server HTTPS, no browser | RFC 9110 (HTTP Semantics, Jun 2022) + TLS |
+| Armored pneumatic tube | **TLS 1.3** transport encryption between two endpoints | **RFC 9846** (Jul 2026), which obsoletes RFC 8446 (Aug 2018) — see the note below |
+| Direct post-office-to-post-office line | **Back channel** — direct server-to-server HTTPS, no browser | RFC 9110 (HTTP Semantics, **Internet Standard, STD 97**, Jun 2022) + TLS |
 | Wax seal on a readable document | **JWS** — JSON Web Signature (compact form `header.payload.signature`) | RFC 7515 |
 | Who wrote it / the signet | Signing **key** + `alg`, identified via `kid`/issuer | RFC 7518 (JWA), RFC 7517 (JWK) |
 | Locked strongbox | **JWE** — JSON Web Encryption | RFC 7516 |
@@ -93,6 +93,24 @@ Now the same ideas in precise terms, with each analogy element mapped to its for
 | "Trust me, no seal" | The `alg: "none"` header value | RFC 7518 §3.6 |
 | The claims written inside | **JWT** — registered claims `iss/sub/aud/exp/iat/nbf` | RFC 7519 |
 | A fingerprint of the signet | **JWK Thumbprint** (used later for DPoP `jkt`) | RFC 7638 |
+
+> ### Two citation notes, and the first is a lesson in what "obsolete" means
+>
+> **TLS 1.3 has two RFC numbers, and both are correct answers to different questions.** RFC 8446 (August 2018)
+> defined it; **RFC 9846** (July 2026) obsoletes it, along with RFCs 5077, 5246, 6961, 7627 and 8422. **The
+> wire protocol did not change** — RFC 9846 is the same TLS 1.3, consolidated, and it is backward compatible.
+> So a document citing RFC 8446 is not describing anything wrong; it is citing a superseded number. **Cite RFC
+> 9846 and mention RFC 8446 when the audience may know it by that number**, which is most audiences for years
+> yet. This distinction is the point: *obsolescence lives in the Datatracker metadata, not in the protocol* —
+> and a citation is a pointer to a document, so it goes stale even when the fact it carries does not.
+> `docs/curriculum/SPEC-INVENTORY.md` has the full row.
+>
+> **RFC 7518's algorithm registry now has a successor**, though nothing in this table changes because of it.
+> **RFC 9864**, *Fully-Specified Algorithms for JSON Object Signing and Encryption (JOSE) and CBOR Object
+> Signing and Encryption (COSE)* (Proposed Standard, December 2025), **updates RFC 7518, 8037 and 9053**. It
+> exists because identifiers like `ECDH-ES` leave the curve to be negotiated elsewhere, and a *fully-specified*
+> identifier names every parameter. **`alg: "none"` is not polymorphic**, so RFC 7518 §3.6 remains the right
+> citation for the row above — but if you are choosing algorithm identifiers for new work, read RFC 9864 first.
 
 **Front channel vs. back channel — the definition to memorize:**
 
@@ -247,7 +265,7 @@ verifier would ever trust. The gap between "it decoded" and "it's valid" is the 
 | Question | Answer |
 |----------|--------|
 | **What came before** | Raw HTTP requests and ad-hoc, unverifiable tokens (opaque strings, homemade cookies). |
-| **What this adds** | A transport that resists eavesdropping/tampering (TLS 1.3, RFC 8446); a standard, *verifiable* token envelope (JOSE: RFC 7515–7519, 7638); a clear front/back-channel model of who controls which bytes. |
+| **What this adds** | A transport that resists eavesdropping/tampering (TLS 1.3, **RFC 9846**, which obsoletes RFC 8446); a standard, *verifiable* token envelope (JOSE: RFC 7515–7519, 7638); a clear front/back-channel model of who controls which bytes. |
 | **What it deprecates** | Nothing yet — this is groundwork. |
 | **What remains unsolved (and where it's addressed)** | *Why* delegated access is needed at all → **Module 01**. How tokens are actually issued → **Module 02**. Stopping front-channel code interception → **Module 03**. Binding a token to its sender so theft doesn't help → **Module 05 (DPoP/mTLS)**. |
 
