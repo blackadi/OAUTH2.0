@@ -472,7 +472,7 @@ All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth. **Authentication f
 | `/api/token/update` | PATCH | Update token scopes/metadata |
 | `/api/token/revoke` | POST | Revoke token via management API |
 | `/api/token/reissue` | POST | Reissue ID token |
-| `/api/token/createLocalToken` | GET | Create local JWT (dev only, returns 404 in production) |
+| `/api/token/createLocalToken` | GET | Create a local **RFC 9068** JWT access token (dev only, returns 404 in production). Requires `sub`, `aud` and `client_id`; `iss` defaults to `JWT_ISSUER`. Optional `scope`, `acr`, `authTime`. The token carries `typ: at+jwt` and all seven claims §2.2 marks REQUIRED — `client_id` is required *because* of that, since this token is the repo's worked example of the section |
 
 ---
 

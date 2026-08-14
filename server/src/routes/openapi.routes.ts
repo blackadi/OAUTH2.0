@@ -995,7 +995,7 @@ const spec: Record<string, unknown> = {
       get: {
         summary: "Create local JWT",
         description:
-          "Creates a locally-signed JWT (development only, no Authlete call). Returns the JWT and the public key for verification.",
+          "Creates a locally-signed RFC 9068 JWT access token (development only, no Authlete call). Returns the JWT and the public key for verification. The token carries `typ: at+jwt` and all seven claims RFC 9068 §2.2 marks REQUIRED — it is the repo's worked example of that section, so `client_id` is required here even though the endpoint is a fixture.",
         parameters: [
           {
             name: "sub",
@@ -1006,23 +1006,45 @@ const spec: Record<string, unknown> = {
           {
             name: "aud",
             in: "query",
+            required: true,
             schema: { type: "string" },
+            description: "Space-delimited; becomes the `aud` array",
+          },
+          {
+            name: "client_id",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+            description: "REQUIRED — RFC 9068 §2.2 marks `client_id` a required claim of a JWT access token",
+          },
+          {
+            name: "iss",
+            in: "query",
+            schema: { type: "string" },
+            description: "Defaults to the JWT_ISSUER environment value when omitted",
+          },
+          {
+            name: "scope",
+            in: "query",
+            schema: { type: "string" },
+            description: "Space-delimited. RFC 9068 §2.2.3 makes `scope` a SHOULD, so it is omitted from the token rather than emitted empty",
           },
           {
             name: "acr",
             in: "query",
             schema: { type: "string" },
-            description: "ACR claim to embed in the JWT",
+            description: "ACR claim to embed in the JWT (RFC 9068 §2.2.1, OPTIONAL)",
           },
           {
             name: "authTime",
             in: "query",
             schema: { type: "integer" },
-            description: "Authentication time (epoch seconds) to embed as auth_time claim",
+            description: "Authentication time (epoch seconds) to embed as auth_time. Ignored unless it parses as a positive integer — an unparseable value stamps no claim rather than the Unix epoch",
           },
         ],
         responses: {
           "200": { description: "Local JWT created with token and publicKey" },
+          "400": { description: "Missing iss, sub, aud or client_id" },
           "404": { description: "Not available in production mode" },
         },
       },

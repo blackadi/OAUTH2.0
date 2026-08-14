@@ -246,6 +246,19 @@ export const tokenReissueIdToken = {
   },
 };
 
+/**
+ * Parse an `authTime` query value, or yield nothing.
+ *
+ * Absence must not become a value. An unparseable or non-positive input yields `undefined` so no
+ * `auth_time` claim is stamped at all — the same rule `utils/step-up.ts` follows, and for the same reason
+ * 9470-W3 exists: an invented authentication time is one a resource server will enforce a `max_age` against.
+ */
+function authTimeOrUndefined(raw: unknown): number | undefined {
+  const parsed = Number(raw);
+  if (typeof raw !== "string" || raw.trim() === "") return undefined;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 export const localSignedToken = {
   handleLocalSignedToken: async (
     req: Request,
@@ -265,11 +278,15 @@ export const localSignedToken = {
       if (!reqBody.iss) {
         reqBody.iss = jwt.issuer;
       }
-      //check empty parameters
-      if (!reqBody.iss || !reqBody.sub || !reqBody.aud) {
+      // `client_id` joined this list in 9068-W2: RFC 9068 §2.2 marks it REQUIRED alongside iss/sub/aud, and
+      // the token this endpoint hands out is the only RFC 9068 specimen a learner can obtain here. Demanding
+      // it is what stops the specimen contradicting the lesson. `scope` is a §2.2.3 SHOULD, so it stays
+      // optional and is omitted rather than emitted empty.
+      if (!reqBody.iss || !reqBody.sub || !reqBody.aud || !reqBody.client_id) {
         return res.status(400).json({
           error: "invalid_request",
-          error_description: "Missing required parameters: iss, sub, aud",
+          error_description:
+            "Missing required parameters: iss, sub, aud, client_id",
         });
       }
 
@@ -283,7 +300,16 @@ export const localSignedToken = {
       const result = tokenManagementService.localSignedToken(
         (reqBody.iss as string) ?? "",
         (reqBody.sub as string) ?? "",
-        (reqBody.aud as string[]) ?? []
+        (reqBody.aud as string[]) ?? [],
+        reqBody.client_id as string,
+        {
+          scope: typeof reqBody.scope === "string" ? reqBody.scope : undefined,
+          acr: typeof reqBody.acr === "string" ? reqBody.acr : undefined,
+          // `authTime` was advertised in the OpenAPI spec and reached nothing. Passed only when it parses
+          // as a positive integer: `Number("")` is 0, which is finite and would stamp `auth_time` as the
+          // Unix epoch — a fabricated authentication time, which is the mistake 9470-W3 exists to prevent.
+          authTime: authTimeOrUndefined(reqBody.authTime),
+        }
       );
 
       res.setHeader("Content-Type", "application/json");

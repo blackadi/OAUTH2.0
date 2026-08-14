@@ -6,12 +6,31 @@ import { TabBar } from '@/components/ui/TabBar';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
 
 type AdminOp = 'create' | 'list' | 'update' | 'revoke' | 'delete' | 'reissue' | 'local';
+
+// Every member of Authlete's `GrantType` enum, which is what POST /api/token/create accepts.
+// This was a free-text Input, and the server coerced anything it did not recognise to
+// AUTHORIZATION_CODE (B1-W3) — so a typo minted a token whose recorded provenance was a fiction.
+// The server now answers 400 instead; a Select makes that 400 unreachable from the UI and makes the
+// valid set discoverable, which the free-text field never did.
+const GRANT_TYPES: { value: string; label: string }[] = [
+  { value: 'AUTHORIZATION_CODE', label: 'AUTHORIZATION_CODE' },
+  { value: 'CLIENT_CREDENTIALS', label: 'CLIENT_CREDENTIALS' },
+  { value: 'REFRESH_TOKEN', label: 'REFRESH_TOKEN' },
+  { value: 'PASSWORD', label: 'PASSWORD — ROPC, retired by RFC 9700 §2.4' },
+  { value: 'IMPLICIT', label: 'IMPLICIT — retired by RFC 9700 §2.1.2' },
+  { value: 'CIBA', label: 'CIBA — urn:openid:params:grant-type:ciba' },
+  { value: 'DEVICE_CODE', label: 'DEVICE_CODE — RFC 8628 §3.4' },
+  { value: 'TOKEN_EXCHANGE', label: 'TOKEN_EXCHANGE — RFC 8693 §2.1' },
+  { value: 'JWT_BEARER', label: 'JWT_BEARER — RFC 7523 §2.1' },
+  { value: 'PRE_AUTHORIZED_CODE', label: 'PRE_AUTHORIZED_CODE — OID4VCI' },
+];
 
 const ADMIN_OPS: { value: AdminOp; label: string }[] = [
   { value: 'create', label: 'Create' },
@@ -47,6 +66,9 @@ function AdminSection() {
   const [localIss, setLocalIss] = useState('');
   const [localSub, setLocalSub] = useState('');
   const [localAud, setLocalAud] = useState('');
+  // RFC 9068 §2.2 makes `client_id` REQUIRED; the server 400s without it (9068-W2).
+  const [localClientId, setLocalClientId] = useState('');
+  const [localScope, setLocalScope] = useState('');
 
   const auth = authId && authSecret ? btoa(`${authId}:${authSecret}`) : '';
   const doc = activeOp ? getDoc('admin', activeOp) : undefined;
@@ -72,7 +94,7 @@ function AdminSection() {
 
       {activeOp === 'create' && (
         <div className="space-y-3">
-          <Input label="Grant Type" value={createGrant} onChange={(e) => setCreateGrant(e.target.value)} placeholder="e.g. AUTHORIZATION_CODE, CLIENT_CREDENTIALS" />
+          <Select label="Grant Type" value={createGrant} onChange={(e) => setCreateGrant(e.target.value)} options={GRANT_TYPES} />
           <Input label="Subject" value={createSubject} onChange={(e) => setCreateSubject(e.target.value)} placeholder="End-user identifier (optional)" />
           <Input label="Scopes (comma-separated)" value={createScopes} onChange={(e) => setCreateScopes(e.target.value)} placeholder="e.g. openid,profile,email" />
           <Input label="Access Token Duration (seconds)" value={createDuration} onChange={(e) => setCreateDuration(e.target.value)} placeholder="Leave empty for service default" />
@@ -132,7 +154,16 @@ function AdminSection() {
           <Input label="Issuer (iss)" value={localIss} onChange={(e) => setLocalIss(e.target.value)} placeholder="Token issuer identifier" />
           <Input label="Subject (sub)" value={localSub} onChange={(e) => setLocalSub(e.target.value)} placeholder="End-user identifier" />
           <Input label="Audience (aud)" value={localAud} onChange={(e) => setLocalAud(e.target.value)} placeholder="Target audience" />
-          <Button onClick={() => handleCall(() => adminService.localToken({ iss: localIss, sub: localSub, aud: localAud }))} loading={loading}>
+          <Input label="Client ID (client_id)" value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="Client the token was issued to" />
+          <Input label="Scope (optional)" value={localScope} onChange={(e) => setLocalScope(e.target.value)} placeholder="e.g. openid profile" />
+          <p className="text-xs text-slate-400 -mt-1">
+            The token is a worked example of <strong>RFC 9068 §2</strong>: <code>typ: at+jwt</code> plus the
+            seven claims §2.2 marks REQUIRED, which is why <code>client_id</code> is not optional here.
+            <code>scope</code> is a §2.2.3 SHOULD and is omitted from the token when left blank. Development
+            only — the endpoint answers 404 elsewhere, and nothing in this deployment accepts the result as
+            an access token.
+          </p>
+          <Button onClick={() => handleCall(() => adminService.localToken({ iss: localIss, sub: localSub, aud: localAud, client_id: localClientId, ...(localScope ? { scope: localScope } : {}) }))} loading={loading}>
             Run
           </Button>
         </div>

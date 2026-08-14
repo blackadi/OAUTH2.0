@@ -114,6 +114,95 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — VCI-W5: the deferred credential endpoint authenticates somebody now** (below)
 - [x] **2026-08-14 — P0, P1, T1-19 batch 1, FAPI2-W4: a fail-open default, and the wrong Authlete service** (below, backfilled)
 - [x] **2026-08-14 — T1-19 batch 2 (FAPI1-W2, ATTR-W1, BCL-W6): and the SDK's two models do not agree** (below)
+- [x] **2026-08-14 — T1-19 batch 3 (B1-W3, 9068-W2, 9101-W5): T1-19 closes; two criteria under-counted their own defect** (below)
+
+### 2026-08-14 — T1-19 batch 3: B1-W3, 9068-W2, 9101-W5 — and T1-19 closes
+
+**Why this matters to a future session:** **T1-19 is complete — all 13 items.** These last three were held
+for plan mode because each touches a file on `AGENTS.md`'s **Security-critical surfaces** list, and all three
+turned out to be *one defect class*: **a value the caller controls, or a value nobody supplied, becoming a
+server assertion.** None was exploitable. Each modelled the wrong habit in a repo that teaches OAuth.
+
+**B1-W3 — `normalizeGrantType` ended `|| "AUTHORIZATION_CODE"`, and the default was the defect.**
+`grantType` is Authlete's record of *what authorised a token*. Coercing an unrecognised — or entirely
+absent — value did not fail to answer that question; it answered it **wrongly**, and the token carried the
+answer for its whole life. A typo in the admin UI's free-text field minted a token whose provenance was a
+fiction, with HTTP 200 and nothing in the log. Now `AppError(400)` — the same rule `utils/step-up.ts`
+applies to an unknown `acr` and `require-basic-auth.ts` to unset management credentials: **an absent value
+selects the safest behaviour, and for an assertion the safest behaviour is to make none.**
+
+> **The criteria under-counted their own defect, which is worth noticing as a pattern.** They named three map
+> additions. But **`CIBA` had no entry at all** — not a missing URN, a missing *grant type*, so every CIBA
+> token was recorded as authorization-code — and `as GrantType` at the call site is *why* that survived: a
+> `Record<string, string>` whose values are cast to an enum at the point of use cannot be checked against
+> the enum it claims to produce. Dropping the cast and typing the map made the compiler find the tenth
+> member. **A cast is not a type; it is a promise that nobody verifies.**
+
+Canonical wire URNs added and **re-verified against the RFCs this session**: RFC 8628 (Standards Track, Aug
+2019) §3.4 → `urn:ietf:params:oauth:grant-type:device_code`; RFC 8693 (Standards Track, Jan 2020) §2.1 →
+`urn:ietf:params:oauth:grant-type:token-exchange`; plus `urn:openid:params:grant-type:ciba`. Only the short
+forms `device_code`/`token_exchange` mapped before, and neither is what any client sends.
+
+**Blast radius checked, not assumed.** `create()` has a second caller —
+`controllers/token-exchange-response.handler.ts`, an `AGENTS.md` **Deliberate defect** whose Module 06
+exercises depend on it working. It sends the camelCase `grantType: "TOKEN_EXCHANGE"`, which still resolves.
+**Both sides now assert it**, because the handler's own characterization test mocks the service and so could
+never have seen a resolver change break the lab. The SPA's free-text *Grant Type* input became a `Select`
+over the ten members, so the new 400 is unreachable from the UI.
+
+**9068-W2 — the one obtainable RFC 9068 specimen contradicted the lesson it illustrates.**
+`GET /api/token/createLocalToken` is dev-only and admin-authenticated, but its token is **the only JWT in
+this repo a learner can decode as an "access token"** — in a curriculum whose Module 04 objective is to state
+§2's required claims and `typ` value. It emitted `typ: JWT` and five claims, missing `client_id`, `jti` and
+`scope`. Now `typ: at+jwt` (§2.1 — `jsonwebtoken` defaults to `JWT`, which §4 check 1 makes a resource
+server **MUST-reject**), all seven §2.2 REQUIRED claims, and `scope` when supplied. `clientId` is a
+**required positional parameter, not an option**: an optional field would let the specimen stay
+non-conformant by omission, which is exactly the defect. `jti` is a fresh UUID per call — §4's replay
+guidance only works if tokens are distinguishable — and `scope` is omitted rather than emitted empty,
+because `scope: ""` tells a resource server the token grants *nothing*, which is not the same as saying
+nothing.
+
+> **Two advertised no-ops turned up while wiring it.** `openapi.routes.ts` documented `acr` and `authTime` as
+> query parameters of this endpoint, and `localSignedToken` took three arguments — so it dropped both before
+> `createLocalJWT`, which has accepted them since the RFC 9470 step-up work, could see them. A fourth site
+> for the audit's *advertised-but-unusable* theme, found by reading the spec entry beside the code rather
+> than either alone. Both are wired, and **an unparseable `authTime` now stamps no claim rather than a
+> number**: `Number("")` is `0`, which is finite, so the naive form would record `auth_time` as the Unix
+> epoch — a **fabricated authentication time**, the precise thing 9470-W3 removed from the `prompt=none`
+> path, and one a resource server enforces `max_age` against.
+
+**And the item's own ordering note was wrong.** It exempted W2 from plan mode by judging the *file* —
+`createLocalJWT.ts`, which is not on the surfaces list. The fix threads `client_id`/`scope` through
+`token.operations.service.ts` **and** `token.management.controller.ts`, both listed under **Token
+issuance**. *The trigger is the concern, and the concern travels with the parameter.* `audit/RESUME.md` §0
+had inherited the same misgrouping.
+
+**9101-W5 — the authorization request was the client's own object.** `authorization.service.ts` passed
+`req.query` **itself**, mutated with a `parameters` key, as the Authlete `AuthorizationRequest` — so every
+parameter the client sent was also offered as a top-level vendor field. **Not exploitable, and establishing
+that is why this was S4:** the request type has exactly three members (`parameters`, `context`,
+`cimdOptions`), the SDK's outbound `z.object` strips the rest, and there is **no `clientCertificate` member
+on this request type**. What survived was `context` — the arbitrary text Authlete attaches to the ticket,
+chosen by whoever wrote the URL. **`jar.service.ts` calls the same Authlete API and already built the request
+from named fields**, so the fix made two siblings agree rather than importing a rule. `context` still travels
+inside `parameters`, where the client put it; only the vendor field is refused. The `req.query` mutation is
+gone too — nothing read it, and a service that quietly rewrites the request it was handed is a trap.
+
+**A test that could not be written where it belonged, and why that is recorded.** The route-level 200 case
+for `createLocalToken` is **deliberately absent**: signing needs `JWT_PRIVATE_KEY_PEM`, which the test
+environment does not set, so a success assertion there would pass or fail depending on whose `.env` ran it —
+the same environment-dependence that made P0's `NODE_ENV` test mock `dotenv`. The token's shape is asserted
+against a real key in the unit test; the controller's parameter forwarding in a new
+`tests/unit/controllers/token.management.controller.test.ts` with the service mocked. **Three places, each
+asserting the thing it can actually see.**
+
+**Verification:** typecheck both packages · lint (server 4 pre-existing warnings, client clean at
+`--max-warnings 0`) · **1050 server tests / 71 files** (998 before) · 109 client / 16 · `check-docs` 167
+files · route coverage 92 routes, empty baseline. No `test:e2e`, no Authlete writes.
+
+**Next:** **P3** — T1-11's wire format (PAR, Device, DCR and `/api/vci/deferred/issue` return Authlete's
+camelCase envelope instead of the RFC body). Server, SPA and lab transcripts ship together or the labs go
+stale; `ParSection.tsx` and `DeviceSection.tsx` read the envelope fields today.
 
 ### 2026-08-14 — T1-19 batch 2: FAPI1-W2, ATTR-W1, BCL-W6
 

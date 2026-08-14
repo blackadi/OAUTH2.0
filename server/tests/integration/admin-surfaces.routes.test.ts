@@ -201,6 +201,26 @@ describe("Integration: the remaining admin and public surfaces", () => {
       expect(res.status).toBe(400)
       expect(res.body.error).toBe("invalid_request")
     })
+
+    // 9068-W2. `client_id` joined the required set because RFC 9068 §2.2 marks it REQUIRED, and this
+    // endpoint's token is the repo's only obtainable specimen of that section. Asserted at the route so the
+    // 400 is known to arrive *after* both gates rather than instead of them.
+    it("rejects a request with iss/sub/aud but no client_id", async () => {
+      mocks.nodeEnv = "development"
+      app = createApp()
+
+      const res = await send("get", "/api/token/createLocalToken?iss=i&sub=s&aud=a", ADMIN_BASIC)
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe("invalid_request")
+      expect(res.body.error_description).toContain("client_id")
+    })
+
+    // The 200 path is NOT asserted here, deliberately. Signing needs `JWT_PRIVATE_KEY_PEM`, which the test
+    // environment does not set, so a success case would pass or fail depending on whose `.env` ran it —
+    // the same environment-dependence that made the `NODE_ENV` default test mock `dotenv`. The token's
+    // shape is asserted against a real key in `tests/unit/utils/createLocalJWT.test.ts`, and the
+    // controller's parameter forwarding in `tests/unit/controllers/token.management.controller.test.ts`.
   })
 
   // -----------------------------------------------------------------------------------------------------
