@@ -120,6 +120,64 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention, and four of the audit's own "unreproducible" verdicts turned out to be stale** (below)
 - [x] **2026-08-14 — T2-11: the step-up challenge is a 401, in all five places it is drawn — one of which nobody had checked** (below)
 - [x] **2026-08-14 — T2-4 + T2-12: TLS 1.3 has a new RFC number, and Module 10's missing conformance row is PARTIAL rather than FAIL** (below)
+- [x] **2026-08-14 — VCI-W6 closed: the credential issuer has a key, and Module 09b Ex 7 is a three-state exercise now** (below)
+
+### 2026-08-14 — VCI-W6: the credential-issuer JWK Set, verified rather than assumed
+
+**Why this matters to a future session:** this was the last configuration gap standing between the deployment
+and end-to-end credential issuance, and it was carried as *"blocked, needs the operator."* The operator set
+`credentialJwks` on service `3693555522` — one EC P-256 key, `kid: vc-issuer-1`, `alg: ES256`. **All three
+checks the resume file was carrying as owed now pass**, probed live against the deployment:
+
+| Check | Before | Now |
+|---|---|---|
+| `GET /api/vci/jwks` | **500** `[A403201]` | **200** |
+| `GET /api/vci/jwtissuer` | **500** `[A417202]` | **200** — same key set, wrapped in an `issuer` |
+| only the **public** half published | n/a | ✅ members `alg,crv,kid,kty,use,x,y` — **`d` absent on both** |
+
+> ### The third check is the one that needed doing properly, and a 200 could not make it
+>
+> **The stored service value contains the private scalar `d`** — it has to, because the issuer signs with it.
+> Authlete strips it on the way out. But a credential-issuer JWKS endpoint that *echoed* `d` would publish the
+> key every credential it ever signs is verified against, **and would still answer `200`**. So the check is to
+> parse the body and assert on `d`/`p`/`q`/`dp`/`dq`/`qi`/`k`, which is what was done. Same rule this repo keeps
+> paying for: **a status code is not evidence about the body.**
+
+**The configuration-change grep rule earned its keep.** A flag has no symptom string, so `AGENTS.md`'s three
+searches were run instead — the field name (`credentialJwks`), the vocabulary of it being off, and **the vendor
+result codes that only occur while it is off** (`A403201`, `A417202`). The third found every affected line:
+Module 09b's lab in eight places, its README status row, a `SPEC-INVENTORY.md` row, and four audit files. **The
+symptom grep would have found nothing**, because the strings that changed were the ones that existed *because
+the key was missing*.
+
+**Module 09b Exercise 7 was rebuilt a second time, and is better again — the third time a fix has improved a
+lab rather than retiring one.** The two-state *"enabling a feature is not the same as configuring it"* lesson
+becomes **three dated states of the same three endpoints**:
+
+```
+feature off      ->  A364301 / A416301 / A402301   all NOT_FOUND              "VCI is off"
+flag on, no key  ->  A403201 / A417202             INTERNAL_SERVER_ERROR      "no signing key"
+key set          ->  200                                                      publishes the public half
+```
+
+**Each transition names a different missing value**, which is the concrete argument for reading vendor result
+codes instead of HTTP statuses: pattern-matching on the status would have read "broken, broken, fixed" and
+learned nothing. The tagline gains its third clause — *…and configuring it is not the same as configuring it
+safely* — and the exercise now includes the private-member check as a step the learner runs.
+
+Two smaller consequences worth keeping. The exercise's probe loop now prints the **same** value for all three
+endpoints, so the lab says so: **a probe that cannot distinguish its inputs has stopped being a measurement.**
+And the loop's own history is now the teaching point — it has been rewritten twice, once because `metadata`
+started returning a document with no `resultCode` (raising `KeyError`), once because the other two joined it.
+
+> **Closing the gap improved a diagnosis instead of deleting one.** The `UNVERIFIED` marker on *issuing an
+> actual credential* used to blame the missing JWK Set — and that was **hiding the fact that nothing else was
+> missing.** Issuance now needs only a **wallet this repo does not contain**. *"Runnable, with a client we do
+> not have"* is a weaker claim than *"blocked by configuration"* and a far more useful one: it tells a reader
+> what to build rather than what to switch on. **A blocked marker hides everything behind it.**
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files. The Authlete write was the operator's; this session's calls were all reads.
 
 ### 2026-08-14 — T2-4 and T2-12: two citation corrections, both against the audit's own criteria
 

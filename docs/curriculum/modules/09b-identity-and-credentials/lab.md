@@ -544,14 +544,27 @@ issuer/verifier unlinkability against a coerced verifier, they are wrong, and th
 
 Now to the server. Start it if it is not running (`npm --prefix server run dev`).
 
-This repo implements nine OID4VCI endpoints, and **verifiable credentials are now enabled on the Authlete
-service** — so this exercise is about a distinction you cannot see when a feature is simply off:
+This repo implements nine OID4VCI endpoints, and **verifiable credentials are now enabled and configured on
+the Authlete service**. That happened in two steps, two days apart, and the two steps are the exercise:
 
-> **Enabling a feature is not the same as configuring it.**
+> **Enabling a feature is not the same as configuring it — and configuring it is not the same as configuring
+> it safely.**
 
-The flag is on. The issuer metadata document is real and conformant. And two of the three discovery endpoints
-still fail — for a completely different reason than they used to. Reading refusals precisely is the skill this
-curriculum keeps drilling, and this is the version of the exercise where precision actually pays.
+**These same three endpoints have answered the same request three different ways in three days.** Reading
+refusals precisely is the skill this curriculum keeps drilling; here you get to read the same endpoint change
+its mind twice, which is better evidence than any single transcript.
+
+| Date | `credentialJwks` | `/vci/metadata` | `/vci/jwtissuer` | `/vci/jwks` |
+|---|---|---|---|---|
+| before **2026-08-14** — `verifiableCredentialsEnabled: false` | unset | `A364301` **NOT_FOUND** | `A416301` **NOT_FOUND** | `A402301` **NOT_FOUND** |
+| **2026-08-14**, flag on, no key | unset | ✅ §12.2.4 document | `A417202` **INTERNAL_SERVER_ERROR** | `A403201` **INTERNAL_SERVER_ERROR** |
+| **2026-08-14**, key set | one EC P-256 key | ✅ §12.2.4 document | ✅ **200** | ✅ **200** |
+
+**Row 1 → row 2 is the interesting transition and `NOT_FOUND → INTERNAL_SERVER_ERROR` is the honest direction.**
+With the feature off the document does not exist, and 404 is right. With the feature on and its key material
+missing, the document *should* exist and cannot be built — a server fault, not a missing resource. Most
+implementations would have kept returning 404. **Row 2 → row 3 is the one you must not take on trust**, and
+the reason is below.
 
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{content_type}\n" \
@@ -567,14 +580,21 @@ done
 ```
 200 application/json; charset=utf-8
 metadata   (document, no resultCode) | 
-jwtissuer  A417202 | INTERNAL_SERVER_ERROR
-jwks       A403201 | INTERNAL_SERVER_ERROR
+jwtissuer  (document, no resultCode) | 
+jwks       (document, no resultCode) | 
 ```
 
-Note the loop had to change to read this. The old version printed `d['resultCode']` unconditionally, because
-every endpoint used to return an Authlete *error envelope*. **`metadata` now returns a document instead**, and
-a document has no `resultCode` — so the old one-liner raises `KeyError`. When a feature comes on, the shape of
-the answer changes, not just its status.
+**All three print the same thing now, and the loop's own history is the lesson.** It has been rewritten twice:
+
+- Originally it printed `d['resultCode']` unconditionally, because every one of these endpoints returned an
+  Authlete *error envelope*.
+- When the flag came on, `metadata` began returning a **document**, and a document has no `resultCode` — so
+  that one-liner raised `KeyError`. The `or '(document, no resultCode)'` fallback exists because of that.
+- When the JWK Set was set, the other two joined it, and **the loop stopped distinguishing anything at all.**
+
+**A probe that prints the same value for every input has stopped being a measurement.** Keep it as a smoke
+test if you like, but the interesting reading is now the *bodies*, which is what the rest of this exercise
+does.
 
 Look at what `metadata` actually returns:
 
@@ -599,24 +619,66 @@ That is OID4VCI 1.0 §12.2.4's document, with all three REQUIRED members present
 is a specification-defined document rather than Authlete's internal envelope. Hold onto that contrast; it is
 the subject of Exercise 8.
 
-Now read the two failures, because their result codes say exactly what is missing:
+### 7a — Read the key you are now publishing, and check what is *not* in it
+
+**A credential issuer signs credentials.** Turning the feature on gave it endpoints and a metadata document; it
+did not give it a signing key. Until `credentialJwks` (or `credentialJwksUri`) is set on the service, there is
+nothing to publish at `/vci/jwks` and nothing to describe at `/vci/jwtissuer` — which is why those two failed
+while `metadata` succeeded: metadata describes *what the issuer offers*, and that needs no key.
+
+A key is set now. **So the question changes from "why does this fail?" to a much more important one: what
+exactly did publishing a signing key just publish?**
 
 ```bash
 curl -s "$API/vci/jwks" -w '\n[%{http_code}]\n'
 ```
 
 ```
-{"resultCode":"A403201","resultMessage":"[A403201] The JWK Set document of the credential issuer has not been set up yet.","action":"INTERNAL_SERVER_ERROR", …}
-[500]
+{"keys":[{"kty":"EC","use":"sig","crv":"P-256","kid":"vc-issuer-1",
+          "x":"h-1e7ixuJNgYfn0Ie5WEMILDRrR9vT1uMkNwbQsIU3g",
+          "y":"bWgQ2XdPkqurqK-9nvZV0c0Qt8eWmm_Htkr5ShznIG0","alg":"ES256"}]}
+[200]
 ```
 
-`jwtissuer` fails for the same root cause and says so differently: `[A417202] The JWT issuer metadata is not
-available because **neither the JWK Set document of the credential issuer nor its URL** has been set up.`
+`jwtissuer` now returns the same key set wrapped in an `issuer`:
 
-**A credential issuer signs credentials.** Turning the feature on gave it endpoints and a metadata document;
-it did not give it a signing key. Until `credentialJwks` (or `credentialJwksUri`) is set on the service, there
-is nothing to publish at `/vci/jwks` and nothing to describe at `/vci/jwtissuer`. The metadata document
-survives because it describes *what the issuer offers*, which needs no key.
+```bash
+curl -s "$API/vci/jwtissuer" | python3 -m json.tool
+```
+
+```json
+{
+    "issuer": "https://oauth2-0-ekh2.onrender.com",
+    "jwks": { "keys": [ { "kty": "EC", "kid": "vc-issuer-1", "...": "..." } ] }
+}
+```
+
+> ### ⚠️ Do this check yourself, and do not accept a 200 as the answer
+>
+> **The value stored on the service is a *private* key.** An EC JWK for signing has `d` — the private scalar —
+> alongside `x` and `y`. The service field holds the whole thing, because the issuer has to *sign* with it. The
+> endpoint publishes the **public half only**, and you should verify that rather than assume it:
+>
+> ```bash
+> curl -s "$API/vci/jwks" | python3 -c "
+> import sys, json
+> for k in json.load(sys.stdin)['keys']:
+>     priv = [m for m in ('d','p','q','dp','dq','qi','k') if m in k]
+>     print(k['kid'], '| members:', ','.join(sorted(k)))
+>     print('   private members:', ','.join(priv) if priv else 'none')"
+> ```
+>
+> ```
+> vc-issuer-1 | members: alg,crv,kid,kty,use,x,y
+>    private members: none
+> ```
+>
+> **`d` is absent — Authlete strips it, on both endpoints.** Verified 2026-08-14. That is the correct
+> behaviour and it is also the single highest-consequence thing to check after setting this field: a
+> credential-issuer JWKS endpoint that echoed `d` would publish the key every credential it ever signs is
+> verified against, and **the HTTP status would still be 200.** Same rule as everywhere else in this
+> curriculum — *a status code is not evidence about the body.* Run the check on any issuer you configure,
+> including your own.
 
 Offers need admin credentials — they mint issuance state, so they are in the admin tier
 (`AGENTS.md`, VCI auth category 2). `MGMT_CLIENT_ID` and `MGMT_CLIENT_SECRET` are the two values from your own
@@ -644,16 +706,15 @@ A366001 | CREATED | [A366001] A credential offer was created successfully.
 
 Four observations worth writing down:
 
-1. **Two different result codes, one root cause, and neither is the one you would guess.** `A403201` and
-   `A417202` both mean "the credential issuer has no JWK Set", but each names the specific document it could
-   not produce. That precision is what makes Authlete error codes worth reading rather than pattern-matching
-   on the HTTP status — and it is why the codes changed when the flag did. They used to be `A364301` /
-   `A416301` / `A402301`, all `NOT_FOUND`, all meaning *"VCI is off"*. **Same endpoints, same failure status
-   class, entirely different diagnosis.**
-2. **`NOT_FOUND` → `INTERNAL_SERVER_ERROR` is the honest transition.** With the feature off, the document does
-   not exist and 404 is correct. With the feature on and its key material missing, the document *should*
-   exist and cannot be built — which is a server fault, not a missing resource. Authlete gets this right, and
-   most implementations would have kept returning 404.
+1. **Three states, and every transition told you something the endpoint's status code did not.** `A403201`
+   and `A417202` both meant "the credential issuer has no JWK Set", but each named the specific document it
+   could not produce — while the earlier `A364301` / `A416301` / `A402301` all meant *"VCI is off"*. **Same
+   endpoints, same 4xx/5xx classes, three entirely different diagnoses.** Pattern-matching on the status would
+   have told you "broken, broken, fixed" and nothing else. Reading the codes told you *which* configuration
+   value was missing each time, which is the difference between a ticket and a fix.
+2. **The failure codes are gone, so the check that replaces them is a *body* check, not a status check.** The
+   only thing 7a can still get wrong now returns **200**: publishing the private half of the signing key. When
+   the interesting failure mode stops being an error, your probe has to stop reading errors.
 3. **`offer/create` refuses locally before Authlete is consulted**, with an OAuth-shaped
    `invalid_client` rather than a vendor envelope. That gate **fails closed**: if `MGMT_CLIENT_ID` or
    `MGMT_CLIENT_SECRET` is unset, it returns 401 rather than allowing the request through.
@@ -738,10 +799,21 @@ the entire control this fix added; and the `requestContent` this server synthesi
 Authlete parsed it far enough to *reach* token validation. Before the flag went on, this was marked
 `UNVERIFIED` and rested on mocked tests alone.
 
-> **`UNVERIFIED` — issuing an actual credential.** Everything above is real. What is still not runnable here
-> is the *end* of the flow: a wallet obtaining an access token against the offer and receiving a signed
-> credential. That needs the credential issuer's JWK Set, which is exactly what `A403201` and `A417202` above
-> say is missing — so the same gap blocks `/vci/jwks` and blocks issuance, and you can see it in both places.
+> **`UNVERIFIED` — issuing an actual credential, and the reason is now a different one.** Everything above is
+> real. What is still not run here is the *end* of the flow: a wallet obtaining an access token against the
+> offer and receiving a signed credential.
+>
+> **Until 2026-08-14 the blocker was the missing JWK Set**, and this marker said so — the same gap that made
+> `/vci/jwks` fail also made signing impossible, which was a satisfying thing to be able to point at in two
+> places at once. **That gap is closed**: the key is set, both endpoints answer 200, and the issuer can sign.
+>
+> What remains is not a configuration gap but a **missing participant**. Issuance needs a wallet: something
+> that follows the credential offer, authenticates, obtains an access token with the right authorization
+> details, and presents a key for `cryptographic_binding_methods_supported: ["jwk"]`. This repo has no wallet
+> and the SPA is not one. So the honest statement is *"runnable, with a client this repo does not contain"* —
+> weaker than "blocked by configuration" and more useful, because it tells you what to build rather than what
+> to switch on. **Note how much better the diagnosis got by the gap closing**: a blocked marker hides
+> everything behind it, and this one was hiding the fact that nothing else was missing.
 
 > **A note on the auth model, and two corrections this lab has to make about itself.** Both are worth more
 > than the facts they correct, because they are the two ways a lab goes stale.
@@ -924,8 +996,11 @@ Tick each only if you ran it and saw it:
 - [ ] A whitespace-only re-serialization rejected — same value, different digest
 - [ ] An expired credential accepted with `exp` withheld, then rejected via `--require-claims exp`
 - [ ] Two presentations with disjoint claims shown to share a **byte-identical** issuer-signed JWT
-- [ ] A conformant OID4VCI §12.2.4 metadata document read, and the **two** remaining refusal codes
-      (`A403201`, `A417202`) traced to the one thing the enabled feature still lacks
+- [ ] A conformant OID4VCI §12.2.4 metadata document read, and all **three** states of `/vci/jwks` and
+      `/vci/jwtissuer` accounted for — `NOT_FOUND` (feature off) → `INTERNAL_SERVER_ERROR` (`A403201` /
+      `A417202`, no key) → `200`
+- [ ] `/vci/jwks` checked for **private key members**, and `d` confirmed absent — a check that a 200 cannot
+      make for you
 - [ ] `A375304` obtained from `deferred/issue` with a bogus token — proving which of its **two** Authlete calls
       checks the token
 - [ ] The federation endpoint's real cause (`A316201`) obtained, and the one-line code fault located

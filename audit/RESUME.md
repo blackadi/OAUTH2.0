@@ -265,29 +265,42 @@ client-action table is split: `acr_values`/`max_age` hang off the 401, `acr`/`au
 `STEP-UP-AUTH-TUTORIAL.md` was deliberately left carrying its wrong challenge status so that T2-11 remains one
 reviewable change rather than being half-absorbed here.
 
-### ⚠️ Blocked, needs the operator
+### ✅ Was blocked on the operator — now closed
 
-**VCI-W6 — the credential-issuer JWK Set. ⚠️ THE WRITE HAS LANDED; THE VERIFICATION HAS NOT.** Observed by
-read-only probe on 2026-08-14 during T2-1: **`credentialJwks` is now set** on service `3693555522` — one EC
-P-256 key, `kid: vc-issuer-1`, `alg: ES256`, `use: sig`. `credentialJwksUri` remains absent, which is fine.
-The operator applied it; this session did not, and the `service/update` refusal described below still stands
-for any *further* write.
+**VCI-W6 — the credential-issuer JWK Set. ✅ CLOSED 2026-08-14, verified live, not assumed.** The operator set
+`credentialJwks` on service `3693555522`: one EC P-256 key, `kid: vc-issuer-1`, `alg: ES256`. All three checks
+this file was carrying as owed now pass, against the live deployment:
 
-**So VCI-W6 is unblocked but NOT closed.** Three things must be checked before it is, and none has been:
+| Check | Result |
+|---|---|
+| `GET /api/vci/jwks` | **200** — was 500 `A403201` |
+| `GET /api/vci/jwtissuer` | **200** — was 500 `A417202`; returns the same key set wrapped in an `issuer` |
+| **only the public half is published** | ✅ members are `alg,crv,kid,kty,use,x,y`; **`d` absent on both endpoints** |
 
-| # | Check | Why it is not a formality |
-|---|---|---|
-| 1 | `GET /api/vci/jwks` stops returning **500 `A403201`** | This is the symptom the JWK Set exists to fix |
-| 2 | `GET /api/vci/jwtissuer` stops returning **500 `A417202`** | A *different* code from a *different* API — one passing does not prove the other |
-| 3 | **`/vci/jwks` exposes only the public half** | The stored value contains the private `d` member. A credential-issuer JWKS endpoint that echoes `d` publishes the signing key. **Check the response body, not the status** |
+**The third check is the one that needed doing properly, and it was done by parsing the body.** The stored
+service value contains the private scalar `d` — it must, since the issuer signs with it — and Authlete strips it
+on the way out. A JWKS endpoint that echoed `d` would publish the key every credential it ever signs is verified
+against **and would still answer 200**. Asserting on `d`/`p`/`q`/`dp`/`dq`/`qi`/`k` is the check; the status code
+is not.
 
-Then close VCI-W6 and update **Module 09b Exercise 7**, whose surviving `UNVERIFIED` marker names this gap as
-the reason issuance is not runnable — the lab is currently correct and will become wrong the moment these pass.
+**Module 09b Exercise 7 was rebuilt a second time, and is better again.** The two-state *"enabling a feature is
+not the same as configuring it"* lesson becomes **three dated states of the same three endpoints** — `NOT_FOUND`
+(feature off) → `INTERNAL_SERVER_ERROR` (`A403201`/`A417202`, on but keyless) → `200` — with each transition
+naming a *different* missing value, which is the argument for reading vendor codes rather than HTTP statuses.
+The tagline gains its third clause: *…and configuring it is not the same as configuring it safely.* Two smaller
+consequences worth keeping: the exercise's own probe loop now prints the **same** value for all three endpoints,
+so the lab says plainly that **a probe that cannot distinguish its inputs has stopped being a measurement**; and
+`README.md`'s status row plus a `SPEC-INVENTORY.md` row moved with it.
 
-*(Original blocker, kept because the refusal still applies to new writes:* an EC P-256 key was generated and
-the read → write → read-back → diff script written, but the Authlete `service/update` call is refused by this
-environment's permission classifier — reads succeed, which is how everything above was probed. Not worked
-around, per the guidance.*)*
+> **Closing the gap improved a diagnosis instead of deleting one, which is the transferable part.** The
+> `UNVERIFIED` marker on *issuing an actual credential* used to blame the missing JWK Set — and that was
+> **hiding the fact that nothing else was missing**. Issuance now needs only a **wallet this repo does not
+> contain**. *"Runnable, with a client we do not have"* is a weaker claim than *"blocked by configuration"* and
+> a far more useful one: it tells a reader what to build rather than what to switch on. A blocked marker hides
+> everything behind it.
+
+*(The `service/update` refusal this entry used to describe still applies to any **new** write from this
+environment — reads succeed, which is how all of the above was probed.)*
 
 **P0's two operator actions are CLOSED — verified live 2026-08-14, not assumed.** They were carried as "still
 owed" and both had already resolved:
