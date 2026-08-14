@@ -303,6 +303,20 @@ instruction where the bank must later prove to a regulator exactly what the clie
 it because it sounds stronger.** Adopt it when you can name the dispute you are trying to settle and the
 party you would have to convince.
 
+**The signed-introspection leg has its own RFC, and this server serves it.** *JSON Web Token (JWT) Response
+for OAuth Token Introspection* — **RFC 9701**, Proposed Standard, **January 2025**. An RS asks for it with
+`Accept: application/token-introspection+jwt` and gets a signed JWT back instead of the plain JSON of RFC
+7662, so the AS's answer becomes evidence rather than a claim the RS repeats. Verified live here on
+2026-08-13: `typ: token-introspection+jwt`, `alg: RS256`, `kid: rsa-1`, carrying `iss`, `aud`, `iat` and
+`token_introspection`.
+
+> **Note the one thing the RFC does not tell you.** Authlete also requires **`rsUri`** in the request body,
+> and answers `[A404301]` without it. That is not gratuitous: `rsUri` becomes the **`aud`**, naming the
+> resource server that asked — and a signed statement addressed to nobody is not much use as evidence. This
+> server passes the 400 through rather than defaulting the value, because it cannot honestly guess which RS
+> is calling. **Vendor requirement, normative purpose** — the distinction this module keeps asking you to
+> make.
+
 ---
 
 ## Part 4 — Grant management
@@ -382,6 +396,7 @@ next authorization request will sail through with no prompt.
 | FAPI 2.0 Security Profile | OpenID Final | 22 Feb 2025 | The `shall` list; simpler than 1.0 |
 | FAPI 2.0 Attacker Model | OpenID Final | 22 Feb 2025 | Six attackers, three goals, explicit exclusions |
 | FAPI 2.0 Message Signing | OpenID Final | 25 Sep 2025 | Non-repudiation, when you can name the dispute |
+| RFC 9701 | Published RFC (Proposed Standard) | Jan 2025 | The signed-introspection leg — **live on this server** |
 | Grant Management for OAuth 2.0 (Draft) | **Internet-Draft ‑03** | 9 May 2023 | `grant_id`, lifecycle actions, query/revoke API |
 
 ---

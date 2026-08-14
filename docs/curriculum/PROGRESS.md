@@ -128,6 +128,75 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-14: the audit's last two fetches, and both went against the audit** (below)
 - [x] **2026-08-14 — CU-W1 proven: Authlete REPLACES, and the defect was never data loss** (below)
 - [x] **2026-08-14 — TIER 3 COMPLETE: all 19 decision records ruled, and none of the remaining ones needed a write** (below)
+- [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
+
+### 2026-08-14 — T2-5: the provenance pass, and what a fetched header actually settled
+
+**Why this matters to a future session: only T2-17 is left in the whole remediation plan.** T2-5 was one
+`SPEC-INVENTORY.md` pass over 15 IDs, and its entire point was *citation provenance* — every row it touched now
+records **the URL fetched and the header line that URL returned**, in a new **Provenance** section at the end of
+the file. A status you cannot trace is the one defect that file exists to prevent, and it had been committed
+there twice.
+
+**The coverage sweep came before any fetch, and it changed the work.** Five of fifteen were already shipped —
+but **not the five the plan predicted**. HSK-W2, PS-W1 and §2.1's TLS outcome were done *and marked*. **NSSO-W3
+and ATTR-W3 were done and never marked**, so they read as open work in the only place a planner looks. And
+FCL-W2 / SM-W2, flagged as *"check against DR-08"*, were genuinely **open** — DR-08 ruled the decision and
+deliberately left its documentation here.
+
+> **"Shipped inside another item" and "recorded as shipped" are different facts, and only the second is
+> visible.** Two of fifteen sat in that gap. Marking them cost nothing; re-fetching them would have spent
+> budgeted fetches on settled questions.
+
+**A sixteenth ID was missing from the list entirely.** **FCL-W3** — the Front-Channel Logout row's
+implementation column — is named only in DR-08 and its own finding. It was the *worse* half of the pair: the
+column read *"logout routes"* for a mechanism this repo does not serve (`frontchannel_logout_supported` is
+ABSENT, and no `frontchannel*` symbol exists in `server/src`). **An undated row that also claims an
+implementation reads as a supported feature nobody got round to citing.** It was neither.
+
+**Four criteria were stale, in four different ways** — the pattern every Tier 2 item has now shown:
+
+| Criterion | What was wrong with it |
+|---|---|
+| **HAIP-W2**, **MDL-W3** | Neither targets `SPEC-INVENTORY.md`. Both rows are in `audit/01-spec-matrix.md` §3, and **neither subject appears anywhere in `docs/`** — so 13 of 15, not 15 of 15, were "one `SPEC-INVENTORY.md` pass" |
+| **ATT-W1** | Asked for a row saying the method is *"advertised but unconfigured"*. **T1-5/DR-07 withdrew it** on 2026-08-12, so the row says *withdrawn* — **a criterion falsified by a fix, not by drift** |
+| **FED-W3** | *"Removes the superseding claim unless it can be sourced"* — it **can** be sourced, and the version was never the problem |
+
+**The one substantive correction: *"OpenID Federation 1.0, superseded by 1.1"* was misleading, and both dates
+were right.** Fetching told a different story than the dates did. **1.1 is a split, not an upgrade** — its own
+abstract says it *"introduces no new functionality not present in OpenID Federation 1.0"* — and the
+protocol-specific half went to a **separate Final of the same date**, *OpenID Federation for OpenID Connect
+1.1*, which now has its own row.
+
+> **This repo's two federation surfaces are in different documents**, which is what makes the shorthand
+> dangerous rather than merely imprecise. The entity configuration endpoint is **1.1 §9**; Explicit
+> Registration — `POST /api/federation/registration` — is the **Connect** document's. A reviewer told to
+> "cite 1.1" for a registration requirement would search a document that does not contain it, find nothing,
+> and reasonably conclude the requirement had been dropped. **When a specification splits, "superseded by"
+> stops being a usable summary — name the half.**
+
+**Three rows were confirmed rather than corrected**, and the Provenance table says so: RFC 9901's Nov 2025,
+OID4VP's 9 Jul 2025, and both Federation dates. **A pass that reports only errors cannot distinguish *checked
+and correct* from *never checked*** — which is the failure mode this whole item exists to end.
+
+**Two smaller results.** The file's own `-final.html` trap was **tested twice and did not fire** (Front-Channel
+Logout and Federation 1.1 serve identical documents at both URLs), so the rule stays *fetch both and take the
+later* rather than *always use one*. And all three OIDC logout specifications turn out to share a publication
+date — **12 September 2022** — which explains why three missing dates looked like three unrelated small gaps
+instead of one family nobody had dated.
+
+> **The honest failure is left visible, and it is the mdoc row.** `iso.org/standard/69084.html` returns
+> **HTTP 403** to an automated fetch and the standard is paywalled regardless, so **no header line exists to
+> record**. The row says exactly that; the identifier and title come from the ISO catalogue listing and are
+> **labelled a secondary source**. That is the third option against the two dishonest ones — dropping the row,
+> or presenting a secondary source as a header — and it is the concrete evidence **MDL-W2** needs, which stays
+> open.
+
+**New rows created:** RFC 9701 (§4, beneath RFC 7662 — the same question in a different envelope), CIMD draft-02
+(§4), attestation-based client auth draft-10 (§5, beside RFC 8705), Federation for OpenID Connect 1.1 (§9b),
+and a real Session Management row replacing a footnote. **9701-W4's second half landed too**: Module 10's
+Message Signing section now names RFC 9701, carrying the `rsUri` requirement as *vendor requirement, normative
+purpose* — Authlete demands it, the RFC does not, and it exists because `rsUri` becomes the **`aud`**.
 
 ### 2026-08-14 — Tier 3: all 19 decision records ruled
 

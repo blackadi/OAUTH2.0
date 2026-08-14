@@ -16,6 +16,9 @@ table and as a map from "what the spec says" to "what runs here."
     and consulted date are given so you know exactly what was read.
 - **Verified:** every row was checked against its primary source (rfc-editor.org / datatracker.ietf.org /
   openid.net) on **2026-07-27**. Where a source disagreed with prior assumptions, the source won.
+- **Provenance:** rows touched on **2026-08-14** additionally record *the URL fetched and the header line it
+  said* — see **Provenance** at the end of this file. A status or date that cannot be traced to a fetched
+  header is the one defect this file exists to prevent, and it has been committed here twice.
 - **Authlete caveat:** the "Where in this repo" column points at code that delegates to the Authlete API.
   Much OAuth/OIDC behavior is enforced *inside Authlete*, controlled by service flags (see `AGENTS.md`), not
   in this server's TypeScript. Modules flag every place a behavior is Authlete's doing rather than a
@@ -105,6 +108,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
 | RFC 7662 | OAuth 2.0 Token Introspection | Published RFC | Oct 2015 | RS asks AS "is this token active?" | Validating opaque/reference tokens | `introspection.routes.ts`, `introspection.service.ts` |
+| **RFC 9701** | JSON Web Token (JWT) Response for OAuth Token Introspection | Published RFC (Proposed Standard) | **Jan 2025** | The introspection response as a **signed JWT**, requested with `Accept: application/token-introspection+jwt` | Non-repudiable introspection — the RS can prove later what the AS said about a token. The signed-introspection leg of FAPI 2.0 Message Signing | **Live** — `introspection-standard.controller.ts` (`case "JWT"`), `introspection.service.ts` (forwards `httpAcceptHeader`). See the note below |
 | RFC 7009 | OAuth 2.0 Token Revocation | Published RFC | Aug 2013 | Client revokes an access/refresh token | Logout/compromise response | `revocation.routes.ts`, `revocation.service.ts` |
 | RFC 8414 | OAuth 2.0 Authorization Server Metadata | Published RFC | Jun 2018 | `/.well-known/oauth-authorization-server` | Client auto-config | `oauth-as-metadata.routes.ts` (root); see path quirk below |
 | RFC 9728 | OAuth 2.0 Protected Resource Metadata | Published RFC | Apr 2025 | `/.well-known/oauth-protected-resource` | RS advertises its AS(es)/scopes; MCP discovery | **Served** at true root — `protected-resource-metadata.routes.ts` + controller (added 2026-07-28); also consumed client-side (`mcp.service.ts`) |
@@ -112,6 +116,24 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | RFC 7592 | OAuth 2.0 Dynamic Client Registration Management Protocol | Published RFC (**Experimental** — *not* Standards Track) | Jul 2015 | Read/update/delete a registration | Lifecycle of DCR clients | `dcr.routes.ts` — **Authlete's management APIs are wired; RFC 7592's HTTP surface is not served.** See the note below |
 | RFC 9068 | JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens | Published RFC | Oct 2021 | Structured `at+jwt` access tokens | Interop for self-contained ATs | JWT ATs via Authlete |
 | RFC 8707 | Resource Indicators for OAuth 2.0 | Published RFC | Feb 2020 | `resource` parameter | Audience-restricting tokens per API | MCP `resource` (RFC 8707) in `mcp.service.ts`; Authlete |
+| draft-ietf-oauth-client-id-metadata-document | OAuth Client ID Metadata Document (CIMD) | **Active Internet-Draft** — revision **‑02**, dated **6 Jul 2026**, expires 7 Jan 2027 | consulted **2026-08-14** | An HTTPS URL as `client_id`; the AS fetches client metadata from that URL | Client identification with no prior registration — the mechanism MCP clients rely on | **Enabled on this service since 2026-08-14** (DR-05). Authlete performs the fetch entirely server-side; no endpoint or client code here. Reported by `fapi.controller.ts` as `cimdSupported` |
+
+> **RFC 9701 is reachable here, and the parameter that makes it reachable is not in the RFC.** Sending
+> `Accept: application/token-introspection+jwt` to `/api/introspection/standard` returns a signed JWT — verified live
+> 2026-08-13: `typ: token-introspection+jwt`, `alg: RS256`, `kid: rsa-1`, claims `iss`, `aud`, `iat`,
+> `token_introspection`. **Authlete additionally requires `rsUri` in the request body**, without which it
+> answers `[A404301]`. That 400 is passed through deliberately: `rsUri` becomes the `aud` naming the calling
+> resource server, and this server has no honest way to guess it. Nor may it be sent unconditionally — a
+> present `rsUri` outside a token's audience values makes Authlete report `active: false`. **A vendor
+> requirement, not a normative one**, which is exactly the gap `CLAUDE.md` asks to be kept visible.
+>
+> **CIMD is cited at two different revisions by two different documents, and that is worth knowing before you
+> read either.** The row above is the IETF draft at **‑02**. The **MCP specification cites `-00`**, and
+> Authlete's support carries a **3.0.22 patch-level floor**. So "CIMD is supported" is three claims about
+> three different things — the draft revision, the profile's pinned revision, and the vendor's implementation
+> level — and they are not interchangeable. Draft-02 also **forbids following redirects** when fetching the
+> document; Authlete performs that fetch, so this deployment cannot verify the rule is honoured. Same
+> delegation as RFC 9449 §7.2 (`AGENTS.md`).
 
 > **DCR's two RFCs do not have the same status.** RFC 7591 (registration) is Standards Track; RFC 7592
 > (the management lifecycle) is **Experimental**, and says so in its own header: *"not an Internet Standards
@@ -156,6 +178,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | RFC 9207 | OAuth 2.0 Authorization Server Issuer Identification | Published RFC | Mar 2022 | `iss` in the authorization response | Mix-up attacks (wrong-AS confusion) | Authlete `issSuppressed=false` (`AGENTS.md`) |
 | RFC 8705 | OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens | Published RFC | Feb 2020 | `tls_client_auth`/`self_signed_tls_client_auth`; `cnf`/`x5t#S256` | Sender-constrained tokens via client cert | **THIN** — only registration flags today; Module 05/10 implements (gated) |
 | RFC 9449 | OAuth 2.0 Demonstrating Proof of Possession (DPoP) | Published RFC | Sep 2023 | Per-request proof-of-possession JWT (`jkt`, `ath`, nonce) | Bearer-token theft/replay | `client/src/services/dpop.service.ts`, `server/src/utils/dpop.ts`; `docs/FAPI-TUTORIAL.md` |
+| draft-ietf-oauth-attestation-based-client-auth | OAuth 2.0 Attestation-Based Client Authentication | **Active Internet-Draft** — revision **‑10**, dated **6 Jul 2026**, expires 7 Jan 2027; intended status Standards Track | consulted **2026-08-14** | `OAuth-Client-Attestation` + `-PoP` headers carrying a key-bound attestation | Client authentication for app instances that cannot hold a registered secret | **Withdrawn here, deliberately** — `ATTEST_JWT_CLIENT_AUTH` was removed from the service 2026-08-12 (DR-07) and no `challenge_endpoint` is advertised. The SDK cites this draft on `TokenRequest` and `PushedAuthorizationRequest` |
 
 ## 6. Machine & delegated grants (Module 06)
 
@@ -202,15 +225,24 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | OIDC Core 1.0 | OpenID Connect Core 1.0 incorporating errata set 2 | OpenID Final (errata set 3 in draft) | errata set 2, Dec 2023 | ID token, `nonce`, UserInfo, hybrid flow, `acr`/`amr` | Authentication on top of OAuth | ID token/UserInfo/hybrid via Authlete; `userinfo.*` |
 | OIDC Discovery 1.0 | OpenID Connect Discovery 1.0 incorporating errata set 2 | OpenID Final | errata set 2 | `/.well-known/openid-configuration` | OP metadata discovery | `discovery.routes.ts`, `discovery.service.ts` |
 | OIDC RP-Initiated Logout 1.0 | OpenID Connect RP-Initiated Logout 1.0 | OpenID Final | **12 Sep 2022** | `end_session_endpoint` flow | RP-triggered logout | logout routes; `LogoutSection.tsx` |
-| OIDC Front-Channel Logout 1.0 | OpenID Connect Front-Channel Logout 1.0 | OpenID Final | *(see note)* | iframe-based multi-RP logout | Browser-mediated logout | logout routes |
+| OIDC Front-Channel Logout 1.0 | OpenID Connect Front-Channel Logout 1.0 | OpenID Final | **12 Sep 2022** | `frontchannel_logout_uri` rendered in an `<iframe>` per RP, so each RP clears its own login state | Browser-mediated multi-RP logout without an OP iframe on every RP page | **Not implemented** — `frontchannel_logout_supported` is ABSENT and no `frontchannel*` symbol exists in `server/src`. Declined, DR-08 |
 | OIDC Back-Channel Logout 1.0 | OpenID Connect Back-Channel Logout 1.0 **incorporating errata set 1** | OpenID Final | **15 Dec 2023** | Server-to-server logout token; `events` claim; `nonce` **MUST NOT** be present (§2.4) | Logout without the browser | `backchannel-logout.service.ts`; `docs/BACKCHANNEL-LOGOUT-TUTORIAL.md` |
-| OIDC Session Management 1.0 | OpenID Connect Session Management 1.0 | OpenID Final | *(see note)* | RP polls OP session state | Session-change detection | conceptual |
+| OIDC Session Management 1.0 | OpenID Connect Session Management 1.0 | OpenID Final | **12 Sep 2022** | `check_session_iframe` — the RP polls the OP's session state through the browser, with no repeated authentication request | Detecting that the End-User's OP session ended without asking the OP on every page view | **Not implemented** — `check_session_iframe` is ABSENT. Declined, DR-08 |
 
-> **Note on the two undated logout rows.** Front-Channel Logout 1.0 and Session Management 1.0 were confirmed
-> **Final** via the OpenID Foundation specifications index rather than by fetching each document, so their
-> publication dates are **not yet verified to this file's standard** and are marked *(see note)* rather than
-> guessed. Everything else in this table has been fetched individually. If you need either date for a
-> citation, fetch the document — do not copy a date from a secondary source.
+> **The two undated logout rows are dated, and the answer was the same date for both** (2026-08-14). Both
+> documents were fetched individually — see the provenance table at the end of this file — and both are
+> **Final, 12 September 2022**, the same day as RP-Initiated Logout. So all three OIDC logout specifications
+> published together, which is worth knowing: they were designed as one family covering the three channels
+> (redirect, iframe, back-channel), and treating them as independently-versioned documents is what made the
+> missing dates look unremarkable for as long as they did.
+>
+> **Both rows now read *"not implemented"* rather than *"logout routes"*, and that was a second defect hiding
+> under the first.** The implementation column pointed at this repo's logout routes for a specification whose
+> mechanism this repo does not serve — `frontchannel_logout_supported` and `check_session_iframe` are both
+> ABSENT from the discovery document. A row that is undated *and* claims an implementation reads as a
+> supported feature nobody got round to citing; it was neither. Declined together in **DR-08**, because both
+> are blocked on the same missing thing — **durable OP session identity** — as are back-channel logout's `sid`
+> mode and Native SSO's `sid`. Build it for any one and all four reopen.
 >
 > **Back-Channel Logout's exact title includes "incorporating errata set 1."** The errata suffix is part of
 > the title, exactly as with JARM and OIDC Core, and dropping it is the same error this file corrected for
@@ -233,12 +265,31 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | Identifier | Exact title | Status / type | Date | What it adds | What it fixes / enables | Where in this repo |
 |---|---|---|---|---|---|---|
 | OIDC Identity Assurance 1.0 | OpenID Connect for Identity Assurance 1.0 | OpenID Final | **1 Oct 2024** (errata set 1 revision dated **1 Jul 2026**) | `verified_claims` = `verification` + `claims`; trust frameworks, evidence | Provenance for identity claims — *accountability, not cryptography* | conceptual (09b) |
-| **OpenID Federation 1.1** | OpenID Federation 1.1 | OpenID **Final** | **5 May 2026** | Entity statements, trust chains, `authority_hints`, metadata policy — consolidates the protocol-independent half of 1.0 | Multilateral federation at scale (replaces bilateral registration) | `federation.routes.ts`, `federation.service.ts` — **configuration endpoint is broken**, see Module 09b |
-| OpenID Federation 1.0 | OpenID Federation 1.0 | OpenID Final — **superseded by 1.1** | 17 Feb 2026 | *(predecessor)* | — | cite 1.1 unless an ecosystem pins 1.0 |
-| RFC 9901 | Selective Disclosure for JSON Web Tokens | Published RFC (Std Track) | Nov 2025 | Salted-digest selective disclosure; `_sd`, `_sd_alg`, Disclosures, KB-JWT | Minimal disclosure; a signature that survives claim removal | **not in `server/`** — taught locally via `scripts/sd-jwt.mjs` (09b) |
+| **OpenID Federation 1.1** | OpenID Federation 1.1 | OpenID **Final** | **5 May 2026** | The **protocol-independent** half: entity statements, trust chains, `authority_hints`, metadata policy, trust marks, federation endpoints | Multilateral federation at scale (replaces bilateral registration) | `federation.routes.ts`, `federation.service.ts` — the **entity configuration endpoint** is this document's §9. Blocked on a federation JWK Set, see Module 09b |
+| **OpenID Federation for OpenID Connect 1.1** | OpenID Federation for OpenID Connect 1.1 | OpenID Final (Standards Track) | **5 May 2026** | The **protocol-specific** half: entity type identifiers, RP/OP/AS metadata, Automatic and Explicit Registration, federation client authentication | The OIDC/OAuth application layer on top of the federation foundation | `POST /api/federation/registration` (Explicit Registration) is **this** document's, not 1.1's |
+| OpenID Federation 1.0 | OpenID Federation 1.0 | OpenID Final — **split into the two 1.1 documents above** | 17 Feb 2026 | *(predecessor — contained both halves)* | — | see the note below before citing "1.1" |
+| RFC 9901 | Selective Disclosure for JSON Web Tokens | Published RFC (Proposed Standard) | **Nov 2025** | Salted-digest selective disclosure; `_sd`, `_sd_alg`, Disclosures, KB-JWT | Minimal disclosure; a signature that survives claim removal | **No AS obligations at all** — RFC 9901's roles are Issuer, Holder and Verifier, and an authorization server is none of them unless it issues credentials under OID4VCI. Not absent from `server/`; *inapplicable* to it. Taught locally via `scripts/sd-jwt.mjs` (09b) |
 | draft-ietf-oauth-sd-jwt-vc | SD-JWT-based Verifiable Digital Credentials (SD-JWT VC) | **Active Internet-Draft** (‑17, dated 6 Jul 2026; expires 7 Jan 2027) | consulted 2026-07-28 | `vct` claim; media type `application/dc+sd-jwt` (was `vc+sd-jwt`) | Type semantics on top of RFC 9901 | conceptual (09b) |
 | OID4VCI 1.0 | OpenID for Verifiable Credential Issuance 1.0 | OpenID Final | **16 Sep 2025** | Credential offer, pre-authorized code grant, `tx_code`, credential endpoint | Issuing VCs into a wallet | `vci.routes.ts`; `.well-known/openid-credential-issuer`; `VciSection.tsx` — **enabled on this service since 2026-08-14** (DR-03); the metadata document is conformant, but the credential issuer has no JWK Set, so `/vci/jwks` and `/vci/jwtissuer` still fail |
-| OID4VP 1.0 | OpenID for Verifiable Presentations 1.0 | OpenID Final | **9 Jul 2025** | `dcql_query`, REQUIRED fresh `nonce`, `vp_token`, `direct_post` | Presenting VCs; supplies the `nonce`/`aud` that RFC 9901 key binding consumes | conceptual (09b) |
+| OID4VP 1.0 | OpenID for Verifiable Presentations 1.0 | OpenID Final | **9 Jul 2025** | `dcql_query`, REQUIRED fresh `nonce`, `vp_token`, `direct_post` | Presenting VCs; supplies the `nonce`/`aud` that RFC 9901 key binding consumes | **No AS obligations at all** — the protocol's parties are the **Wallet** and the **Verifier** (an OAuth *client*), with the Credential Issuer appearing only as whoever issued the credential being shown. This component is none of them. Not unbuilt; *inapplicable* (DR-13). Conceptual, 09b |
+
+> ### "Superseded by 1.1" was too simple, and citing 1.1 alone will send a reader to the wrong document
+>
+> **Corrected 2026-08-14 (FED-W3).** This file used to carry one 1.1 row and mark 1.0 *"superseded by 1.1 —
+> cite 1.1 unless an ecosystem pins 1.0."* The version and date were right. **The relationship was not.**
+>
+> On 5 May 2026 the OpenID Foundation published **two** Final documents, and between them they replace 1.0:
+> **OpenID Federation 1.1** (protocol-independent) and **OpenID Federation for OpenID Connect 1.1**
+> (protocol-specific). Both say, in their own abstracts, that they *"introduce no new functionality not
+> present in OpenID Federation 1.0"* — so **1.1 is a split, not an upgrade**. Nothing changed except which
+> document a requirement lives in.
+>
+> **That is precisely why the shorthand is dangerous.** This repo has two federation surfaces and they now sit
+> in *different documents*: the entity configuration endpoint is **1.1 §9**, while Explicit Registration —
+> `POST /api/federation/registration` — is in **Federation for OpenID Connect 1.1**. A reviewer told to
+> "cite 1.1" for a registration requirement would search a document that does not contain it, find nothing,
+> and reasonably conclude the requirement was dropped. **When a specification splits, "superseded by" stops
+> being a usable summary**; name the half.
 
 ## 10. FAPI & grant management (Module 10)
 
@@ -269,8 +320,8 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | Dedicated resource server endpoint | RFC 6750 | None; use UserInfo + Introspection as RS stand-ins | Teach with existing endpoints |
 | SD-JWT | RFC 9901 | Absent from `server/` and `client/` — and does not need to be there; it is pure JOSE | **Taught locally** with `scripts/sd-jwt.mjs` (issue / present / verify + §7.1 trace). No source change proposed |
 | OID4VCI | OID4VCI 1.0 | Nine endpoints exist and delegate to Authlete. **Verifiable credentials were enabled 2026-08-14 (DR-03) and a credential-issuer JWK Set was set the same day (VCI-W6).** `/vci/metadata` returns a conformant §12.2.4 document, `offer/create` answers `A366001 CREATED`, and `/vci/jwks` + `/vci/jwtissuer` now answer **200** — publishing the **public half only**, `d` absent, verified rather than assumed. **These three endpoints have given three different answers in three days**: `A364301`/`A416301`/`A402301` (`NOT_FOUND` — feature off) → `A403201`/`A417202` (`INTERNAL_SERVER_ERROR` — on, no key) → `200`. Each transition named a different missing value, which is the argument for reading vendor codes rather than statuses | Module 09b verifies the metadata document, all three states, that `/vci/jwks` leaks no private key member, and that the deferred path validates its access token (`A375304`). **Issuance itself still needs a wallet this repo does not contain** — no longer a configuration gap |
-| OpenID Federation entity configuration | OpenID Federation **1.1** §9 *("Obtaining Federation Entity Configuration Information" — same number in 1.0)* | Endpoint exists at the correct well-known path but is **broken** — the SDK call omits the request body | Diagnosed as Module 09b's Tier-3 finding; **not fixed** (server source) |
-| OID4VP | OID4VP 1.0 | No verifier implementation | Taught from the spec; the key-binding half is exercised locally via `sd-jwt.mjs` |
+| OpenID Federation entity configuration | OpenID Federation **1.1** §9 *("Obtaining Federation Entity Configuration Information" — same number in 1.0; protocol-independent, so this half is genuinely 1.1's)* | Endpoint exists at the correct well-known path. The SDK call no longer omits the request body (T1-16), so the failure is now honest: Authlete answers `[A316201]` because the service has **no federation JWK Set** | **Blocked on a configuration decision**, not on code — see FED-W2 |
+| OID4VP | OID4VP 1.0 | **Not a gap.** The roles are Wallet and Verifier; an AS is neither, so there is nothing here to build | Taught from the spec; the key-binding half is exercised locally via `sd-jwt.mjs` |
 
 ## Vendor features — implemented here, defined by no specification
 
@@ -296,6 +347,55 @@ interoperability guarantee, no second implementation, and no normative text to a
 > **That inverts the usual advice.** Everywhere else in this curriculum, discovery is the trustworthy source and
 > hardcoding is the mistake. Here, conforming to discovery is what loses you the capability — which is why
 > Module 09a's taxonomy needed a fourth term rather than a footnote.
+
+---
+
+## Provenance — the URL fetched and the header line it said
+
+**Added 2026-08-14 (FED-W4).** Every row below was changed or created in one pass, and each records **the URL
+actually fetched and what its header block said**. This exists because the audit found that *"where a status,
+date or version was taken from recall or from a sibling document rather than a fetched header, it was
+wrong"* — Native SSO's date, Federation's version, CIMD's revision, an absent attestation row, and, in this
+very file, RFC 9864's date and scope. **A citation you cannot trace is a citation you cannot check.**
+
+| Row | URL fetched | Header line read | Outcome |
+|---|---|---|---|
+| RFC 9701 | `rfc-editor.org/info/rfc9701` | *"JSON Web Token (JWT) Response for OAuth Token Introspection"*, Proposed Standard, **January 2025** | **New row.** No obsoletes/updates |
+| RFC 9901 | `datatracker.ietf.org/doc/rfc9901/` | *"Selective Disclosure for JSON Web Tokens"*, **RFC – Proposed Standard (November 2025)**, IETF stream | Date **confirmed**; "Std Track" sharpened to Proposed Standard |
+| CIMD | `datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/` | *"OAuth Client ID Metadata Document"*, Active Internet-Draft, revision **02**, **6 July 2026**, expires 7 Jan 2027 | **New row.** Revision matched the criterion |
+| Attestation-based client auth | `datatracker.ietf.org/doc/draft-ietf-oauth-attestation-based-client-auth/` | *"OAuth 2.0 Attestation-Based Client Authentication"*, Active Internet-Draft, revision **10**, **2026-07-06**, intended status Standards Track | **New row.** Revision matched |
+| Front-Channel Logout 1.0 | `openid.net/specs/openid-connect-frontchannel-1_0.html` **and** `…-final.html` | *"OpenID Connect Front-Channel Logout 1.0"*, **Final**, **12 September 2022** — identical at both URLs | Date filled; implementation column corrected |
+| Session Management 1.0 | `openid.net/specs/openid-connect-session-1_0.html` | *"OpenID Connect Session Management 1.0"*, **Final**, **12 September 2022** | Date filled; row rebuilt from a footnote |
+| OpenID Federation 1.1 | `openid.net/specs/openid-federation-1_1.html` **and** `…-final.html` | *"OpenID Federation 1.1"*, **Final**, **5 May 2026** — identical at both URLs | Version/date **confirmed**; the *"superseded"* framing corrected |
+| Federation for OpenID Connect 1.1 | `openid.net/specs/openid-federation-connect-1_1.html` | *"OpenID Federation for OpenID Connect 1.1"*, Standards Track, **5 May 2026** | **New row** — the half nobody had noticed was separate |
+| OpenID Federation 1.0 | `openid.net/specs/openid-federation-1_0.html` | *"OpenID Federation 1.0"*, **Final**, **17 February 2026** | Date **confirmed**; relationship to 1.1 rewritten |
+| HAIP 1.0 | `openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html` | *"OpenID4VC High Assurance Interoperability Profile 1.0"*, **Final**, **24 December 2025** | Applied to `audit/01-spec-matrix.md` §3 — see below |
+| OID4VP 1.0 | `openid.net/specs/openid-4-verifiable-presentations-1_0.html` | *"OpenID for Verifiable Presentations 1.0"*, **Final**, **9 July 2025**; roles **Wallet**, **Verifier**, Credential Issuer | Date **confirmed**; no-obligations clause added |
+| ISO/IEC 18013-5 (mdoc) | `iso.org/standard/69084.html` | **NOT FETCHED — HTTP 403.** No header line was read | See the note below. Nothing is cited from it |
+
+> **Four things this table records that a "verified ✅" stamp could not.**
+>
+> **1. Two rows were confirmed, not corrected — and that is a result.** RFC 9901's November 2025 and OID4VP's
+> 9 July 2025 were already right. A provenance pass that only surfaced errors would tell you nothing about the
+> rows it left alone; this one distinguishes *checked and correct* from *never checked*.
+>
+> **2. The `-final.html` trap was tested twice and did not fire.** Front-Channel Logout and Federation 1.1
+> serve the same document at both URLs. The trap is real — it caught JARM and Identity Assurance — but it is
+> not universal, which is why the rule is *fetch both and take the later* rather than *always use one*.
+>
+> **3. The mdoc row is the honest failure, and it is left visible on purpose.** `iso.org` returns **HTTP 403**
+> to an automated fetch, and the standard's text is paywalled regardless. So **no header line exists to
+> record**, and nothing in this repo cites the document's content — deliberately. The identifier and title
+> (*ISO/IEC 18013-5:2021, "Personal identification — ISO-compliant driving licence — Part 5: Mobile driving
+> licence (mDL) application"*) come from the **ISO catalogue listing, a secondary source, and are labelled as
+> such**. This is the one place where this curriculum's *"verified against the primary source"* promise
+> **cannot** be kept. Recording the 403 is the alternative to the two dishonest options: dropping the row, or
+> citing a secondary source as though it were a header. **MDL-W2 — carving a paywalled-standard category into
+> `docs/curriculum/README.md`'s verification promise — is still open**, and this row is its evidence.
+>
+> **4. Two of the fifteen rows were not in this file at all.** HAIP and mdoc live in `audit/01-spec-matrix.md`
+> §3, not here — the work item called the whole batch a "`SPEC-INVENTORY.md` pass", and for thirteen of
+> fifteen it was. **Check which table a row is actually in before planning an edit to it.**
 
 **§10 corrections, 2026-07-28.** Three errors were found and fixed while writing Module 10: FAPI 2.0 Message
 Signing was dated "approved 2025-07-29" and is in fact **published 25 Sep 2025**; the FAPI 1.0 Parts had no

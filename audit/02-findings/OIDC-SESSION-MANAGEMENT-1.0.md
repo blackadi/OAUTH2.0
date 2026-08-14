@@ -86,7 +86,7 @@ Recommend `OUT_OF_SCOPE` with a decision record:
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | SM-W1 | Write the decision record | S | Dated; states that the mechanism is superseded in practice by `prompt=none` and by browser third-party-cookie restrictions **without** implying the document is anything other than Final; names durable OP session identity as the shared prerequisite; names the revisit trigger. Filed in `audit/05-decision-records.md`. |
-| SM-W2 | Give it a proper `SPEC-INVENTORY.md` row | S | Title, OpenID Final, **12 Sep 2022**, mechanism, threat, and an implementation column reading "not implemented — see decision record", replacing the footnote-only treatment. |
+| SM-W2 | Give it a proper `SPEC-INVENTORY.md` row | S | ✅ **DONE 2026-08-14 (T2-5).** Fetched `openid.net/specs/openid-connect-session-1_0.html`; header reads *"OpenID Connect Session Management 1.0"*, **Final**, **12 September 2022**. All four elements the criterion asked for are on the row: title, status/date, **mechanism** (`check_session_iframe` — the RP polls OP session state through the browser with no repeated authentication request, taken from the abstract) and **implementation** (*"Not implemented — `check_session_iframe` ABSENT. Declined, DR-08"*). The footnote-only treatment is gone. |
 | SM-W3 | Fold into the Phase 4 shared-prerequisite item | S | Same item as **FCL-W4**. |
 
 **Ordering.** All documentation; no code proposed. SM-W2 pairs with **FCL-W2** as one `SPEC-INVENTORY.md` edit.

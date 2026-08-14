@@ -67,8 +67,9 @@ decline with no trigger is a dead end rather than a decision.
 > prerequisite, durable OP session identity. Building it for any one consumer reopens all four at once. Treating
 > them as independent was the mistake Phase 2 corrected, and it is the mistake most likely to recur.
 >
-> **What is left is not decisions.** Two Tier 2 documentation batches remain (**T2-5**, **T2-17**); DR-08 owes
-> three of its consequences to T2-5. No record is blocked on either.
+> **What is left is not decisions.** One Tier 2 documentation batch remains (**T2-17**). **T2-5 shipped
+> 2026-08-14 and DR-08's three documentation consequences are discharged with it**; DR-13's role list and
+> DR-14/DR-15's inventory rows were applied in the same pass. No record is blocked on anything.
 
 ---
 
@@ -355,9 +356,15 @@ records must not imply otherwise — the reason is mechanism, not status.
 **Measured gap:** `check_session_iframe` **ABSENT**; `frontchannel_logout_supported` **ABSENT**;
 `backchannel_logout_supported` **ABSENT**.
 
-**Documentation consequences.** FCL-W2 (date the row 12 Sep 2022, drop the *(see note)* qualifier), FCL-W3 (the
-implementation column reads *"not implemented"*, not *"logout routes"*), SM-W2 (a real row replacing the
-footnote-only treatment). All inside T2-5.
+**Documentation consequences — ✅ all three discharged 2026-08-14 (T2-5).** FCL-W2 (date the row 12 Sep 2022,
+drop the *(see note)* qualifier), FCL-W3 (the implementation column reads *"not implemented"*, not *"logout
+routes"*), SM-W2 (a real row replacing the footnote-only treatment). Both dates were **fetched, not assumed**,
+and came back **identical — 12 September 2022** for Front-Channel Logout, Session Management *and* RP-Initiated
+Logout. **That shared date is the part worth keeping**: the three logout specifications were published as one
+family covering the three channels, which is why the missing dates looked like three unrelated small gaps
+rather than one. **Note FCL-W3 was absent from cluster 29's list of fifteen** — this record was its only
+pointer, which is an argument for stating documentation consequences inside the decision record even when a
+work item already exists.
 
 **Revisit trigger.** Durable OP session identity is built for **any** of its four consumers — at which point
 this record is reopened for all four at once. That is the point of recording them together.
@@ -555,6 +562,14 @@ edited without a plan"* — the same evidence that produced this record.
 
 **Decision.** No implementation. **An authorization server has no OID4VP obligations at all** — the specification's
 roles are **Wallet** and **Verifier**, and this component is neither.
+
+> **One factual correction, made 2026-08-14 when the document was fetched for VP-W2; the ruling is unaffected.**
+> OID4VP 1.0 defines **three** roles, not two — Wallet, Verifier and **Credential Issuer** — plus the Holder as
+> the person controlling the wallet. The Credential Issuer appears only as whoever issued the credential being
+> presented; it carries no OID4VP protocol obligations, so "this component is none of them" still holds and
+> holds for the same reason. The row in `SPEC-INVENTORY.md` states three rather than repeating a two-role claim
+> the source does not make. **Recorded because a decision that rests on a role list should be checkable against
+> the list**, and this one was written from recall.
 
 **Why the distinction matters.** `SPEC-INVENTORY.md`'s row currently reads as an unbuilt feature. It is not
 unbuilt; it is *inapplicable*. That is the same correction RFC 9901 needs (DR-19), and getting it wrong inflates

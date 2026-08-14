@@ -91,7 +91,7 @@ grounds that this entry "covered" RFC 9901.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 9901-W1 | State in the inventory row that an AS has no RFC 9901 obligations | S | One clause: the roles are Issuer / Holder / Verifier, and this component is none of them unless it issues credentials under OID4VCI. Prevents the row reading as an unimplemented feature. |
+| 9901-W1 | State in the inventory row that an AS has no RFC 9901 obligations | S | ✅ **DONE 2026-08-14 (T2-5).** Clause applied verbatim — roles Issuer / Holder / Verifier, this component none of them unless it issues credentials under OID4VCI, and the row now says *"Not absent from `server/`; **inapplicable** to it"*, which is the distinction the item exists to draw. Provenance fetched while there: `datatracker.ietf.org/doc/rfc9901/` reads *"RFC – Proposed Standard (November 2025)"*, so **the date was already correct** and the vaguer *"Std Track"* label was sharpened to Proposed Standard. A row confirmed rather than corrected is still a result — it separates *checked* from *never checked*. |
 | 9901-W2 | Audit `sd-jwt.mjs` against §§4.2.3, 4.2.4 and 7.3 | M | **Phase 3 item.** Salt entropy ≥128 bits (§9.3), digests computed over the base64url-encoded disclosure string, `_sd_alg` set, and the verifier path recomputing digests rather than trusting them. Same standard as the DPoP client service. |
 | 9901-W3 | No implementation | — | Correct: there is nothing for an authorization server to implement. |
 | 9901-W4 | No decision record | — | Deliberate departure — see the verdict reasoning above. Gate 4 to confirm. |
