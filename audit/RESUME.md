@@ -217,7 +217,28 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (10):** T2-4, T2-5, T2-8, T2-10, T2-11, T2-12, T2-14, T2-15, T2-16, T2-17.
+**Tier 2 remaining (9):** T2-4, T2-5, T2-8, T2-10, T2-12, T2-14, T2-15, T2-16, T2-17.
+
+**T2-11 shipped 2026-08-14 — and "everywhere" was five locations, not the plan's four.**
+`STEP-UP-AUTH-TUTORIAL.md`'s Part 1 diagram arrow and both Part 5 transcripts, Module 09a's *"❌ 403 for a
+step-up requirement"* entry, and **`docs/DATA-FLOWS.md`**, which drew `RS-->>C: 403 Forbidden` carrying the
+challenge and had never been checked for it — recorded as the new **9470-W7**. It was missed because F-1
+searched the tutorial, batch 3c searched the nine tutorials and batch 3b searched the modules, and a top-level
+architecture document that redraws every flow in the repo is none of those three.
+
+> **The rule that finds the next one: a defect stated as *a status code on a particular arrow* recurs wherever
+> that arrow is drawn.** Grep the *shape* — `insufficient_user_authentication` beside a status — across `docs/`
+> rather than auditing document by document. Doing that also confirmed three places have it **right**:
+> `GLOSSARY.md` says 401, and `API.md` and `StepUpSection.tsx` describe the *introspection* 403, which is
+> correct.
+
+**No code changed, and that was the finding's own instruction.** `introspection.controller.ts`'s 403 is the
+**AS → resource server** response, where Authlete's action is `FORBIDDEN` and 403 is a defensible mapping for
+a vendor introspection API. RFC 9470 §3's challenge is the **resource server → client** response and must be
+**401** — and this repo implements no resource server, so it never sends one. The defect was always the
+*conflation*, which is why Part 5 now prints both responses side by side with a boundary table, and the
+client-action table is split: `acr_values`/`max_age` hang off the 401, `acr`/`auth_time` are labelled
+*Response 1 only*.
 **T2-15 and T2-17 are each one item lighter** — T2-1 took the tutorial halves of 9126-W6 and CIBA-W5, and
 `docs/README.md` gained the two index rows CUR-3c-W14 wants for `STEP-UP-AUTH-TUTORIAL.md` and
 `MCP-OAUTH-TUTORIAL.md` (the `TICKET-PARAMETER.md` / `AUDIT-PASS-A/B.md` / `CHANGELOG.md` rows are still owed).

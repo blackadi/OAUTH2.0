@@ -496,6 +496,17 @@ WWW-Authenticate: Bearer error="insufficient_user_authentication",
 It is an *authentication* problem, so 401 with `WWW-Authenticate` — the header is the whole mechanism, and 403
 has no place to put it.
 
+> **And this deployment is an instance of it, which is worth knowing before you run anything.**
+> `server/src/controllers/introspection.controller.ts` answers the `insufficient_user_authentication` case
+> with **403**. Be precise about what that is, because the reading matters: it is the **AS → resource server**
+> introspection response, where Authlete's action is `FORBIDDEN` and 403 is a defensible mapping for a vendor
+> API. It is **not** RFC 9470 §3's challenge, which is the **resource server → client** response and must be
+> 401. The two are separate messages with separate status codes, and this repo only implements the first —
+> **you write the second.** `docs/STEP-UP-AUTH-TUTORIAL.md` Part 5 conflated them until 2026-08-14, printing
+> the 403 under the heading *"an error conforming to RFC 9470"* with the client-action table hanging off it;
+> it now prints both, side by side, with the boundary drawn. So `curl` returning 403 here does not contradict
+> the ❌ above — but you cannot see that from the status code alone, which is the more general lesson.
+
 ---
 
 **❌ Encoding structure into scope strings**

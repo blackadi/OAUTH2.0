@@ -118,6 +118,53 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — the P1 configuration changes had broken three labs, and the grep rule could not have caught it** (below)
 - [x] **2026-08-14 — T1-11 + CU-W2: four endpoints stopped speaking the vendor's shape, and an admin PATCH stopped clearing what it did not name** (below)
 - [x] **2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention, and four of the audit's own "unreproducible" verdicts turned out to be stale** (below)
+- [x] **2026-08-14 — T2-11: the step-up challenge is a 401, in all five places it is drawn — one of which nobody had checked** (below)
+
+### 2026-08-14 — T2-11: the step-up challenge status, and a fifth carrier
+
+**Why this matters to a future session:** step-up authentication is a challenge/response protocol, and **most
+client libraries only inspect `WWW-Authenticate` on a 401**. Publish the challenge as 403 and a conformant
+client never parses it, never learns `acr_values`, and never re-authorizes — the loop *never starts*, and the
+user sees an unexplained failure instead of a re-authentication prompt. RFC 9470 §3's two examples are both
+`401 Unauthorized` and the section never mentions 403; RFC 6750 §3.1 already assigns 403 to
+`insufficient_scope`, while `insufficient_user_authentication` is about the authentication itself.
+
+**No code changed, and the finding said so.** `introspection.controller.ts` answers this case with **403**, and
+that is defensible: it is the **AS → resource server** introspection response, where Authlete's action is
+`FORBIDDEN`. §3's challenge is the **resource server → client** response — and this repo implements no
+resource server, so it never sends one. **The defect was always the conflation**, not the status code.
+
+`STEP-UP-AUTH-TUTORIAL.md` Part 5 now opens with a two-participant diagram and a six-row table separating
+**Response 1** (AS→RS, 403, this repo) from **Response 2** (RS→client, 401, *"your resource server"*). The
+*"What the client learns"* table is **split**, which the work item asked for and which matters: `acr_values`
+and `max_age` are §3's challenge parameters and hang off the 401; `acr` and `auth_time` are this AS's own
+additions and now sit in a second table labelled *Response 1 only*, because a client acting on them is
+trusting the AS's view of a token it already holds.
+
+> ### "Everywhere" was four locations in the plan and turned out to be five
+>
+> The fifth is **`docs/DATA-FLOWS.md`**, whose step-up sequence diagram drew `RS-->>C: 403 Forbidden` with the
+> challenge on it — the RS→client arrow that batch 3c had already identified as the *sharpest* form of this
+> defect, in a document nobody had searched. **Why three passes missed it:** the original finding searched
+> `STEP-UP-AUTH-TUTORIAL.md`, batch 3c searched the nine tutorials, batch 3b searched the modules, and a
+> top-level architecture document that redraws every flow in the repo is none of those three. Recorded as the
+> new **9470-W7**.
+>
+> **The rule that finds the next one: a defect stated as *a status code on a particular arrow* recurs wherever
+> that arrow is drawn.** Grep the *shape* — `insufficient_user_authentication` beside a status — across
+> `docs/`, rather than auditing document by document. Doing that also confirmed three places already have it
+> right: `GLOSSARY.md` says 401, and `API.md` and `StepUpSection.tsx` describe the *introspection* 403, which
+> is correct for what they document.
+
+**One consistency decision worth recording.** The tutorial uses `urn:mace:incommon:iap:silver` as its strong
+ACR in ten places, and this deployment registers `["pwd", "mfa"]`. Substituting `mfa` in only the transcripts
+would have left two vocabularies in one file, so `silver` stays as the illustration throughout and the
+substitution rule is stated **once** in the file's T2-1 box. Part 2's `acr_values_supported` block, which
+claimed to show this server's metadata, was corrected to the live `["pwd", "mfa"]` — with the reason `mfa` is
+registered *and deliberately unsatisfiable*: it is what makes the essential-ACR **refusal** path reachable.
+
+**Verification.** Documentation only — 1081 server tests / 73 files and 109 client / 16 unchanged;
+`check-docs.mjs` clean across 166 files.
 
 ### 2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention
 

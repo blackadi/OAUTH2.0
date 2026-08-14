@@ -70,7 +70,7 @@ sequenceDiagram
 
     C->>RS: GET /resource<br/>Authorization: Bearer <token>
     RS->>RS: Check token's acr<br/>acr="pwd" < required "silver"
-    RS-->>C: 403 insufficient_user_authentication<br/>acr_values="silver"
+    RS-->>C: 401 insufficient_user_authentication<br/>acr_values="silver"
     C->>AS: Authorization Request<br/>(essential ACR: silver, prompt=login)
     AS->>AS: Authenticate user with<br/>stronger method
     AS-->>C: New tokens with acr="silver"
@@ -78,6 +78,11 @@ sequenceDiagram
     RS->>RS: Check token's acr<br/>acr="silver" = required "silver" ✓
     RS-->>C: 200 OK (resource data)
 ```
+
+**That arrow is a `401`, and it is the single most important number in this tutorial.** RFC 9470 §3's two
+examples are both `401 Unauthorized`; 403 appears nowhere in the section. It read `403` here until
+2026-08-14 — see [Part 5](#part-5-the-step-up-challenge-response) for why the distinction is load-bearing and
+which response in this repo legitimately *is* a 403.
 
 ---
 
@@ -123,17 +128,23 @@ Set in the client's DCR registration. Used when the authorization request doesn'
 | UK Open Banking | `urn:openbanking:psd2:ca`, `urn:openbanking:psd2:sca` |
 | AU CDR | `urn:cds:au:cdr:2`, `urn:cds:au:cdr:3` |
 | Open Banking Brasil | `urn:brasil:openbanking:loa2`, `urn:brasil:openbanking:loa3` |
-| This demo server | `pwd` (password authentication) |
+| This demo server | `pwd` (password authentication) and `mfa` (registered, deliberately unsatisfiable) |
 
 ### Authlete configuration
 
-The `acr_values_supported` metadata advertises which ACRs the server supports:
+The `acr_values_supported` metadata advertises which ACRs the server supports. **Captured 2026-08-14 from
+this deployment** — note it is not the `silver` value used as the illustration elsewhere in this file:
 
 ```json
 {
-  "acr_values_supported": ["pwd", "urn:mace:incommon:iap:silver"]
+  "acr_values_supported": ["pwd", "mfa"]
 }
 ```
+
+`mfa` is registered here **deliberately and is deliberately unsatisfiable**: this server can only perform
+password authentication, so `mfa` is what makes the *refusal* path reachable. Registering an ACR you cannot
+satisfy sounds wrong and is the only way to exercise an essential-ACR failure — see
+[`modules/09a…/lab.md` 4b](curriculum/modules/09a-interaction-extensions/lab.md).
 
 ---
 
@@ -226,9 +237,37 @@ sequenceDiagram
 
 ## Part 5: The Step-Up Challenge Response
 
-When a protected resource detects insufficient authentication, it returns an error conforming to RFC 9470:
+**There are two different responses here, they have different status codes, and conflating them breaks the
+protocol.** This Part used to print only the first one and label it the second.
 
-### ACR mismatch
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant RS as Protected Resource
+    participant AS as Auth Server (this repo)
+
+    C->>RS: GET /resource + access token
+    RS->>AS: POST /api/introspection
+    AS-->>RS: 403 + JSON (acr_values / max_age)
+    Note over AS,RS: Response 1 — AS to RS.<br/>Authlete's FORBIDDEN, re-shaped as JSON
+    RS-->>C: 401 + WWW-Authenticate
+    Note over RS,C: Response 2 — RS to client.<br/>THIS is RFC 9470 §3's challenge
+```
+
+| | Response 1 | Response 2 |
+|---|---|---|
+| who → who | **AS → resource server** | **resource server → client** |
+| what it is | this repo's introspection API answering "is this token strong enough?" | RFC 9470 §3's **challenge** |
+| status | **403** — Authlete's action is `FORBIDDEN`, and 403 is a defensible mapping for a vendor introspection API | **401**, and §3 gives no alternative |
+| governed by | Authlete's contract | RFC 9470 §3, RFC 6750 §3 |
+| where it lives | `server/src/controllers/introspection.controller.ts` | **your resource server — this repo does not implement one** |
+
+### Response 1 — what `/api/introspection` returns to a resource server
+
+The AS re-shapes Authlete's `WWW-Authenticate` string into JSON, so a browser-based resource server can read
+the requirement without parsing an HTTP header.
+
+**ACR mismatch:**
 
 ```text
 HTTP/1.1 403 Forbidden
@@ -249,7 +288,7 @@ Content-Type: application/json
 }
 ```
 
-### Max age exceeded
+**Max age exceeded:**
 
 ```text
 HTTP/1.1 403 Forbidden
@@ -269,14 +308,55 @@ Content-Type: application/json
 }
 ```
 
-### What the client learns
+### Response 2 — the 401 challenge your resource server must send
+
+**This is the one RFC 9470 §3 specifies, and it is a `401`.** Both of §3's worked examples are
+`HTTP/1.1 401 Unauthorized`; the section never mentions 403. Having read Response 1, your resource server
+copies the `acr_values` or `max_age` into a challenge of its own:
+
+```text
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer error="insufficient_user_authentication",
+  error_description="A different authentication level is required",
+  acr_values="urn:mace:incommon:iap:silver"
+```
+
+> ### ⚠️ Why 401 and not 403, and what breaks if you get it wrong
+>
+> **The split is deliberate in the specifications, not a stylistic preference.** RFC 6750 §3.1 assigns **403**
+> to `insufficient_scope` — *"the token is valid, you are simply not allowed this"*. RFC 9470's
+> `insufficient_user_authentication` says something different: *"the **authentication** behind this token is
+> not strong or recent enough"*, which is 401 territory, because the remedy is a new authentication event
+> rather than a different grant.
+>
+> **The failure is silent and total.** Most client libraries only inspect `WWW-Authenticate` on a **401**. Send
+> 403 and a conformant client never parses the header, never learns `acr_values`, and never re-authorizes — so
+> the step-up loop *never starts*. The user sees an unexplained failure where they should have seen a
+> re-authentication prompt. **Step-up is a challenge/response protocol, and the challenge status is what makes
+> the response happen.**
+>
+> **Until 2026-08-14 this Part printed Response 1 twice, under the heading *"an error conforming to RFC
+> 9470"*, with the client-action table hanging off it** — and the sequence diagram in Part 1 drew the 403 as
+> an explicit `RS-->>C` arrow, which is exactly the relationship §3 governs. A learner following either would
+> have built a step-up loop that cannot start.
+
+### What the client learns — from Response 2
+
+These are the fields your client reads off the **401** challenge:
 
 | Error field | Meaning | Client action |
 |-------------|---------|---------------|
 | `acr_values` | Required ACR values (space-separated) | Re-authorize with `claims` requesting these ACRs as essential |
 | `max_age` | Maximum auth age in seconds | Re-authorize with `max_age` parameter and `prompt=login` |
-| `acr` | Current token's ACR | For debugging/logging |
-| `auth_time` | Current token's auth_time | For debugging/logging |
+
+And these two are **not** part of §3's challenge. They appear in Response 1 because this AS adds them, and
+they are for the resource server's logs — a client that acts on them is trusting the AS's view of a token it
+already holds:
+
+| Extra field (Response 1 only) | Meaning |
+|---|---|
+| `acr` | The ACR the current token was issued with |
+| `auth_time` | When that authentication happened |
 
 ---
 

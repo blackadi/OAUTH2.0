@@ -459,6 +459,15 @@ sequenceDiagram
 
 ## Step-Up Authentication (RFC 9470)
 
+> **Two responses, two status codes — the diagram distinguishes them and you must too.** `AL-->>RS` is
+> Authlete's `FORBIDDEN`, which this repo's `/api/introspection` serves to a resource server as **403**; a
+> vendor introspection API is entitled to that mapping. `RS-->>C` is RFC 9470 §3's **challenge** and is
+> **401** — both of §3's examples are, and 403 appears nowhere in the section, because RFC 6750 §3.1 already
+> assigns 403 to `insufficient_scope` while `insufficient_user_authentication` is about the authentication
+> itself. **This arrow read `403` until 2026-08-14.** Most client libraries only inspect `WWW-Authenticate`
+> on a 401, so a resource server built from the old version would never have started a step-up loop. Full
+> treatment in [`STEP-UP-AUTH-TUTORIAL.md` Part 5](STEP-UP-AUTH-TUTORIAL.md#part-5-the-step-up-challenge-response).
+
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#475569', 'lineColor': '#6366f1', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'fontFamily': 'Inter'}}}%%
 sequenceDiagram
@@ -473,7 +482,7 @@ sequenceDiagram
     AL->>AL: Check token acr="pwd"<br/>vs required "silver"
     AL-->>RS: action=FORBIDDEN<br/>responseContent={error: insufficient_user_authentication,<br/>acr_values: "silver"}
     RS->>RS: Parse WWW-Authenticate header
-    RS-->>C: 403 Forbidden<br/>WWW-Authenticate: Bearer error="insufficient_user_authentication",<br/>acr_values="silver"<br/>{error, error_description, acr_values, acr, auth_time}
+    RS-->>C: 401 Unauthorized<br/>WWW-Authenticate: Bearer error="insufficient_user_authentication",<br/>acr_values="silver"
 
     Note over C,AL: Phase 2 — Re-Authorize with Higher ACR
     C->>AS: GET /api/authorization?<br/>response_type=code&scope=openid&<br/>claims={"id_token":{"acr":{"essential":true,"values":["silver"]}}}&<br/>prompt=login
