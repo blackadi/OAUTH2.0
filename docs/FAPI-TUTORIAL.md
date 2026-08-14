@@ -529,7 +529,12 @@ The React SPA includes a **FAPI 2.0 Security Profile** section that lets you run
 > `docs/curriculum/modules/10-fapi-and-grant-management/lab.md` Exercise 4 walks all three states.
 
 **1. Fetch Config** — shows live FAPI mode and the controls the service actually enforces:
-- `mode`: `"sp"`, `"ms"`, or `"disabled"` — derived from `service.fapiModes`
+- `mode`: derived from `service.fapiModes`, which spans **both** FAPI generations —
+  `"sp"` (FAPI 2.0 Security Profile), `"ms"` (FAPI 2.0 Message Signing), `"fapi1-advanced"`,
+  `"fapi1-baseline"`, `"disabled"` or `"unknown"`. The last two are **not** the same thing:
+  `"disabled"` means the service sets no FAPI mode at all, `"unknown"` means it sets one this server
+  does not recognise. Until 2026-08-14 every FAPI 1.0 mode was reported as `"disabled"`, so the
+  endpoint whose job is reporting the FAPI posture could not see half of it
 - `dpopEnabled`: **this is `service.dpopNonceRequired`, not "is DPoP available"**. DPoP works without
   nonces, so `dpopEnabled: false` does not mean DPoP is off
 - `supportedTokenAuthMethods` — the methods the service permits. FAPI 2.0 SP requires `private_key_jwt`

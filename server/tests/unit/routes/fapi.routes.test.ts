@@ -127,6 +127,79 @@ describe("FAPI routes", () => {
     expect(res.body.cimdSupported).toBe(false);
   });
 
+  // FAPI1-W2. `fapiModes` is a six-member closed enum spanning both FAPI generations, and this mapper
+  // used to recognise only the FAPI 2.0 half — so a service configured for FAPI 1.0 Baseline or
+  // Advanced was reported as having FAPI switched **off**. One case per member, plus the two cases the
+  // enum does not cover: nothing set, and something set that we do not know.
+  describe("computeFapiMode is total over Authlete's fapiModes (FAPI1-W2)", () => {
+    const cases: Array<[string[], string, string]> = [
+      [["FAPI2_SECURITY"], "sp", "FAPI 2.0 Security Profile"],
+      [["FAPI2_MESSAGE_SIGNING_AUTH_REQ"], "ms", "FAPI 2.0 Message Signing"],
+      [["FAPI2_MESSAGE_SIGNING_AUTH_RES"], "ms", "FAPI 2.0 Message Signing"],
+      [["FAPI2_MESSAGE_SIGNING_INTROSPECTION_RES"], "ms", "FAPI 2.0 Message Signing"],
+      [["FAPI1_BASELINE"], "fapi1-baseline", "FAPI 1.0 Part 1: Baseline"],
+      [["FAPI1_ADVANCED"], "fapi1-advanced", "FAPI 1.0 Part 2: Advanced"],
+    ];
+
+    for (const [fapiModes, expected, title] of cases) {
+      it(`${fapiModes[0]} → ${expected}`, async () => {
+        mockServiceGet.mockResolvedValue({ fapiModes });
+
+        const res = await request(app).get("/fapi/config");
+        expect(res.status).toBe(200);
+        expect(res.body.mode).toBe(expected);
+        expect(res.body.specs.securityProfile).toBe(title);
+      });
+    }
+
+    // Advanced is Baseline plus further requirements, so reporting the weaker of the two under-reports
+    // the service. Same reason message signing outranks the security profile.
+    it("reports the stronger mode when the service sets several", async () => {
+      mockServiceGet.mockResolvedValue({
+        fapiModes: ["FAPI1_BASELINE", "FAPI1_ADVANCED"],
+      });
+
+      const res = await request(app).get("/fapi/config");
+      expect(res.body.mode).toBe("fapi1-advanced");
+    });
+
+    // The half of the item that is not about FAPI 1.0. A mode set but unrecognised is a *different*
+    // fact from no mode at all, and collapsing it to "disabled" asserts a posture nobody checked — the
+    // hardcoded-literal defect FAPI2-W1 removed, one layer down. A seventh Authlete member lands here.
+    it("an unrecognised mode is reported as unknown, not as off", async () => {
+      mockServiceGet.mockResolvedValue({ fapiModes: ["FAPI3_SOMETHING_NEW"] });
+
+      const res = await request(app).get("/fapi/config");
+      expect(res.status).toBe(200);
+      expect(res.body.mode).toBe("unknown");
+      expect(res.body.mode).not.toBe("disabled");
+    });
+
+    it("no mode at all is the only thing reported as disabled", async () => {
+      mockServiceGet.mockResolvedValue({ fapiModes: [] });
+
+      const res = await request(app).get("/fapi/config");
+      expect(res.body.mode).toBe("disabled");
+      expect(res.body.specs.securityProfile).toBe("None");
+    });
+
+    it("an absent fapiModes is disabled, not unknown", async () => {
+      mockServiceGet.mockResolvedValue({});
+
+      const res = await request(app).get("/fapi/config");
+      expect(res.body.mode).toBe("disabled");
+    });
+
+    // /fapi/status shares the mapper, so it inherits the fix rather than needing its own.
+    it("GET /fapi/status reports a FAPI 1.0 mode too", async () => {
+      mockServiceGet.mockResolvedValue({ fapiModes: ["FAPI1_ADVANCED"] });
+
+      const res = await request(app).get("/fapi/status");
+      expect(res.status).toBe(200);
+      expect(res.body.mode).toBe("fapi1-advanced");
+    });
+  });
+
   it("GET /fapi/status returns live Authlete config", async () => {
     mockServiceGet.mockResolvedValue({
       issuer: "https://auth.example.com",

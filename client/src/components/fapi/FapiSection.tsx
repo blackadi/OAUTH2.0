@@ -35,6 +35,19 @@ interface FapiConfig {
   cimdSupported: boolean;
 }
 
+// Mirrors the server's `FapiModeSummary` (`fapi.controller.ts`). It spans both FAPI generations because
+// Authlete's `fapiModes` does — the server used to report a FAPI 1.0 service as "disabled" (FAPI1-W2).
+// `disabled` (no mode set) and `unknown` (a mode set that the server does not recognise) are distinct
+// states and are shown differently on purpose.
+const FAPI_MODE_BADGES: Record<string, { label: string; variant: 'success' | 'info' | 'warning' }> = {
+  sp: { label: 'FAPI 2.0 Security Profile', variant: 'success' },
+  ms: { label: 'FAPI 2.0 + Message Signing', variant: 'success' },
+  'fapi1-advanced': { label: 'FAPI 1.0 Advanced', variant: 'success' },
+  'fapi1-baseline': { label: 'FAPI 1.0 Baseline', variant: 'success' },
+  unknown: { label: 'FAPI mode unrecognised', variant: 'warning' },
+  disabled: { label: 'FAPI Disabled', variant: 'info' },
+};
+
 function FapiSection() {
   const { loading, error, call } = useAsyncCall();
   const { getAccessToken } = useToken();
@@ -215,11 +228,14 @@ function FapiSection() {
             </Button>
             {configData != null && (
               <div className="flex flex-wrap gap-2 mt-2">
-                {configData.mode !== 'disabled' ? (
-                  <Badge variant="success">FAPI {configData.mode === 'ms' ? '+ Message Signing' : 'Security Profile'}</Badge>
-                ) : (
-                  <Badge variant="info">FAPI Disabled</Badge>
-                )}
+                {(() => {
+                  const badge = FAPI_MODE_BADGES[configData.mode];
+                  // An unrecognised mode is NOT a disabled one. The server stopped collapsing the two
+                  // (FAPI1-W2) and this badge must not put them back together.
+                  return badge
+                    ? <Badge variant={badge.variant}>{badge.label}</Badge>
+                    : <Badge variant="warning">FAPI mode: {configData.mode}</Badge>;
+                })()}
                 {configData.dpopEnabled ? (
                   <Badge variant="success">DPoP Enabled</Badge>
                 ) : (

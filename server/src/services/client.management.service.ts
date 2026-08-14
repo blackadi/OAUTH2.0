@@ -3,6 +3,7 @@ import { authleteApi as defaultApi, serviceId } from "./authlete.service";
 import { Request } from "express";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
+import { clientAttributesSchema, validateOrThrow } from "../utils/validation";
 import {
   ClientGetListResponse,
   ClientSecretRefreshResponse,
@@ -484,9 +485,12 @@ export class ClientManagementService {
     if (payload.bcRequestSignAlg !== undefined) input.bcRequestSignAlg = String(payload.bcRequestSignAlg) as any;
     if (payload.bcUserCodeRequired !== undefined) input.bcUserCodeRequired = Boolean(payload.bcUserCodeRequired);
 
-    // Attributes — accept array of {key, value} objects
-    if (payload.attributes !== undefined && Array.isArray(payload.attributes)) {
-      input.attributes = payload.attributes as any;
+    // Attributes — an array of {key, value} pairs, validated rather than cast (ATTR-W1). This was the
+    // only field in this mapper that reached Authlete through `as any`, so any array at all was
+    // forwarded verbatim, and a non-array was silently dropped — a write that answers 200 and stores
+    // nothing. Both shapes are now 400s; see `clientAttributesSchema` for why a keyless pair is one.
+    if (payload.attributes !== undefined) {
+      input.attributes = validateOrThrow(clientAttributesSchema, payload.attributes);
     }
 
     // Locked

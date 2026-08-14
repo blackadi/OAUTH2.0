@@ -70,15 +70,38 @@ validate the access token, and that the `requestContent` this server synthesises
 ### Where the work stands
 
 **Done:** P0 (fail-safe default, `lint` added to both CI jobs, root `.gitignore` + `logs/` untracked),
-P1 (the three Authlete writes), and **5 of 13 T1-19 items** plus FAPI2-W4.
+P1 (the three Authlete writes), and **10 of 13 T1-19 items**.
 
-**T1-19 shipped:** 9728-W1 (PRM path-suffixed route), 9728-W2 (`bearer_methods_supported`), 9126-W3 (405 on
+**T1-19 batch 1:** 9728-W1 (PRM path-suffixed route), 9728-W2 (`bearer_methods_supported`), 9126-W3 (405 on
 `/api/par`), 9470-W6 (`parseBearerError` quote-aware), B1-W4 (two echoing `default` branches), FAPI2-W4.
 *Three of those were the same defect — an endpoint answering **200 with HTML** where it meant "no".*
 
-**T1-19 remaining:** `normalizeGrantType` made total · `attributes` validated (**ATTR-W1**) · the duplicate
-client-listing `fetch()` (**BCL-W6**) · dev JWT made §2-shaped (**9068-W2**) · `computeFapiMode` made total ·
-**B1-W3** and **9101-W5** — both touch security surfaces, so **plan mode**.
+**T1-19 batch 2 (2026-08-14):** **FAPI1-W2** — `computeFapiMode` is total over the six-member `FapiMode`
+enum, so a FAPI 1.0 service is no longer reported as having FAPI **off**; `"unknown"` and `"disabled"` are
+now distinct, because a mode we cannot name is not a mode nobody set. **ATTR-W1** — `attributes` was the one
+`as any` in a ~40-field mapper, and a *non-array* was silently dropped, which answers 200 and stores nothing.
+**BCL-W6** — the duplicate client-listing `fetch()` is gone.
+
+> **BCL-W6 corrected a claim this audit had been reasoning from, and the correction is the durable part.**
+> `AGENTS.md` said the SDK *"silently strips"* what it does not model. **True of `Service`, false of
+> `Client`**: `Service$inboundSchema` is a plain `z.object`; `Client$inboundSchema` wraps itself in
+> `collectExtraKeys$` and collects into `client.additionalProperties`. SDK 1.0.0's `Client` carries **104**
+> of Authlete 3.0.16's **108** properties, omitting `backchannelLogoutUri`,
+> `backchannelLogoutSessionRequired`, `spiffeId` and `spiffeBundleEndpoint`. Had the generalisation held,
+> moving off the raw `fetch()` would have delivered logout tokens to **nobody**, silently, while answering
+> 200. Found by the **compiler**, settled by parsing a fixture through the real schema, locked by a test that
+> does the same. **Do not generalise one SDK model's tolerance to another.**
+
+**T1-19 remaining — all three under plan mode:** **B1-W3** (`normalizeGrantType` total) · **9101-W5** (JAR
+built from named fields) · **9068-W2** (dev JWT made §2-shaped). **The third is a correction to this file:**
+the previous revision grouped 9068-W2 with the safe items on the strength of the finding's own ordering note,
+which judged the *file* — `createLocalJWT.ts`, not on the surfaces list. But the fix threads `client_id` and
+`scope` through `token.operations.service.ts` **and** `token.management.controller.ts`, both listed under
+**Token issuance**. *The trigger is the concern, and the concern travels with the parameter.*
+
+**A gap in the record, not in the code:** the 2026-08-14 work *before* batch 2 — P0, P1, T1-19 batch 1 and
+FAPI2-W4 — landed with **no `PROGRESS.md` Build Log entry**. The newest entry before batch 2's was
+2026-08-13. The code and this file describe it; the Build Log does not.
 
 **Then, in order:** **P3** T1-11's wire format (PAR/Device/DCR **and now `/api/vci/deferred/issue`** — one
 batch with the SPA and lab transcripts, or the labs go stale) · **P4** Tier 2's 17 documentation items,
@@ -88,7 +111,7 @@ the seven standing declines) plus **`CLIENT-UPDATE-FIELD-LOSS`**, which I recomm
 names ~40 of the `Client` schema's 108 properties against a **replace-semantics** API, so an admin `PATCH`
 silently clears the rest.
 
-**Current baselines:** **969 server tests / 70 files**, **109 client / 16**, server lint **4 pre-existing
+**Current baselines:** **998 server tests / 70 files**, **109 client / 16**, server lint **4 pre-existing
 warnings** (client lint clean at `--max-warnings 0`), `check-docs` **167 files**, route coverage **92 routes,
 empty baseline**.
 

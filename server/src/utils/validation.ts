@@ -129,3 +129,24 @@ export const nativeSsoProcessSchema = z.object({
 export const nativeSsoLogoutSchema = z.object({
   sessionId: z.string().min(1, required("sessionId")),
 });
+
+/**
+ * Authlete's client `attributes` — an array of key/value pairs (SDK 1.0.0 `Pair`).
+ *
+ * ATTR-W1. This was the one field `buildClientInput` forwarded with `as any`. Every other field in that
+ * mapper is coerced (`String(…)`, `Number(…)`) or cast to a named SDK type, so a malformed `attributes`
+ * was the only client input that crossed the Authlete boundary unexamined — and a *non-array* was
+ * silently dropped, which reports success for a setting that never took effect.
+ *
+ * **Stricter than the SDK on one point, deliberately.** `Pair` makes *both* members optional, so `[{}]`
+ * satisfies it. An attribute with no key cannot be addressed by anything, and the namespace is not
+ * inert — Authlete assigns meaning to some keys, which is how the `regex` *scope* attribute drives
+ * parameterized scopes. So a keyless entry is a silent no-op rather than a setting, and is refused.
+ * `value` stays optional, matching `Pair`.
+ */
+export const clientAttributesSchema = z.array(
+  z.object({
+    key: z.string().min(1, "Client attribute entries require a non-empty `key`"),
+    value: z.string().optional(),
+  }),
+);

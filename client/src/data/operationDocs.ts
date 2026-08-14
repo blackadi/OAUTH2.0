@@ -758,7 +758,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
       title: 'FAPI 2.0 Configuration',
       description: 'Displays this deployment\'s actual FAPI 2.0 posture, read from the live Authlete service. Shows whether FAPI mode (Security Profile only, or +Message Signing) is enabled, which client authentication methods the service permits, and which requirements are genuinely enforced — PAR, PKCE, scope, and whether refresh tokens are rotated.',
       params: [],
-      returns: 'JSON with mode ("disabled", "sp", "ms"), dpopEnabled (boolean), supportedTokenAuthMethods (array), certificateBoundAccessTokens (boolean), parRequired, pkceRequired, refreshTokenRotation, scopeRequired, cimdSupported, and specs describing which FAPI profiles are active.',
+      returns: 'JSON with mode ("sp", "ms", "fapi1-advanced", "fapi1-baseline", "unknown" or "disabled" — "disabled" means no FAPI mode is set, "unknown" means one is set that the server does not recognise), dpopEnabled (boolean), supportedTokenAuthMethods (array), certificateBoundAccessTokens (boolean), parRequired, pkceRequired, refreshTokenRotation, scopeRequired, cimdSupported, and specs describing which FAPI profiles are active.',
       tips: 'Every field is read from authleteApi.service.get() — none is hardcoded, so a "false" here means the control really is off. Two traps worth knowing: dpopEnabled is the service\'s dpopNonceRequired flag, not "is DPoP available" (DPoP works fine without nonces); and refreshTokenRotation inverts refreshTokenKept, because a refresh token that is kept is one that is not rotated. Configure FAPI modes in the Authlete console.',
     },
     'status': {

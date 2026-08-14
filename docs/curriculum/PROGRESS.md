@@ -112,6 +112,68 @@ against it before calling the capstone complete._
 - [x] **2026-08-13 — the two process findings became mechanisms** (below)
 - [x] **2026-08-13 — the route-coverage backlog reached zero, and the checker was counting comments** (below)
 - [x] **2026-08-13 — VCI-W5: the deferred credential endpoint authenticates somebody now** (below)
+- [x] **2026-08-14 — T1-19 batch 2 (FAPI1-W2, ATTR-W1, BCL-W6): and the SDK's two models do not agree** (below)
+
+### 2026-08-14 — T1-19 batch 2: FAPI1-W2, ATTR-W1, BCL-W6
+
+**Why this matters to a future session:** three small contained items, and the third turned up a fact about
+the SDK that **contradicts a generalisation `AGENTS.md` had been carrying** — one that would have made this
+fix silently break the feature it was tidying.
+
+**FAPI1-W2 — `computeFapiMode` could not represent FAPI 1.0.** Authlete's `fapiModes` is a six-member closed
+enum spanning both FAPI generations. The mapper recognised only `FAPI2_SECURITY` and the
+`FAPI2_MESSAGE_SIGNING_*` prefix and returned `"disabled"` for everything else — so a service configured for
+**FAPI 1.0 Baseline or Advanced was reported as having FAPI switched off**, by the endpoint whose entire job
+is reporting the FAPI posture, for a profile `SPEC-INVENTORY.md` carries two rows for and Module 10 teaches.
+The domain is now `sp` · `ms` · `fapi1-advanced` · `fapi1-baseline` · `unknown` · `disabled`. **The
+`unknown`/`disabled` split is the half that is not about FAPI 1.0**: `"disabled"` is a statement about
+configuration (no mode set), `"unknown"` about recognition (a mode set that we do not know). Collapsing the
+second into the first asserts a posture nobody checked — FAPI2-W1's hardcoded-literal defect one layer down —
+and it is what makes a seventh Authlete enum member land visibly instead of silently off. `specs.securityProfile`
+now follows `mode` rather than being the constant `"FAPI 2.0 Security Profile"`, which was wrong the moment
+`mode` could be a FAPI 1.0 value. Consumers moved in the same commit: `openapi.routes.ts`,
+`FapiSection.tsx`'s badge, `operationDocs.ts`, `docs/FAPI-TUTORIAL.md`. **No curriculum transcript changed** —
+`fapiModes` is absent on this service, so the live answer is still `mode: "disabled"` and Module 10's
+Exercise 4 reads exactly what it always did.
+
+**ATTR-W1 — the one `as any` in a ~40-field mapper.** `buildClientInput` coerces or casts every client
+metadata field to a named type except `attributes`, which was forwarded with `as any` behind an
+`Array.isArray` guard. So *any* array reached Authlete verbatim, and a **non-array was dropped without a
+word** — a write that answers 200 and stores nothing. `clientAttributesSchema` now validates it and both
+shapes are 400s. **Deliberately stricter than the SDK on one point:** `Pair` makes both members optional, so
+`[{}]` satisfies it, but a keyless attribute is unaddressable and the namespace is not inert — Authlete
+assigns meaning to some keys, which is how the `regex` *scope* attribute drives parameterized scopes. `value`
+stays optional. Create and update share the mapper, so both are covered; a test asserts that.
+
+**BCL-W6 — and the finding underneath it.** `backchannel-logout.service.ts` kept **two** raw `fetch()` calls
+to Authlete. One is justified and stays: SDK 1.0.0 exposes no backchannel logout token API. The other
+hand-rolled `/client/get/list` — its own URL, its own bearer header, its own guess at the response shape —
+and nothing justified it. Moved to `authleteApi.client.list`.
+
+> **The part worth carrying.** The compiler refused `client.backchannelLogoutUri`: **SDK 1.0.0's `Client`
+> model does not have that field.** `AGENTS.md` said the SDK *"silently strips"* what it does not model —
+> which, if true here, would have made `issueAndDeliverToAll` deliver logout tokens to **nobody**, silently,
+> while still answering 200. **It is true of `Service` and false of `Client`.** `Service$inboundSchema` is a
+> plain `z.object` and strips; `Client$inboundSchema` wraps itself in the SDK's `collectExtraKeys$` and
+> *collects* unmodelled members into `client.additionalProperties`. `Client` carries **104** of Authlete
+> 3.0.16's **108** properties; the four omitted are `backchannelLogoutUri`,
+> `backchannelLogoutSessionRequired`, `spiffeId` and `spiffeBundleEndpoint` — the last two the client-side
+> sibling of the `SPIFFE_JWT` enum gap that took `service.get()` down for six days.
+>
+> Established by **parsing a fixture through the real `Client$inboundSchema` and reading where the field
+> landed**, not by reading the model's shape — the same "probe before writing" discipline, applied to a
+> vendor library instead of a vendor API. A test now parses through that schema, so an SDK bump that changes
+> the behaviour fails loudly rather than emptying the delivery list. **Rule: do not generalise one SDK
+> model's tolerance to another; check which wrapper the schema uses.**
+
+**Verification:** typecheck (both packages) · lint (server 4 pre-existing warnings, client clean at
+`--max-warnings 0`) · **998 server tests / 70 files** (969 before) · 109 client / 16 · `check-docs` 167 files ·
+route coverage 92 routes, empty baseline. `test:e2e` not run.
+
+**Still open in T1-19:** **B1-W3** (`normalizeGrantType` total) and **9101-W5** (JAR built from named fields),
+plus **9068-W2** (dev JWT §2-shaped) — which `audit/RESUME.md` §0 had grouped with the safe items, but which
+threads `client_id`/`scope` through `token.operations.service.ts` and `token.management.controller.ts`, both
+on the **Security-critical surfaces** list under Token issuance. All three need plan mode.
 
 ### 2026-08-13 — VCI-W5: the deferred credential endpoint authenticates somebody now
 

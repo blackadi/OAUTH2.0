@@ -1873,7 +1873,7 @@ const spec: Record<string, unknown> = {
                 schema: {
                   type: "object",
                   properties: {
-                    mode: { type: "string", enum: ["sp", "ms", "disabled"], description: "FAPI mode: sp=Security Profile, ms=Message Signing, disabled" },
+                    mode: { type: "string", enum: ["sp", "ms", "fapi1-advanced", "fapi1-baseline", "unknown", "disabled"], description: "FAPI mode derived from the service's fapiModes. sp=FAPI 2.0 Security Profile, ms=FAPI 2.0 Message Signing, fapi1-advanced/fapi1-baseline=the FAPI 1.0 parts. 'disabled' means no mode is set; 'unknown' means a mode is set that this server does not recognise — the two are deliberately distinct, so an unrecognised profile is never reported as off." },
                     dpopEnabled: { type: "boolean", description: "The service's dpopNonceRequired flag. NOT 'is DPoP available' — DPoP works without nonces, so false does not mean DPoP is off." },
                     supportedTokenAuthMethods: { type: "array", items: { type: "string" }, description: "Client authentication methods the service permits. FAPI 2.0 requires mTLS or private_key_jwt; which one a given client must use is pinned per client, so there is no service-level 'required' method." },
                     certificateBoundAccessTokens: { type: "boolean", description: "The service's tlsClientCertificateBoundAccessTokens flag — mTLS sender-constraining. DPoP binding is a per-client setting and is not reported here." },
