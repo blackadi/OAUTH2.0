@@ -43,6 +43,77 @@ Get these from [Authlete Console](https://console.authlete.com/):
 - `AUTHLETE_BASE_URL` — Authlete API base URL
 - `AUTHLETE_SERVICE_ID` — Authlete service ID
 
+### Admin credentials — you invent these
+
+> **The short version:** `MGMT_CLIENT_ID` and `MGMT_CLIENT_SECRET` are a username and password **you make
+> up**. They are not from Authlete, and there is no correct value to go and find.
+
+The names are the trap. They read exactly like an OAuth `client_id` / `client_secret`, so the natural
+assumption is that you copy them out of the Authlete console like the three above. **You don't.** They are
+HTTP Basic credentials for *this server's own* admin endpoints, compared straight against the two
+environment variables and nothing else:
+
+```ts
+// src/middleware/require-basic-auth.ts — no Authlete call anywhere in this file
+const idMatches     = safeEqual(id,     process.env.MGMT_CLIENT_ID);
+const secretMatches = safeEqual(secret, process.env.MGMT_CLIENT_SECRET);
+```
+
+Whatever you put in `.env` **is** the correct value. Nothing outside this repo knows them.
+
+| Variable | Where the value comes from |
+|---|---|
+| `AUTHLETE_BEARER_TOKEN`, `AUTHLETE_BASE_URL`, `AUTHLETE_SERVICE_ID` | **Authlete console** |
+| `CID` / `SEC`, `PUB_CID`, `PKJWT_CID` (E2E) | **Authlete console** — real registered OAuth clients |
+| **`MGMT_CLIENT_ID`, `MGMT_CLIENT_SECRET`** | **You choose them.** Any username; a random secret |
+
+**Generate and set them:**
+
+```bash
+openssl rand -base64 32          # -> use as MGMT_CLIENT_SECRET
+```
+
+```bash
+# server/.env
+MGMT_CLIENT_ID=admin
+MGMT_CLIENT_SECRET=<the value openssl printed>
+```
+
+**Use them** as ordinary HTTP Basic credentials:
+
+```bash
+curl -u "admin:<your-secret>" http://localhost:3000/api/client/list
+```
+
+**Three things worth knowing:**
+
+1. **They fail closed.** Leave either blank and every admin endpoint answers `401` — in development too.
+   That is deliberate: the middleware used to *allow* all requests when unconfigured, which silently
+   disabled authentication on routes that return a confidential client's secret in plaintext. The server
+   logs a warning at startup naming every surface that will reject requests.
+2. **A colon in the secret is safe.** The decoder splits on the **first** colon only, so `openssl` output
+   with punctuation works. (`base64` output has no colons anyway, but the rule holds if you pick your own.)
+3. **Your host needs them separately.** `server/.env` is local and gitignored. Set both in your hosting
+   provider's environment (Render dashboard, etc.) or the deployed admin endpoints will all 401.
+
+**Common mistake:**
+
+```bash
+# ❌ Looking for these in the Authlete console, finding nothing, and leaving them blank
+MGMT_CLIENT_ID=
+MGMT_CLIENT_SECRET=
+#    -> every admin endpoint returns 401 {"error":"invalid_client"}
+
+# ✅ Any username you like, plus a generated secret
+MGMT_CLIENT_ID=admin
+MGMT_CLIENT_SECRET=Yk3n8...              # openssl rand -base64 32
+```
+
+> **Why a 401 looks the same either way.** A wrong password and *unconfigured credentials* both return
+> `401 {"error":"invalid_client","error_description":"Client authentication required"}`. Telling an
+> anonymous caller that admin auth is misconfigured is free reconnaissance, so the distinction goes to the
+> server log instead — check there if you are unsure which one you are hitting.
+
 ---
 
 ## Environment Variables
@@ -52,7 +123,7 @@ Get these from [Authlete Console](https://console.authlete.com/):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PORT` | No | `3000` | Express listen port |
-| `NODE_ENV` | No | `development` | `development` or `production` |
+| `NODE_ENV` | No | **`production`** | `development` or `production`. **The default is `production`, and that is a security control** — it used to default to `development`, and the live deployment did not set it, so `development-only.ts` never fired and `POST /api/device/complete` (which approves a device authorization as any subject the caller names) was reachable on the public internet. `npm run dev` sets `development` explicitly; `server.ts` warns loudly whenever the resolved environment is `development` |
 | `SESSION_SECRET` | **Yes** | — | Session encryption secret. Only non-emptiness is enforced; 32+ random chars is a recommendation, not a check |
 | `AUTHLETE_BEARER_TOKEN` | **Yes** | — | Authlete API token |
 | `AUTHLETE_BASE_URL` | **Yes** | — | Authlete API base URL (e.g. `https://eu.authlete.com`) |
@@ -60,8 +131,8 @@ Get these from [Authlete Console](https://console.authlete.com/):
 | `REDIS_URL` | No | — | Redis connection string (e.g., `redis://localhost:6379`) |
 | `ALLOWED_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | CORS allowed origins |
 | `AUTH_USERS` | No | `admin:admin:password:Administrator` | Demo users: `subject:username:password:name;...` |
-| `MGMT_CLIENT_ID` | No | — | Admin API Basic auth username. **Fails closed** — unset means every admin route 401s |
-| `MGMT_CLIENT_SECRET` | No | — | Admin API Basic auth password. Same fail-closed behaviour |
+| `MGMT_CLIENT_ID` | No | — | Admin API Basic auth username. **You choose this — not from Authlete.** **Fails closed** — unset means every admin route 401s. See [Admin credentials](#admin-credentials--you-invent-these) |
+| `MGMT_CLIENT_SECRET` | No | — | Admin API Basic auth password. **You generate this** (`openssl rand -base64 32`). Same fail-closed behaviour |
 | `JWKS_URI` | No | — | JWKS URI for backchannel logout token verification |
 | `LOGOUT_REDIRECT_URI` | No | — | Valid post-logout redirect URI |
 | `LOGOUT_CLIENT_ID` | No | — | Client ID rendered in the logout view |
@@ -226,16 +297,35 @@ Rate limiting uses `express-rate-limit` with in-memory store.
 
 ## Admin Routes
 
-Routes requiring admin Basic auth use `requireBasicAuth` middleware checking `MGMT_CLIENT_ID` / `MGMT_CLIENT_SECRET`:
+Routes requiring admin Basic auth use `requireBasicAuth` middleware checking `MGMT_CLIENT_ID` /
+`MGMT_CLIENT_SECRET` (see [Admin credentials — you invent these](#admin-credentials--you-invent-these) for
+where those values come from). Nine realms:
 
-- `/api/token/*` (list, create, delete, update, revoke, reissue)
-- `/api/client/*` (CRUD)
-- `/api/backchannel_logout/issue`
-- `/api/backchannel_logout/deliver`
-- `/api/backchannel_logout/deliver-all`
-- `/api/client/dcr/register`
+| Realm | Routes |
+|---|---|
+| `token_management` | `/api/token/*` — list, create, delete, update, revoke, reissue, createLocalToken |
+| `client_management` | `/api/client/*` — CRUD |
+| `dcr` | `/api/client/dcr/register` (only; `get`/`update`/`delete` use the registration access token) |
+| `hsk` | `/api/hsk/*` — create, get, delete, list |
+| `vci` | `/api/vci/offer/create`, `/api/vci/offer/info` |
+| `introspection` | `/api/introspection` and `/api/introspection/standard` |
+| `jar` | `/api/jar/process` |
+| `federation` | `/api/federation/registration` |
+| `nativesso` | native SSO endpoints |
+| *(also)* | `/api/backchannel_logout/{issue,deliver,deliver-all}` |
 
-If `MGMT_CLIENT_ID` and `MGMT_CLIENT_SECRET` are **not set**, all admin routes are unprotected (no auth required).
+> ### ⚠️ Corrected 2026-08-15 — this section said the opposite, and the opposite was dangerous
+>
+> It read: *"If `MGMT_CLIENT_ID` and `MGMT_CLIENT_SECRET` are **not set**, all admin routes are unprotected
+> (no auth required)."*
+>
+> **That was true once and has not been for some time.** `requireBasicAuth` **fails closed**: unset either
+> value and every route above returns `401`. The old sentence did not merely describe stale behaviour — it
+> told a reader that leaving the credentials blank was a working, open configuration, on routes including
+> one that returns a confidential client's secret in plaintext.
+>
+> The fix that changed it is the reason the middleware carries a `managementCredentialsConfigured()` helper
+> and a startup warning: an unset variable must be loud, not permissive.
 
 ---
 
