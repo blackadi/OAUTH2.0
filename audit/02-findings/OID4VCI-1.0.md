@@ -205,7 +205,7 @@ Probed live 2026-08-14, after DR-03, against service `3693555522`:
 | `GET /.well-known/openid-credential-issuer` | **200** |
 | `GET /api/vci/metadata` | **200**, a conformant §12.2.4 document — all three REQUIRED members, snake_case, no `resultCode` |
 | `POST /api/vci/offer/create` (admin auth) | **201**, `A366001 CREATED` |
-| `POST /api/vci/deferred/issue` (bogus token) | **401**, `A375304 UNAUTHORIZED` — from `parse`, retiring VCI-W5's marker |
+| `POST /api/vci/deferred/issue` (bogus token) | **401**, `A375304 UNAUTHORIZED` — from `parse`, retiring VCI-W5's marker. **The code comment carrying that marker was not updated until 2026-08-15** — `vci.controller.ts` still asserted `verifiableCredentialsEnabled` is `false` and named a next action already taken. Retiring a marker in the audit is not retiring it where a reader meets it |
 | `GET /api/vci/jwks` | **500**, `[A403201] The JWK Set document of the credential issuer has not been set up yet.` |
 | `GET /api/vci/jwtissuer` | **500**, `[A417202] The JWT issuer metadata is not available because neither the JWK Set document of the credential issuer nor its URL has been set up.` |
 

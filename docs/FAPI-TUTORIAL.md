@@ -415,7 +415,15 @@ HTTP/1.1 201 Created
 > service's `pushedAuthReqDuration`, **600**. And it showed a `DPoP-Nonce: <serverNonce>` response header —
 > **`UNVERIFIED`, and not producible here**: `dpopNonceRequired` is `false`, so this server never issues a
 > nonce and never demands one. The nonce dance in [Part 4's later steps](#step-5-exchange-code-for-token) is
-> the specification's, not this deployment's. Turn the flag on to see it.
+> the specification's, not this deployment's.
+>
+> **It is no longer merely the specification's, though.** The flag was turned on for three token-endpoint
+> calls on 2026-08-15 and turned back off, so the dance has been observed: a proof with no nonce earns
+> **400 `use_dpop_nonce`** *with* a `DPoP-Nonce` header, replaying that nonce succeeds, and a stale one earns
+> `use_dpop_nonce` again rather than `invalid_dpop_proof`. **Note the 400** — RFC 9449 §8 gives an
+> *authorization server* 400 and §9 gives a *resource server* 401, and getting that backwards stops a client
+> that only retries on 401 from ever starting the dance. The full transcript, including the nonce being
+> **time-based rather than one-time**, is in [`PAR-TUTORIAL.md`](PAR-TUTORIAL.md#dpop-nonce-handling).
 
 ### Step 4: Authorize
 
