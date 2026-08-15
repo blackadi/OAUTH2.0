@@ -274,10 +274,18 @@ export function createVciControllers(serviceInstance = new VciService()) {
        *    `requestIdentifier` is exactly the shape that used to bypass validation, and it carries no
        *    `transaction_id` to build a `requestContent` from, so there is nothing to validate against.
        *
-       * UNVERIFIED: that Authlete accepts this `requestContent` and returns `info.identifier` on this
-       * deployment. `verifiableCredentialsEnabled` is `false`, so `parse` answers `FORBIDDEN` before
-       * reaching that logic; the shape is taken from the vendored 3.0.16 schema and §9.1's REQUIRED
-       * `transaction_id`. Named next action: re-run this path if VCI is ever enabled.
+       * ✅ VERIFIED 2026-08-14. This block was `UNVERIFIED` on the grounds that
+       * `verifiableCredentialsEnabled` was `false`, so `parse` answered `FORBIDDEN` before reaching the
+       * logic, and it named a next action: re-run the path if VCI is ever enabled. **DR-03 enabled it the
+       * same day and the path was re-run**: `POST /vci/deferred/parse` with a bogus access token answers
+       * `UNAUTHORIZED`, `[A375304] The access token does not exist.` — which proves three things at once.
+       * The endpoint is live; the deferred path really does validate the token; and the `requestContent`
+       * this server synthesises **is accepted**, because Authlete parsed it far enough to reach token
+       * validation. Evidence: `audit/02-findings/OID4VCI-1.0.md`.
+       *
+       * Still open, and narrower than the old marker: §9's normative sentence on authenticating the request
+       * was never quoted verbatim, so no MUST is cited here — the design rests on the four facts in
+       * `VciService.parseDeferred` instead.
        *
        * NOTE for T1-11: the request shape here is still Authlete's (`{ order: { transactionId } }`) rather
        * than §9.1's (`{ transaction_id }`), and the response is still the vendor envelope. That is the

@@ -531,16 +531,34 @@ sequenceDiagram
 
 - First request without nonce → server returns `DPoP-Nonce` header
 - Client stores nonce, includes it in next DPoP proof
-- Expired nonce → server returns 401 with new `DPoP-Nonce`
+- Expired or missing nonce at PAR → server returns **400** `use_dpop_nonce` with a new `DPoP-Nonce`
 - SPA stores nonces in `sessionStorage` under `dpop_nonce`
 
-> **`UNVERIFIED` — no nonce appears on this deployment (2026-08-14).** `dpopNonceRequired` is `false` and
-> `dpopNonceDuration` is `0`, so the two `DPoP-Nonce` arrows in the diagram above and every step of the
-> handling list are the specification's behaviour, not this service's. **DPoP itself works without it** —
-> nonces are OPTIONAL in RFC 9449, and the flag controls nonce *enforcement*, not whether tokens can be
-> sender-constrained. Turn it on under **Service Settings → Tokens and Claims → Advanced → DPoP Token →
-> Require Nonce** and set a non-zero duration to make this section runnable. The `DPoP` sender-constraining
-> that *does* work here is demonstrated end to end, with captured responses, in
+> **`UNVERIFIED` here — but no longer unobserved (updated 2026-08-15).** `dpopNonceRequired` is `false` and
+> `dpopNonceDuration` is `0` on this deployment, so nothing above is reproducible as you find it. **The flag
+> was switched on for three token-endpoint calls and switched back**, so the behaviour itself has now been
+> seen rather than only read:
+>
+> | Proof carries | Result |
+> |---|---|
+> | no `nonce` | **400** `use_dpop_nonce`, **plus** a `DPoP-Nonce` header |
+> | that nonce | success |
+> | a stale/bogus `nonce` | **400** `use_dpop_nonce` — **not** `invalid_dpop_proof` |
+>
+> **Three things RFC 9449 does not tell you, and one of them changes how you write a client:**
+>
+> - **The nonce is time-based, not one-time.** All three calls returned the *same* `DPoP-Nonce`, including
+>   the successful one — it is valid for `dpopNonceDuration`. So **cache it and reuse it**. A client that
+>   treats a repeated nonce as a replay attempt would be wrong.
+> - **A nonce comes back on success too** at the token endpoint, not only on the error that demands one.
+> - **Authlete's `[A254307]` message misdirects on first contact**: a proof with *no* `nonce` and one with a
+>   *wrong* `nonce` produce the same code and the same text, *"the value of the 'nonce' claim … is different
+>   from the expected one"* — describing a mismatch that did not happen. Trust the `error` code, not the prose.
+>
+> **DPoP itself works without any of this** — nonces are OPTIONAL in RFC 9449, and the flag controls nonce
+> *enforcement*, not whether tokens can be sender-constrained. To make the section runnable yourself: **Service
+> Settings → Tokens and Claims → Advanced → DPoP Token → Require Nonce**, plus a non-zero duration. The `DPoP`
+> sender-constraining that *does* work here is demonstrated end to end, with captured responses, in
 > [`FAPI-TUTORIAL.md` Part 6](FAPI-TUTORIAL.md#part-6-failure-demonstrations).
 
 ---
