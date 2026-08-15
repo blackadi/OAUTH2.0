@@ -4,62 +4,65 @@
 the state so a new session resumes without re-reading the repo, re-fetching specifications, or re-probing
 Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` §5 second.
 
-- **Last updated:** 2026-08-14 — **Tier 0 and Tier 1 complete; Tier 2 at 16 of 17 (only T2-17 remains); VCI-W6 closed.** Read §0 in full before anything else. *(The remainder of this bullet is the 2026-08-13 state, kept because its rulings still hold.)* (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1 … T1-10 and T1-17 shipped, T1-13 closed as unachievable, T1-21 declined**, see `04-remediation-plan.md` §1.2). **T1-9 + T1-10 + 6749-W1 shipped 2026-08-13**: `/api/gm/:grantId` is now a protected resource in the same sense UserInfo is — `DPoP` accepted, the §7.2 downgrade refused, an RFC 6750 §3.1-shaped no-token challenge — every `htu` derives from `dpopHttpTarget()` so a query string no longer breaks proof validation, a caller can no longer choose the introspection `targetUri`, and dual-channel client credentials are refused at `/api/token` and `/api/par`. **Two probes rewrote that design before any code**: `/gm` checks the DPoP binding independently of the ownership introspection (`[A281305]`), and one proof serves both calls. **B1-W1 + B1-W2 + MS-W1 also shipped 2026-08-13**: `/api/jar/process` was unauthenticated and returned Authlete's whole authorization response **including the `ticket`** — a credential — plus `service` and `client`, always with status 200; it is now admin-only with an allowlist, and `jar.controller.ts` joins the surfaces list (**a DR-12 dependency settled**). RFC 9701 JWT introspection returns a signed `token-introspection+jwt` instead of **500**, the profile's only live one — and it signs with the key T1-2 registered, so an earlier ⚙️ action is what made a later code fix produce a signature. **`rsUri` is required for that path and must not be defaulted or sent unconditionally** — see `AGENTS.md`. **T1-14 + T1-15 shipped 2026-08-13 too**: `POST /api/backchannel_logout` performed **5 of §2.6's 11 validation steps** — no `iss`, no `aud`, no `iat` bound, no `sub`/`sid` presence, no `nonce` rejection — and then destroyed **`req.session`**, which is the *caller's* session, so it terminated nothing while answering 200. Both fixed and driven live against a locally-served JWKS. The `jwt.verify` rule is in `AGENTS.md` and **its second clause is the one that gets skipped**: pass `issuer`/`audience`, *and* refuse when they are unconfigured, because omitting an option silently downgrades the check. Two new settings (`BACKCHANNEL_LOGOUT_ISSUER`/`_AUDIENCE`) — **not** `JWT_ISSUER`, since there this server is the RP. **BCL-W3 and BCL-W7 rode along.** The entry is **S2 → S3**. **T1-16 + T1-18 shipped 2026-08-13**: one line (`requestBody: {}`) turned federation's **400 blaming the caller** into a **500 naming the missing configuration** — but **FED-W1's criteria cannot be met by it**, because an entity statement needs a federation JWK Set on the service (`[A316201]`), so **FED-W2 stays blocked** on a feature-enablement decision. **FED-W5 closed with no change of its own**, since the controller mapping was already right once the SDK stopped throwing — the same defect shape as BCL-W3 but a different fix, because *where the throw happens* decides which. **T1-20 shipped 2026-08-13**: `ciba.service.ts` never read `Authorization: Basic`, so the `CLIENT_SECRET_BASIC` configuration `AGENTS.md` *recommends* for CIBA could not authenticate. Three channels now, matching PAR; `appendToParams` extracted to `utils/params.ts`. Verified live — Basic reaches `USER_IDENTIFICATION`, and body credentials for that client now correctly earn `401 [A157357]` instead of being **silently converted** onto the Basic channel. **The three S1 residues are closed as documentation**: `README.md` opens with a *"Read this before you copy anything"* table of the four deliberate departures, and the feature tables carry honest statuses (FAPI 2.0 / Native SSO / Federation **Not enabled**, Backchannel Logout **Partial**, PKCE **supported, not required**). **A CI gap was found while verifying**: the client job ran `vite build` alone, which does not typecheck, so `npm run typecheck` was never invoked and **16 client test files never ran** — 4 real type errors had accumulated. Fixed, and both gates added to `ci.yml`. **1081 server tests / 73 files; 109 client tests / 16 files** (721/63 before the route-coverage backlog was drained, 969/70 before T1-19 batches 2 and 3 — see §0). **`npm run lint` was added to both CI jobs on 2026-08-14**; it had never run on either, and the client's was failing with 4 errors and 7 warnings. **TIER 1 IS COMPLETE as of 2026-08-14** — `T1-19` (all 13 items, three batches) and `T1-11` (the JAR half on 08-13, the four spec-shaped endpoints on 08-14). What remains in the plan is Tier 2's 11 open documentation items and Tier 3's decisions. **PKCE is now ENFORCED (2026-08-13) and `RFC7636-pkce.md` drops S1 → S3** — `pkceRequired` + `pkceS256Required` are `true` on `4277838306` and `2176571218`, verified live (`[A124301]` with no challenge, `[A124308]` on `plain`, `INTERACTION` on `S256`). **`1523514379` and `1678274156` stay unenforced deliberately** and must not be "fixed": Module 02 teaches the plain flow and Module 03 shows what it costs, so the lesson needs a client that still permits it — recorded in `AGENTS.md`. **Gate 4 Q1 is superseded**; it asked whether the entry stays S1 until PKCE is *actually* required, and it now is. Note §7.2's Tier 1 exit criterion is **under-specified** — it covers only the ⚙️ half of a tier titled *configuration and contained code*, and says *three* probes where T1-17 had five; fix it before using it to judge the tier complete. **T1-17 answered all five unprobed behaviours and deleted work rather than creating it**: `9449-W4` resolved *in our favour* (`/auth/introspection` enforces `cnf.jkt` with no proof — `[A065308]`), so **9449-W3 stays S2 and T1-10 is not escalated**; `7523-W1` showed Authlete refuses a no-`exp` assertion (`[A314305]`), demoting **7523-W2** to defence-in-depth; `GM-W2` works end to end with **no AS code**; `8628-W6` is substituted. Only **6749-W1** still owes a ruling — Authlete does *not* reject dual-channel credentials and the strict-checking page is silent, so the plan's "no code change if Authlete already rejects" escape does not apply. **Do not re-run these five probes.** **S1 register: 8 found, 0 remain — verified entry by entry on 2026-08-13, not asserted.** Current severities: `ERRORHANDLER-…` **closed**; `OIDC-RP-INITIATED-LOGOUT-1.0` **S4**; `RFC8628-…`, `RFC7662-…`, `RFC9470-…`, `RFC7636-pkce`, `FAPI-2.0-SECURITY-PROFILE`, `RFC9700-…` all **S3**. The last three fell on 2026-08-13 — PKCE by being enforced, the other two because `README.md` stopped claiming what was not true. The latent S1 (9470 F-3) is retired rather than downgraded. **The ⚙️ configuration block is complete.** **T1-5 shipped with DR-07 ruled and executed** — nine advertised client-auth methods → five, `service.get()` works, and both FAPI endpoints answer `200` with live values for the first time since 2026-08-06; Module 10 Ex 4 was **rebuilt, not retired**. **T1-4 is deliberately half-landed** — the 24-hour lifetime is kept on purpose (GM-W1/FAPI1-W3 open by decision). **B1-W6 is closed**: `idTokenReissuable` is now `true` and kept, because the `ID_TOKEN_REISSUABLE` branch was calling the wrong Authlete API and now calls `POST /idtoken/reissue`.
+- **Last updated:** 2026-08-15 — ✅ **THE AUDIT IS CLOSED. Tiers 0–3 all complete; T2-17 shipped; nothing in the remediation plan is open.** The single outstanding item is **JARM-W6**, a bug report to Authlete, which no commit can discharge. Read §0 in full before anything else — and note that everything after this sentence in this bullet is **historical narrative kept because its rulings still hold**, not a to-do list. *(The remainder is the 2026-08-13/14 state.)* *(The remainder of this bullet is the 2026-08-13 state, kept because its rulings still hold.)* (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1 … T1-10 and T1-17 shipped, T1-13 closed as unachievable, T1-21 declined**, see `04-remediation-plan.md` §1.2). **T1-9 + T1-10 + 6749-W1 shipped 2026-08-13**: `/api/gm/:grantId` is now a protected resource in the same sense UserInfo is — `DPoP` accepted, the §7.2 downgrade refused, an RFC 6750 §3.1-shaped no-token challenge — every `htu` derives from `dpopHttpTarget()` so a query string no longer breaks proof validation, a caller can no longer choose the introspection `targetUri`, and dual-channel client credentials are refused at `/api/token` and `/api/par`. **Two probes rewrote that design before any code**: `/gm` checks the DPoP binding independently of the ownership introspection (`[A281305]`), and one proof serves both calls. **B1-W1 + B1-W2 + MS-W1 also shipped 2026-08-13**: `/api/jar/process` was unauthenticated and returned Authlete's whole authorization response **including the `ticket`** — a credential — plus `service` and `client`, always with status 200; it is now admin-only with an allowlist, and `jar.controller.ts` joins the surfaces list (**a DR-12 dependency settled**). RFC 9701 JWT introspection returns a signed `token-introspection+jwt` instead of **500**, the profile's only live one — and it signs with the key T1-2 registered, so an earlier ⚙️ action is what made a later code fix produce a signature. **`rsUri` is required for that path and must not be defaulted or sent unconditionally** — see `AGENTS.md`. **T1-14 + T1-15 shipped 2026-08-13 too**: `POST /api/backchannel_logout` performed **5 of §2.6's 11 validation steps** — no `iss`, no `aud`, no `iat` bound, no `sub`/`sid` presence, no `nonce` rejection — and then destroyed **`req.session`**, which is the *caller's* session, so it terminated nothing while answering 200. Both fixed and driven live against a locally-served JWKS. The `jwt.verify` rule is in `AGENTS.md` and **its second clause is the one that gets skipped**: pass `issuer`/`audience`, *and* refuse when they are unconfigured, because omitting an option silently downgrades the check. Two new settings (`BACKCHANNEL_LOGOUT_ISSUER`/`_AUDIENCE`) — **not** `JWT_ISSUER`, since there this server is the RP. **BCL-W3 and BCL-W7 rode along.** The entry is **S2 → S3**. **T1-16 + T1-18 shipped 2026-08-13**: one line (`requestBody: {}`) turned federation's **400 blaming the caller** into a **500 naming the missing configuration** — but **FED-W1's criteria cannot be met by it**, because an entity statement needs a federation JWK Set on the service (`[A316201]`), so **FED-W2 stays blocked** on a feature-enablement decision. **FED-W5 closed with no change of its own**, since the controller mapping was already right once the SDK stopped throwing — the same defect shape as BCL-W3 but a different fix, because *where the throw happens* decides which. **T1-20 shipped 2026-08-13**: `ciba.service.ts` never read `Authorization: Basic`, so the `CLIENT_SECRET_BASIC` configuration `AGENTS.md` *recommends* for CIBA could not authenticate. Three channels now, matching PAR; `appendToParams` extracted to `utils/params.ts`. Verified live — Basic reaches `USER_IDENTIFICATION`, and body credentials for that client now correctly earn `401 [A157357]` instead of being **silently converted** onto the Basic channel. **The three S1 residues are closed as documentation**: `README.md` opens with a *"Read this before you copy anything"* table of the four deliberate departures, and the feature tables carry honest statuses (FAPI 2.0 / Native SSO / Federation **Not enabled**, Backchannel Logout **Partial**, PKCE **supported, not required**). **A CI gap was found while verifying**: the client job ran `vite build` alone, which does not typecheck, so `npm run typecheck` was never invoked and **16 client test files never ran** — 4 real type errors had accumulated. Fixed, and both gates added to `ci.yml`. **1081 server tests / 73 files; 109 client tests / 16 files** (721/63 before the route-coverage backlog was drained, 969/70 before T1-19 batches 2 and 3 — see §0). **`npm run lint` was added to both CI jobs on 2026-08-14**; it had never run on either, and the client's was failing with 4 errors and 7 warnings. **TIER 1 IS COMPLETE as of 2026-08-14** — `T1-19` (all 13 items, three batches) and `T1-11` (the JAR half on 08-13, the four spec-shaped endpoints on 08-14). What remains in the plan is Tier 2's 11 open documentation items and Tier 3's decisions. **PKCE is now ENFORCED (2026-08-13) and `RFC7636-pkce.md` drops S1 → S3** — `pkceRequired` + `pkceS256Required` are `true` on `4277838306` and `2176571218`, verified live (`[A124301]` with no challenge, `[A124308]` on `plain`, `INTERACTION` on `S256`). **`1523514379` and `1678274156` stay unenforced deliberately** and must not be "fixed": Module 02 teaches the plain flow and Module 03 shows what it costs, so the lesson needs a client that still permits it — recorded in `AGENTS.md`. **Gate 4 Q1 is superseded**; it asked whether the entry stays S1 until PKCE is *actually* required, and it now is. Note §7.2's Tier 1 exit criterion is **under-specified** — it covers only the ⚙️ half of a tier titled *configuration and contained code*, and says *three* probes where T1-17 had five; fix it before using it to judge the tier complete. **T1-17 answered all five unprobed behaviours and deleted work rather than creating it**: `9449-W4` resolved *in our favour* (`/auth/introspection` enforces `cnf.jkt` with no proof — `[A065308]`), so **9449-W3 stays S2 and T1-10 is not escalated**; `7523-W1` showed Authlete refuses a no-`exp` assertion (`[A314305]`), demoting **7523-W2** to defence-in-depth; `GM-W2` works end to end with **no AS code**; `8628-W6` is substituted. Only **6749-W1** still owes a ruling — Authlete does *not* reject dual-channel credentials and the strict-checking page is silent, so the plan's "no code change if Authlete already rejects" escape does not apply. **Do not re-run these five probes.** **S1 register: 8 found, 0 remain — verified entry by entry on 2026-08-13, not asserted.** Current severities: `ERRORHANDLER-…` **closed**; `OIDC-RP-INITIATED-LOGOUT-1.0` **S4**; `RFC8628-…`, `RFC7662-…`, `RFC9470-…`, `RFC7636-pkce`, `FAPI-2.0-SECURITY-PROFILE`, `RFC9700-…` all **S3**. The last three fell on 2026-08-13 — PKCE by being enforced, the other two because `README.md` stopped claiming what was not true. The latent S1 (9470 F-3) is retired rather than downgraded. **The ⚙️ configuration block is complete.** **T1-5 shipped with DR-07 ruled and executed** — nine advertised client-auth methods → five, `service.get()` works, and both FAPI endpoints answer `200` with live values for the first time since 2026-08-06; Module 10 Ex 4 was **rebuilt, not retired**. **T1-4 is deliberately half-landed** — the 24-hour lifetime is kept on purpose (GM-W1/FAPI1-W3 open by decision). **B1-W6 is closed**: `idTokenReissuable` is now `true` and kept, because the `ID_TOKEN_REISSUABLE` branch was calling the wrong Authlete API and now calls `POST /idtoken/reissue`.
 - **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `audit/phase3-and-tier0-fixes`
 - **Skill:** `.claude/skills/rfc-audit/SKILL.md` — invoke with `/rfc-audit` or follow it directly
-- **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **167 markdown files, 103 source refs, clean**
+- **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **166 markdown files, clean**, validating ~1,400 references across six forms. Also run `node scripts/check-route-coverage.mjs` — **92 routes, empty baseline**, so a new endpoint without a test breaks the build.
 
 ---
 
 ## 0. START HERE — the next piece of work, and why it is that one
 
-> ### ⏭️ NEXT: exactly ONE item remains in the whole plan — **T2-17**
+> ### ✅ THE AUDIT IS CLOSED. There is no next item.
 >
-> **Tier 0, Tier 1 and Tier 3 are complete. Tier 2 is 16 of 17.** Every decision record is ruled, every
-> Authlete probe the audit owed is spent, CU-W1 is proven, and **T2-5 shipped 2026-08-14**. One documentation
-> batch is left.
+> **Tiers 0, 1, 2 and 3 are complete.** T2-17 — the last row in the plan — shipped **2026-08-15**. Every
+> decision record is ruled, every probe the audit owed is spent, and the remediation plan has no open work.
 >
-> #### T2-5 is done — and four things it learned are worth carrying into T2-17
+> **Do not go looking for the next item. There isn't one.** If you are here to change something, you are
+> starting new work, not continuing this.
 >
-> **The sweep found 5 of 15 already shipped**, as predicted, but **not the five predicted**. HSK-W2, PS-W1 and
-> §2.1's outcome were marked done; **NSSO-W3 and ATTR-W3 were done but never marked**, so they read as open
-> work in the only place a planner would look. **FCL-W2 and SM-W2 — which the previous version of this section
-> flagged as *"check against DR-08"* — were genuinely open**, because DR-08 ruled the decision and deliberately
-> left its documentation to T2-5. **"Shipped inside another item" and "recorded as shipped" are different
-> facts, and only the second is visible.**
+> #### The single thing still owed, and why it cannot be closed here
 >
-> 1. **A sixteenth ID was missing from the list.** **FCL-W3** (the row's implementation column) is named only
->    in DR-08 and in its own finding — cluster 29's fifteen omit it. It was the worse half of the pair: the
->    column claimed *"logout routes"* for a mechanism this repo does not serve.
-> 2. **Two of the fifteen were not in `SPEC-INVENTORY.md` at all.** HAIP-W2's *"last undated Group C row"* and
->    MDL-W3's *"the inventory row"* are both `01-spec-matrix.md` §3 — neither HAIP nor mdoc appears anywhere in
->    `docs/`. **Check which table a row is in before planning the edit.**
-> 3. **A criterion can be falsified by a fix, not just by drift.** ATT-W1 asked for a row saying the method is
->    *"advertised but unconfigured"* — T1-5/DR-07 had **withdrawn** it, so the row says withdrawn.
-> 4. **Three rows were confirmed, not corrected** (RFC 9901's Nov 2025, OID4VP's 9 Jul 2025, both Federation
->    dates). That is recorded on purpose: a provenance pass reporting only errors cannot tell *checked and
->    correct* from *never checked*.
+> **JARM-W6 — report the `form_post.jwt` anomaly to Authlete.** Filing a bug with a vendor is an action
+> outside the working tree, so no commit can discharge it. It is recorded as **OWED**, not as done and not
+> quietly dropped. JARM-W2 upgraded what should be filed from an observation to a minimal reproduction:
 >
-> **The `-final.html` trap was tested twice and did not fire** — Front-Channel Logout and Federation 1.1 serve
-> identical documents at both URLs. The rule stays *fetch both and take the later*, not *always use one*.
+> > One client whose `responseModes` include `FORM_POST_JWT` and whose `authorizationSignAlg` is **unset**;
+> > one authorization request with `response_mode=form_post.jwt`. Authlete answers `action: LOCATION` with
+> > `responseContent` beginning `<html>` — a whole HTML document where a URL belongs. Expected `action: FORM`,
+> > which is what the same endpoint returns on **every** other `form_post.jwt` path.
 >
-> **The one substantive correction: "OpenID Federation 1.0 superseded by 1.1" was misleading.** Both dates were
-> right. **1.1 is a split, not an upgrade** — its own abstract says it introduces no new functionality — and the
-> protocol-specific half went to a *separate* Final of the same date, **OpenID Federation for OpenID Connect
-> 1.1**. This repo's two federation surfaces now live in **different documents**: entity configuration is 1.1
-> §9; Explicit Registration is the Connect document's. Following the old shorthand, a reviewer would search 1.1
-> for a registration requirement and conclude it had been dropped.
+> **It is unreachable on this deployment** — the trigger is the misconfiguration JARM-W1 removed on
+> 2026-08-12 — so nothing here is broken by leaving it unfiled.
 >
-> **T2-17 — the remaining documentation items**, ~40 IDs, listed on its row in `04-remediation-plan.md`.
-> **Batch by file, not by ID** — that is what the row says and it is right; many touch the same three or four
-> documents. Several are already closed by other work (RPL-W5, CUR-3b-W14, 6749-W1, 8693-W1/W2, 9068-W3/W4,
-> CUR-3c-W13's premise), so **the first task is a coverage sweep of the list, not writing.**
+> #### Final state
 >
-> **And carry this from the nine Tier 2 items shipped on 2026-08-14: eight of nine had criteria that were
-> WRONG, not merely vague** — see the table under *Tier 2 progress* below. The plan predates Tier 1. **Re-derive
-> every value an item hands you**, including its replacement line numbers and its "already established" facts.
-
-
+> | | |
+> |---|---|
+> | **S1 findings** | 8 found, **0 remain** |
+> | **Tier 0 / 1 / 2 / 3** | complete · complete · **17 of 17** · **19 of 19 ruled** |
+> | **Server tests** | **1097 / 74 files** (721/63 at the start of Phase 5) |
+> | **Client tests** | 109 / 16 |
+> | **`check-docs.mjs`** | clean, 166 files, ~1,400 references |
+> | **`check-route-coverage.mjs`** | 92 routes, **empty baseline** — a new route without a test breaks the build |
+> | **Discovery document** | 65 members |
+>
+> #### What T2-17 itself taught, since it is the last entry
+>
+> **The row listed 54 IDs; 15 were already closed and only 3 said so.** Eight had been shipped inside other
+> items and recorded **nowhere** — four in the Tier 3 commit alone. The lesson repeats T2-5's and outgrew it:
+> **"shipped inside another item" and "recorded as shipped" are different facts, and a planner only sees the
+> second.** If this audit is ever resumed or imitated, close the work item in the same commit as the work.
+>
+> **The row was titled *"Remaining documentation items"* and 13 of 39 were not documentation** — 6 code, 2
+> tests, 4 Authlete writes, 1 vendor report. Three of the six were in a **Security-critical surface**. A
+> heading is not a scope.
+>
+> **And the criteria were wrong far more often than right**, exactly as the nine Tier 2 items on 2026-08-14
+> predicted. One was actively dangerous: **7523-W3's *"replaced with `resources`"* would have restricted every
+> JWT-bearer token to this AS's own issuer identifier** — valid nowhere, accepted by Authlete, HTTP 200, and
+> indistinguishable from a cleanup in review. **Re-derive every value an item hands you.** That instruction
+> earned its place across seventeen items and never once failed to.
 
 *(Rewritten 2026-08-14. Everything the previous version described as "next" is done and merged. Read this
 before §1.)*
@@ -579,6 +582,13 @@ warnings** (client lint clean at `--max-warnings 0`), `check-docs` **167 files**
 empty baseline**.
 
 ## 1. Phase status
+
+> ✅ **CLOSED 2026-08-15.** Everything in this section is a record of work that is **finished**. Tier 0, Tier 1,
+> Tier 2 (all 17) and Tier 3 (all 19 decisions) are complete, and `04-remediation-plan.md` has no open row.
+> **Nothing below is a queue.** The only item this audit still owes is **JARM-W6**, a vendor bug report —
+> see §0 for the reproduction and why it cannot be closed from inside the repo.
+>
+> Read the rest of this section for *why* something is the way it is, never for *what to do next*.
 
 | Phase | Output | Status |
 |---|---|---|

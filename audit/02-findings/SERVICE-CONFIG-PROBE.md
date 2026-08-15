@@ -835,6 +835,80 @@ find a *second* error on the same mode, which row 4 is.
 `response_mode=form_post.jwt`, observe `action: LOCATION` carrying `<html>…`. That is a better bug report
 than the original observation, which could not say which of two conditions caused it.
 
+# Probe 11 — T2-17 batch 8, the two writes, 2026-08-15
+
+## 23. The DPoP nonce dance, observed — and back-channel logout advertised
+
+### 23.1 9449-W6 — the nonce transcript this audit had never been able to produce
+
+**Method.** `dpopNonceRequired: false → true` and `dpopNonceDuration: 0 → 300`, three `client_credentials`
+token calls each carrying a fresh ES256 DPoP proof, then both fields restored. Read → write → probe → revert
+→ diff: **0 unexpected field changes**, both values back to `false` / `0`.
+
+| # | Proof carries | `action` | `resultCode` | Body / header |
+|---|---|---|---|---|
+| 1 | **no `nonce`** | `BAD_REQUEST` | `A254307` | `{"error":"use_dpop_nonce", …}` **+ a `DPoP-Nonce`** |
+| 2 | the nonce from 1 | **`OK`** | `A052001` | success — **and a `DPoP-Nonce` again** |
+| 3 | a bogus `nonce` | `BAD_REQUEST` | `A254307` | `{"error":"use_dpop_nonce", …}` |
+
+**Both halves of 9449-W5's correction are now observed rather than argued.** That item fixed `AGENTS.md`
+from the specification alone and marked the area unexercisable. It was right twice:
+
+- **§8's status is 400 at the authorization server.** Authlete answers `BAD_REQUEST`, which
+  `token.controller.ts` maps to `400`. The old *"401 for both"* claim would have left a client that only
+  retries on 401 never retrying at the token endpoint — the nonce dance could not have started.
+- **A stale or mismatched nonce is `use_dpop_nonce`, not `invalid_dpop_proof`.** Row 3 confirms it. Reserve
+  `invalid_dpop_proof` for a proof that is genuinely malformed.
+
+**Three things the specification does not tell you, all worth keeping.**
+
+1. **The nonce is time-based, not one-time.** All three calls returned the *same* `DPoP-Nonce`, including
+   the successful one. It is valid for `dpopNonceDuration` (300 s here), so a client caches it and reuses it
+   rather than re-fetching per request. A client written to expect a fresh nonce per response would work,
+   but one written to expect *rotation* — treating a repeated nonce as a replay — would be wrong.
+2. **A nonce is returned on success at the token endpoint**, which is what `AGENTS.md` says token/PAR
+   endpoints may do and protected resources may not. Confirmed for the token endpoint.
+3. **`A254307`'s message is inaccurate for the absent case, and the code does not distinguish it.** Both
+   row 1 and row 3 give `[A254307] DPoP nonce error: The value of the 'nonce' claim in the DPoP proof JWT is
+   different from the expected one.` — but **row 1 sent no `nonce` claim at all**. There is nothing
+   *different from expected* about a claim that is absent. Anyone debugging a first-contact request will
+   read that message and go looking for a wrong value they never sent. Vendor behaviour; the `error` code is
+   correct in both cases, which is the part a client acts on.
+
+**The relay is already correct here.** `token.controller.ts:69` calls `setDpopNonce(res, result.dpopNonce)`
+**before** the `switch`, so every branch — `OK`, `BAD_REQUEST` and the rest — emits the header. Placing it
+before the switch rather than per-branch is why row 1 and row 2 both carry it. `par.controller.ts`,
+`userinfo.controller.ts`, `introspection.controller.ts` and `require-grant-ownership.ts` do the same through
+the same helper.
+
+**The live posture is unchanged.** `dpopNonceRequired` is `false` again, so none of the above is reachable on
+this deployment — it is now *documented from observation* rather than from reading, which is the whole
+difference between this and 9449-W5.
+
+### 23.2 BCL-W5 — advertised, and one client registered
+
+| Target | Before | After |
+|---|---|---|
+| `service.backchannelLogoutSupported` | `false` | **`true`** |
+| `client 1523514379 .backchannelLogoutUri` | absent | `https://oauth2-0-ekh2.onrender.com/api/backchannel_logout` |
+
+Both writes `200`; **0 unexpected field changes** on either object. The client canaries held —
+`tokenAuthMethod` is still `CLIENT_SECRET_BASIC` and `authorizationSignAlg` still `ES256`, which matters
+because `client/update` **replaces** rather than merges (CU-W1) and those are the two fields a careless
+update resets to Authlete's weakest defaults.
+
+Discovery now carries **`backchannel_logout_supported: true`**, and the document is at **65 members**.
+`backchannel_logout_session_supported` is **absent**, consistent with `backchannelLogoutSessionSupported`
+remaining `false` — Session Management and `sid` are declined together under DR-08, so advertising session
+support would have been the false half of a true claim.
+
+> **What this does and does not establish.** F-4's delivery path is now executable: a client with a
+> `backchannel_logout_uri` exists, so `issueAndDeliverToAll` has somebody to deliver to. **The somebody is
+> this deployment itself** — a loopback, because there is no third-party RP to register. That makes the path
+> *demonstrable*, not *interoperable*. Recorded as such deliberately: writing "back-channel logout works" on
+> the strength of a loopback would be the *advertised but unusable* defect this audit found four times, and
+> the discovery document is exactly where such a claim would mislead.
+
 ## Sources
 
 - Live probe 1: `GET /api/{serviceId}/service/get` — HTTP 200, 129 fields, 2026-08-10, authorised, read-only

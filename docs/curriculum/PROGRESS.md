@@ -129,6 +129,76 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — CU-W1 proven: Authlete REPLACES, and the defect was never data loss** (below)
 - [x] **2026-08-14 — TIER 3 COMPLETE: all 19 decision records ruled, and none of the remaining ones needed a write** (below)
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
+- [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
+
+### 2026-08-15 — T2-17: the last batch, and the audit closes
+
+**Why this matters to a future session: there is no next item.** Tiers 0–3 are complete, all 17 Tier 2 items
+are shipped, and the only thing this audit still owes is a bug report to a vendor, which cannot be filed from
+inside a git repository. See `audit/RESUME.md` §0.
+
+**T2-17 listed 54 IDs. 15 were already closed and only 3 said so.** The first task was a coverage sweep, not
+writing — and it found the same gap T2-5 did, one size larger: **8 items were closed in the repo and recorded
+nowhere**, four of them inside the Tier 3 commit (8693-W1, 8693-W2, 9068-W3, FAPI1A-W4), plus 8705-W2 in
+DR-01, 9068-W4 in T2-1, and 9700-W3 and 6749-W2 in the ordinary run of Tier 1. A further 4 carried ✅ in their
+own finding while the plan's row listed them plainly. **"Shipped inside another item" and "recorded as
+shipped" are still different facts, and only the second is visible to a planner.**
+
+**39 items remained, batched by file across 8 commits.** The batching instruction on the row was right: the
+39 touched about a dozen documents, and by-ID order would have opened `AGENTS.md` five separate times.
+
+> **The row is titled *"Remaining documentation items"* and 13 of the 39 were not documentation** — 6 code, 2
+> tests, 4 Authlete writes, 1 vendor bug report. Three of the six sat in `jwt-verification.service.ts`, a
+> **Security-critical surface**, so a row that reads as a prose batch contained the session's only plan-mode
+> change. **Check what an item actually is before budgeting it by its heading.**
+
+**The three findings worth carrying out of it:**
+
+1. **7523-W3's criterion, followed literally, was a security defect.** It offered *"replaced with
+   `resources`"* — and the inert field it pointed at held the **assertion's `aud`**, which RFC 7523 §3(3)
+   requires to identify the *authorization server*. Renaming it would have audience-restricted every
+   JWT-bearer access token to this AS's own issuer identifier: valid at **no resource server anywhere**,
+   accepted by Authlete, answered 200, and reading in review as a tidy-up. The correct source is the
+   `resource` request parameter Authlete has already parsed. A test now asserts the assertion's `aud` appears
+   **nowhere** in the outgoing request, and carries the reasoning so nobody "fixes" the guard.
+2. **The JWKS endpoint reported a fault as a valid empty key set.** Authlete answers 204 when a service has
+   no keys; the controller turned that into `200 {"keys":[]}`, which tells a relying party *"this OP
+   publishes no keys"*. The RP caches it and then rejects **every** token this OP signs — indistinguishable,
+   from its side, from forgery. Two code paths reached it. Both now fail loudly, with three tests, added
+   **because the change broke nothing**: the endpoint had one test and it was the happy path.
+3. **T2-13 was declared complete and had a fourth site.** `operationDocs.ts:532` still told SPA users to use
+   *"`exp` (max 60s for FAPI)"* — the same 60× error, in the same advice, three weeks after the item closed.
+   Its search was over markdown; this one is a TypeScript string literal. **A grep is scoped by file type
+   whether or not you meant it to be.**
+
+**Two live Authlete writes, and my own probe scripts reproduced the audit's signature defect.** The first run
+posted to `/api/{sid}/service` — a path that does not exist; the real one is `/service/update`. It returned
+**404 with an empty body**, which surfaced as `Unexpected end of JSON input`, and the companion script printed
+`service write=404` beside `client write=200` and **carried on to report `DIFF … NONE (0)`**. That diff was
+telling the truth: nothing unexpected changed, because nothing changed at all. **A verification that only
+looks for unexpected changes cannot see a write that never happened.** A second bug in the same script set its
+revert-guard flag on *entry*, so a crash inside the revert left the flag claiming success and the exit warning
+silent — **the guard reported the attempt, not the outcome.** Both fixed before the real run; both are the
+shapes this audit has spent five phases finding in other people's code.
+
+**9449-W6 finally produced the nonce transcript**, and it confirms 9449-W5's correction — which had been made
+from the specification alone and marked unexercisable. No nonce → **400** `use_dpop_nonce` **with** a
+`DPoP-Nonce`; that nonce replayed → `OK`; a bogus nonce → `use_dpop_nonce`, **not** `invalid_dpop_proof`.
+Three things RFC 9449 does not say: the nonce is **time-based, not one-time** (the same value came back on all
+three calls, including the success, so clients cache it and one treating repetition as replay is wrong); a
+nonce **is** returned on success at the token endpoint; and Authlete's `[A254307]` says *"different from the
+expected one"* **even when no `nonce` claim was sent**, sending a first-contact debugger after a value they
+never supplied. Flag reverted, 0 unexpected field changes.
+
+**BCL-W5 advertised back-channel logout** — `backchannel_logout_supported: true`, discovery now 65 members,
+one client registered. ⚠️ **The registered RP is this deployment itself.** F-4's delivery path is
+*demonstrable*, not *interoperable*, and is written up that way on purpose: claiming otherwise would be the
+**advertised but unusable** shape this audit found four times, in the one document where it would mislead
+every client that reads it.
+
+**Verification.** typecheck clean both packages, **1097 server tests / 74 files** (from 1081), 109 client / 16,
+lint unchanged (server's 4 pre-existing e2e warnings), `check-docs` clean across 166 files, route coverage 92
+with an empty baseline. `test:e2e` not run.
 
 ### 2026-08-14 — T2-5: the provenance pass, and what a fetched header actually settled
 
