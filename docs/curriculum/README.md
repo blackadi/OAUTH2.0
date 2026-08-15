@@ -120,3 +120,22 @@ spec identifier here is verified against its primary source, labeled by type (pu
 Implementer's Draft / active Internet-Draft / vendor behavior), and drafts are never presented as normative.
 Where this deployment diverges from a spec — or where a behavior is Authlete's implementation choice rather
 than a spec requirement — the modules say so explicitly. If you find an error, treat it as a bug and report it.
+
+**One category of standard cannot be verified that way, and saying so is part of keeping the promise true.**
+Some specifications are **not publicly retrievable** — ISO standards are the case here. `ISO/IEC 18013-5`
+(mobile driving licence / mdoc), referenced in Module 09b, is **paywalled**, and its catalogue page returns
+**HTTP 403** to an automated fetch, so there is no header line to read and no text to quote. For any such
+standard this curriculum:
+
+- **labels the source as secondary** — the identifier and title come from the ISO catalogue listing, not from
+  the document, and the row says so;
+- **quotes no normative text**, because quoting a requirement nobody here has read is the exact failure the
+  promise above exists to prevent;
+- **states requirements as reported by an accessible secondary source**, attributed, rather than as *"the
+  standard says"*.
+
+There were three options and two of them were dishonest: drop the row and pretend the standard is not relevant,
+or present a catalogue listing as though it were a header line. **The third is to keep the row and mark what
+kind of knowledge it is** — which is why you will see mdoc discussed without a single verbatim citation. If a
+claim here about a paywalled standard matters to your work, buy the document; do not treat this curriculum as a
+substitute for it.

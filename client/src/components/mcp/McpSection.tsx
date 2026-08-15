@@ -210,6 +210,8 @@ function McpSection() {
         clientId: wizClientId,
         redirectUri: wizRedirectUri,
         codeVerifier: wizCodeVerifier,
+        // MCP requires `resource` on BOTH requests. The same value the authorize step used.
+        resource: wizResource || undefined,
       }),
     );
     if (data) {
@@ -218,7 +220,7 @@ function McpSection() {
     } else {
       toast.error(err);
     }
-  }, [wizCode, wizCodeVerifier, wizAsData, wizIssuer, wizClientId, wizRedirectUri, wizCall]);
+  }, [wizCode, wizCodeVerifier, wizAsData, wizIssuer, wizClientId, wizRedirectUri, wizResource, wizCall]);
 
   const wizStepUserinfo = useCallback(async () => {
     const accessToken = (wizTokenResult as Record<string, unknown>)?.access_token as string;

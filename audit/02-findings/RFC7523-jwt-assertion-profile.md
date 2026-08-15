@@ -47,7 +47,7 @@
 | 10 | If client credentials are present, the AS MUST validate them | §3.1 | ✅ Authlete's; and an unidentifiable client is refused with `invalid_request` `[A244305]`, verified |
 | 11 | A bad client assertion → `invalid_client` | §3.2 | ✅ verified live, `[A157357]` |
 | 12 | Replay prevention via `jti` | §3(7), §6 — **MAY** | ⊘ not implemented; correctly optional, and the tutorial says so |
-| 13 | Clock skew allowance | §3(4) | ⚠️ `clockSkew` is a `JoseVerifyRequest` field and is never set — Authlete's default applies, value unknown (S4) |
+| 13 | Clock skew allowance | §3(4) | ✅ **`clockSkew: 60` since 2026-08-14** (7523-W5). It was unset, so Authlete's default applied and the value was unknown; it is now explicit. Inert while Authlete's own `exp` check fires first — see the note on F-1 |
 
 ## Authlete integration boundary
 
@@ -62,8 +62,14 @@
 
 ## Finding F-1 — `exp` is validated when present but is not required to be present (S3)
 
+> ✅ **CLOSED 2026-08-14 (T2-17, 7523-W2).** `mandatoryClaims` is now `["iss", "sub", "aud", "exp"]`, and
+> `clockSkew` is an explicit `60` (7523-W5). **Both are defence-in-depth and neither is reachable** — 7523-W1
+> established that Authlete refuses a no-`exp` assertion at `/auth/token` with `[A314305]` *before* it answers
+> `JWT_BEARER`, so this method is never entered for one and `/jose/verify` never applies either setting. The
+> block below is the pre-fix state, kept because F-1's reasoning is what identified the gap.
+
 ```ts
-// server/src/services/jwt-verification.service.ts:43-48
+// the pre-fix literal — see the note above
 joseVerifyRequest: {
   jose: assertion,
   clientIdentifier,
@@ -188,12 +194,15 @@ found.
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | 7523-W1 | Establish whether an assertion with no `exp` is accepted | S | ✅ **DONE 2026-08-12 (T1-17). It is refused** — `action: BAD_REQUEST`, `[A314305] The JWT specified by the 'assertion' request parameter does not contain the claim 'exp'.`, served as `error: invalid_grant`. The control (same assertion plus `exp`) returns `action: JWT_BEARER` and proceeds. So **Authlete enforces §3(4)'s presence requirement itself, before `/jose/verify` is ever called**. `[A314305]` is a **sixth error code Exercise 4's table does not carry**, and it is now a runnable row rather than a predicted one. Transcript in `PROGRESS.md`, entry 2026-08-12 T1-17. |
-| 7523-W2 | Add `exp` to `mandatoryClaims` | S | ⚠️ **DOWNGRADED to defence-in-depth 2026-08-12 by W1's result.** F-1 named two possibilities; it is the first. `mandatoryClaims` omitting `exp` never had the consequence feared, because a no-`exp` assertion never reaches `/jose/verify`. The change is still *correct* — `mandatoryClaims: ["iss","sub","aud","exp"]` plus a unit test asserting the value sent to `joseVerifyApi` — but whoever ships it must describe it as belt-and-braces against a vendor behaviour change, **not** as closing a hole. It no longer earns its own row; fold it into T2-17. |
-| 7523-W3 | Remove the inert `issuer` / `audience` fields | S | Either dropped, or replaced with `resources` so the JWT-bearer path really can audience-restrict — with a lab step showing `aud` in introspection, mirroring `modules/04…/lab.md` Exercise 4. |
+| 7523-W2 | Add `exp` to `mandatoryClaims` | S | ✅ **DONE 2026-08-14 (T2-17), as defence-in-depth — downgraded 2026-08-12 by W1's result.** Shipped exactly as this row required: `mandatoryClaims: ["iss","sub","aud","exp"]` plus a unit test asserting the value sent to `joseVerifyApi`, and both the code comment and `AGENTS.md` describe it as belt-and-braces against a vendor behaviour change rather than as closing a hole. *(Original note follows.)* **DOWNGRADED to defence-in-depth 2026-08-12 by W1's result.** F-1 named two possibilities; it is the first. `mandatoryClaims` omitting `exp` never had the consequence feared, because a no-`exp` assertion never reaches `/jose/verify`. The change is still *correct* — `mandatoryClaims: ["iss","sub","aud","exp"]` plus a unit test asserting the value sent to `joseVerifyApi` — but whoever ships it must describe it as belt-and-braces against a vendor behaviour change, **not** as closing a hole. It no longer earns its own row; fold it into T2-17. |
+| 7523-W3 | Remove the inert `issuer` / `audience` fields | S | ✅ **DONE 2026-08-14 (T2-17) — dropped, and `resources` wired from the right source, which is not the one the criterion implies.** ⚠️ **The criterion's second option, read literally, is a security defect.** *"Replaced with `resources`"* invites renaming the `audience` field — but `audience` here is the **assertion's `aud`**, which RFC 7523 §3(3) requires to identify the **authorization server**. That rename would audience-restrict every JWT-bearer token to this AS's own issuer identifier, valid at **no resource server anywhere**, with Authlete answering 200 and the diff reading as a cleanup. `resources` now comes from the **`resource` request parameter** Authlete already parsed — `accessTokenResources` (the AS's decision) with `resources` (what was asked for) as fallback. Also corrects this file's own account: the two fields were inert **twice over**, since `TokenManagementService.create()` builds from named fields and never read them, so they never reached the SDK to be stripped. **No lab step was added and none was needed** — a `grep` over `docs/` found *zero* JWT-bearer requests carrying `resource`, so nothing changed for any transcript; the guard is a unit test asserting the assertion's `aud` appears nowhere in the outgoing request. |
 | 7523-W4 | Register one client with `private_key_jwt` and a JWKS | S | ✅ **DONE 2026-08-12 (T1-3).** Client `2176571218` created rather than an existing one converted — the other three are load-bearing for labs, the SPA and 14 E2E blocks. `requestSignAlg: ES256` set in the same call, which closes **9101-W3** too. Both were exercised live, not just registered. The private half lives in `server/.env` as `PKJWT_PRIVATE_JWK` (gitignored) so the labs are repeatable; only the public half is registered, per `Client.jwks`'s *"must not include private keys"*. |
-| 7523-W5 | Set `clockSkew` explicitly, or document the default | S | Whichever, the value stops being unknown. |
+| 7523-W5 | Set `clockSkew` explicitly, or document the default | S | ✅ **DONE 2026-08-14 (T2-17) — set explicitly to `60`.** RFC 7523 §3(4)'s *"small leeway"*; at or below any conventional default, so making it explicit can only tighten or match what was in force. **Unreachable for the same reason as W2** — Authlete's own `exp` check fires at `/auth/token` before `/jose/verify` is called. Requirement row 13 updated: the value is no longer unknown. |
 
-**Ordering and gating.** W1 gates W2. W3 touches `services/jwt-verification.service.ts`, which is **not** on
-the `AGENTS.md` **Security-critical surfaces** list — but it decides what subject a token is minted for, so I
-would treat it as if it were and plan first; W2 changes validation policy and definitely should be planned.
-W4 is console configuration and should go first, since three other entries wait on it.
+**Ordering and gating.** *(Written before Tier 1; recorded as shipped for the record.)* W1 gated W2. W4 went
+first, as advised, and closed 9101-W3 with it. W2, W3 and W5 shipped together on 2026-08-14 **under plan
+mode** — which this paragraph said to do for the right reason and on wrong grounds: it read
+*"`services/jwt-verification.service.ts` is **not** on the `AGENTS.md` Security-critical surfaces list"*, and
+**DR-12 added it** to the *Token issuance* row on 2026-08-14. The instinct — *"it decides what a token is
+minted for, so treat it as if it were"* — is precisely the reasoning DR-12 later formalised. **The trigger is
+the concern, not the list**, and a list is a lagging record of concerns somebody already had.

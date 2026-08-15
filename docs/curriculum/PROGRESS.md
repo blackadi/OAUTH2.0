@@ -128,6 +128,145 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-14: the audit's last two fetches, and both went against the audit** (below)
 - [x] **2026-08-14 — CU-W1 proven: Authlete REPLACES, and the defect was never data loss** (below)
 - [x] **2026-08-14 — TIER 3 COMPLETE: all 19 decision records ruled, and none of the remaining ones needed a write** (below)
+- [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
+- [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
+
+### 2026-08-15 — T2-17: the last batch, and the audit closes
+
+**Why this matters to a future session: there is no next item.** Tiers 0–3 are complete, all 17 Tier 2 items
+are shipped, and the only thing this audit still owes is a bug report to a vendor, which cannot be filed from
+inside a git repository. See `audit/RESUME.md` §0.
+
+**T2-17 listed 54 IDs. 15 were already closed and only 3 said so.** The first task was a coverage sweep, not
+writing — and it found the same gap T2-5 did, one size larger: **8 items were closed in the repo and recorded
+nowhere**, four of them inside the Tier 3 commit (8693-W1, 8693-W2, 9068-W3, FAPI1A-W4), plus 8705-W2 in
+DR-01, 9068-W4 in T2-1, and 9700-W3 and 6749-W2 in the ordinary run of Tier 1. A further 4 carried ✅ in their
+own finding while the plan's row listed them plainly. **"Shipped inside another item" and "recorded as
+shipped" are still different facts, and only the second is visible to a planner.**
+
+**39 items remained, batched by file across 8 commits.** The batching instruction on the row was right: the
+39 touched about a dozen documents, and by-ID order would have opened `AGENTS.md` five separate times.
+
+> **The row is titled *"Remaining documentation items"* and 13 of the 39 were not documentation** — 6 code, 2
+> tests, 4 Authlete writes, 1 vendor bug report. Three of the six sat in `jwt-verification.service.ts`, a
+> **Security-critical surface**, so a row that reads as a prose batch contained the session's only plan-mode
+> change. **Check what an item actually is before budgeting it by its heading.**
+
+**The three findings worth carrying out of it:**
+
+1. **7523-W3's criterion, followed literally, was a security defect.** It offered *"replaced with
+   `resources`"* — and the inert field it pointed at held the **assertion's `aud`**, which RFC 7523 §3(3)
+   requires to identify the *authorization server*. Renaming it would have audience-restricted every
+   JWT-bearer access token to this AS's own issuer identifier: valid at **no resource server anywhere**,
+   accepted by Authlete, answered 200, and reading in review as a tidy-up. The correct source is the
+   `resource` request parameter Authlete has already parsed. A test now asserts the assertion's `aud` appears
+   **nowhere** in the outgoing request, and carries the reasoning so nobody "fixes" the guard.
+2. **The JWKS endpoint reported a fault as a valid empty key set.** Authlete answers 204 when a service has
+   no keys; the controller turned that into `200 {"keys":[]}`, which tells a relying party *"this OP
+   publishes no keys"*. The RP caches it and then rejects **every** token this OP signs — indistinguishable,
+   from its side, from forgery. Two code paths reached it. Both now fail loudly, with three tests, added
+   **because the change broke nothing**: the endpoint had one test and it was the happy path.
+3. **T2-13 was declared complete and had a fourth site.** `operationDocs.ts:532` still told SPA users to use
+   *"`exp` (max 60s for FAPI)"* — the same 60× error, in the same advice, three weeks after the item closed.
+   Its search was over markdown; this one is a TypeScript string literal. **A grep is scoped by file type
+   whether or not you meant it to be.**
+
+**Two live Authlete writes, and my own probe scripts reproduced the audit's signature defect.** The first run
+posted to `/api/{sid}/service` — a path that does not exist; the real one is `/service/update`. It returned
+**404 with an empty body**, which surfaced as `Unexpected end of JSON input`, and the companion script printed
+`service write=404` beside `client write=200` and **carried on to report `DIFF … NONE (0)`**. That diff was
+telling the truth: nothing unexpected changed, because nothing changed at all. **A verification that only
+looks for unexpected changes cannot see a write that never happened.** A second bug in the same script set its
+revert-guard flag on *entry*, so a crash inside the revert left the flag claiming success and the exit warning
+silent — **the guard reported the attempt, not the outcome.** Both fixed before the real run; both are the
+shapes this audit has spent five phases finding in other people's code.
+
+**9449-W6 finally produced the nonce transcript**, and it confirms 9449-W5's correction — which had been made
+from the specification alone and marked unexercisable. No nonce → **400** `use_dpop_nonce` **with** a
+`DPoP-Nonce`; that nonce replayed → `OK`; a bogus nonce → `use_dpop_nonce`, **not** `invalid_dpop_proof`.
+Three things RFC 9449 does not say: the nonce is **time-based, not one-time** (the same value came back on all
+three calls, including the success, so clients cache it and one treating repetition as replay is wrong); a
+nonce **is** returned on success at the token endpoint; and Authlete's `[A254307]` says *"different from the
+expected one"* **even when no `nonce` claim was sent**, sending a first-contact debugger after a value they
+never supplied. Flag reverted, 0 unexpected field changes.
+
+**BCL-W5 advertised back-channel logout** — `backchannel_logout_supported: true`, discovery now 65 members,
+one client registered. ⚠️ **The registered RP is this deployment itself.** F-4's delivery path is
+*demonstrable*, not *interoperable*, and is written up that way on purpose: claiming otherwise would be the
+**advertised but unusable** shape this audit found four times, in the one document where it would mislead
+every client that reads it.
+
+**Verification.** typecheck clean both packages, **1097 server tests / 74 files** (from 1081), 109 client / 16,
+lint unchanged (server's 4 pre-existing e2e warnings), `check-docs` clean across 166 files, route coverage 92
+with an empty baseline. `test:e2e` not run.
+
+### 2026-08-14 — T2-5: the provenance pass, and what a fetched header actually settled
+
+**Why this matters to a future session: only T2-17 is left in the whole remediation plan.** T2-5 was one
+`SPEC-INVENTORY.md` pass over 15 IDs, and its entire point was *citation provenance* — every row it touched now
+records **the URL fetched and the header line that URL returned**, in a new **Provenance** section at the end of
+the file. A status you cannot trace is the one defect that file exists to prevent, and it had been committed
+there twice.
+
+**The coverage sweep came before any fetch, and it changed the work.** Five of fifteen were already shipped —
+but **not the five the plan predicted**. HSK-W2, PS-W1 and §2.1's TLS outcome were done *and marked*. **NSSO-W3
+and ATTR-W3 were done and never marked**, so they read as open work in the only place a planner looks. And
+FCL-W2 / SM-W2, flagged as *"check against DR-08"*, were genuinely **open** — DR-08 ruled the decision and
+deliberately left its documentation here.
+
+> **"Shipped inside another item" and "recorded as shipped" are different facts, and only the second is
+> visible.** Two of fifteen sat in that gap. Marking them cost nothing; re-fetching them would have spent
+> budgeted fetches on settled questions.
+
+**A sixteenth ID was missing from the list entirely.** **FCL-W3** — the Front-Channel Logout row's
+implementation column — is named only in DR-08 and its own finding. It was the *worse* half of the pair: the
+column read *"logout routes"* for a mechanism this repo does not serve (`frontchannel_logout_supported` is
+ABSENT, and no `frontchannel*` symbol exists in `server/src`). **An undated row that also claims an
+implementation reads as a supported feature nobody got round to citing.** It was neither.
+
+**Four criteria were stale, in four different ways** — the pattern every Tier 2 item has now shown:
+
+| Criterion | What was wrong with it |
+|---|---|
+| **HAIP-W2**, **MDL-W3** | Neither targets `SPEC-INVENTORY.md`. Both rows are in `audit/01-spec-matrix.md` §3, and **neither subject appears anywhere in `docs/`** — so 13 of 15, not 15 of 15, were "one `SPEC-INVENTORY.md` pass" |
+| **ATT-W1** | Asked for a row saying the method is *"advertised but unconfigured"*. **T1-5/DR-07 withdrew it** on 2026-08-12, so the row says *withdrawn* — **a criterion falsified by a fix, not by drift** |
+| **FED-W3** | *"Removes the superseding claim unless it can be sourced"* — it **can** be sourced, and the version was never the problem |
+
+**The one substantive correction: *"OpenID Federation 1.0, superseded by 1.1"* was misleading, and both dates
+were right.** Fetching told a different story than the dates did. **1.1 is a split, not an upgrade** — its own
+abstract says it *"introduces no new functionality not present in OpenID Federation 1.0"* — and the
+protocol-specific half went to a **separate Final of the same date**, *OpenID Federation for OpenID Connect
+1.1*, which now has its own row.
+
+> **This repo's two federation surfaces are in different documents**, which is what makes the shorthand
+> dangerous rather than merely imprecise. The entity configuration endpoint is **1.1 §9**; Explicit
+> Registration — `POST /api/federation/registration` — is the **Connect** document's. A reviewer told to
+> "cite 1.1" for a registration requirement would search a document that does not contain it, find nothing,
+> and reasonably conclude the requirement had been dropped. **When a specification splits, "superseded by"
+> stops being a usable summary — name the half.**
+
+**Three rows were confirmed rather than corrected**, and the Provenance table says so: RFC 9901's Nov 2025,
+OID4VP's 9 Jul 2025, and both Federation dates. **A pass that reports only errors cannot distinguish *checked
+and correct* from *never checked*** — which is the failure mode this whole item exists to end.
+
+**Two smaller results.** The file's own `-final.html` trap was **tested twice and did not fire** (Front-Channel
+Logout and Federation 1.1 serve identical documents at both URLs), so the rule stays *fetch both and take the
+later* rather than *always use one*. And all three OIDC logout specifications turn out to share a publication
+date — **12 September 2022** — which explains why three missing dates looked like three unrelated small gaps
+instead of one family nobody had dated.
+
+> **The honest failure is left visible, and it is the mdoc row.** `iso.org/standard/69084.html` returns
+> **HTTP 403** to an automated fetch and the standard is paywalled regardless, so **no header line exists to
+> record**. The row says exactly that; the identifier and title come from the ISO catalogue listing and are
+> **labelled a secondary source**. That is the third option against the two dishonest ones — dropping the row,
+> or presenting a secondary source as a header — and it is the concrete evidence **MDL-W2** needs, which stays
+> open.
+
+**New rows created:** RFC 9701 (§4, beneath RFC 7662 — the same question in a different envelope), CIMD draft-02
+(§4), attestation-based client auth draft-10 (§5, beside RFC 8705), Federation for OpenID Connect 1.1 (§9b),
+and a real Session Management row replacing a footnote. **9701-W4's second half landed too**: Module 10's
+Message Signing section now names RFC 9701, carrying the `rsUri` requirement as *vendor requirement, normative
+purpose* — Authlete demands it, the RFC does not, and it exists because `rsUri` becomes the **`aud`**.
 
 ### 2026-08-14 — Tier 3: all 19 decision records ruled
 

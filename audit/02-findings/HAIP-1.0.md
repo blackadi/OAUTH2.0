@@ -115,7 +115,7 @@ Recommend `OUT_OF_SCOPE`:
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | HAIP-W1 | Write the decision record | S | Dated; states the three-link prerequisite chain, names the FAPI-2.0-versus-curriculum conflict as the binding constraint, and distinguishes this ruling from OID4VP's. Revisit trigger: links 1–2 cleared and a FAPI 2.0 service profile exists. |
-| HAIP-W2 | Date and retitle the row | S | *"OpenID4VC High Assurance Interoperability Profile 1.0"*, OpenID Final, **24 Dec 2025** — closing the last undated Group C row. |
+| HAIP-W2 | Date and retitle the row | S | ✅ **DONE 2026-08-14 (T2-5).** Fetched `openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html`; header reads *"OpenID4VC High Assurance Interoperability Profile 1.0"*, **Final**, **24 December 2025** — criterion confirmed exactly. **The row is in `01-spec-matrix.md` §3, not `SPEC-INVENTORY.md`**, which is what "the last undated Group C row" means and which cluster 29's *"one `SPEC-INVENTORY.md` pass"* framing obscured; HAIP appears nowhere in `docs/`. The `Prior ruling` column moved from *"Decision record needed"* to **DR-14 — cost-declined**, since leaving it beside a now-dated row would have been a fresh inaccuracy. |
 | HAIP-W3 | Distinguish the two Group C rulings | S | `01-spec-matrix.md` §3 marks OID4VP as structurally inapplicable and HAIP as cost-declined — F-2. |
 | HAIP-W4 | No implementation | — | Correct. |
 

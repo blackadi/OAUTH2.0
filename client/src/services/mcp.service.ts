@@ -61,12 +61,23 @@ function buildAuthorizationUrl(params: {
   return url.toString();
 }
 
+/**
+ * Exchange the authorization code for tokens.
+ *
+ * `resource` is sent here **as well as** on the authorization request — MCP requires clients to send it in
+ * *both*, and until 2026-08-14 this function did not accept the parameter at all (MCP-W1). Sending it only
+ * on the authorization request is the easy half to get right and the useless one on its own: RFC 8707 §2.2
+ * lets the token request narrow the audience of the token actually issued, so omitting it here means the
+ * access token can come back without the `aud` the wizard's earlier step asked for — and nothing in the
+ * response says so. Verify with introspection rather than by inspecting the request.
+ */
 async function exchangeCode(params: {
   tokenEndpoint: string;
   code: string;
   clientId: string;
   redirectUri: string;
   codeVerifier: string;
+  resource?: string;
 }): Promise<unknown> {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -75,6 +86,9 @@ async function exchangeCode(params: {
     redirect_uri: params.redirectUri,
     code_verifier: params.codeVerifier,
   });
+  if (params.resource) {
+    body.set('resource', params.resource);
+  }
   return http.postForm(params.tokenEndpoint, body);
 }
 

@@ -100,7 +100,7 @@ sources.
 |---|---|---|---|
 | MDL-W1 | Write the decision record | S | Dated; states the four grounds above, including that the standard is paywalled and a citation-standard page cannot be written; names SD-JWT VC as the preferred format for any HAIP ambition. Revisit trigger: an ecosystem requirement for mdoc specifically. |
 | MDL-W2 | Carve out the paywalled-standard case in the curriculum's verification promise | S | `docs/curriculum/README.md:116-122` gains a category for standards whose text is not publicly retrievable, so the promise stays true — F-1. |
-| MDL-W3 | Record the toolchain cost in the inventory row | S | The gating condition reads "requires a wallet **and** a CBOR/COSE toolchain; SD-JWT VC satisfies the same HAIP requirement" — F-2. |
+| MDL-W3 | Record the toolchain cost in the inventory row | S | ✅ **DONE 2026-08-14 (T2-5).** Applied verbatim to `01-spec-matrix.md` §3 — **not** `SPEC-INVENTORY.md`, which has no mdoc row and should not gain one, since `mdoc`/`18013`/`mDL` appear nowhere in `docs/`. **The provenance attempt is itself recorded, because it failed:** `iso.org/standard/69084.html` returns **HTTP 403** to an automated fetch and the text is paywalled regardless, so **no header line exists to cite** and the row says so. Identifier and title come from the ISO catalogue listing, **labelled a secondary source**. That is the honest third option against dropping the row or dressing a secondary source as a header — and it is the concrete evidence **MDL-W2** needs, which stays open. |
 | MDL-W4 | No implementation | — | Correct. |
 
 **Ordering.** All documentation. MDL-W2 is the only one with reach beyond this row — it touches the curriculum's

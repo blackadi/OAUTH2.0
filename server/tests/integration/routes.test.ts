@@ -114,6 +114,54 @@ describe("Integration: all API routes", () => {
       expect(res.body.access_token).toBe("at-1")
     })
 
+    // 8707-W1. RFC 8707 §2.2 lets the token request narrow the audience of the token actually issued, so
+    // `resource` has to survive the trip to Authlete. It does here only because `parameters` is `req.rawBody`
+    // — nothing names the parameter, which is a property worth pinning rather than trusting.
+    //
+    // What this can and cannot show. Authlete is mocked, so the `resource` -> `aud` mapping itself is *its*
+    // behaviour and is verified live in `modules/04…/lab.md` Exercise 4. What is asserted here is the half
+    // that is ours and the half that has actually broken: that the parameter crosses the boundary, and that
+    // an `aud` coming back is surfaced rather than dropped. The contrast case is token exchange, where the
+    // request IS built from named fields and `resource` is discarded — locked separately by
+    // `token-exchange-response.handler.test.ts`, a Deliberate defect.
+    it("forwards `resource` to Authlete verbatim on the token request — RFC 8707 §2.2", async () => {
+      mockApi.token.process.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ access_token: "at-1" }) })
+      await request(app).post("/api/token")
+        .set("Authorization", `Basic ${Buffer.from("c-1:s-1").toString("base64")}`)
+        .send("grant_type=authorization_code&code=code-1&resource=https%3A%2F%2Fapi.example.com%2Forders")
+        .expect(200)
+
+      const sent = mockApi.token.process.mock.calls[0][0].tokenRequest.parameters as string
+      expect(new URLSearchParams(sent).get("resource")).toBe("https://api.example.com/orders")
+    })
+
+    it("passes `invalid_target` through unchanged when Authlete rejects the resource", async () => {
+      // The one error code RFC 8707 adds (§2). Authlete decides it; this asserts we do not rewrite it.
+      mockApi.token.process.mockResolvedValue({
+        action: "BAD_REQUEST",
+        responseContent: JSON.stringify({ error: "invalid_target", error_description: "[A251307] not an absolute URI" }),
+      })
+      const res = await request(app).post("/api/token")
+        .set("Authorization", `Basic ${Buffer.from("c-1:s-1").toString("base64")}`)
+        .send("grant_type=authorization_code&code=code-1&resource=%2Forders")
+        .expect(400)
+      expect(res.body.error).toBe("invalid_target")
+    })
+
+    it("surfaces `aud` from introspection so a resource server can check it", async () => {
+      // The other end of the same control: an audience-restricted token is only useful if the RS can see
+      // the restriction. RFC 7662 §2.2 makes `aud` an optional top-level member of the response.
+      mockApi.introspection.standardProcess.mockResolvedValue({
+        action: "OK",
+        responseContent: JSON.stringify({ active: true, aud: ["https://api.example.com/orders"] }),
+      })
+      const res = await request(app).post("/api/introspection/standard")
+        .auth("test-admin", "test-secret")
+        .set("Content-Type", "application/x-www-form-urlencoded")
+        .send("token=at-1").expect(200)
+      expect(res.body.aud).toEqual(["https://api.example.com/orders"])
+    })
+
     it("refuses credentials on both channels — RFC 6749 §2.3.1", async () => {
       // Authlete accepts this shape and lets the Basic channel win (verified live 2026-08-12),
       // and this server forwards both because `parameters` is the raw body. So the single-method
@@ -307,6 +355,33 @@ describe("Integration: all API routes", () => {
       mockApi.jwkSetEndpoint.serviceJwksGetApi.mockResolvedValue({ keys: [{ kty: "RSA", kid: "k-1" }] })
       const res = await request(app).get("/api/.well-known/jwks.json").expect(200)
       expect(res.body.keys).toHaveLength(1)
+    })
+
+    // JOSE-W5. "No keys" is a server fault, not an empty-but-valid JWK Set. All three shapes below used to
+    // answer `200 {"keys":[]}`, which tells a relying party this OP publishes no keys — so the RP caches an
+    // empty set and rejects every token for an unknown `kid`, indistinguishable from forged tokens. A 5xx
+    // makes a well-built RP retry and keep serving from its cached set instead.
+    it("fails rather than serving an empty key set when Authlete returns nothing", async () => {
+      mockApi.jwkSetEndpoint.serviceJwksGetApi.mockResolvedValue(undefined)
+      const res = await request(app).get("/api/.well-known/jwks.json")
+      expect(res.status).toBeGreaterThanOrEqual(500)
+      expect(res.body.keys).toBeUndefined()
+    })
+
+    it("fails when the response carries no `keys` array", async () => {
+      mockApi.jwkSetEndpoint.serviceJwksGetApi.mockResolvedValue({} as never)
+      const res = await request(app).get("/api/.well-known/jwks.json")
+      expect(res.status).toBeGreaterThanOrEqual(500)
+      expect(res.body.keys).toBeUndefined()
+    })
+
+    it("fails on Authlete's 204 rather than translating it to an empty set", async () => {
+      mockApi.jwkSetEndpoint.serviceJwksGetApi.mockRejectedValue(
+        Object.assign(new Error("No Content"), { statusCode: 204 }),
+      )
+      const res = await request(app).get("/api/.well-known/jwks.json")
+      expect(res.status).toBeGreaterThanOrEqual(500)
+      expect(res.body.keys).toBeUndefined()
     })
   })
 

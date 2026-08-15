@@ -38,13 +38,26 @@ export class JwtVerificationService {
 
     const clientIdentifier = result.clientIdAlias ?? String(result.clientId);
 
+    // `exp` and `clockSkew` are **defence-in-depth, and are unreachable today** — 7523-W2 / 7523-W5.
+    //
+    // RFC 7523 §3(4) makes `exp` mandatory on an assertion, and this list omitted it. That reads like a hole
+    // and is not one: 7523-W1 established live that Authlete refuses a no-`exp` assertion at `/auth/token`
+    // with `[A314305]`, *before* it ever answers `JWT_BEARER`, so this method is not reached for one and
+    // `/jose/verify` never gets to apply either setting. Both are correct, both are inert while the vendor
+    // behaves as observed, and both become load-bearing the day it does not. Do not describe either as
+    // closing a vulnerability.
+    //
+    // `clockSkew` was previously unset, so Authlete's default applied and its value was unknown — a gap the
+    // RFC 7523 audit recorded as its own requirement row. 60 s matches §3(4)'s "small leeway" guidance and
+    // sits at or below any conventional default, so making it explicit can only tighten or match.
     const verifyResp = await this.authleteApi.joseObject.joseVerifyApi({
       serviceId: this.svcId,
       joseVerifyRequest: {
         jose: assertion,
         clientIdentifier,
         signedByClient: true,
-        mandatoryClaims: ["iss", "sub", "aud"],
+        mandatoryClaims: ["iss", "sub", "aud", "exp"],
+        clockSkew: 60,
       },
     });
 
@@ -67,8 +80,6 @@ export class JwtVerificationService {
 
     const decodedPayload = decoded.payload as jwt.JwtPayload;
     const subject = decodedPayload.sub;
-    const issuer = decodedPayload.iss;
-    const audience = decodedPayload.aud;
 
     if (!subject) {
       return {
@@ -78,14 +89,40 @@ export class JwtVerificationService {
       };
     }
 
-    const createRequest = {
+    /**
+     * ⚠️ **Do not audience-restrict this token with the assertion's `aud`.** 7523-W3, 2026-08-14.
+     *
+     * This literal used to carry `issuer` and `audience`, read from the decoded assertion. Both were
+     * **inert** — `TokenCreateRequest` has 23 properties and neither is among them, and
+     * `TokenManagementService.create()` builds its request from named fields and never reads them either,
+     * so they were dropped twice over. Nothing ever failed, which is why they survived.
+     *
+     * **The tidy-looking fix is a security defect.** `audience` here is the assertion's `aud`, and RFC 7523
+     * §3(3) requires that claim to identify the **authorization server** — a wrong value earns `[A314314]`
+     * from Authlete, which Module 06's lab demonstrates. Renaming the field to `resources` would therefore
+     * audience-restrict every JWT-bearer access token to *this AS's own issuer identifier*, making it valid
+     * at no resource server anywhere. Authlete accepts that and answers 200. The tokens would simply stop
+     * working at their intended API, silently, and the diff would read as a cleanup.
+     *
+     * The audience a client actually wants comes from the **`resource` request parameter** (RFC 8707 §2.2),
+     * which Authlete has already parsed and validated by the time it hands us this response.
+     * `accessTokenResources` is its *decision* about the token being issued and wins; `resources` is what
+     * the client *asked for* and is the fallback, since at this point in the flow Authlete has issued
+     * nothing. Neither is read from a request body here — same rule as `introspection.service.ts` and
+     * `userinfo.service.ts`: server-determined fields do not come from the caller.
+     */
+    const resources = result.accessTokenResources ?? result.resources;
+
+    const createRequest: Record<string, unknown> = {
       grantType: "JWT_BEARER",
       subject,
       clientId: result.clientId,
-      issuer,
-      audience: Array.isArray(audience) ? audience : [audience],
       scopes: result.scopes,
     };
+
+    if (resources?.length) {
+      createRequest.resources = resources;
+    }
 
     const createResp = await this.tokenManagementService.create(createRequest);
 

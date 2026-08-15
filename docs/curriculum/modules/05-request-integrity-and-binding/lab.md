@@ -498,6 +498,36 @@ identifier, clients MUST reject the authorization response and MUST NOT proceed 
 grant."*). Write the check as three lines of pseudocode and note that nothing in this repo's flow would break
 if you deleted it — which is precisely why it gets forgotten.
 
+> ### Where does *"the expected issuer identifier"* come from?
+>
+> §2.4 tells the client to compare `iss` against the issuer it expected, and says nothing about how the client
+> got that value. **It comes from discovery, and RFC 8414 §3 is what makes it trustworthy.** So RFC 9207 has a
+> precondition it never states: mix-up protection is only as good as the correspondence between the `issuer`
+> in the metadata document and the URL the document was fetched from.
+>
+> §3.3 makes that correspondence a requirement — the `issuer` value *"MUST be identical to the issuer
+> identifier value into which the well-known URI string was inserted to create the URL used to retrieve the
+> metadata"*. Check it here:
+>
+> ```bash
+> curl -s "$API/.well-known/openid-configuration" | jq -r '.issuer, .authorization_endpoint, .token_endpoint'
+> ```
+>
+> Every endpoint should sit **under** the `issuer`, and the `issuer` should be exactly the host you fetched
+> from — trailing slashes included, since `https://host` and `https://host/` are different strings to the `===`
+> a client performs.
+>
+> **This deployment failed that check until 2026-08-14.** Its `issuer` named one host while the endpoints named
+> another, so a client doing §2.4 correctly would have compared the response's `iss` against an identifier that
+> matched nothing it was actually talking to. Two failure modes follow, and they are opposite: a strict client
+> rejects every response and the flow simply breaks, while a lenient client skips the comparison as unworkable
+> and **loses the mix-up defence entirely** — silently, which is the worse one.
+>
+> The fix was configuration, not code: `issuer` and all fourteen URL fields were repointed at one host. Note
+> what that means for the exercise you just ran — **`iss` being present and correct proves the AS half only.**
+> The client half needs a value to compare against, and that value comes from a different document, fetched at a
+> different time, by a different rule. Two specifications, one control; neither is sufficient alone.
+
 ## Exercise 4 — Build a DPoP proof and bind a token
 
 ```bash

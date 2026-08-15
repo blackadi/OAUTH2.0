@@ -499,16 +499,69 @@ Two requirements. Client authentication is **enforced** for confidential clients
 `[A157357]` refuse mismatched methods twice (Modules 06 and just now). PASS.
 
 The asymmetric-cryptography RECOMMENDED is a different matter: `$CLIENT_ID` uses `client_secret_basic`, a
-shared symmetric secret. The service *supports* `private_key_jwt`, `tls_client_auth`, and
-`self_signed_tls_client_auth`; no client uses them.
+shared symmetric secret. The service supports `private_key_jwt`, and **one client uses it** — `$PKJWT_CLIENT_ID`,
+which you exercised in Module 06. So this is *"available and mostly unused"*, not *"available and unused"*.
 
-> **§2.5 — PASS (enforcement); DEVIATES (asymmetric RECOMMENDED).** Supported but unused. **Severity: low**
-> for a lab; note that Module 10's FAPI profile makes it mandatory, and that Module 06 demonstrated the
-> concrete cost of the symmetric secret here — with the JWT assertion grant enabled, that one shared secret is
-> also a user-impersonation key.
+> **§2.5 — PASS (enforcement); DEVIATES (asymmetric RECOMMENDED).** Available and used by one of four clients.
+> **Severity: low** for a lab; note that Module 10's FAPI profile makes it mandatory, and that Module 06
+> demonstrated the concrete cost of the symmetric secret here — with the JWT assertion grant enabled, that one
+> shared secret is also a user-impersonation key.
 
 That cross-reference is the point. A shared secret is a weak finding on its own and a serious one in
 combination, and only someone who has done both modules can see it.
+
+### 5b-bis — *advertised but unusable*, and the audit trail of a fix
+
+Module 09a gives you four states a capability can be in. This subsection is where you meet the third one on a
+live service, and the reason it is worth its own step is that **the evidence for it disappeared when it was
+fixed** — so you are reading history, not running a probe.
+
+Until 2026-08-12 this deployment's `token_endpoint_auth_methods_supported` listed **nine** methods:
+
+```
+none  client_secret_basic  client_secret_post  client_secret_jwt  private_key_jwt
+tls_client_auth  self_signed_tls_client_auth  attest_jwt_client_auth  spiffe_jwt
+```
+
+**Four of those nine could not be used by anyone.** Not "not configured on a client" — *unusable*:
+
+| Advertised | Why no client could ever use it |
+|---|---|
+| `tls_client_auth`, `self_signed_tls_client_auth` | mTLS is not implemented, and `tls_client_certificate_bound_access_tokens` is `false`. There is no TLS-terminating hop that forwards a client certificate |
+| `attest_jwt_client_auth` | no Client Attester is configured, and the discovery document had **no `challenge_endpoint`** — so the method's own precondition was missing from the same document that advertised it |
+| `spiffe_jwt` | nothing here speaks SPIFFE. It also **broke `service.get()` for six days**, because the TypeScript SDK's `ClientAuthMethod` enum does not contain it |
+
+Now run it and count:
+
+```bash
+curl -s "$API/.well-known/openid-configuration" | jq '.token_endpoint_auth_methods_supported | length'
+```
+
+```
+5
+```
+
+**The four were withdrawn, not implemented.** That is the correct fix for *advertised but unusable*, and it is
+worth sitting with, because the instinct runs the other way: the list looked like a feature set, so removing
+entries looks like losing features. Nothing was lost — no client could authenticate by any of the four, so the
+only thing the advertisement ever did was mislead a client into trying.
+
+**Three things to take into your report.**
+
+1. **A metadata document is a promise, and an unkeepable promise is a defect** even though every endpoint
+   returns 200 and nothing in a test suite fails. There is no error to grep for.
+2. **Withdrawal has side effects worth checking.** Dropping `attest_jwt_client_auth` also removed
+   `client_attestation_signing_alg_values_supported` and `client_attestation_pop_signing_alg_values_supported`,
+   because those two members exist only to describe that method. One withdrawal, three advertisements gone,
+   and the document went from 64 members to 62.
+3. **This is the state Module 09a calls *advertised but unusable*, and it cost trust in the metadata** — the
+   fourth column of that table. Compare it with the other three states there, and note that a report written
+   from discovery metadata alone would have scored all nine of these methods as supported.
+
+> **Write it up as a finding even though it is closed.** *"Four of nine advertised client-authentication methods
+> were unusable; withdrawn 2026-08-12."* An auditor who only reports open items produces a document that cannot
+> distinguish *fixed* from *never examined* — the same reason the specification inventory records rows it
+> checked and found correct.
 
 ### 5c — §2.6 other recommendations
 

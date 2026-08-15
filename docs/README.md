@@ -60,6 +60,18 @@ Each tutorial explains **why** the feature was created, **how** it works, and **
 | [FAPI 2.0](./FAPI-TUTORIAL.md) | "How do I meet financial-grade security requirements?" |
 | [MCP OAuth 2.1](./MCP-OAUTH-TUTORIAL.md) | "How does an AI client get authorized to call my tools?" |
 
+### Reference and internal documents
+
+Not tutorials — these answer a narrower question or record how the repo is maintained. They are listed because
+an unindexed document is one nobody finds and nobody updates.
+
+| Document | What it is |
+|---|---|
+| [Authlete tickets](./TICKET-PARAMETER.md) | **Reference.** What a `ticket` is, why it is a credential rather than a correlation id, and why `/api/jar/process` no longer returns one to anonymous callers. Read this before touching any endpoint that handles Authlete's authorization response |
+| [API reference](./API.md) · [Architecture](./ARCHITECTURE.md) · [Development](./DEVELOPMENT.md) · [Monitoring](./MONITORING.md) | **Reference.** Endpoints, request lifecycle, SDK version pin, Prometheus/Grafana |
+| [Curriculum audit pass A](./curriculum/AUDIT-PASS-A.md) · [pass B](./curriculum/AUDIT-PASS-B.md) | **Internal.** Working records of two curriculum review passes. Kept for their method and their misses — pass A recorded `sd-jwt.mjs` as *"CLEAN, 0 defects"* and it had three, one of them a security defect. Not a description of current state; read the module itself for that |
+| [CHANGELOG](../CHANGELOG.md) | **Internal.** Release-level history. Day-to-day build history lives in [`curriculum/PROGRESS.md`](./curriculum/PROGRESS.md), which is the fuller record |
+
 ### How to read the transcripts in these tutorials
 
 **A request or response printed in a tutorial is evidence of one of three different things, and confusing

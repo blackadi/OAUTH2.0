@@ -240,6 +240,35 @@ job entirely to PKCE.
 > algorithm; this module states the requirement; until 2026-08-14 nothing put them in the same sentence — in the
 > module whose deliverable is a conformance report. **When you write yours, the check is per client, and the
 > question to ask is "which principal does this requirement bind?"**
+>
+> ---
+>
+> **Why HMAC is the wrong shape here, not merely the wrong entry on a list.** *"HMAC appears nowhere in the
+> profile"* is true and is the weak version of the argument, because it invites the reply *"then add it."*
+> The real objection is that FAPI 1.0 Advanced exists to make high-value, write-access API calls
+> **non-repudiable**, and a symmetric algorithm cannot do that at all:
+>
+> | | Asymmetric (`ES256`, `PS256`) | Symmetric (`HS256`) |
+> |---|---|---|
+> | who can produce a valid signature | the OP alone — it holds the private key | **the OP *and* the client** — both hold `client_secret` |
+> | what a valid signature proves | the OP issued this token | *somebody holding the shared secret* issued it |
+> | can the client forge one? | no | **yes, trivially** |
+> | can the OP deny issuing one? | no | **yes — and truthfully** |
+>
+> An `HS256` ID token is a perfectly good *integrity* check between two parties who already trust each other.
+> It is worthless as **evidence**. If `1523514379`'s user disputes a payment, the ID token proves nothing about
+> which of the two parties minted it, because either could have. That is what non-repudiation means and why the
+> profile's algorithm list is not arbitrary: swapping in a symmetric algorithm does not weaken the guarantee by
+> a degree, it **removes the property the profile was built to provide** while leaving every field in place and
+> every signature verifying.
+>
+> Note the direction this cuts. The confidential client — the one holding a secret, the one you would assume is
+> the *more* trustworthy of the four — is the only one that can forge the OP's tokens, precisely *because* it
+> holds a secret. **Confidentiality and non-repudiation are different properties, and here they trade against
+> each other.** FAPI 2.0 Message Signing (later in this module) is the same concern one layer up: signing the
+> request, the response and the introspection so a dispute can be settled from artefacts rather than from logs.
+> Ask of any signature you meet: *who could have produced this?* If the answer is more than one party, it is
+> integrity, not proof.
 
 **§5.3.2.2 — authorization endpoint flows.** Also `shall`:
 
@@ -302,6 +331,20 @@ Message Signing layers JAR, JARM and signed introspection responses back on for 
 instruction where the bank must later prove to a regulator exactly what the client asked for. **Do not adopt
 it because it sounds stronger.** Adopt it when you can name the dispute you are trying to settle and the
 party you would have to convince.
+
+**The signed-introspection leg has its own RFC, and this server serves it.** *JSON Web Token (JWT) Response
+for OAuth Token Introspection* — **RFC 9701**, Proposed Standard, **January 2025**. An RS asks for it with
+`Accept: application/token-introspection+jwt` and gets a signed JWT back instead of the plain JSON of RFC
+7662, so the AS's answer becomes evidence rather than a claim the RS repeats. Verified live here on
+2026-08-13: `typ: token-introspection+jwt`, `alg: RS256`, `kid: rsa-1`, carrying `iss`, `aud`, `iat` and
+`token_introspection`.
+
+> **Note the one thing the RFC does not tell you.** Authlete also requires **`rsUri`** in the request body,
+> and answers `[A404301]` without it. That is not gratuitous: `rsUri` becomes the **`aud`**, naming the
+> resource server that asked — and a signed statement addressed to nobody is not much use as evidence. This
+> server passes the 400 through rather than defaulting the value, because it cannot honestly guess which RS
+> is calling. **Vendor requirement, normative purpose** — the distinction this module keeps asking you to
+> make.
 
 ---
 
@@ -382,6 +425,7 @@ next authorization request will sail through with no prompt.
 | FAPI 2.0 Security Profile | OpenID Final | 22 Feb 2025 | The `shall` list; simpler than 1.0 |
 | FAPI 2.0 Attacker Model | OpenID Final | 22 Feb 2025 | Six attackers, three goals, explicit exclusions |
 | FAPI 2.0 Message Signing | OpenID Final | 25 Sep 2025 | Non-repudiation, when you can name the dispute |
+| RFC 9701 | Published RFC (Proposed Standard) | Jan 2025 | The signed-introspection leg — **live on this server** |
 | Grant Management for OAuth 2.0 (Draft) | **Internet-Draft ‑03** | 9 May 2023 | `grant_id`, lifecycle actions, query/revoke API |
 
 ---

@@ -239,6 +239,18 @@ validated the redirect URI, so it was allowed to report the error there. The fra
 fragment never reaches the server, so two URIs differing only by fragment are the same resource to everyone
 except the string comparison — an ambiguity you do not want in an audience check.
 
+> **Where `resource` stops working, and it is not where you would guess.** You just saw it honoured on the
+> **authorization** endpoint and carried through to the **token** endpoint — the `aud` above is the proof. It is
+> **not** honoured through a **token exchange**: `POST /api/token` with
+> `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` accepts a `resource` parameter, answers **200**,
+> and issues a token with **no `aud` at all**. Nothing tells you it was dropped.
+>
+> That is the same parameter, the same endpoint, and a different grant — which makes it a much easier trap than
+> an unsupported feature would be. **Module 06 Exercise 6b** is where you watch it happen and read why; the short
+> version is that this server's exchange handler builds its Authlete request from four fields and `resources` is
+> not one of them, so the restriction you asked for is silently discarded. Do not carry the confidence you just
+> earned in this exercise across a grant-type boundary without re-checking `aud`.
+
 ## Exercise 5 — The three metadata documents
 
 ```bash
