@@ -113,7 +113,12 @@ describe("handleTokenExchange — characterization of deliberate gaps", () => {
       expect(sentCreateRequest().resources).toBeUndefined()
     })
 
-    it("drops `audiences`", async () => {
+    // Unlike every other case in this block, this one can never legitimately change: Authlete's
+    // `TokenCreateRequest` has no audience field at all, so there is nowhere to forward `audiences` to.
+    // `resources` above is a choice this server makes; this is a vendor boundary. Both look identical from
+    // the outside — same dropped parameter, same missing `aud`, same 200 — which is how they got conflated
+    // (8693-W1). If this assertion ever fails, the SDK gained a field; check the schema before "fixing" it.
+    it("drops `audiences` — and cannot do otherwise; Authlete models no audience field", async () => {
       await handleTokenExchange(mockReq(), mockRes(), authleteResult, next())
       expect(sentCreateRequest().audiences).toBeUndefined()
     })

@@ -490,6 +490,78 @@ All require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth. **Authentication f
 | `/api/client/secret/refresh/:clientId` | POST | Generate new client secret |
 | `/api/client/secret/update/:clientId` | PUT | Set specific client secret |
 
+> **`PATCH /api/client/update/:clientId` is read-modify-write, and that is not an optimisation.** Authlete's
+> update API **replaces** the client object rather than merging into it, and the request mapper names roughly
+> **40** of the `Client` schema's **108** properties. Building the request from scratch therefore sent one
+> missing ~68 fields, so changing a client's name could silently clear `tokenAuthMethod`, `pkceRequired` or
+> `redirectUris` — **with a 200**. Since 2026-08-14 the current client is fetched first and the named changes
+> applied on top. Two accepted costs: two Authlete calls per update, and a missing client now fails on the read.
+
+### The `attributes` field — a vendor namespace, and it is not inert
+
+Both `create` and `update` accept an `attributes` array of key/value pairs. This is **an Authlete feature, not
+part of any specification** — no OAuth or OIDC document defines client attributes.
+
+```json
+{ "attributes": [ { "key": "tier", "value": "gold" }, { "key": "owner", "value": "payments-team" } ] }
+```
+
+**Authlete assigns meaning to some keys, so the namespace is not free-form storage.** The clearest example is on
+*scope* attributes rather than client attributes: a scope carrying a **`regex`** attribute becomes a
+**parameterized scope**, and a `fapi2` attribute is what makes Authlete enforce FAPI rules per request. A key
+you invent today may collide with a key Authlete defines tomorrow — prefix your own.
+
+**Validated, not cast** (since 2026-08-14): the value must be an array of objects with a non-empty string `key`;
+`value` is optional. Both a malformed entry and a **non-array** are `400`. The non-array case used to be
+*silently dropped*, which answered 200 for a setting that never took effect — the worst of the three outcomes,
+because nothing anywhere reported it. This is deliberately **stricter than the SDK**, whose `Pair` type makes
+both members optional: an attribute with no key cannot be addressed by anything.
+
+### This repo manages no scopes, and two features depend on that
+
+There is **no scope-management endpoint here** — scopes are created and edited in the Authlete console only.
+Two vendor features are therefore documented but not reachable through this API:
+
+| Feature | Needs | Consequence |
+|---|---|---|
+| **Parameterized scopes** | a `regex` attribute on a *scope* | cannot be created or inspected through this server |
+| **FAPI per-request enforcement** | a `fapi2=sp` attribute on a *scope* | same — which is why `FAPI-TUTORIAL.md` Part 3 sends you to the console |
+
+---
+
+## Hardware Security Keys (HSK)
+
+> **A vendor feature, not a specification.** No OAuth or OIDC document defines an HSK API. These four endpoints
+> wrap `authleteApi.hardwareSecurityKeys.*`, and the concept — a key handle held in an HSM, referenced rather
+> than exported — is the same one Modules 00 and 05 teach about signing keys and `kid`. Nothing else in this
+> repo consumes them; they exist so the surface is reachable and inspectable.
+
+All four require `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` Basic auth, and **fail closed** if either is unset.
+
+| Endpoint | Method | Description | Success |
+|----------|--------|-------------|:---:|
+| `/api/hsk/create` | POST | Register a key handle on the service | **201** |
+| `/api/hsk/list` | GET | All key handles | 200 |
+| `/api/hsk/get/:handle` | GET | One key handle | 200 |
+| `/api/hsk/delete/:handle` | DELETE | **Destroys** the handle on the service | **204** |
+
+**`create`** takes `kty`, `use`, `kid`, `hsmName`, `alg` in a JSON body. **`kty` and `hsmName` are required**;
+the rest are optional.
+
+```json
+{ "kty": "EC", "use": "sig", "kid": "hsm-signer-1", "hsmName": "my-hsm", "alg": "ES256" }
+```
+
+Action → status for all four: `SUCCESS` → 201 / 200 / 204 as above, `INVALID_REQUEST` → 400, `NOT_FOUND` → 404,
+`SERVER_ERROR` → 500.
+
+> ### ⚠️ `DELETE` is destructive and there is no undo
+>
+> It removes the key handle **from the Authlete service**, not from this server. If anything on that service
+> was configured to sign with the handle, it stops being able to. Deleting a handle is not the same as
+> deleting a *key* — the key material lives in the HSM and this API never sees it, which is the whole point of
+> the indirection. Treat `:handle` as a live production identifier even in a lab.
+
 ---
 
 ## Health

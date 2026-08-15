@@ -2,6 +2,38 @@
 
 > **The short version:** CIBA lets a device (like a POS terminal or call center screen) initiate authentication without a browser redirect. The user approves on their own phone, and the device gets tokens via server-side polling.
 
+> ### How the transcripts below were verified, and the one thing CIBA Core requires that this server does not do
+>
+> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials).
+>
+> **The POLL flow runs here, on one client.** `bcDeliveryMode = POLL` was set on client `1523514379` on
+> 2026-08-12 and the full sequence was run end to end that day: `USER_IDENTIFICATION` → `authReqId`
+> (`expiresIn 600`, `interval 5`) → `authorization_pending` (**400**) → `complete` → `NO_ACTION` → access
+> token + ID token → replay refused with `invalid_grant`. Transcript in
+> [`modules/09a…/lab.md` 3d](curriculum/modules/09a-interaction-extensions/lab.md). Re-checked 2026-08-14:
+> **the other three clients still have no `bcDeliveryMode`**, and a client without one is refused with
+> `[A169301]` no matter how correct the request is. That is the field to check first.
+>
+> Values in the request/response blocks below are *illustrative* (`ticket-abc123`, `YOUR_CID`); the shapes
+> and the numbers are real — `expiresIn: 600` and `interval: 5` are the service's
+> `backchannelAuthReqIdDuration` and `backchannelPollingInterval`.
+>
+> ### ⚠️ These are Authlete-shaped debug endpoints, not a conformant CIBA backchannel endpoint
+>
+> Two departures from [CIBA Core 1.0](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html),
+> both open findings rather than simplifications:
+>
+> | | CIBA Core requires | This server does |
+> |---|---|---|
+> | the request | §7.1 — a **form-encoded** POST whose parameters are `login_hint`, `scope`, `binding_message` … at the top level | a **JSON** body with those parameters packed into one URL-encoded `parameters` string, plus `clientId`/`clientSecret` |
+> | the response | §7.3 — `auth_req_id`, `expires_in` and `interval` from **the backchannel endpoint itself** | `ticket` — Authlete's internal handle. The `auth_req_id` arrives only after a **second** call, to `/api/ciba/issue` |
+>
+> **So a conformant CIBA client cannot talk to `/api/ciba/authentication` at all**, and the two-call split is
+> this server's shape, not the protocol's. Everything about *why* CIBA exists and how the poll loop behaves
+> transfers; the wire format does not. And note `POST /api/ciba/issue` **authenticates nobody** — it takes a
+> `ticket` and nothing else — which is only tolerable because it is a lab surface.
+
 ---
 
 ## Table of Contents
@@ -324,6 +356,36 @@ sequenceDiagram
 
 **Step 1: Authentication Request**
 
+> ### ⚠️ Which channel you put the credentials on decides whether this works
+>
+> `/api/ciba/authentication` reads client credentials from **three** places, and Authlete checks the channel
+> against the client's registered `tokenAuthMethod` — so the channel is not a style choice. The rules are
+> identical to `/api/par`'s:
+>
+> | You send | Serves | Against a `CLIENT_SECRET_BASIC` client |
+> |---|---|---|
+> | `Authorization: Basic` | `client_secret_basic` | ✅ reaches `USER_IDENTIFICATION` |
+> | body `clientId` + `clientSecret` | `client_secret_post` | ❌ **`401 [A157357]`**, even with the *correct* secret |
+> | body `clientId` alone | `none` (public client) | ❌ 401 |
+>
+> **This matters here specifically**: Part 2 recommends `CLIENT_SECRET_BASIC` — following Authlete's own CIBA
+> guide, and because the backchannel and token endpoints must use the same method — and the one client on
+> this deployment with `bcDeliveryMode` set is exactly that. So the body-credential form below will 401
+> against it. Both channels verified live 2026-08-13.
+
+For a `CLIENT_SECRET_BASIC` client — the configuration Part 2 recommends:
+
+```bash
+curl -X POST http://localhost:3000/api/ciba/authentication \
+  -u "YOUR_CID:YOUR_SEC" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parameters": "login_hint=admin&scope=openid&binding_message=Approve+kiosk+login"
+  }'
+```
+
+For a `CLIENT_SECRET_POST` client, the same request with the credentials in the body instead:
+
 ```bash
 curl -X POST http://localhost:3000/api/ciba/authentication \
   -H "Content-Type: application/json" \
@@ -388,20 +450,34 @@ curl -X POST http://localhost:3000/api/token \
   -d "grant_type=urn:openid:params:grant-type:ciba&auth_req_id=auth_req_id_xyz789"
 ```
 
-**While pending:**
-```json
-{"error": "authorization_pending", "interval": 5}
+**While pending** — note the status, which is the part people get wrong:
+```
+HTTP/1.1 400 Bad Request
+
+{"error": "authorization_pending", "error_description": "[A...] ...", "error_uri": "..."}
 ```
 
-**On success:**
+> **`authorization_pending` is a 400, and that is by design** — CIBA Core §11 makes a pending request an
+> *error* response, the same convention RFC 8628's device flow uses. **A polling loop must not treat 400 as
+> terminal.** Confirmed by the 2026-08-12 run.
+>
+> **`UNVERIFIED` — the exact `error_description` text.** The `error` value is spec-defined and stable; the
+> description is Authlete's, carries a bracketed `[A...]` code, and changes between versions. Run it if you
+> need the string. Do not parse it.
+
+**On success** — shape **captured 2026-08-12**:
 ```json
 {
   "access_token": "eyJraWQ...",
   "token_type": "Bearer",
-  "expires_in": 3600,
+  "expires_in": 86400,
   "id_token": "eyJraWQ..."
 }
 ```
+
+`expires_in` is the service's `accessTokenDuration`, **86400** — not the 3600 this block used to show. A
+24-hour token for a kiosk authorization is far too long for production; it is deliberate here so lab tokens
+outlive a lab session.
 
 ---
 
@@ -435,6 +511,16 @@ curl -X POST http://localhost:3000/api/token \
 ---
 
 ## Part 6: Failure Demonstrations
+
+> **`UNVERIFIED` bodies, and one demo that proves less than it looks like.** The statuses below are the
+> controller's documented mapping (see [the Appendix](#action-to-status-mapping)); the response *bodies* are
+> abbreviated rather than captured, so treat `action` as the reliable field.
+>
+> **"Wrong Client Secret" is ambiguous against a `CLIENT_SECRET_BASIC` client** — which is the only kind
+> that can run CIBA on this deployment. Body credentials earn `401 [A157357]` there whether the secret is
+> right or wrong, because the *channel* is refused before the secret is examined. To demonstrate a genuinely
+> wrong secret, send it on the channel the client is registered for: `-u "YOUR_CID:wrong_secret"`. **A
+> negative test that passes for the wrong reason is not a test** — read the bracketed code, not the status.
 
 ### No Client Credentials
 

@@ -205,6 +205,41 @@ job entirely to PKCE.
 | *"shall not expose open redirectors"* | Module 07 — **and this repo's logout endpoint fails it** |
 | *"shall not use refresh token rotation except in extraordinary circumstances"* | Module 03 — see below |
 | *"shall issue authorization codes with a maximum lifetime of 60 seconds"* | Module 02 |
+| *"shall use PS256, ES256 or EdDSA … for signing"* | **Nowhere until 2026-08-14 — and it is the row this deployment fails most visibly.** See below |
+| *"shall require the `redirect_uri` in the pushed authorization request"* | **NOT REACHABLE here** — PAR is optional on this service, so a requirement about a pushed request's *contents* cannot be evaluated. Same reason `authorizationCodeDuration: 0` gets a row of its own |
+
+> ### The signing-algorithm `shall`, and why "does the service support it?" is the wrong question
+>
+> The profile permits **PS256, ES256 or EdDSA** and no others — all asymmetric. Now look at what this
+> deployment advertises (**captured 2026-08-14**):
+>
+> ```
+> id_token_signing_alg_values_supported =
+>   [PS384, RS384, HS256, HS512, ES256, RS256, HS384, PS256, PS512, RS512]
+> ```
+>
+> **Both permitted algorithms are there.** `PS256` and `ES256` are advertised — `PS256` only since 2026-08-12,
+> when one RSA key was registered on the service and four algorithm lists changed at once. So is the
+> requirement met? **The service-level list cannot answer that**, because `id_token_signing_alg_values_supported`
+> says what the AS *can* do, and the algorithm actually used is pinned **per client** in `idTokenSignAlg`:
+>
+> | Client | `idTokenSignAlg` | §5.3.2.1 row 8 |
+> |---|---|---|
+> | `4277838306` (SPA, public) | `ES256` | ✅ |
+> | `1678274156` (public) | `ES256` | ✅ |
+> | `2176571218` (`private_key_jwt`) | `ES256` | ✅ |
+> | `1523514379` (**confidential**, the labs' main client) | **`HS256`** | ❌ — symmetric, and HMAC appears nowhere in the profile |
+>
+> So the honest verdict on row 8 is **partially**, not FAIL: three of four clients satisfy it and the one the
+> labs lean on does not. **That is a better finding than a flat FAIL**, and it generalises — a conformance
+> report written from discovery metadata alone will over-credit *every* per-client requirement.
+>
+> **You already have this fact from an earlier module and were never asked to join it up.**
+> `modules/05…/lab.md` explains that Exercise 5 needs the confidential client because *"this service signs ID
+> tokens with HS256, and Authlete refuses a symmetric algorithm for a public client."* Module 05 states the
+> algorithm; this module states the requirement; until 2026-08-14 nothing put them in the same sentence — in the
+> module whose deliverable is a conformance report. **When you write yours, the check is per client, and the
+> question to ask is "which principal does this requirement bind?"**
 
 **§5.3.2.2 — authorization endpoint flows.** Also `shall`:
 

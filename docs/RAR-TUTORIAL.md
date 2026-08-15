@@ -2,6 +2,30 @@
 
 > **The short version:** RAR replaces flat `scope` strings with structured JSON objects that describe exactly what the client wants to do, on which resources, with what data types — giving users and servers precise visibility into authorization requests.
 
+> ### How the transcripts below were verified
+>
+> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials).
+>
+> **RAR runs on this deployment, for exactly one `type`.** As of **2026-08-14** the service registers
+> `supportedAuthorizationDetailsTypes = ["payment_initiation"]` and client `1523514379` registers
+> `authorizationDetailsTypes = ["payment_initiation"]`. Both were added on 2026-08-12, and the full round
+> trip — authorization request accepted, granted details on the token response, granted details on
+> introspection — was run end to end that day. The transcript lives in
+> [`modules/09a…/lab.md` 5b](curriculum/modules/09a-interaction-extensions/lab.md); the response shapes in
+> Parts 4, 5 and 6 below are taken from it.
+>
+> **Every other `type` in this file is refused**, with `invalid_authorization_details` and `[A249302]`.
+> That includes `account_information`, `document_access` and `id_card_verification` in
+> [Part 7](#part-7-common-rar-types) — those are the specification's examples, not this service's
+> configuration. Register the type on the service *and* on the client before expecting any of them to work;
+> both halves are required, and the client half is the one people forget.
+>
+> **Until 2026-08-12 nothing in this file was runnable at all** — no type was registered, so Authlete
+> refused *every* RAR request. The three success transcripts that used to be here were unmarked and
+> unproducible. They are now derived from a real round trip, which is why they no longer say
+> `expires_in: 3600`: the service default is **86400**.
+
 ---
 
 ## Table of Contents
@@ -168,7 +192,22 @@ The consent page renders authorization_details as structured permission cards:
 
 ### No Feature Flag Needed
 
-RAR is **enabled by default** in Authlete. No service-level configuration required.
+RAR is **enabled by default** in Authlete. There is no "enable RAR" switch.
+
+**But there is a registration requirement, and it is not optional.** RFC 9396 §3 makes the AS refuse an
+unknown `type` with `invalid_authorization_details`, so a service with *no* registered types refuses
+*every* RAR request — which looks exactly like RAR being switched off. Register types under **Service
+Settings → Tokens and Claims → Advanced → Supported Authorization Details Types**.
+
+```bash
+# What this service accepts today (captured 2026-08-14): ["payment_initiation"]
+curl -s -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" \
+  "$AUTHLETE_BASE_URL/api/$AUTHLETE_SERVICE_ID/service/get" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('supportedAuthorizationDetailsTypes','ABSENT'))"
+```
+
+The generated discovery document echoes it as `authorization_details_types_supported`, which is §10's
+metadata member — so a client can discover which types are worth asking for instead of guessing.
 
 ### Client-Level Configuration
 
@@ -237,12 +276,12 @@ curl -X POST http://localhost:3000/api/token \
   -d "grant_type=authorization_code&code=THE_CODE&redirect_uri=http://localhost:3001/callback"
 ```
 
-**Response:**
+**Response** — shape **captured 2026-08-12**, token values elided:
 ```json
 {
   "access_token": "at-...",
   "token_type": "Bearer",
-  "expires_in": 3600,
+  "expires_in": 86400,
   "authorization_details": [{
     "type": "payment_initiation",
     "actions": ["initiate", "status"],
@@ -251,6 +290,14 @@ curl -X POST http://localhost:3000/api/token \
   }]
 }
 ```
+
+**`expires_in` is 86400 because that is this service's `accessTokenDuration`** — 24 hours, which is far
+longer than a payment-initiation token should live. It is deliberate here (the curriculum needs tokens that
+outlive a lab session) and it is one of the audit's open findings, not a value to copy into production.
+
+**The granted details are not necessarily the requested details.** RFC 9396 §7 requires the AS to return
+what it *granted*, and a user who unticks something on the consent screen gets a narrower array back. Compare
+the two rather than assuming the echo.
 
 ---
 
@@ -278,13 +325,19 @@ curl -X POST http://localhost:3000/api/par \
   }'
 ```
 
-**Response:**
+**Response (201)** — RFC 9126 §2.2's body, *illustrative* values:
 ```json
 {
-  "action": "CREATED",
+  "expires_in": 600,
   "request_uri": "urn:ietf:params:oauth:request_uri:abc123..."
 }
 ```
+
+> **This block used to carry an `action: "CREATED"` field beside `request_uri`, and that shape never
+> existed.** It was half of Authlete's envelope and half of the RFC's body. Since **2026-08-14** (T1-11)
+> `/api/par` returns §2.2's body and nothing else — two members, both snake_case. `expires_in` is the
+> service's `pushedAuthReqDuration`, live value **600**. The *request* is still an Authlete-shaped JSON
+> body rather than §2's form-encoded one; see [the PAR tutorial](PAR-TUTORIAL.md) for what that costs.
 
 **Then redirect with just `request_uri`:**
 ```
@@ -297,25 +350,27 @@ http://localhost:3000/api/authorization?client_id=YOUR_CID&request_uri=urn:ietf:
 
 ### Token Response
 
-When you exchange the code, Authlete includes `authorization_details`:
+When you exchange the code, Authlete includes `authorization_details` — **RFC 9396-shaped**, your fields at
+the top level of each element. Captured **2026-08-12**, using §2.2's common data fields:
 
 ```json
 {
   "access_token": "at-abc123",
   "token_type": "Bearer",
-  "expires_in": 3600,
+  "expires_in": 86400,
   "authorization_details": [{
+    "instructedAmount": { "currency": "EUR", "amount": "123.50" },
+    "creditorAccount": { "iban": "DE02100100109307118603" },
     "type": "payment_initiation",
-    "actions": ["initiate", "status"],
-    "locations": ["https://bank.example.com/payments"],
-    "datatypes": ["payment", "transaction"]
+    "locations": ["https://api.example.com/payments"],
+    "actions": ["initiate", "status"]
   }]
 }
 ```
 
 ### Introspection
 
-Introspecting the token also returns `authorization_details`:
+Introspecting the token also returns the granted details — **but not in the same shape.**
 
 ```bash
 curl -X POST http://localhost:3000/api/introspection \
@@ -324,22 +379,53 @@ curl -X POST http://localhost:3000/api/introspection \
   -d "token=YOUR_ACCESS_TOKEN"
 ```
 
+Captured **2026-08-12**, from the same token as the block above:
+
 ```json
 {
-  "active": true,
-  "sub": "admin",
-  "authorization_details": [{
-    "type": "payment_initiation",
-    "actions": ["initiate", "status"]
-  }]
+  "authorizationDetails": {
+    "elements": [{
+      "type": "payment_initiation",
+      "locations": ["https://api.example.com/payments"],
+      "actions": ["initiate", "status"],
+      "otherFields": "{\"instructedAmount\":{...},\"creditorAccount\":{...}}"
+    }]
+  }
 }
 ```
 
-Resource servers can enforce fine-grained authorization based on RAR details.
+> ### ⚠️ Read those two blocks side by side — they are not the same document
+>
+> | | Token response | Introspection response |
+> |---|---|---|
+> | member name | `authorization_details` (snake_case, RFC 9396 §7) | `authorizationDetails` (camelCase, Authlete's) |
+> | container | a JSON **array** | an **object** with an `elements` array |
+> | common data fields | at the top level of each element | flattened into **`otherFields`, a string** |
+>
+> So a resource server that parses the token response and reuses that parser on introspection **fails** —
+> and the fields it most needs for a payment decision (`instructedAmount`, `creditorAccount`) are inside a
+> string it has to know to parse twice. This is the vendor's envelope crossing a boundary the specification
+> defines, on **one of two responses for the same feature**. It is a live gap, not a simplification: nothing
+> in `server/src` reshapes it. Verified 2026-08-12; discussed at length in
+> [`modules/09a…/lab.md` 5b](curriculum/modules/09a-interaction-extensions/lab.md).
+
+Resource servers can enforce fine-grained authorization based on RAR details — provided they parse whichever
+of the two shapes they are actually reading.
 
 ---
 
 ## Part 7: Common RAR Types
+
+> **`UNVERIFIED` on this deployment — only the first one runs (2026-08-14).**
+> `supportedAuthorizationDetailsTypes` is `["payment_initiation"]`, so the four type names below —
+> `account_information`, `document_access`, `id_card_verification`, and the combined request that pairs
+> `account_information` with `payment_initiation` — are all refused with `invalid_authorization_details`
+> and **`[A249302]`**. They are examples of how a type is *designed*, drawn from the specification and from
+> Open Banking practice, not transcripts from this service. To run one, register the name on the service
+> and on the client, then re-send.
+>
+> Note `[A249302]` (*unsupported* type) is a different code from `[A249301]` (*absent* type) — the first
+> means "not registered here", the second "you sent an element with no `type` at all". Different fixes.
 
 ### Payment Initiation (PSD2)
 

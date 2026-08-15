@@ -59,10 +59,11 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | RFC 7515 | JSON Web Signature (JWS) | Published RFC | May 2015 | Detached/compact signatures over JSON | Integrity + origin auth for tokens | ID tokens, JWT ATs, DPoP proofs, JAR (via Authlete + `client/src/services/dpop.service.ts`) |
 | RFC 7516 | JSON Web Encryption (JWE) | Published RFC | May 2015 | Encrypted JSON payloads | Confidentiality of claims/request objects | Encrypted request objects (Brazil flags in `AGENTS.md`) |
 | RFC 7517 | JSON Web Key (JWK) | Published RFC | May 2015 | Key representation + JWK Set | Publishing/consuming signing keys | JWKS via Authlete; `utils/jwksClient` |
-| RFC 7518 | JSON Web Algorithms (JWA) | Published RFC — **updated by RFC 9864** (Oct 2025) | May 2015 | `alg`/`enc` registry (ES256, RS256, …) | Names the algorithms JWS/JWE use | DPoP ES256 (`dpop.service.ts`) |
+| RFC 7518 | JSON Web Algorithms (JWA) | Published RFC — **updated by RFC 9864** (Dec 2025) | May 2015 | `alg`/`enc` registry (ES256, RS256, …) | Names the algorithms JWS/JWE use | DPoP ES256 (`dpop.service.ts`) |
 | RFC 7519 | JSON Web Token (JWT) | Published RFC — **updated by RFC 8725** (BCP 225) | May 2015 | Claims container + registered claims | `iss/sub/aud/exp/iat/nbf` semantics | ID tokens, JWT ATs, assertions |
 | **RFC 8725** | JSON Web Token Best Current Practices | Published RFC (**BCP 225**, updates RFC 7519) | Feb 2020 | The normative countermeasures: §2.1 explicit typing, §3.1 *"Perform Algorithm Verification"*, §3.2 *"Use Appropriate Algorithms"*, §3.8 substitution attacks | Turns "pin the algorithm, never trust the header" from folklore into a citable requirement | Module 00's threat notes; Module 08 step 7; Module 06's `kid`/`jku` exercise |
 | RFC 7638 | JSON Web Key (JWK) Thumbprint | Published RFC | Sep 2015 | Canonical hash of a JWK | DPoP `jkt` binding; key IDs | DPoP proof binding (RFC 9449) |
+| **RFC 9864** | Fully-Specified Algorithms for JSON Object Signing and Encryption (JOSE) and CBOR Object Signing and Encryption (COSE) | Published RFC (Proposed Standard) — **updates RFC 7518, 8037, 9053** | **Dec 2025** | Algorithm identifiers that name *every* parameter, rather than leaving the curve to be negotiated | Removes the ambiguity in polymorphic identifiers like `ECDH-ES` | Nothing yet — see the note below |
 
 > **RFC 8725 is the one to reach for in a review.** Modules 00, 06 and 08 all teach its content — reject
 > `alg: none`, pin the algorithm from configuration rather than reading it from the header, never resolve a
@@ -70,11 +71,18 @@ Not subjects in their own right, but cited by name in the modules — so they be
 > who wants to "just use the library default." Cite **RFC 8725 §3.1** for algorithm verification and **§3.2**
 > for algorithm choice.
 >
-> **RFC 9864 barely matters here, and it is worth knowing why.** It updates RFC 7518 with *fully-specified*
-> algorithm identifiers and deprecates `ES256` — **in COSE registries only**. JOSE's `ES256` is unaffected,
-> and RFC 9864 explicitly declines to register fully-specified RSA variants. Nothing in this curriculum's
-> `ES256`/`RS256` usage changes. The row is annotated because the inventory promises to track updates, not
-> because you need to act.
+> **RFC 9864 barely matters here, and it is worth knowing why.** It updates RFC 7518, **RFC 8037 and RFC
+> 9053** with *fully-specified* algorithm identifiers and deprecates `ES256` — **in COSE registries only**.
+> JOSE's `ES256` is unaffected, and RFC 9864 explicitly declines to register fully-specified RSA variants.
+> Nothing in this curriculum's `ES256`/`RS256` usage changes, and **`alg: "none"` is not polymorphic**, so
+> Module 00's citation of RFC 7518 §3.6 stands. It now has a row of its own because it updates three RFCs
+> rather than one. **The row is annotated because the inventory promises to track updates, not because you
+> need to act** — which is the honest reason to carry a row, and the reason to say so on it.
+>
+> **Its date was wrong here until 2026-08-14** — recorded as Oct 2025 against a verified **December 2025** —
+> and so was its scope, given as RFC 7518 alone. Both were corrected from the header block of
+> `https://www.rfc-editor.org/info/rfc9864`, fetched 2026-08-11. A date carried from recall in the file whose
+> job is citation provenance is the defect this file exists to prevent.
 
 ## 2. OAuth 2.0 core & threat model (Modules 01–02)
 
@@ -101,7 +109,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | RFC 8414 | OAuth 2.0 Authorization Server Metadata | Published RFC | Jun 2018 | `/.well-known/oauth-authorization-server` | Client auto-config | `oauth-as-metadata.routes.ts` (root); see path quirk below |
 | RFC 9728 | OAuth 2.0 Protected Resource Metadata | Published RFC | Apr 2025 | `/.well-known/oauth-protected-resource` | RS advertises its AS(es)/scopes; MCP discovery | **Served** at true root — `protected-resource-metadata.routes.ts` + controller (added 2026-07-28); also consumed client-side (`mcp.service.ts`) |
 | RFC 7591 | OAuth 2.0 Dynamic Client Registration Protocol | Published RFC | Jul 2015 | Programmatic client registration | Onboarding without console | `dcr.routes.ts` (`/api/client/dcr/register`), `dcr.service.ts` |
-| RFC 7592 | OAuth 2.0 Dynamic Client Registration Management Protocol | Published RFC (**Experimental** — *not* Standards Track) | Jul 2015 | Read/update/delete a registration | Lifecycle of DCR clients | `dcr.routes.ts` (`get`/`update`/`delete`) |
+| RFC 7592 | OAuth 2.0 Dynamic Client Registration Management Protocol | Published RFC (**Experimental** — *not* Standards Track) | Jul 2015 | Read/update/delete a registration | Lifecycle of DCR clients | `dcr.routes.ts` — **Authlete's management APIs are wired; RFC 7592's HTTP surface is not served.** See the note below |
 | RFC 9068 | JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens | Published RFC | Oct 2021 | Structured `at+jwt` access tokens | Interop for self-contained ATs | JWT ATs via Authlete |
 | RFC 8707 | Resource Indicators for OAuth 2.0 | Published RFC | Feb 2020 | `resource` parameter | Audience-restricting tokens per API | MCP `resource` (RFC 8707) in `mcp.service.ts`; Authlete |
 
@@ -110,6 +118,19 @@ Not subjects in their own right, but cited by name in the modules — so they be
 > Track specification."* This is not pedantry — it is why an authorization server may implement `register`
 > and not `get`/`update`/`delete`, and why the registration access token is the least portable thing in the
 > DCR story. Do not present the pair as equivalent in a review.
+>
+> **And this deployment implements the *capability* without serving the *protocol*** (7592-W3, stated
+> 2026-08-14). RFC 7592 defines a **client configuration endpoint**: one URL per registration, addressed with
+> `GET`, `PUT` and `DELETE`, authorized by the `registration_access_token` as a Bearer token, and discoverable
+> as `registration_client_uri` in the registration response. What this repo serves instead is **four `POST`
+> routes** — `/api/client/dcr/{register,get,update,delete}` — taking the registration access token in a JSON
+> body. Every RFC 7592 *operation* is reachable; **none of RFC 7592's HTTP surface is**, so a conformant DCR
+> client cannot manage its own registration here even though the underlying Authlete APIs are wired.
+>
+> Note this is the same shape as theme 3's wire-format findings and **not** the same thing as the RFC 7591
+> half, which *was* fixed: since 2026-08-14 `register` returns §3.2.1's registration response as the body
+> rather than nested inside a vendor envelope. **The body is conformant; the endpoint is not.** Keeping those
+> two claims apart is the whole reason this row now says both.
 
 > **Discovery-path divergence — this deployment is non-conformant, and you should recognise why.**
 > `/.well-known/openid-configuration` is served under the **`/api`** prefix here, while RFC 8414's
@@ -203,7 +224,7 @@ Not subjects in their own right, but cited by name in the modules — so they be
 |---|---|---|---|---|---|---|
 | JARM | JWT Secured Authorization Response Mode for OAuth 2.0 (JARM) *incorporating errata set 1* | OpenID **Final** | errata set 1, **17 Aug 2025** | Signed/encrypted authorization **response** (`response_mode=jwt`); `iss`/`aud`/`exp` claims; four `response_mode` values | Response tampering, mix-up (strong form), response replay | **Supported by the AS; not configured.** Needs only the client's `authorization_signed_response_alg`. No `server/src` change — see note below |
 | CIBA Core 1.0 | OpenID Connect Client-Initiated Backchannel Authentication Flow – Core 1.0 | OpenID Final | Sep 2021 | Decoupled auth (poll/ping/push), `auth_req_id` | Auth without a browser redirect | `ciba.routes.ts`, `ciba.service.ts`; `docs/CIBA-TUTORIAL.md` |
-| Native SSO 1.0 | OpenID Connect Native SSO for Mobile Apps 1.0 | OpenID **2nd Implementer's Draft** (draft 07) | approved 2025-10-17 | `device_secret`, `urn:openid:params:grant-type:device_secret` | SSO across native apps on one device | `docs/NATIVE-SSO-TUTORIAL.md`; Authlete |
+| Native SSO 1.0 | OpenID Connect Native SSO for Mobile Apps 1.0 | OpenID **2nd Implementer's Draft** (draft 07, text dated 16 Jan 2025) | approved 2025-10-17 | `device_secret`, `urn:openid:params:grant-type:device_secret` | SSO across native apps on one device | `docs/NATIVE-SSO-TUTORIAL.md`; Authlete |
 | RFC 9470 | OAuth 2.0 Step Up Authentication Challenge Protocol | Published RFC | Sep 2023 | `acr_values`/`max_age` challenge; `insufficient_user_authentication` | Force stronger auth for sensitive ops | `session.controller.ts`, `introspection.controller.ts`; `docs/STEP-UP-AUTH-TUTORIAL.md` |
 | RFC 9396 | OAuth 2.0 Rich Authorization Requests (RAR) | Published RFC | May 2023 | `authorization_details` (typed, fine-grained) | Beyond coarse `scope` | `rar` section; Authlete; `docs/RAR-TUTORIAL.md` |
 
@@ -247,9 +268,34 @@ Not subjects in their own right, but cited by name in the modules — so they be
 | Protected Resource Metadata endpoint | RFC 9728 | ✅ **Now served** at true root | Implemented 2026-07-28; Module 04's proposal is closed |
 | Dedicated resource server endpoint | RFC 6750 | None; use UserInfo + Introspection as RS stand-ins | Teach with existing endpoints |
 | SD-JWT | RFC 9901 | Absent from `server/` and `client/` — and does not need to be there; it is pure JOSE | **Taught locally** with `scripts/sd-jwt.mjs` (issue / present / verify + §7.1 trace). No source change proposed |
-| OID4VCI | OID4VCI 1.0 | Nine endpoints exist and delegate to Authlete. **Verifiable credentials were enabled 2026-08-14 (DR-03).** `/vci/metadata` returns a conformant §12.2.4 document and `offer/create` answers `A366001 CREATED`; `/vci/jwks` and `/vci/jwtissuer` still fail with `A403201` / `A417202` because the credential issuer has no JWK Set. The pre-DR-03 refusals were `A364301`, `A416301`, `A402301`, `A366201` — all `NOT_FOUND`/`FORBIDDEN`, i.e. *"the feature is off"*, a different diagnosis from today's | Module 09b now verifies the metadata document, both remaining refusals, and that the deferred path validates its access token (`A375304`). Issuing a credential still needs a credential-issuer JWK Set |
+| OID4VCI | OID4VCI 1.0 | Nine endpoints exist and delegate to Authlete. **Verifiable credentials were enabled 2026-08-14 (DR-03) and a credential-issuer JWK Set was set the same day (VCI-W6).** `/vci/metadata` returns a conformant §12.2.4 document, `offer/create` answers `A366001 CREATED`, and `/vci/jwks` + `/vci/jwtissuer` now answer **200** — publishing the **public half only**, `d` absent, verified rather than assumed. **These three endpoints have given three different answers in three days**: `A364301`/`A416301`/`A402301` (`NOT_FOUND` — feature off) → `A403201`/`A417202` (`INTERNAL_SERVER_ERROR` — on, no key) → `200`. Each transition named a different missing value, which is the argument for reading vendor codes rather than statuses | Module 09b verifies the metadata document, all three states, that `/vci/jwks` leaks no private key member, and that the deferred path validates its access token (`A375304`). **Issuance itself still needs a wallet this repo does not contain** — no longer a configuration gap |
 | OpenID Federation entity configuration | OpenID Federation **1.1** §9 *("Obtaining Federation Entity Configuration Information" — same number in 1.0)* | Endpoint exists at the correct well-known path but is **broken** — the SDK call omits the request body | Diagnosed as Module 09b's Tier-3 finding; **not fixed** (server source) |
 | OID4VP | OID4VP 1.0 | No verifier implementation | Taught from the spec; the key-binding half is exercised locally via `sd-jwt.mjs` |
+
+## Vendor features — implemented here, defined by no specification
+
+**These three are Authlete features, and this table would be dishonest without them.** Every other row above
+names a specification; these name a *vendor*. They are included because the repo implements them, a reader will
+meet them, and **the most useful thing to know about each is that there is no RFC to check it against** — no
+interoperability guarantee, no second implementation, and no normative text to appeal to in a review.
+
+| Capability | Defined by | Reality here | Where |
+|---|---|---|---|
+| **Hardware Security Keys (HSK)** | Authlete only | Four admin endpoints wrapping `hardwareSecurityKeys.*`. Nothing else in the repo consumes a handle. `DELETE` destroys the handle **on the service** | `docs/API.md` → *Hardware Security Keys*; the key/`kid` concepts are Modules 00 and 05 |
+| **Parameterized scopes** | Authlete only | A `regex` attribute on a *scope* turns it into a pattern (`payment:123.50` matching `payment:.*`); the granted value returns in a **`dynamicScopes`** response field. **Not reachable through this server** — there is no scope-management endpoint, so scopes are console-only | Module 04's note; `PARAMETERIZED-SCOPES.md` |
+| **Scope & client `attributes`** | Authlete only | Key/value pairs on scopes and clients. **The namespace is not inert**: `regex` makes a parameterized scope and `fapi2=sp` makes Authlete enforce FAPI per request. Client `attributes` are validated rather than cast since 2026-08-14 | `docs/API.md` → *The `attributes` field* |
+
+> ### The one that is worth a paragraph: parameterized scopes are *"accepted but unadvertisable"*
+>
+> A parameterized scope is the **inverse** of the *advertised but unusable* pattern this audit found four times.
+> Authlete will accept `payment:123.50` against a registered `payment:.*` — the feature works — but
+> `scopes_supported` in the discovery document can only list **literal** scope strings. There is no metadata
+> member for a pattern. So a client that discovers this AS correctly, reads `scopes_supported`, and requests
+> only what it finds there **can never use the feature**, and a client that hardcodes `payment:123.50` works.
+>
+> **That inverts the usual advice.** Everywhere else in this curriculum, discovery is the trustworthy source and
+> hardcoding is the mistake. Here, conforming to discovery is what loses you the capability — which is why
+> Module 09a's taxonomy needed a fourth term rather than a footnote.
 
 **§10 corrections, 2026-07-28.** Three errors were found and fixed while writing Module 10: FAPI 2.0 Message
 Signing was dated "approved 2025-07-29" and is in fact **published 25 Sep 2025**; the FAPI 1.0 Parts had no
@@ -274,7 +320,7 @@ one-time "verified" stamp.
 | Federation 1.1 described as "of the same date" as 1.0 | 1.0 = 17 Feb 2026, **1.1 = 5 May 2026** | The claim that they share a date is what made "either is fine" look safe |
 | Discovery `/api` prefix called a "path quirk" | Labelled a **non-conformance** against RFC 8414 §3 and OIDC Discovery §4.1/§4.3 | A learner told it was a free routing choice would reproduce it |
 | **RFC 8725 (BCP 225) absent entirely** | Added to §1, and noted on the RFC 7519 row it updates | Modules 00/06/08 teach its content as reasoned practice with no citable BCP behind it |
-| RFC 7518 carried no update note | **Updated by RFC 9864** (Oct 2025), with a note that the `ES256` deprecation is **COSE-only** and changes nothing here | Completeness — deliberately annotated *without* overstating the impact |
+| RFC 7518 carried no update note | **Updated by RFC 9864** (**Dec 2025** — the Oct 2025 date carried here until 2026-08-14 was wrong), with a note that the `ES256` deprecation is **COSE-only** and changes nothing here. RFC 9864 now has its own §1 row, since it updates RFC 7518, 8037 and 9053 | Completeness — deliberately annotated *without* overstating the impact |
 | FAPI 2.0 row read "**forbids** refresh-token rotation" | Quotes the actual §5.3.2.1 text, including *"except in extraordinary circumstances"* | The carve-out exists and is operationally real (infrastructure migration) |
 | Four logout rows had no dates; Back-Channel Logout's title dropped its errata suffix | RP-Initiated dated **12 Sep 2022**; Back-Channel **15 Dec 2023** and retitled *"incorporating errata set 1"*; the two unverified rows marked *(see note)* rather than guessed | Same errata-suffix precision this file already applies to JARM and OIDC Core |
 

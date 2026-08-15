@@ -386,8 +386,12 @@ authentication: the first app's token response includes a `device_secret`, which
 (together with the first app's ID token) via
 `grant_type=urn:openid:params:grant-type:device_secret` for its own tokens.
 
-> **Status caveat, and it matters.** This is an **OpenID 2nd Implementer's Draft** (draft 07, approved
-> 2025-10-17) — **not** a Final specification. Do not cite it as normative. On this deployment
+> **Status caveat, and it matters.** This is an **OpenID 2nd Implementer's Draft** — **draft 07, whose own
+> header is dated 16 January 2025, approved as the 2nd Implementer's Draft on 2025-10-17** — and **not** a Final
+> specification. Do not cite it as normative. **Give both dates, because they answer different questions:** the
+> header date tells you which text you read, the approval date tells you what standing it has. Citing only one
+> is how a reader ends up unable to tell whether they have the revision you meant. `SPEC-INVENTORY.md` states
+> the rule generally. On this deployment
 > `nativeSsoSupported` is `false`, so this module teaches it from the spec and from
 > [`docs/NATIVE-SSO-TUTORIAL.md`](../../../NATIVE-SSO-TUTORIAL.md) and runs nothing.
 
@@ -429,7 +433,7 @@ guarantee outside OAuth's model entirely.
 | CIBA Core 1.0 | OpenID Final, Sep 2021 | Backchannel authentication endpoint, `auth_req_id`, poll/ping/push | No standard decoupled authentication |
 | RFC 9470 | Published RFC, Sep 2023 | `insufficient_user_authentication` + `acr_values`/`max_age` challenge | RS can refuse but cannot say what would suffice |
 | RFC 9396 | Published RFC, May 2023 | `authorization_details`; five common data fields; `invalid_authorization_details` | Structured authority smuggled into scope strings |
-| Native SSO 1.0 | OpenID **2nd Implementer's Draft** (draft 07, approved 2025-10-17) | `device_secret`, the device-secret grant | Every sibling app runs its own browser flow |
+| Native SSO 1.0 | OpenID **2nd Implementer's Draft** (draft 07, text dated 16 Jan 2025; approved 2025-10-17) | `device_secret`, the device-secret grant | Every sibling app runs its own browser flow |
 
 ## Where this sits in the dependency graph
 
@@ -495,6 +499,17 @@ WWW-Authenticate: Bearer error="insufficient_user_authentication",
 
 It is an *authentication* problem, so 401 with `WWW-Authenticate` — the header is the whole mechanism, and 403
 has no place to put it.
+
+> **And this deployment is an instance of it, which is worth knowing before you run anything.**
+> `server/src/controllers/introspection.controller.ts` answers the `insufficient_user_authentication` case
+> with **403**. Be precise about what that is, because the reading matters: it is the **AS → resource server**
+> introspection response, where Authlete's action is `FORBIDDEN` and 403 is a defensible mapping for a vendor
+> API. It is **not** RFC 9470 §3's challenge, which is the **resource server → client** response and must be
+> 401. The two are separate messages with separate status codes, and this repo only implements the first —
+> **you write the second.** `docs/STEP-UP-AUTH-TUTORIAL.md` Part 5 conflated them until 2026-08-14, printing
+> the 403 under the heading *"an error conforming to RFC 9470"* with the client-action table hanging off it;
+> it now prints both, side by side, with the boundary drawn. So `curl` returning 403 here does not contradict
+> the ❌ above — but you cannot see that from the status code alone, which is the more general lesson.
 
 ---
 

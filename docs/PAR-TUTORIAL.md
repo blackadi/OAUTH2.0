@@ -2,6 +2,33 @@
 
 > **The short version:** PAR lets you send authorization parameters directly to the server (server-to-server) instead of through the browser URL. The browser only gets an opaque `request_uri` — no sensitive data leaks through the URL bar.
 
+> ### How the transcripts below were verified, and the one way this endpoint is not RFC 9126
+>
+> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials).
+>
+> **PAR runs here, on every client.** Nothing in this file needs a setting turned on: `parRequired` is
+> `false`, which means PAR is *optional*, not unavailable. Values in the blocks below are *illustrative*
+> except `expires_in`, which is the service's live `pushedAuthReqDuration` — **600**, re-checked 2026-08-14.
+>
+> ### ⚠️ The response is RFC 9126's. The request is not.
+>
+> | | RFC 9126 requires | This server accepts |
+> |---|---|---|
+> | request | §2 — a **form-encoded** POST whose body is the authorization parameters themselves (`response_type=code&client_id=…`), with client authentication as at the token endpoint | a **JSON** body: `{"parameters": "<url-encoded string>", "clientId": …, "clientSecret": …}` |
+> | success response | §2.2 — `{"request_uri": …, "expires_in": …}` | ✅ **exactly that**, since 2026-08-14 (T1-11). Two members, snake_case, no vendor envelope |
+>
+> **So a conformant PAR client cannot call `/api/par`** — it would send §2's form body and get
+> `400 Missing required body field: parameters`. This is an open finding, not a design choice, and it is worth
+> being precise about *why* it is tempting: Part 1 lists "an SPA can call PAR from JavaScript" as a benefit,
+> and that is true here **only because** the endpoint takes JSON. A conformant PAR endpoint requires client
+> authentication, which is exactly what an SPA cannot do — so the convenience and the non-conformance are the
+> same fact. Read that bullet as a description of this deployment, not as advice.
+>
+> The response half used to be non-conformant too: `requestUri` in camelCase, beside `action` and
+> `resultCode`, with §2.2's body carried as a `responseContent` **string** the caller had to know to parse.
+> If you are reading an older copy of this file, that is what changed.
+
 ---
 
 ## Table of Contents
@@ -110,8 +137,8 @@ sequenceDiagram
     AuthServer->>Client: 201 Created + request_uri
 
     Note over Client,Browser: Step 2: Redirect (browser)
-    Client->>Browser: Redirect to /authorize?client_id=...&request_uri=...
-    Browser->>AuthServer: GET /authorize?client_id=...&request_uri=...
+    Client->>Browser: Redirect to /api/authorization?client_id=...&request_uri=...
+    Browser->>AuthServer: GET /api/authorization?client_id=...&request_uri=...
     AuthServer->>Authlete: /auth/authorization (resolve request_uri)
     Authlete->>AuthServer: Login/consent page
     AuthServer->>Browser: Login page
@@ -506,6 +533,15 @@ sequenceDiagram
 - Client stores nonce, includes it in next DPoP proof
 - Expired nonce → server returns 401 with new `DPoP-Nonce`
 - SPA stores nonces in `sessionStorage` under `dpop_nonce`
+
+> **`UNVERIFIED` — no nonce appears on this deployment (2026-08-14).** `dpopNonceRequired` is `false` and
+> `dpopNonceDuration` is `0`, so the two `DPoP-Nonce` arrows in the diagram above and every step of the
+> handling list are the specification's behaviour, not this service's. **DPoP itself works without it** —
+> nonces are OPTIONAL in RFC 9449, and the flag controls nonce *enforcement*, not whether tokens can be
+> sender-constrained. Turn it on under **Service Settings → Tokens and Claims → Advanced → DPoP Token →
+> Require Nonce** and set a non-zero duration to make this section runnable. The `DPoP` sender-constraining
+> that *does* work here is demonstrated end to end, with captured responses, in
+> [`FAPI-TUTORIAL.md` Part 6](FAPI-TUTORIAL.md#part-6-failure-demonstrations).
 
 ---
 

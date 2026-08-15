@@ -43,7 +43,7 @@ export function checkStepUpRequirements(
   event: AuthenticationEvent,
   now: number
 ): StepUpFailure {
-  // RFC 9470 §2 / OIDC Core §5.5.1.1. Only an *essential* `acr` request is binding: a non-essential one is a
+  // RFC 9470 §4 / OIDC Core §5.5.1.1. Only an *essential* `acr` request is binding: a non-essential one is a
   // preference, and OIDC Core says the OP "MAY" honour it, so failing on it would refuse conformant requests.
   if (required.acrEssential && required.acrs && required.acrs.length > 0) {
     // `event.acr === undefined` lands here too, and must: an ACR we cannot name is one we cannot assert.

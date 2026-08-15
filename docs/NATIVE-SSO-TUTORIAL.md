@@ -2,6 +2,40 @@
 
 > **The short version:** Native SSO lets mobile apps from the same vendor share authentication state directly through secure device storage (iOS Keychain, Android Account Manager), eliminating the need for browser cookies and providing SSO that works even in incognito mode.
 
+> ### ⚠️ `UNVERIFIED` — Native SSO is switched off here, so **nothing in this file has been run**
+>
+> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials). This whole file is the
+> third kind. Verified against the live service on **2026-08-14**:
+>
+> | Setting | Live value | Consequence |
+> |---|---|---|
+> | `nativeSsoSupported` | **`false`** | no `device_secret` is ever issued, so Phase 1 cannot complete |
+> | `native_sso_supported` | **absent** from the 64-member discovery document | a client cannot discover the capability either |
+> | `device_sso` in `supportedScopes` | **not registered** | the scope is silently ignored — OAuth drops unknown scopes, so the request *succeeds* and Native SSO simply never triggers |
+>
+> **The middle row is the one that bites.** An unregistered scope produces no error. You get a normal token
+> response, no `device_secret`, and nothing anywhere saying why. [Part 6](#part-6-authlete-console-setup) is
+> the fix list, and it is ordered deliberately: the flag, then the scope, then the grant type, then the two
+> per-client settings.
+>
+> **`b81d5ae9-9f85-4c6d-8658-1a36ffa42c83` is one *illustrative* constant, not a captured value.** It
+> appears in all four token-response blocks in this file so that you can follow one device secret through
+> Phase 1 → storage → Phase 2 and see that it is the *same* value. Real device secrets are opaque and
+> server-generated; do not read the UUID format as a promise.
+>
+> **One more thing to check before running Phase 2 through *this* server.** The blocks in
+> [Part 7](#part-7-step-by-step-flow) call Authlete's own token endpoint directly. This repo's `/api/token`
+> routes Authlete's `action: TOKEN_EXCHANGE` through `controllers/token-exchange-response.handler.ts`, which
+> **omits `issued_token_type`** and **drops `actor_token`** — two deliberate teaching defects, recorded in
+> `AGENTS.md` under *Deliberate defects*. `actor_token` is how Native SSO carries the device secret.
+>
+> **`UNVERIFIED` — whether a device-secret exchange actually reaches that handler.** It would need Authlete
+> to answer this request shape with `TOKEN_EXCHANGE` rather than handling Native SSO natively and answering
+> `OK`, and that cannot be established while `nativeSsoSupported` is `false`: there is no way to send the
+> request. If it does reach the handler, the path is unusable for a second, unrelated reason. Settle it by
+> enabling the flag and reading `action` before assuming either way.
+
 ---
 
 ## Table of Contents
@@ -226,6 +260,10 @@ client_id=app_1
 ```
 
 #### Step 5: Token Response (Native SSO Enhanced)
+
+> **`UNVERIFIED`** — `nativeSsoSupported = false` on this deployment (2026-08-14), so no response like this
+> has been produced here. The `device_secret` member is what the flag controls; everything else is an
+> ordinary authorization-code token response.
 
 ```json
 {
@@ -489,6 +527,16 @@ For each client:
 ---
 
 ## Part 7: Step-by-Step Flow
+
+> **`UNVERIFIED` — every "Expected Response" in this Part is predicted from the specification, not captured.**
+> Re-checked 2026-08-14: `nativeSsoSupported` is still `false`, so none of these commands has been run
+> against this deployment. What each block *does* tell you reliably is the request shape and which member to
+> look for — `device_secret` in Phase 1, a matching `ds_hash` in Phase 2. Enable the five settings in
+> [Part 6](#part-6-authlete-console-setup) first, then run them and replace these blocks with what came back.
+>
+> Note the URLs here address **Authlete's own** endpoints (`YOUR_AUTHLETE_BASE/YOUR_SERVICE_ID/token`),
+> not this server's `/api/token` — deliberately, because it removes this repo's token-exchange handler from
+> the picture. See the warning at the top of the file for why that matters.
 
 ### Phase 1: Get Tokens for App 1
 

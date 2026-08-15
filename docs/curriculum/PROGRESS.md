@@ -117,6 +117,557 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T1-19 batch 3 (B1-W3, 9068-W2, 9101-W5): T1-19 closes; two criteria under-counted their own defect** (below)
 - [x] **2026-08-14 — the P1 configuration changes had broken three labs, and the grep rule could not have caught it** (below)
 - [x] **2026-08-14 — T1-11 + CU-W2: four endpoints stopped speaking the vendor's shape, and an admin PATCH stopped clearing what it did not name** (below)
+- [x] **2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention, and four of the audit's own "unreproducible" verdicts turned out to be stale** (below)
+- [x] **2026-08-14 — T2-11: the step-up challenge is a 401, in all five places it is drawn — one of which nobody had checked** (below)
+- [x] **2026-08-14 — T2-4 + T2-12: TLS 1.3 has a new RFC number, and Module 10's missing conformance row is PARTIAL rather than FAIL** (below)
+- [x] **2026-08-14 — VCI-W6 closed: the credential issuer has a key, and Module 09b Ex 7 is a three-state exercise now** (below)
+- [x] **2026-08-14 — T2-8: two of theme 2's four features were missing from README's tables entirely** (below)
+- [x] **2026-08-14 — T2-10: three of the audit's own replacement line numbers had drifted again before anyone applied them** (below)
+- [x] **2026-08-14 — T2-15: theme 3 stated honestly — PAR is conformant on the way out and not on the way in** (below)
+- [x] **2026-08-14 — T2-16: the vendor features, and a fourth capability state that runs backwards** (below)
+- [x] **2026-08-14 — T2-14: the audit's last two fetches, and both went against the audit** (below)
+- [x] **2026-08-14 — CU-W1 proven: Authlete REPLACES, and the defect was never data loss** (below)
+- [x] **2026-08-14 — TIER 3 COMPLETE: all 19 decision records ruled, and none of the remaining ones needed a write** (below)
+
+### 2026-08-14 — Tier 3: all 19 decision records ruled
+
+**Why this matters to a future session: no decision is outstanding.** `audit/05-decision-records.md` now opens
+with a status table. The shape: **four enabled, nine declined, one deferred, one defect kept on purpose, one
+deliberately unrecorded.**
+
+> **None of the remaining rulings needed an Authlete write.** DR-02 and DR-04 are *do not enable*, DR-06 is
+> document-only, DR-08 declines, DR-09 defers, DR-10 keeps, DR-12 is a documentation edit. Every service write
+> had already happened in DR-03/05/07/11. **"Take the Tier 3 decisions" was mostly a writing task, not a
+> configuration one** — worth knowing before budgeting a session for it.
+
+**Four items of real work shipped alongside the rulings**, each in the same commit as its decision, per
+`AGENTS.md`'s rule that a Tier 3 decision ships with its paired doc change:
+
+- **DR-12** — `middleware/errorHandler.ts` added under a **new** concern row, *Failure disclosure & status
+  derivation*, with its three grounds written into `AGENTS.md` itself: it sets the status of every failure across
+  all 57 SDK call sites, it is the **sole gate on stack-trace disclosure**, and it has **already produced one
+  security-relevant defect** (every SDK validation failure served as HTTP 200 — invisible to a monitor watching
+  status codes). A filename does not explain why a generic middleware is on that list. Also added
+  `jwt-verification.service.ts` and `introspection-standard.controller.ts`; `jar.controller.ts`'s conditional had
+  already resolved when B1-W2 shipped. **`fapi.controller.ts`'s decline is now explicit** — it *reports* posture
+  rather than deciding outcomes, and an exclusion that is only implied is one somebody will undo.
+- **8693-W1** — `resource` and `audience` look identical from the outside: both dropped, both produce no `aud`,
+  both answer 200. But `TokenCreateRequest` **has a `resources` field and no audience field at all**, so one drop
+  is **a choice this server makes** and the other is **a vendor boundary no fix can cross**. Established by
+  reading the SDK model, not by testing — a 200 looks the same either way, which is exactly how the two got
+  conflated. The characterization test's `it("drops audiences")` case now carries that reasoning, because unlike
+  its siblings it can never legitimately change.
+- **8693-W2** — the tutorial's *"Not covered by tests"* section was true when written and false since. Replaced
+  with why a **characterization** test is the stronger arrangement: a test asserting the *correct* RFC 8693
+  behaviour fails today and gets skipped within a week; a test asserting the *current* behaviour fails the moment
+  somebody changes it, and names the documents to update. The old note's point about the E2E assertion is kept as
+  its own lesson — `expect([200, 400, 429]).toContain(res.status)` is a smoke test wearing a unit test's clothes.
+- **9068-W3** — Module 04 now separates **audience restriction** (runnable here, through introspection) from
+  **self-contained tokens** (not runnable, `accessTokenSignAlg` unset), and states that the two are
+  *orthogonal*: you can audience-restrict an opaque token, and you can issue a JWT with no `aud` at all.
+- **FAPI1A-W4** — Module 08's `c_hash` exercise continues into **`s_hash`**, with a hash computation that was
+  **run before publishing** (22 base64url chars, matching the `c_hash` length in the lab's own transcript), the
+  three-way `at_hash` / `c_hash` / `s_hash` table, and why `s_hash` is the *only* FAPI 1.0 Advanced behaviour
+  observable here — mTLS, the other half of Part 2, is declined with reasons. It also says what it does **not**
+  mean: one emitted claim is not a profile.
+
+> **The recurring reason for declining, stated three times independently.** DR-02, DR-06 and DR-04 all collide
+> with the retired-grant curriculum: requiring PKCE-S256 and PAR removes the very behaviours Modules 01, 02, 03
+> and 07 exist to demonstrate. **A profile that forbids what the curriculum teaches is not a configuration this
+> deployment can hold and still be what it is.** That is not timidity; it is what auditing a *teaching* server
+> against production profiles produces.
+>
+> **And the ruling most likely to be undone by accident is DR-08.** Session Management, Front-Channel Logout,
+> back-channel logout's `sid` mode and Native SSO's `sid` share **one** prerequisite — durable OP session
+> identity — so building it for any one consumer reopens all four at once. Treating them as four independent gaps
+> was the mistake Phase 2 corrected, and it is the one most likely to recur.
+
+**Verification.** `typecheck` clean both packages, 1081 server tests / 73 files, 109 client / 16, lint unchanged
+(server's 4 pre-existing warnings), `check-docs` clean across 166 files, route coverage 92 with an empty baseline.
+The only source change is one test comment.
+
+### 2026-08-14 — CU-W1: merge or replace, settled on a throwaway client
+
+**Why this matters to a future session:** this was the audit's last unproven premise about Authlete, and the
+answer changes what the `CLIENT-UPDATE-FIELD-LOSS` finding *is*.
+
+**Method.** `client/create` a throwaway with 15 distinctive fields, read back what Authlete actually **stored**
+(not what was sent), `client/update` with a body carrying **only `clientId` and a changed `clientName`**, read
+back, diff, delete. **`0` of 15 fields survived unchanged.**
+
+Twelve cleared or zeroed — `grantTypes`, `responseTypes`, `redirectUris`, `contacts`, `description`,
+`applicationType`, `tosUri`, `policyUri` → absent; `pkceRequired`, `pkceS256Required`, `parRequired` → `false`;
+`defaultMaxAge` → `0`. **The other two are the finding**: they reset not to empty but to Authlete's **non-empty
+defaults**.
+
+| Field | Was | After an update that omitted it |
+|---|---|---|
+| **`tokenAuthMethod`** | `CLIENT_SECRET_BASIC` | **`NONE`** — the client stops authenticating at all |
+| `idTokenSignAlg` | `ES256` | `RS256` |
+
+> ### The defect was never "data loss", and every document describing it said so
+>
+> `AGENTS.md`, this file and the finding entry all called it *"silently clears the rest"*. **The accurate
+> phrasing is "resets to defaults — and for client authentication the default is the weakest available value."**
+> Before CU-W2 shipped, **renaming a client through the admin surface could have converted a confidential client
+> into one requiring no client authentication, withdrawn its PKCE requirement, and answered `200`** with nothing
+> in the log. That is an authentication downgrade performed by an unrelated edit, not a support ticket.
+>
+> It is also the strongest possible argument for CU-W2's read-modify-write — worth recording even though the
+> code was already correct under **either** answer, which is why CU-W2 correctly did not wait for this probe.
+
+**Two process notes.** Authlete's `client/delete` requires the **`DELETE`** method: a `POST` returns **405**, and
+the probe's first cleanup attempt failed on exactly that, leaving the throwaway client alive until a second pass
+removed it (`DELETE` → `204`, then `client/get` → `404 [A001212]`). **Verify a cleanup ran; do not assume it
+did** — the same class of mistake as reading a status code instead of a body. And all four real clients were
+re-listed afterwards and are identical to the pre-probe snapshot.
+
+**Verification.** No source change — 1081 server tests / 73 files unchanged. The service holds four clients, as
+before.
+
+### 2026-08-14 — T2-14: the last two fetches, and a misquotation nobody had noticed
+
+**Why this matters to a future session: the audit's fetch budget is spent.** `RESUME.md` recorded *"two fetches
+remain in the whole audit."* Both were made, and **both contradicted the audit rather than the curriculum**:
+
+| Fetch | Result |
+|---|---|
+| **RFC 9101 §10.1** | *"Choice of Algorithms"* — and it carries **verbatim** the MUST-be-signed sentence Module 05 attributes to it. The Phase 2 entry had mapped that requirement to §6.2, *"JWS-Signed Request Object"*, which is a validation rule for a server *receiving* an object. Both sections are real; Module 05 cites the one carrying its quote. §10.8 *"Cross-JWT Confusion"* exists, settling a second claim |
+| **RFC 8252 §7.3** | *"Loopback Interface Redirection"*, and the obligation is a **MUST**: *"The authorization server MUST allow any port to be specified at the time of the request for loopback IP redirect URIs…"* The finding's own reasoning had said the AS **"should"** treat the port as variable — an understatement of a MUST, in an entry whose whole verdict rests on that one obligation. `IMPLEMENTED_VERIFIED` stands and is stronger |
+
+> ### A by-product neither item predicted, and it is the best find in the batch
+>
+> Asking the same RFC 9101 document *where the precedence rule actually lives* established three things at once:
+> it is **§6.3** (*Request Parameter Assembly and Validation*), not §5; the phrase occurs **exactly once** in the
+> whole document; and **the repo's quotation carried an extra word** — the RFC reads *"the parameters in the
+> Request Object"*, and Module 05 had *"the parameters **included** in the Request Object"*.
+>
+> **Module 05's lab had it right and its README did not.** The lesson and the lab disagreed for a fortnight, and
+> the lab was correct — the fifth time in this audit that the curriculum beat the audit's own reasoning, and
+> again in a place where the audit worked from an earlier fetch list while the curriculum had read the document.
+>
+> The mnemonic now in the README: **§5 is where a request is *passed*; §6.3 is where the server *assembles and
+> validates* it** — which is the only place a precedence rule could live. That makes the right section memorable
+> instead of arbitrary.
+
+**Two items reached files their criteria could not have named.** 9470-W4's code comments include
+`utils/step-up.ts`, which **T1-7 created** after the item was written. Both of its code edits are
+**comment-only**, so `session.controller.ts`'s plan-mode requirement does not apply — `CLAUDE.md` exempts a
+semantics-free edit, and a citation in a comment is exactly that. The old numbers were wrong for a reason worth
+keeping: **§2 is *Protocol Overview*, narrative with nothing to check against, and §3 is the challenge — a
+message this code never sends.** Citing §3 for a *check* is the same AS/RS conflation T2-11 fixed, one layer down.
+
+> **9449-W5 is the one with a live consequence.** RFC 9449 **§8 gives the AS `400 use_dpop_nonce`**; **§9 gives a
+> resource server `401`**. `AGENTS.md` documented **401 for both**. A client that retries only on a 401 never
+> retries at the token endpoint — so the wrong status does not mislabel the error, **it stops the nonce dance
+> from ever starting.** Also corrected: a stale or mismatched nonce is refused with `use_dpop_nonce`, not
+> `invalid_dpop_proof`. None of it is exercisable here — `dpopNonceRequired` is `false` — and the bullet now
+> says so rather than reading as an observation.
+
+Also landed: the Native SSO **two dates** (text 16 Jan 2025, approved 2025-10-17) with the reason both are
+needed; **RFC 9440** named in Module 05's mTLS revisit trigger, with what its *Informational* status means — it
+standardises the header, not any obligation to trust it, and §4 requires the origin to accept it only from a
+proxy it authenticates; and the **six** attacker archetypes corrected in the audit's own entry, where the prose
+said five while its table listed six and Module 10 had it right.
+
+**Verification.** `typecheck` clean, 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files. The only source changes are two comments.
+
+### 2026-08-14 — T2-16: the vendor-feature pass, and *accepted but unadvertisable*
+
+**Why this matters to a future session:** three things this repo implements are **Authlete features that no
+specification defines** — Hardware Security Keys, parameterized scopes, and scope/client `attributes`. A
+specification inventory that omits them is dishonest, and one that lists them like RFCs is worse. They now sit in
+their own `SPEC-INVENTORY.md` section, *Vendor features — implemented here, defined by no specification*, which
+states the reason they belong there at all: **the most useful thing to know about each is that there is no RFC to
+check it against** — no interoperability guarantee, no second implementation, no normative text to appeal to.
+
+`docs/API.md` gains the four **HSK** endpoints (shapes, required-vs-optional fields, action→status, admin auth
+that fails closed) with `DELETE` in a ⚠️ box making a point the work item did not: **deleting a handle is not
+deleting a key** — the key material lives in the HSM and this API never sees it, which is the whole reason for
+the indirection. Plus the **`attributes`** shape with *two* vendor-assigned keys rather than one (`regex` on a
+scope, and `fapi2=sp`, the second being the one `FAPI-TUTORIAL.md` Part 3 already depends on), the advice to
+**prefix your own keys**, and a two-row table naming exactly what *no scope-management endpoint* blocks.
+
+> ### The interesting half: Module 09a's taxonomy needed a fourth state, and it runs the other way
+>
+> The three it had — *supported but not required*, *permitted but not configured*, *advertised but unusable* —
+> all describe a capability that **is listed** and delivers less than the listing implies. **Parameterized
+> scopes are the inverse.** Authlete accepts `payment:123.50` against a scope registered with a `regex`
+> attribute of `payment:.*`, and returns the granted value in a `dynamicScopes` field. The feature works. But
+> `scopes_supported` can only list **literal strings** — there is no metadata member for a pattern.
+>
+> | State | The listing says | The reality is | Misreading it costs |
+> |---|---|---|---|
+> | supported but not required | available | available, and optional | a security finding you called a pass |
+> | permitted but not configured | available | unavailable | an afternoon debugging your own request |
+> | advertised but unusable | available | unavailable, and the AS said otherwise | trust in the metadata |
+> | **accepted but unadvertisable** | **absent** | **available** | **a capability you never knew you had** |
+>
+> **So a client that discovers this AS correctly can never use the feature, and a client that hardcodes
+> `payment:123.50` can** — the exact inverse of the advice every other module gives. And in a capability matrix
+> it does not look like a green tick; **it looks like the feature is absent.** The last column is what makes the
+> four legible as one taxonomy rather than four observations.
+>
+> This repo cannot demonstrate it — no scope-management endpoint, so scopes are console-only — and **that
+> limitation is itself an instance of the same shape**: a feature the vendor supports, the documentation
+> describes, and the deployment cannot reach.
+
+**One deliberate departure.** HSK-W2 asked for a separate `docs/` page and did not get one: a page for four
+endpoints nothing else in the repo consumes would be prose in search of a reader. Promote it if HSK ever gains a
+consumer.
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files, route coverage 92 with an empty baseline.
+
+### 2026-08-14 — T2-15: the wire-format gaps, stated until Tier 3 closes them
+
+**Why this matters to a future session:** theme 3 of the audit is *"Authlete's envelope crossing the boundary"* —
+PAR, CIBA and the device flow speak the vendor's shape on endpoints that advertise an RFC. T1-11 closed the
+**response** half at PAR and Device on 2026-08-14. The **request** half is deferred, deliberately, so the honest
+interim is to say so where a learner will read it. The tutorial halves shipped with T2-1; this is the rest.
+
+**Module 05 gains a four-row table**, and the pattern in it is the point:
+
+| | Status |
+|---|---|
+| PAR **response** | ✅ RFC 9126 §2.2's body exactly, since 2026-08-14 |
+| PAR **request** | ❌ not §2's wire format — JSON with an Authlete-shaped `parameters` field; a conformant request gets `400 Missing required body field: parameters` |
+| JAR **by value** | ✅ runs, and **asymmetrically** — `2176571218` has `requestSignAlg: ES256` + a JWK Set |
+| JAR **by reference** | ❌ no client registers a `requestUris` entry, and `require_request_uri_registration` is in force |
+
+> **An endpoint can be conformant on the way out and non-conformant on the way in**, and reading only the
+> response tells you nothing about whether a conformant client could have reached it. That is the generalisation
+> worth carrying out of theme 3, and it applies identically at CIBA and the device flow.
+
+**Two of the five criteria were stale.** **9101-W4** said *"object signing symmetric-only until W3"* — but W3
+shipped on 2026-08-12, so JAR by value now validates an **ES256** request object against a real registered key;
+only by reference is unavailable. And **8628-W5** had already been closed by DR-11. The table also adds a
+distinction no item asked for: **JAR's §5.2 `request_uri` is a different artefact from PAR's** — the client hosts
+one, the AS mints the other.
+
+**`AGENTS.md`'s CIBA paragraph** now states both departures — §7.1's form-encoded request, §7.3's `auth_req_id`
+from the backchannel endpoint itself rather than a `ticket` plus a second call — and cross-references PAR and
+Device, so theme 3 reads as one systemic finding rather than three unrelated notes.
+
+> **7592-W3 is the sharpest of the five.** Every RFC 7592 *operation* is reachable and **none of its HTTP
+> surface is**: no per-registration client configuration endpoint, no `GET`/`PUT`/`DELETE`, no
+> `registration_client_uri`; four `POST` routes taking the registration access token in a JSON body instead. It
+> sits beside the RFC 7591 half that **was** fixed the same week, which makes the pair easy to misread as
+> finished — so `SPEC-INVENTORY.md` now says both: **the body is conformant, the endpoint is not.**
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files.
+
+### 2026-08-14 — T2-10: the stale line numbers, and the corrections that went stale too
+
+**Why this matters to a future session:** the plan's note on this item read *"prefer anchoring on the ⚠️ comment
+text — these have drifted once already."* That was the finding, not a stylistic preference. **Three of the
+bundle's replacement numbers had drifted a second time before anyone applied them:**
+
+| The audit's correction | Actual, 2026-08-14 | Why it moved |
+|---|---|---|
+| `parseBearerError` at `introspection.controller.ts:20-36` | **`:45`** | T1-1's auth gate and the DPoP-nonce relay grew the file |
+| the RFC 9470 branch at `:81-97` | **`case "FORBIDDEN"` at `:142-167`** | same |
+| `ParSection.tsx:43` (the PKCE write) | **`:41`**, read back at `:34` | the component shifted by two lines |
+
+So every reference fixed here carries a **content anchor** alongside the number — *"the `tokenCreateRequest`
+literal"*, *"the `case \"FORBIDDEN\"` branch"*, *"under the ⚠️ comment naming §2.2.1"*. A `path:line` pointer
+rots; a quoted comment does not.
+
+**What landed:** the three token-exchange handler refs (`:47-52`, `:69-76`, `:32`) in `AGENTS.md`,
+`TOKEN-EXCHANGE-TUTORIAL.md` ×2 and Module 06's lab ×2 — and Module 06's *"read those six lines"* becomes
+**"read the create-request literal"**, because *six lines* was counting the ⚠️ comment the old number pointed
+at. The introspection refs in `AGENTS.md`, Module 09a's lab and — a site no work item named — the step-up
+tutorial's appendix, which cited `:114`, the **validation-error** branch. And Module 03's `ParSection.tsx` ref.
+
+> **Two closures worth the detail.** **CUR-3c-W12 was closed by deleting its line numbers, not correcting
+> them**: T2-1 and T2-11 had already invalidated the replacements (`:391`, `:182-183`) the week they were
+> written, so seven tutorial citations across two findings now name a **section** — *"Part 5 → What the client
+> learns"*. That is `audit/04-remediation-plan.md` §6.3's option (b), applied to findings rather than to this
+> file. **CUR-3b-W4 was already satisfied, by deletion**: Module 05 carries no `dpop.service.ts:NNN` reference
+> at all any more, which is more durable than renumbering a file that had already drifted twice.
+>
+> `03-curriculum-audit.md`'s copies of the wrong numbers were **deliberately left** — they quote them *as* the
+> defect, the same reason `check-docs.mjs` needs a `PATHS_DISCUSSED_NOT_REFERENCED` list.
+
+**Two rules for anyone doing this again:** *never cite a line number in a file you are actively rewriting*, and
+*when a work item hands you a replacement number, re-derive it* — three of five here were wrong.
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files.
+
+### 2026-08-14 — T2-8: the claimed-working/flag-off table, and the drift nobody was watching
+
+**Why this matters to a future session:** theme 2 of the audit was *"four features claimed as working while
+their service flag is off"* — Native SSO, FAPI 2.0, verifiable credentials, MCP/CIMD — recorded as **one**
+systemic defect rather than four documentation slips, because nothing in the build, the tests or
+`check-docs.mjs` can see a service flag.
+
+**By the time the item was executed, two of the four had been switched on** (VCI via DR-03 + VCI-W6, CIMD via
+DR-05) — so the live defect had inverted. It was no longer a false claim but **an absent one: `README.md` had
+no VCI row and no MCP row at all.** *A feature missing from the table cannot be caught by re-reading the
+table*, which is why this direction of drift survived a documentation pass that fixed the other two rows.
+
+Both rows added, with the qualifications that make them honest rather than green:
+
+| Row | Status |
+|---|---|
+| Verifiable Credentials (OID4VCI) | **Working** — flag on, credential issuer has a JWK Set, three discovery endpoints answer. **Issuance is not exercised**: it needs a wallet, and this repo does not contain one |
+| MCP / CIMD | **Partial** — CIMD works (`clientIdMetadataDocumentSupported: true`). **MCP end to end does not**: OAuth 2.1's first MUST is that the AS reject `implicit` and `password`, both enabled here deliberately, and there is no `registration_endpoint` in the discovery document |
+
+> ### The deliverable is the derivation, not the rows
+>
+> A note under the table names the five service fields every status depends on, gives the **read-only** command
+> that prints them, and records the captured values with a date. Three details in that command are deliberate:
+>
+> - **It was run before being published**, and prints exactly the values the prose quotes. The first draft
+>   printed Python's `False`/`True` while the prose said `false`/`true` — a mismatch a careful reader would
+>   have caught and a sloppy one would have copied. `json.dumps` fixed it.
+> - **It prints `<set>` rather than `credentialJwks` itself**, because that field holds a private scalar. A
+>   diagnostic command in a public README should not teach people to `echo` their signing key.
+> - **It is not a CI check**, on purpose. A service configuration change is not a reason to fail somebody's
+>   pull request — the same argument that puts external link checking on a weekly schedule rather than per
+>   push. `audit/04-remediation-plan.md` §7.3's scheduled discovery-diff check is the right mechanism and is
+>   **still unbuilt**; it remains the only proposal in that plan that would have caught a defect *before* the
+>   audit did.
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files.
+
+### 2026-08-14 — VCI-W6: the credential-issuer JWK Set, verified rather than assumed
+
+**Why this matters to a future session:** this was the last configuration gap standing between the deployment
+and end-to-end credential issuance, and it was carried as *"blocked, needs the operator."* The operator set
+`credentialJwks` on service `3693555522` — one EC P-256 key, `kid: vc-issuer-1`, `alg: ES256`. **All three
+checks the resume file was carrying as owed now pass**, probed live against the deployment:
+
+| Check | Before | Now |
+|---|---|---|
+| `GET /api/vci/jwks` | **500** `[A403201]` | **200** |
+| `GET /api/vci/jwtissuer` | **500** `[A417202]` | **200** — same key set, wrapped in an `issuer` |
+| only the **public** half published | n/a | ✅ members `alg,crv,kid,kty,use,x,y` — **`d` absent on both** |
+
+> ### The third check is the one that needed doing properly, and a 200 could not make it
+>
+> **The stored service value contains the private scalar `d`** — it has to, because the issuer signs with it.
+> Authlete strips it on the way out. But a credential-issuer JWKS endpoint that *echoed* `d` would publish the
+> key every credential it ever signs is verified against, **and would still answer `200`**. So the check is to
+> parse the body and assert on `d`/`p`/`q`/`dp`/`dq`/`qi`/`k`, which is what was done. Same rule this repo keeps
+> paying for: **a status code is not evidence about the body.**
+
+**The configuration-change grep rule earned its keep.** A flag has no symptom string, so `AGENTS.md`'s three
+searches were run instead — the field name (`credentialJwks`), the vocabulary of it being off, and **the vendor
+result codes that only occur while it is off** (`A403201`, `A417202`). The third found every affected line:
+Module 09b's lab in eight places, its README status row, a `SPEC-INVENTORY.md` row, and four audit files. **The
+symptom grep would have found nothing**, because the strings that changed were the ones that existed *because
+the key was missing*.
+
+**Module 09b Exercise 7 was rebuilt a second time, and is better again — the third time a fix has improved a
+lab rather than retiring one.** The two-state *"enabling a feature is not the same as configuring it"* lesson
+becomes **three dated states of the same three endpoints**:
+
+```
+feature off      ->  A364301 / A416301 / A402301   all NOT_FOUND              "VCI is off"
+flag on, no key  ->  A403201 / A417202             INTERNAL_SERVER_ERROR      "no signing key"
+key set          ->  200                                                      publishes the public half
+```
+
+**Each transition names a different missing value**, which is the concrete argument for reading vendor result
+codes instead of HTTP statuses: pattern-matching on the status would have read "broken, broken, fixed" and
+learned nothing. The tagline gains its third clause — *…and configuring it is not the same as configuring it
+safely* — and the exercise now includes the private-member check as a step the learner runs.
+
+Two smaller consequences worth keeping. The exercise's probe loop now prints the **same** value for all three
+endpoints, so the lab says so: **a probe that cannot distinguish its inputs has stopped being a measurement.**
+And the loop's own history is now the teaching point — it has been rewritten twice, once because `metadata`
+started returning a document with no `resultCode` (raising `KeyError`), once because the other two joined it.
+
+> **Closing the gap improved a diagnosis instead of deleting one.** The `UNVERIFIED` marker on *issuing an
+> actual credential* used to blame the missing JWK Set — and that was **hiding the fact that nothing else was
+> missing.** Issuance now needs only a **wallet this repo does not contain**. *"Runnable, with a client we do
+> not have"* is a weaker claim than *"blocked by configuration"* and a far more useful one: it tells a reader
+> what to build rather than what to switch on. **A blocked marker hides everything behind it.**
+
+**Verification.** Documentation only — 1081 server tests / 73 files, 109 client / 16, `check-docs` clean across
+166 files. The Authlete write was the operator's; this session's calls were all reads.
+
+### 2026-08-14 — T2-4 and T2-12: two citation corrections, both against the audit's own criteria
+
+**T2-4 — the TLS reconciliation.** Phase 4 §2.1's four fetches (2026-08-11) are now applied to Module 00.
+Its two TLS citations lead with **RFC 9846 (Jul 2026)** and name RFC 8446 (Aug 2018) as the superseded number
+most readers will recognise; RFC 9110 is sharpened to **Internet Standard, STD 97**. The edit comes with a note
+that teaches the distinction instead of just making it: **the wire protocol did not change** — RFC 9846 is
+`rfc8446bis`, same version number, backward compatible — so a document citing RFC 8446 is not wrong about TLS,
+only about which document to point at. *Obsolescence lives in the Datatracker metadata, not in the RFC text*,
+and a 2018 document cannot carry a forward reference to a 2026 one.
+
+> **`SPEC-INVENTORY.md`'s TLS rows were correct and were left alone, as the item instructed — but its RFC 9864
+> annotation was wrong twice, and this item is how that surfaced.** The date read **Oct 2025** against §2.1's
+> verified **Dec 2025**, and the scope read *"updates RFC 7518"* where the header block says **7518, 8037 and
+> 9053**. RFC 9864 now has a row of its own. **A date carried from recall, in the one file whose entire job is
+> citation provenance** — exactly the defect that file exists to prevent, and a direct argument for T2-5's
+> per-row *"URL fetched + header line read"* discipline. `alg: "none"` is not polymorphic, so Module 00's
+> citation of RFC 7518 §3.6 stands unchanged.
+
+**T2-12 — and its acceptance criteria were stale twice over.** The criterion said Module 10's missing
+§5.3.2.1 row should read **FAIL**. It was already wrong when written — Phase 4 §2.2 had recorded `ES256` as
+advertised — and became more wrong on 2026-08-12, when T1-2's single RSA key added **`PS256`**. The live list
+is ten algorithms carrying **both** algorithms the profile permits:
+
+```
+id_token_signing_alg_values_supported =
+  [PS384, RS384, HS256, HS512, ES256, RS256, HS384, PS256, PS512, RS512]
+```
+
+**So the service-level list cannot settle the row at all**, because `idTokenSignAlg` is pinned **per client**:
+`ES256` on `4277838306`, `1678274156` and `2176571218`, and **`HS256` on `1523514379`** — the confidential
+client the labs run on, using a symmetric algorithm that appears nowhere in the profile. The verdict is
+**PARTIAL**.
+
+> **The finding is better than the row it corrects: a conformance report written from discovery metadata alone
+> scores this PASS.** So `lab.md`'s Exercise 7 now names **PARTIAL** and **NOT REACHABLE** as verdicts distinct
+> from NOT EVIDENCED — *partial* means some principals satisfy it and others do not, *not reachable* means this
+> configuration admits no measurement either way (§5.3.2.1 row 7, a requirement about a pushed request's
+> contents on a service where PAR is optional), *not evidenced* means a measurement exists and you did not make
+> it. Picking the wrong one is itself a reporting error.
+>
+> **The habit: ask which principal each `shall` binds.** Roughly half of §5.3.2's bind the **AS** (metadata,
+> code lifetime, `iss`); the rest bind a **client configuration** (`tokenAuthMethod`, `pkceRequired`,
+> `dpopRequired`, `idTokenSignAlg`). `/.well-known` answers only the first kind, and one `client/get/list`
+> answers the second.
+
+**And the evidence was already in the curriculum, unjoined.** `modules/05…/lab.md` explains that its Exercise 5
+needs the confidential client because *"this service signs ID tokens with HS256, and Authlete refuses a
+symmetric algorithm for a public client."* Module 05 had the algorithm, Module 10 had the requirement, and no
+document put them in one sentence — in the module whose deliverable is a conformance report.
+
+**Verification.** Documentation only; suites unchanged at 1081/73 and 109/16, `check-docs` clean across 166 files.
+
+### 2026-08-14 — T2-11: the step-up challenge status, and a fifth carrier
+
+**Why this matters to a future session:** step-up authentication is a challenge/response protocol, and **most
+client libraries only inspect `WWW-Authenticate` on a 401**. Publish the challenge as 403 and a conformant
+client never parses it, never learns `acr_values`, and never re-authorizes — the loop *never starts*, and the
+user sees an unexplained failure instead of a re-authentication prompt. RFC 9470 §3's two examples are both
+`401 Unauthorized` and the section never mentions 403; RFC 6750 §3.1 already assigns 403 to
+`insufficient_scope`, while `insufficient_user_authentication` is about the authentication itself.
+
+**No code changed, and the finding said so.** `introspection.controller.ts` answers this case with **403**, and
+that is defensible: it is the **AS → resource server** introspection response, where Authlete's action is
+`FORBIDDEN`. §3's challenge is the **resource server → client** response — and this repo implements no
+resource server, so it never sends one. **The defect was always the conflation**, not the status code.
+
+`STEP-UP-AUTH-TUTORIAL.md` Part 5 now opens with a two-participant diagram and a six-row table separating
+**Response 1** (AS→RS, 403, this repo) from **Response 2** (RS→client, 401, *"your resource server"*). The
+*"What the client learns"* table is **split**, which the work item asked for and which matters: `acr_values`
+and `max_age` are §3's challenge parameters and hang off the 401; `acr` and `auth_time` are this AS's own
+additions and now sit in a second table labelled *Response 1 only*, because a client acting on them is
+trusting the AS's view of a token it already holds.
+
+> ### "Everywhere" was four locations in the plan and turned out to be five
+>
+> The fifth is **`docs/DATA-FLOWS.md`**, whose step-up sequence diagram drew `RS-->>C: 403 Forbidden` with the
+> challenge on it — the RS→client arrow that batch 3c had already identified as the *sharpest* form of this
+> defect, in a document nobody had searched. **Why three passes missed it:** the original finding searched
+> `STEP-UP-AUTH-TUTORIAL.md`, batch 3c searched the nine tutorials, batch 3b searched the modules, and a
+> top-level architecture document that redraws every flow in the repo is none of those three. Recorded as the
+> new **9470-W7**.
+>
+> **The rule that finds the next one: a defect stated as *a status code on a particular arrow* recurs wherever
+> that arrow is drawn.** Grep the *shape* — `insufficient_user_authentication` beside a status — across
+> `docs/`, rather than auditing document by document. Doing that also confirmed three places already have it
+> right: `GLOSSARY.md` says 401, and `API.md` and `StepUpSection.tsx` describe the *introspection* 403, which
+> is correct for what they document.
+
+**One consistency decision worth recording.** The tutorial uses `urn:mace:incommon:iap:silver` as its strong
+ACR in ten places, and this deployment registers `["pwd", "mfa"]`. Substituting `mfa` in only the transcripts
+would have left two vocabularies in one file, so `silver` stays as the illustration throughout and the
+substitution rule is stated **once** in the file's T2-1 box. Part 2's `acr_values_supported` block, which
+claimed to show this server's metadata, was corrected to the live `["pwd", "mfa"]` — with the reason `mfa` is
+registered *and deliberately unsatisfiable*: it is what makes the essential-ACR **refusal** path reachable.
+
+**Verification.** Documentation only — 1081 server tests / 73 files and 109 client / 16 unchanged;
+`check-docs.mjs` clean across 166 files.
+
+### 2026-08-14 — T2-1: the nine tutorials adopt the `UNVERIFIED` convention
+
+**Why this matters to a future session:** the audit called this *the single highest-leverage item in the
+plan* — the aggregate behind **six S2 findings** — and its whole point is that a tutorial must say which of
+its transcripts were **run** and which were **reasoned**. **5 markers across 3 files → 29 across 9.**
+
+**The convention is defined once, in `docs/README.md`**, as three labels: **captured** (run on a stated date),
+*illustrative* (right shape, placeholder values, nothing run), **`UNVERIFIED`** (this deployment cannot
+produce it, and the marker names the setting responsible). Each tutorial then carries only its own facts, so
+there are not nine near-duplicate boxes to drift apart. **None of the three words was invented here** —
+`UNVERIFIED` is the curriculum's (`modules/09a…/lab.md`), *illustrative* is FAPI2-W6's own acceptance
+criterion, and **captured** is `TOKEN-EXCHANGE-TUTORIAL.md`'s existing *"what this server actually returns
+(captured 2026-08-06)"*. **That file was already the model**, which corrects the finding's own framing: the
+convention was not "three files away in the curriculum", it was in a tutorial nobody had generalised from.
+
+> ### The load-bearing step was probing, not writing
+>
+> Batch 3c's reproducibility table is dated **2026-08-13 and earlier**, and Tier 1 changed the deployment
+> underneath it. **Four of nine verdicts were stale, every one in the *runnable* direction:**
+>
+> | File | 3c said | Live 2026-08-14 |
+> |---|---|---|
+> | `RAR-TUTORIAL.md` | three transcripts "cannot have been produced" — no type registered | **T1-6 registered `payment_initiation`.** The transcripts now come from the real 2026-08-12 round trip |
+> | `CIBA-TUTORIAL.md` | "unreproducible — `bcDeliveryMode` unset on all three clients" | **T1-6 set `POLL` on `1523514379`.** The flow runs — on that client |
+> | `FAPI-TUTORIAL.md` | "no client has a JWKS or `private_key_jwt`" | **T1-3 created `2176571218`** with both, so four of Part 4's six steps are runnable |
+> | `MCP-OAUTH-TUTORIAL.md` | CIMD does nothing; issuer inconsistent | **DR-05 and DR-11 fixed both** |
+>
+> **Writing "unreproducible" from the audit's own table would have been wrong four times.** Only
+> `NATIVE-SSO-TUTORIAL.md` is still wholly unrunnable, and it is the file marked that way throughout.
+
+**Three defects no work item had named**, each found by checking a transcript against live configuration
+rather than by reading it:
+
+1. **`CIBA-TUTORIAL.md`'s every worked example 401s against the configuration the tutorial tells you to
+   build.** Part 2 recommends `CLIENT_SECRET_BASIC` — citing Authlete's own guide, and because the
+   backchannel and token endpoints must agree — and the one client here with `bcDeliveryMode` set is exactly
+   that. Every example passed `clientId`/`clientSecret` in the **body**, which earns `[A157357]` for the
+   *channel* before the secret is looked at. The Basic form is now primary, with a three-row channel table
+   copied from `PAR-TUTORIAL.md`'s (which is excellent and was the model). **A consequence worth keeping:**
+   Part 6's *"Wrong Client Secret"* demo therefore **passed for the wrong reason** — against a Basic client it
+   401s whether the secret is right or wrong. A negative test that cannot distinguish its two failure causes
+   is not a test.
+2. **`RAR-TUTORIAL.md` showed a PAR response shape that has never existed** — `{"action":"CREATED",
+   "request_uri":…}`, half Authlete's envelope and half RFC 9126 §2.2's body. A **T1-11 residue**: that pass
+   updated six tutorials and did not reach a seventh file quoting PAR incidentally. **When a wire format
+   changes, grep for the shape, not only for the endpoint's own tutorial.**
+3. **`MCP-OAUTH-TUTORIAL.md` instructed you to set `resourceIndicatorsSupported`, which is not an Authlete
+   field.** No `Service` property in 3.0.16 matches `resource` except `resourceSignatureKeyId`, and the string
+   appears nowhere in the vendored OpenAPI document. **The fourth instance** of "set X in the console" for an
+   X with no console field, after RPL-W4, T1-13 and VCI-W2's AS half. Struck through rather than deleted, so
+   nobody re-adds it. Its sibling `resource_indicators_supported` is absent from the discovery document too —
+   and **whether RFC 8707 registers such a member at all is marked `UNVERIFIED`** rather than asserted, since
+   the RFC was not re-fetched for it.
+
+**Six stale literals corrected**: five `expires_in: 3600` where the service's `accessTokenDuration` is
+**86400**, and `FAPI-TUTORIAL.md`'s PAR `expires_in: 90` where `pushedAuthReqDuration` is **600**. Plus
+`RAR-TUTORIAL.md`'s introspection block, which showed `authorization_details` at the top level where the live
+response is `authorizationDetails.elements[]` with RFC 9396's common data fields flattened into an
+**`otherFields` string** — so the tutorial taught one parser for two incompatible shapes.
+
+**Four other IDs discharged**: 9396-W4 · FAPI2-W6 ⊃ 9126-W5 = CUR-3c-W7 (the `/api/authorize` →
+`/api/authorization` path in two files) · the tutorial halves of 9126-W6 and CIBA-W5, whose `AGENTS.md` and
+Module 05 halves stay in T2-15. **`FAPI2-W6` had no tier row of its own** — it existed in the plan only inside
+§5.2's cluster 22 — so the coverage check counted it as covered without anything scheduling it. That failure
+mode is now recorded in the plan.
+
+**One thing deliberately not done.** `STEP-UP-AUTH-TUTORIAL.md` still prints its step-up challenge as **403**
+where RFC 9470 §3 requires **401**, including the sequence-diagram arrow. That is **T2-11**, and leaving it
+keeps T2-11 one reviewable change instead of half-absorbed here. The file's new box says what *is* and is not
+runnable — `accessTokenSignAlg` is unset so Part 4's JWT payload cannot exist, and
+`urn:mace:incommon:iap:silver` is not a registered ACR (`supportedAcrs` is `["pwd","mfa"]`, so use `mfa`) —
+and records the T1-7 correction that `max_age` can only genuinely fail on the `prompt=none` path, because on a
+login POST the user has just authenticated.
+
+**Verification.** 1081 server tests / 73 files, 109 client / 16 — unchanged, this is a documentation change.
+`check-docs.mjs` clean across **166 files**, now validating **1037 endpoint paths** (up from 997) and 274
+anchors. Route coverage 92 routes, empty baseline. `docs/README.md` also gained the two tutorial-index rows
+`STEP-UP-AUTH-TUTORIAL.md` and `MCP-OAUTH-TUTORIAL.md` were missing, which is part of CUR-3c-W14.
 
 ### 2026-08-14 — T1-11 + CU-W2: the wire format, and the client update that cleared fields
 
@@ -1915,7 +2466,7 @@ whose fault it is" diagnosis went with it.
 
 | Finding | Evidence, 2026-08-06 |
 |---|---|
-| Four parameters silently discarded | `actor_token`, `resource`, `audience`, `requested_token_type` → four identical 200s; root cause unchanged at `token-exchange-response.handler.ts:29-34` |
+| Four parameters silently discarded | `actor_token`, `resource`, `audience`, `requested_token_type` → four identical 200s; root cause unchanged in `token-exchange-response.handler.ts`'s `tokenCreateRequest` literal |
 | `issued_token_type` missing (RFC 8693 §2.2.1 REQUIRED) | absent from the response; built at `handler.ts:48-55`, which also adds non-spec `client_id`/`subject` |
 | A live credential in `subject` | `handler.ts:27` — `result.subject \|\| subjectToken`. Confirmed live: the returned `subject` is **byte-identical** to the subject token sent, and still `active` |
 | `resource` does not audience-restrict | introspection of the resulting token → no `aud` |
@@ -2248,7 +2799,7 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   **SDK Version Pin**. **Curriculum impact:** this was Module 06 Exercise 6's entry point; the gate was
   rebuilt around the three findings that still reproduce (see the Build Log entry for 2026-08-06).
 - **The token-exchange handler discards four request parameters.**
-  `token-exchange-response.handler.ts:29-34` builds its `token.create` request from exactly `grantType`,
+  `token-exchange-response.handler.ts`'s `tokenCreateRequest` literal builds its `token.create` request from exactly `grantType`,
   `clientId`, `scopes`, `subject`. Verified live: `actor_token`, `resource`, `audience`, and
   `requested_token_type` all produce byte-identical 200 responses, and introspection of the `resource` case
   shows **no `aud`** (the same parameter does produce `aud` on the authorization-code path — Module 04). The
@@ -2256,10 +2807,10 @@ and [mTLS](modules/05-request-integrity-and-binding/README.md#proposed-source-ch
   `act`, no error.** RFC 8693 §1.1 defines impersonation as being *"indistinguishable from B"* — which is
   exactly what the downstream service gets.
 - **`issued_token_type` is missing from the token-exchange success response.** RFC 8693 §2.2.1 marks it
-  **REQUIRED**. `token-exchange-response.handler.ts:48-55` emits `access_token`, `token_type`, `expires_in`,
+  **REQUIRED**. `token-exchange-response.handler.ts`'s response body emits `access_token`, `token_type`, `expires_in`,
   `scope`, plus two parameters that are not in the spec (`client_id`, `subject`). Since
   `requested_token_type` is also ignored, the client has no way to learn what it actually received.
-- **A live access token is written into a `sub` claim.** `token-exchange-response.handler.ts:27` does
+- **A live access token is written into a `sub` claim.** `token-exchange-response.handler.ts`'s `result.subject || subjectToken` does
   `result.subject || subjectToken`. When Authlete resolves no subject — correct for a client-credentials
   subject token — the fallback stores **the credential string itself** as the new token's subject. Verified:
   `sub == subject_token` on the exchanged token, and that value still introspects `active: true`. It is

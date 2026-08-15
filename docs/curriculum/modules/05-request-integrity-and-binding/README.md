@@ -137,10 +137,18 @@ object *"MUST be either signed using JWS [RFC7515] or signed and then encrypted 
 [RFC7516]."* §4: *"If signed, the Authorization Request Object SHOULD contain the Claims 'iss' (issuer) and
 'aud' (audience)… The value of 'aud' should be the value of the authorization server (AS) 'issuer'."*
 
-The rule that surprises people, §5: *"The authorization server supporting this specification MUST only use the
-parameters included in the Request Object"* — even when the same parameter also appears in the query string.
-The signed object wins outright; there is no merge. Get that wrong in a client and you will spend an afternoon
-wondering why your query parameter is ignored.
+The rule that surprises people, **§6.3** (*Request Parameter Assembly and Validation*): *"The authorization
+server MUST only use the parameters in the Request Object, even if the same parameter is provided in the query
+parameter."* The signed object wins outright; there is no merge. Get that wrong in a client and you will spend
+an afternoon wondering why your query parameter is ignored.
+
+> **This paragraph cited §5 and misquoted the sentence until 2026-08-14, and both halves are worth noticing.**
+> §5 is *Authorization Request* — where the request is **passed**; §6.3 is where the server **assembles and
+> validates** it, which is the only place a precedence rule could live. And the quote carried an extra word:
+> the RFC says *"the parameters in the Request Object"*, not *"the parameters included in"*. This module's own
+> **lab had it right all along**, citing §6.3 verbatim — so the lesson and the lab disagreed for a fortnight,
+> and the lab was correct. Verified against `rfc9101.txt` on 2026-08-14: the phrase occurs **exactly once** in
+> the whole document.
 
 On typing, §10.8 notes that existing deployments use untyped request objects but that *"requiring explicit
 typing would be a good idea for new OAuth deployment profiles"* using `"typ": "oauth-authz-req+jwt"`.
@@ -263,6 +271,26 @@ compares DPoP with mTLS as a design decision. That is what is here.
 - **`server/src/services/par.service.ts`** — note lines ~29–34: for `client_secret_post` clients the secret is
   merged **into the `parameters` string**, not sent as a separate field. That is Authlete's PAR API contract,
   not RFC 9126, and it is exactly the kind of vendor detail worth labelling.
+
+  > ### Which halves of PAR and JAR this deployment can actually run
+  >
+  > Two of these three are open gaps rather than simplifications, and knowing which is which decides what your
+  > own conformance notes can claim. Re-checked **2026-08-14**.
+  >
+  > | | Status here |
+  > |---|---|
+  > | PAR **response** | ✅ **RFC 9126 §2.2's body exactly** — `{"expires_in":600,"request_uri":"urn:…"}`, since 2026-08-14. It used to be Authlete's envelope with a camelCase `requestUri` |
+  > | PAR **request** | ❌ **not §2's wire format.** §2 specifies a form-encoded POST whose body *is* the authorization parameters, with client authentication as at the token endpoint. `/api/par` requires a JSON body with an Authlete-shaped `parameters` field, and answers `400 Missing required body field: parameters` to a conformant request |
+  > | JAR **by value** (`request=<JWS>`) | ✅ **runs, and asymmetrically** — client `2176571218` has `requestSignAlg: ES256` and a registered JWK Set since 2026-08-12, so an ES256-signed request object validates against a real key. Before that the only signing available here was symmetric |
+  > | JAR **by reference** (`request_uri=<client-hosted URL>`) | ❌ **cannot be run** — no client registers a `requestUris` entry, and `require_request_uri_registration` is in force. Note this is a *different* `request_uri` from PAR's: PAR's is minted by the AS, JAR's §5.2 one is hosted by the client |
+  >
+  > **The pattern in rows 1 and 2 is the one to take away**: an endpoint can be conformant on the way out and
+  > non-conformant on the way in, and reading only the response tells you nothing about whether a conformant
+  > client could have reached it. **The same split holds at CIBA and the device flow** — see
+  > [`CIBA-TUTORIAL.md`](../../../CIBA-TUTORIAL.md) and
+  > [`DEVICE-FLOW-TUTORIAL.md`](../../../DEVICE-FLOW-TUTORIAL.md), where the request shape departs the same way
+  > for the same reason. Three endpoints, one vendor-envelope habit, and the audit counts it as **one** systemic
+  > finding rather than three.
 - **`server/src/services/token.service.ts`** (~line 74) and **`par.service.ts`** — both read the `DPoP` header
   and pass `dpop`, `htm`, `htu` to Authlete. Note the server computes `htu` from its own `Host` header.
 - **`server/src/utils/dpop.ts`** — relays Authlete's `DPoP-Nonce`, and holds all access-token presentation
@@ -403,9 +431,16 @@ the Authlete configuration surface**, clearly labelled as not-run-here, and DPoP
 and verified end to end here) demonstrates the same sender-constraining idea.
 
 **Revisit if any of these becomes true:** the deployment moves behind something that forwards the client
-certificate (an ALB or nginx passing `x-amzn-mtls-clientcert` / `X-Client-Cert`, or Render gaining the
-feature); an ecosystem this repo targets mandates FAPI 1.0 Advanced, which requires mTLS; or the teaching
-goal changes to needing a hands-on mTLS lab specifically, in which case scope it as roughly a day —
+certificate — and **that forwarding has a specification now: RFC 9440, *Client-Cert HTTP Header Field*
+(Informational, July 2023)**, which defines `Client-Cert` and `Client-Cert-Chain` for exactly this
+proxy-to-origin hop. Cite RFC 9440 rather than a vendor header name: the ad-hoc ones you will meet in the wild
+(`x-amzn-mtls-clientcert`, `X-Client-Cert`, `X-SSL-Client-Cert`) all predate it and none is interoperable.
+**Note what its Informational status means here** — it standardises the *header*, not any obligation to trust
+it, and RFC 9440 §4 is emphatic that an origin server must only accept it from a proxy it authenticates,
+because a header is trivially forgeable by anyone who can reach the origin directly. That caveat is the whole
+reason this condition is a *revisit trigger* and not a plan. Other triggers: an ecosystem this repo targets
+mandates FAPI 1.0 Advanced, which requires mTLS; or the teaching goal changes to needing a hands-on mTLS lab
+specifically, in which case scope it as roughly a day —
 local-CA script, second HTTPS listener behind an env flag, certificate pass-through on three service calls,
 `cnf["x5t#S256"]` in introspection output, `mtls_endpoint_aliases` in discovery, plus flipping
 `tlsClientCertificateBoundAccessTokens` on the service.

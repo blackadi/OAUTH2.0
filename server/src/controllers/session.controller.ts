@@ -116,7 +116,7 @@ export function createSessionController(
         req.session.authorization.authTime = authTimeNow;
       }
 
-      // RFC 9470 §2 / OIDC Core §3.1.2.1 — the same check the non-interactive `prompt=none` path runs, from
+      // RFC 9470 §4 / OIDC Core §3.1.2.1 — the same check the non-interactive `prompt=none` path runs, from
       // the same function (`utils/step-up.ts`), so the two cannot drift. The authentication event here is the
       // one that just happened, which is why `max_age` passes by construction on this path: the End-User has
       // actively re-authenticated, and that satisfies any maximum age. The place `max_age` can genuinely fail

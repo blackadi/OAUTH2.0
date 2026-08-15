@@ -501,6 +501,11 @@ The deliverable. Use the Module 07 format — statement, evidence, severity as s
 remediation — and cover at minimum:
 
 1. Each §5.3.2.1 `shall` and §5.3.2.2 `shall`: **PASS / FAIL / NOT EVIDENCED**, with the command you ran.
+   Add **PARTIAL** and **NOT REACHABLE** to that vocabulary — you will need both, and picking the wrong one is
+   itself a reporting error. *Partial* means some principals satisfy it and others do not (the signing
+   algorithm, PKCE); *not reachable* means this configuration admits no measurement either way (a requirement
+   about PAR's contents, on a service where PAR is optional); *not evidenced* means a measurement exists and
+   you have not made it.
 2. The numeric requirements, with measured values.
 3. The grant-management revocation gap, with its severity argued from the *interaction* rather than the
    modal verb.
@@ -537,6 +542,21 @@ required mechanism is available and none is mandatory.**
 | No refresh-token rotation | **FAIL** — rotation is on (`refreshTokenKept: false`) |
 | `request_uri` lifetime < 600 s | **FAIL** — exactly 600 |
 | Code lifetime ≤ 60 s | **NOT EVIDENCED** — `authorizationCodeDuration: 0` (service default) |
+| **PS256, ES256 or EdDSA for signing** | **PARTIAL, and the reason is the lesson** — the service advertises both permitted algorithms (`PS256` since 2026-08-12, `ES256` throughout), but `idTokenSignAlg` is pinned **per client**: `ES256` on three clients, **`HS256` on `1523514379`**, the confidential client these labs run on. A symmetric algorithm; HMAC appears nowhere in the profile. **A report written from discovery metadata alone would have scored this PASS** |
+| **`redirect_uri` required in the pushed request** | **NOT REACHABLE** — PAR is optional here, so a requirement about a pushed request's contents has nothing to evaluate. Distinct from NOT EVIDENCED: there is no measurement that *could* settle it on this configuration |
+
+> ### The last two rows were missing until 2026-08-14, and the first of them is the sharpest failure in the table
+>
+> **You already had the evidence, from Module 05.** `modules/05…/lab.md` explains that its Exercise 5 needs the
+> confidential client because *"this service signs ID tokens with HS256, and Authlete refuses a symmetric
+> algorithm for a public client."* Module 05 gave you the algorithm; this module gave you the requirement; until
+> 2026-08-14 no document put them in one sentence — in the module whose deliverable is a conformance report.
+>
+> **The transferable habit: ask which principal each requirement binds.** Roughly half of §5.3.2's `shall`
+> statements bind the **AS** (metadata, code lifetime, `iss`) and the rest bind a **client** configuration
+> (`tokenAuthMethod`, `pkceRequired`, `dpopRequired`, `idTokenSignAlg`). Discovery metadata answers only the
+> first kind. For the second, one `client/get/list` beats any amount of reading `/.well-known`, and it is why
+> item 4 of this exercise asks you to argue about the per-client fields the FAPI endpoints do not read.
 
 > ### The open-redirect row moved, and that is the exercise now
 >
