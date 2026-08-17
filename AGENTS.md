@@ -450,7 +450,12 @@ defect.
 Two design decisions worth keeping:
 
 - **External links are checked on a schedule, not per push.** A third party moving a page is not a
-  reason to fail somebody's pull request.
+  reason to fail somebody's pull request. **And only `404`/`410` fail it** (2026-08-17): `401`/`403` mean the
+  server refused *us*, `429` means it rate-limited us, `5xx` means it is having a bad day — none of which
+  is a dead link. They are printed as a ⚠️ list and never fatal. **Found the hard way:** the first weekly
+  run to fail did so on **one** URL, `https://support.authlete.com`, which answers **403 to a bare request
+  and 200 to a browser**. The page was fine throughout. A gate that cries wolf is a gate people learn to
+  ignore, and this one had exactly one job a week.
 - **Only markdown links (`[text](url)`) are fetched, never bare URLs.** A bare URL in a table or code
   block is *data* — an `iss` value, a sample redirect, a placeholder host — not a reference anyone
   follows. Narrowing to links removed 20 of 20 false positives on the first run. Reserved TLDs
