@@ -161,6 +161,32 @@ violation.
 > Two smaller observations from the same specimen: Authlete's `typ` **is** `at+jwt` (§2.1) and `jti` **is**
 > present, so five of §2.2's seven REQUIRED claims arrive without any work; and the payload carries a
 > **`grant_type`** claim that RFC 9068 does not define — harmless, but it is vendor output, not profile output.
+>
+> ### ⛔ And it cannot be fixed by configuration — checked 2026-08-17, the fourth instance of this trap
+>
+> The obvious remedy is *"configure a default resource indicator."* **There is no field to configure.**
+> Searched Authlete 3.0.16's vendored `docs/openapi-spec.json` for any `Service` or `Client` property
+> matching `/resource|audience/i`:
+>
+> | Schema | Matching properties | Any of them a default audience? |
+> |---|---|---|
+> | `Service` (193 properties) | `requestObjectAudienceChecked`, `resourceSignatureKeyId` | **no** — the first checks a *request object's* `aud` against the issuer; the second is the introspection **signing key** |
+> | `Client` (108 properties) | **none** | — |
+>
+> So §3's *"the authorization server MUST use a default resource indicator in the `aud` claim"* has **no
+> configuration surface on this vendor**, and the `aud` in a JWT access token here can only come from a
+> `resource` parameter the **client** chooses to send. An authorization server cannot compel that.
+>
+> **This changes the finding's disposition, not its severity.** It was written as *"fix this before enabling
+> JWT access tokens."* The accurate statement is: **enabling JWT access tokens on this deployment emits a
+> token missing a §2.2 REQUIRED claim whenever the client omits `resource`, and nothing in the Authlete
+> configuration layer can prevent it.** DR-09's defer is therefore not merely prudent — the alternative has
+> no clean form.
+>
+> **It is the fourth criterion in this audit to name a console setting that does not exist**, after RPL-W4
+> (`postLogoutRedirectUris`), T1-13 (`none` in the signing-algorithm lists) and VCI-W2 (`credential_issuer`
+> in AS discovery). The rule earned four times over: **check the field exists before writing "set X" as a
+> remedy** — and check both `Service` *and* `Client`, because three of the four were only half-searched.
 
 ## Documentation delta
 
