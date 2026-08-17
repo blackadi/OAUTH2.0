@@ -79,14 +79,13 @@ function ParSection() {
         dpopKeyRaw = JSON.stringify(pair.privateKey);
       }
       const dpopPrivateKey = JSON.parse(dpopKeyRaw);
-      const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
-      const proof = await createProof(dpopPrivateKey, 'POST', PAR_ENDPOINT, undefined, storedNonce);
-      const { data, dpopNonce } = await parService.pushedAuthorizationWithDpop(
+      // A factory, not a proof: the nonce is inside the signature, so a `use_dpop_nonce` retry needs a
+      // fresh one. `dpopRequest` owns reading and storing `dpop_nonce`.
+      const { data } = await parService.pushedAuthorizationWithDpop(
         body,
-        proof,
+        (nonce) => createProof(dpopPrivateKey, 'POST', PAR_ENDPOINT, undefined, nonce),
         basicAuth,
       );
-      if (dpopNonce) sessionStorage.setItem('dpop_nonce', dpopNonce);
       return data;
     }
     return parService.pushedAuthorization(body, basicAuth);

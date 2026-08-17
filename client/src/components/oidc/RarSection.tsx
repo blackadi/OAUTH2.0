@@ -90,10 +90,10 @@ function RarSection() {
         dpopKeyRaw = JSON.stringify(pair.privateKey);
       }
       const dpopPrivateKey = JSON.parse(dpopKeyRaw);
-      const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
-      const proof = await createProof(dpopPrivateKey, 'POST', PAR_ENDPOINT, undefined, storedNonce);
-      const { data, dpopNonce } = await rarService.pushAuthorizationWithDpop(body, proof);
-      if (dpopNonce) sessionStorage.setItem('dpop_nonce', dpopNonce);
+      // A factory, not a proof — see the note in ParSection: a nonce retry needs a fresh signature.
+      const { data } = await rarService.pushAuthorizationWithDpop(body, (nonce) =>
+        createProof(dpopPrivateKey, 'POST', PAR_ENDPOINT, undefined, nonce),
+      );
       return data;
     }
     return rarService.pushAuthorization(body);

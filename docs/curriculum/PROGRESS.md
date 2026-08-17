@@ -131,6 +131,58 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
 - [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
 
+### 2026-08-17 (later) — the two defects the marker work found, both fixed and both live-verified
+
+The marker pass recorded two code defects and deliberately left them, because each sat behind a declined
+decision. Fixed now. **Neither fix flips a flag** — `dpopNonceRequired` and `nativeSsoSupported` are both
+still `false`. These make the code correct *if* either is ever switched on.
+
+**1. The SPA discarded the DPoP nonce it was sent.** New `client/src/services/dpop-fetch.ts` is the single
+place a DPoP request is sent. It caches `DPoP-Nonce` from **success and failure alike** — that one line is
+the bug fix — and retries once with a **re-signed** proof. Re-signed, not replayed: the nonce lives inside
+the signature, which is why `DpopProofSource` is a proof **factory** or a string, and why a string caller
+(the manual proof-builder in `FapiSection`) can never retry but still gets the nonce cached. All four DPoP
+service functions route through it; the `sessionStorage` juggling duplicated at five component sites is gone.
+
+**Verified against the live deployment, not just a mock** (`SERVICE-CONFIG-PROBE.md` §25.1). With
+`dpopNonceRequired: true`, three calls through the deployed `POST /api/token`:
+
+| | Attempts | Result |
+|---|---|---|
+| the **old** single-shot client | 1 | 400 `use_dpop_nonce`, **`DPoP-Nonce` present and discarded** → permanent failure |
+| `dpopRequest`, cold cache | **2** | refused, re-signed, `token_type: DPoP` + an access token |
+| `dpopRequest`, warm cache | **1** | accepted first time |
+
+> **The control row is the finding, not the fix row.** It shows the nonce arriving and being thrown away on
+> the real deployment. Everything before it was a reading of the code.
+
+**A test double was hiding it.** `par.service.test.ts`'s `fail()` helper omitted `headers`, which a real
+`Response` always has. Nothing noticed for as long as nothing read a header on the error path — which is
+precisely the defect. **An unfaithful double hides the bug its own code path contains.**
+
+**2. Native SSO Phase 1 answered HTTP 500.** `native-sso-response.handler.ts` required a `deviceSecret`
+Authlete does **not** return on an authorization-code exchange; SDK 1.0.0's model says the AS *"is free to
+generate a new device secret."* It now mints `randomBytes(32).toString("base64url")` and always sends
+`deviceSecretHash = base64url(SHA-256(secret))` — the value the 2026-08-17 probe watched Authlete echo as
+`ds_hash`. **Phase 2's secret is forwarded unchanged**, because replacing it would leave the second app
+holding a secret whose hash was never bound to the session. The 500 is kept only for a missing access token.
+
+The handler had **no unit test** — the integration file drives the two `/api/nativesso/*` routes and never
+reaches this path, which is why F-4 survived. New
+`tests/unit/controllers/native-sso-response.handler.test.ts`, 7 cases.
+
+**Neither decision moved.** DR-20's *revisit trigger is satisfied*, so its decline now rests on nonces being
+OPTIONAL and the transcripts being banked — preference grounds, where before it had a blocking one; enabling
+is an available decision now rather than a blocked one. DR-04 is **unchanged**: one of three blockers gone,
+and the two that remain are the draft's maturity and a service policy, not defects. **Fixing a defect inside
+a declined feature is not a step toward enabling it** — it is making the code honest about what it would do.
+
+Docs moved with the code, in the same commit: the ⛔ *"do not turn this on, it will break the SPA"* boxes in
+`PAR-TUTORIAL.md` and `FAPI-TUTORIAL.md` stopped being true and would otherwise have become the next stale
+instruction, which is the exact failure the morning's work was about.
+
+**1104 server / 75 files · 118 client / 17 · check-docs 167 files · 92 routes.**
+
 ### 2026-08-17 — the three configuration-gated `UNVERIFIED` markers, taken to terminal states
 
 Post-audit work, not a remediation-plan item. Three markers in `docs/` survived only because an Authlete

@@ -29,13 +29,13 @@
 > | # | Blocker | Evidence |
 > |---|---|---|
 > | 1 | `/auth/authorization/issue` **requires a `sessionId`** when the request asks for a Native SSO ID token | `[A499201]`, returned as `error=server_error` in an error **redirect**. This server already supplies one (`services/authorization.service.ts:135`), so it clears this bar — a hand-rolled probe does not |
-> | 2 | **This server answers Phase 1 with HTTP `500`** | Authlete's `action: NATIVE_SSO` response to an authorization-code exchange carries **no `deviceSecret`** — the AS is expected to *mint* one — but `controllers/native-sso-response.handler.ts:22-28` requires it and otherwise returns `{"error":"server_error","error_description":"Missing accessToken or deviceSecret for Native SSO"}`. It also never computes `deviceSecretHash` |
+> | ~~2~~ | ~~**This server answers Phase 1 with HTTP `500`**~~ | ✅ **FIXED 2026-08-17.** Authlete's `action: NATIVE_SSO` response to an authorization-code exchange carries **no `deviceSecret`** — the AS is expected to *mint* one — and `controllers/native-sso-response.handler.ts` used to require it and answer `500`. It now mints one and computes `deviceSecretHash` |
 > | 3 | Public clients cannot complete Phase 2 | `[A311304]`, per the table above |
 >
-> **Blocker 2 is a real defect and it is deliberately not fixed** — fixing it would ship half of a feature
-> DR-04 declines. Once the AS mints a secret, everything downstream works: `/nativesso` answers
-> **`OK [A501001]`**, and the ID token carries **`sid`** and a **`ds_hash`** equal to `base64url(SHA-256(secret))`.
-> So the gap is one narrow, well-understood piece of AS work — not the sweeping unknown this file used to imply.
+> **Two blockers remain, and neither is a defect** — one is the specification's maturity, one is a service
+> policy. Once the AS mints a secret everything downstream works: `/nativesso` answers **`OK [A501001]`**,
+> and the ID token carries **`sid`** and a **`ds_hash`** equal to `base64url(SHA-256(secret))`. So the gap is
+> narrow and well understood, not the sweeping unknown this file used to imply.
 >
 > **`b81d5ae9-9f85-4c6d-8658-1a36ffa42c83` is one *illustrative* constant, not a captured value.** It
 > appears in all four token-response blocks in this file so that you can follow one device secret through
@@ -67,8 +67,9 @@
 > **Two lessons worth more than the answer.** A question posed as a binary (`TOKEN_EXCHANGE` *or* `OK`) cannot
 > represent a third outcome, and vendors reserve the right to have one — Authlete has a dedicated action and a
 > dedicated `/nativesso` API. And *"settle it by enabling the flag"* was not an executable instruction: the
-> flag is the first of **three** blockers, and the second one (this server returns HTTP `500` on Phase 1 — see
-> the box at the top of this file) would have stopped the reader before any `action` reached them.
+> flag was the first of **three** blockers, and the second — this server answering HTTP `500` on Phase 1 —
+> would have stopped the reader before any `action` reached them. That one is fixed now; the instruction was
+> still not executable on the day it was written, which is the point.
 
 ---
 

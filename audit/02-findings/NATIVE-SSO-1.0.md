@@ -118,7 +118,24 @@ the caller chooses which session to terminate. It is behind admin Basic auth, so
 gap — but nothing correlates that `sessionId` with anything the server recorded, because the server never stores
 the UUIDs it generates.
 
-## Finding F-4 — Phase 1 cannot complete: `handleNativeSso` demands a `deviceSecret` the AS is supposed to mint (S3, latent)
+## Finding F-4 — Phase 1 cannot complete: `handleNativeSso` demands a `deviceSecret` the AS is supposed to mint (S3, latent) — ✅ **FIXED 2026-08-17**
+
+> **✅ Fixed the same day it was found.** `controllers/native-sso-response.handler.ts` now mints
+> `randomBytes(32).toString("base64url")` when Authlete returns no `deviceSecret`, and always sends
+> `deviceSecretHash = base64url(SHA-256(secret))` — the value §24.3 step 4 observed Authlete echoing as the
+> ID token's `ds_hash`. The `500` is kept **only** for a missing `accessToken`, which is a genuine server
+> error. On Phase 2 Authlete *does* return a secret and it is forwarded **unchanged**, because replacing it
+> would leave the second app holding a secret whose hash was never bound to the session.
+>
+> Locked by `tests/unit/controllers/native-sso-response.handler.test.ts` (new — the handler had **no** unit
+> test, which is why this survived; the integration file drives the two `/api/nativesso/*` routes and never
+> reaches this path).
+>
+> **This does not move DR-04.** One of three blockers is gone; the draft status, the `sid` derivation
+> question and `tokenExchangeByConfidentialClientsOnly` remain. **Fixing a defect inside a declined feature
+> is not a step toward enabling it** — it is making the code honest about what it would do if enabled.
+
+*(The finding as written, kept because the reasoning is the durable part:)*
 
 **Found 2026-08-17**, by enabling `nativeSsoSupported` temporarily and walking the whole chain
 (`SERVICE-CONFIG-PROBE.md` §24.3). This is the finding F-2 said it could not produce, arrived at from the other

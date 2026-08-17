@@ -1,5 +1,6 @@
 import { PAR_ENDPOINT } from '@/config';
 import { http } from './http';
+import { dpopRequest, type DpopProofSource } from './dpop-fetch';
 
 export interface RarPushRequest {
   parameters: string;
@@ -18,20 +19,16 @@ async function pushAuthorization(body: RarPushRequest): Promise<unknown> {
 
 async function pushAuthorizationWithDpop(
   body: RarPushRequest,
-  dpopProof: string,
+  dpopProof: DpopProofSource,
 ): Promise<RarResponseWithNonce> {
-  const response = await fetch(PAR_ENDPOINT, {
+  return dpopRequest(PAR_ENDPOINT, dpopProof, (proof) => ({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      DPoP: dpopProof,
+      DPoP: proof,
     },
     body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  const data = await response.json();
-  const dpopNonce = response.headers.get('dpop-nonce') || undefined;
-  return { data, dpopNonce };
+  }));
 }
 
 export const rarService = { pushAuthorization, pushAuthorizationWithDpop };

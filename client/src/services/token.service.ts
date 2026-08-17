@@ -8,6 +8,7 @@ import {
   JWKS_ENDPOINT,
 } from '@/config';
 import { http } from './http';
+import { dpopRequest, type DpopProofSource } from './dpop-fetch';
 import type { TokenRequest, TokenResponse, JwksResponse } from '@/types';
 
 async function exchangeCodeForToken(tokenRequest: TokenRequest): Promise<TokenResponse> {
@@ -22,21 +23,21 @@ export interface TokenResponseWithNonce {
 
 async function exchangeCodeForTokenWithDpop(
   tokenRequest: TokenRequest,
-  dpopProof: string,
+  dpopProof: DpopProofSource,
 ): Promise<TokenResponseWithNonce> {
   const params = new URLSearchParams(tokenRequest as unknown as Record<string, string>);
-  const response = await fetch(TOKEN_ENDPOINT, {
+  // A `use_dpop_nonce` refusal happens *before* the authorization code is redeemed — verified live
+  // 2026-08-17 — so the retry inside `dpopRequest` replays the same code successfully. The dance costs
+  // a round trip, not a re-authorization.
+  const { data, dpopNonce } = await dpopRequest(TOKEN_ENDPOINT, dpopProof, (proof) => ({
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      DPoP: dpopProof,
+      DPoP: proof,
     },
     body: params.toString(),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  const tokenResponse = (await response.json()) as TokenResponse;
-  const dpopNonce = response.headers.get('dpop-nonce') || undefined;
-  return { tokenResponse, dpopNonce };
+  }));
+  return { tokenResponse: data as TokenResponse, dpopNonce };
 }
 
 async function clientCredentials(
@@ -97,9 +98,11 @@ async function userInfo(accessToken: string): Promise<unknown> {
 
 async function userInfoWithDpop(
   accessToken: string,
-  dpopProof: string,
+  dpopProof: DpopProofSource,
 ): Promise<UserinfoResponseWithNonce> {
-  const response = await fetch(USERINFO_ENDPOINT, {
+  // RFC 9449 §9: a *protected resource* answers a missing nonce with 401, not §8's 400. `dpopRequest`
+  // keys off the `use_dpop_nonce` error code rather than the status, so it handles both.
+  return dpopRequest(USERINFO_ENDPOINT, dpopProof, (proof) => ({
     method: 'POST',
     headers: {
       // RFC 9449 §7.1: a DPoP-bound access token is sent with the `DPoP` scheme, not `Bearer`.
@@ -107,14 +110,10 @@ async function userInfoWithDpop(
       // so `Bearer` here would be refused — and if it were not, it would silently discard the binding.
       Authorization: `DPoP ${accessToken}`,
       'Content-Type': 'application/json',
-      DPoP: dpopProof,
+      DPoP: proof,
       Accept: 'application/json',
     },
-  });
-  if (!response.ok) throw new Error(await response.text());
-  const data = await response.json();
-  const dpopNonce = response.headers.get('dpop-nonce') || undefined;
-  return { data, dpopNonce };
+  }));
 }
 
 /**

@@ -1074,6 +1074,42 @@ again. Client `1678274156` driven, never written. **0 unexpected field changes**
 returns **86 lines across 13 files** — `modules/04…/lab.md`'s `# → 43 chars, opaque`, five assertions in
 Module 04's README, plus Modules 02, 03, 06, 08 and 10, `AUDIT-PASS-A/B.md` and `PROGRESS.md`.
 
+## 25. The two fixes, verified live — 2026-08-17
+
+§24 declined all three flags and left two code defects recorded but unfixed. Both are now fixed, and both
+were **verified against Authlete rather than only against a mock**.
+
+### 25.1 The DPoP nonce retry — control, fix, and warm cache
+
+**Method.** `dpopNonceRequired: false → true`, `dpopNonceDuration: 0 → 300`; three `client_credentials`
+calls against the **deployed** `POST /api/token` (not Authlete directly, so this exercises this server's
+`setDpopNonce` relay too); both fields restored. Confidential client `1523514379` over Basic. Revert
+confirmed by read-back, **0 unexpected field diffs**.
+
+| | Attempts | Result |
+|---|---|---|
+| **Control — the old client** (single shot, header read after the throw) | 1 | **400** `use_dpop_nonce`, **`DPoP-Nonce` header PRESENT** — and discarded. Nothing cached, so the next attempt fails identically. **Permanent failure** |
+| **`dpopRequest`, cold cache** | **2** | refused, **re-signed with the returned nonce**, then `token_type: DPoP` + an access token |
+| **`dpopRequest`, warm cache** | **1** | accepted first time — the cached nonce was still valid |
+
+**The control row is the finding, not the fix row.** It shows the nonce arriving and being thrown away on
+the real deployment, which is what made DR-20's objection concrete rather than a reading of the code.
+
+### 25.2 Native SSO F-4 — the mint, and what it does not change
+
+The handler now mints a device secret when Authlete returns none and always sends
+`deviceSecretHash = base64url(SHA-256(secret))`. §24.3 step 4 had already confirmed Authlete accepts exactly
+that and echoes it as the ID token's `ds_hash`, so no further probe was needed — **the fix was written from
+an observation, not a guess.**
+
+**Phase 2's secret is forwarded unchanged rather than re-minted**, which is the part worth a test: on the
+token-exchange leg Authlete *does* return a `deviceSecret`, and replacing it would leave the second app
+holding a secret whose hash was never bound to the session. §24.3 step 5 is where that was observed.
+
+> **Neither fix enables anything.** `dpopNonceRequired` and `nativeSsoSupported` are both still `false`.
+> These make the code correct *if* either is switched on — which is what DR-20's revisit trigger asked for,
+> and what DR-04 needs before its remaining two blockers are the only ones left.
+
 ## Sources
 
 - Live probe 1: `GET /api/{serviceId}/service/get` — HTTP 200, 129 fields, 2026-08-10, authorised, read-only

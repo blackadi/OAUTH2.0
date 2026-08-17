@@ -213,6 +213,15 @@ carries the same banner — theme 2's remedy (T2-8).
 >
 > **The `sid` question this record declined to answer is therefore not the first blocker, only the deepest
 > one.** Two shallower ones sit in front of it, and both are ours.
+>
+> **Update, same day: blocker 1 is fixed; the decline is unchanged.** `native-sso-response.handler.ts` now
+> mints a device secret when Authlete returns none and computes `deviceSecretHash` as
+> `base64url(SHA-256(secret))` — the value §24.3 step 4 observed Authlete echoing as `ds_hash`. Phase 1 no
+> longer answers HTTP 500. **That removes one of three blockers and none of the two original grounds.**
+> Native SSO 1.0 is still an Internet-Draft, the `sid` derivation is still a security-critical change to
+> `services/authorization.service.ts`, and `tokenExchangeByConfidentialClientsOnly` still refuses Phase 2 to
+> the public clients the specification exists to serve. **Fixing a defect in a declined feature is not a
+> step toward enabling it** — it is making the code honest about what it would do.
 
 Both grounds stand unchanged, and the second is the binding one: `sid` derivation is a change to `services/authorization.service.ts`, which is on the Security-critical surfaces list, and **enabling the flag first would produce a two-app sequence that half-works** — worse teaching material than a stated gap. The paired doc change is done: `README.md` reads *"Not enabled — `nativeSsoSupported` is `false`"*, and `NATIVE-SSO-TUTORIAL.md` was rewritten under T2-1 with a whole-file `UNVERIFIED` banner naming the three settings responsible. As this record predicted, **declining and rewriting were the same commit**.
 
@@ -789,7 +798,27 @@ the AS acquires Issuer obligations and this record is replaced by a real one.
 
 ## DR-20 — DPoP nonces (`dpopNonceRequired`)
 
-**Status: ✅ RULED 2026-08-17 — do NOT enable. Nonces stay off; the behaviour stays captured.**
+**Status: ✅ RULED 2026-08-17 — do NOT enable. ⚠️ REVISIT TRIGGER SATISFIED the same day — the decline stands on narrower ground.**
+
+> **The blocking objection is gone.** This record declined nonces because the SPA discarded the nonce it was
+> sent, making every DPoP flow fail permanently. `client/src/services/dpop-fetch.ts` now captures
+> `DPoP-Nonce` on **success and failure alike** and retries once with a re-signed proof; all four DPoP
+> service functions route through it. **Verified against the live deployment**, not only a mock
+> (`SERVICE-CONFIG-PROBE.md` §25.1): with `dpopNonceRequired: true`, the old single-shot client gets a 400
+> and throws the nonce away, while `dpopRequest` is refused, re-signs, and succeeds on attempt 2 — then
+> needs only one attempt once the nonce is cached.
+>
+> **So this record no longer rests on the client.** What holds it up now is what was previously secondary:
+> nonces are **OPTIONAL** in RFC 9449 and required by nothing this deployment claims (FAPI 2.0 is declined
+> under DR-02), and **both transcripts are already banked**, so enabling adds no documentation value. Those
+> are real grounds, but they are *preference* grounds rather than *blocking* ones.
+>
+> **What that means for whoever reads this next: enabling is now an available decision, not a blocked one.**
+> It would need one more thing the old objection made moot — the tutorials' captured transcripts would have
+> to be re-captured with nonces in them, and `PAR-TUTORIAL.md`'s and `FAPI-TUTORIAL.md`'s "not reproducible
+> here" boxes would become wrong. That is a doc change with a known shape, not an unknown.
+
+**Original ruling below, unchanged.** Nonces stay off; the behaviour stays captured.
 
 **The choice.** `dpopNonceRequired = true` (with a non-zero `dpopNonceDuration`), so this deployment demands
 the RFC 9449 §8/§9 nonce dance — or leave it off and keep the dance as a captured transcript of a temporary
@@ -829,6 +858,7 @@ standing in the way is our own client. That is a much better reason to decline t
 **What declining costs.** Nothing that is not already banked. Both transcripts exist, and the markers now say
 *"declined, and here is what it looks like"* instead of *"unverified"*.
 
-**Revisit trigger.** The SPA's HTTP layer reads `DPoP-Nonce` from error responses and retries once — a change
-to `client/src/services/dpop.service.ts` (a **Security-critical surface**) and the shared HTTP layer. After
-that, enabling costs nothing and this record should be reopened. Also reopen if DR-02 flips.
+**Revisit trigger.** ~~The SPA's HTTP layer reads `DPoP-Nonce` from error responses and retries once.~~
+✅ **Done 2026-08-17** — `client/src/services/dpop-fetch.ts`, live-verified. The trigger this record was
+written with is spent; see the banner above for what now holds the decline up. **Remaining trigger:** DR-02
+flips, or somebody decides the tutorials should show the nonce dance as *reproducible* rather than captured.

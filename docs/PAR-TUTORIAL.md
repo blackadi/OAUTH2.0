@@ -568,22 +568,29 @@ sequenceDiagram
 > the refusal happens before the code is redeemed, so the same code replayed with the nonce succeeds. The dance
 > costs a round trip, not a re-authorization.
 >
-> ### ⛔ Do **not** turn this flag on to "make the section runnable" — it will not work
+> ### The SPA used to break if you turned this on. It no longer does — fixed 2026-08-17
 >
-> **This instruction used to appear here and it was wrong.** Enabling nonces breaks every DPoP flow in this
-> repo's own SPA, permanently:
+> **This box used to say "do not turn this flag on".** It was right at the time, and the reason is worth
+> keeping because it is a defect shape rather than a one-off:
 >
 > ```
-> client/src/services/token.service.ts:36   if (!response.ok) throw new Error(...);   ← throws first
+> client/src/services/token.service.ts:36   if (!response.ok) throw new Error(...);   ← threw first
 > client/src/services/token.service.ts:38   response.headers.get('dpop-nonce')        ← never reached
 > ```
 >
-> The throw is on the line **before** the header read, and `http.ts` repeats that shape at nine call sites. So
-> the SPA **discards the very nonce the server sent to make the retry possible**, and
-> `sessionStorage.dpop_nonce` is only ever written from a *success* — which can now never happen. It is not a
-> failed first request; it is a failed **every** request, in `FapiSection`, `ParSection`, `RarSection` and
-> `CallbackPage` alike. Making the client retry on `use_dpop_nonce` is the prerequisite, and it is DR-20's
-> revisit trigger.
+> The throw sat on the line **before** the header read, so the SPA **discarded the very nonce the server sent
+> to make the retry possible** — and `sessionStorage.dpop_nonce` is only ever written from a *success*, which
+> could then never happen. Not a failed first request: a failed **every** request, forever.
+>
+> **`client/src/services/dpop-fetch.ts` now owns every DPoP request.** It captures `DPoP-Nonce` on success
+> *and* failure, and retries once with a **re-signed** proof — re-signed because the nonce lives inside the
+> signature, so a cached proof string cannot be reused. Verified against the live deployment with the flag
+> temporarily on: the old single-shot path gets a 400 and loses the nonce; the new one is refused, re-signs,
+> and succeeds on attempt 2, then needs a single attempt once the nonce is cached.
+>
+> **The flag is still off** — see [DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired),
+> which now rests on nonces being OPTIONAL and the transcripts being banked, rather than on the client being
+> unable to cope. If you enable it on a deployment of your own, this SPA will work.
 >
 > **DPoP itself works without any of this** — nonces are OPTIONAL in RFC 9449, and the flag controls nonce
 > *enforcement*, not whether tokens can be sender-constrained. The `DPoP` sender-constraining that *does* work

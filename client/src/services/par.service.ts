@@ -1,5 +1,6 @@
 import { PAR_ENDPOINT } from '@/config';
 import { http } from './http';
+import { dpopRequest, type DpopProofSource } from './dpop-fetch';
 
 export interface ParResponseWithNonce {
   data: unknown;
@@ -37,22 +38,18 @@ async function pushedAuthorizationWithDpop(
   // Values are optional: with `client_secret_basic` the credentials travel in the header, so the
   // body carries `parameters` alone. A required-value record cannot express that.
   body: Record<string, string | undefined>,
-  dpopProof: string,
+  dpopProof: DpopProofSource,
   basicAuth?: BasicAuth,
 ): Promise<ParResponseWithNonce> {
-  const response = await fetch(PAR_ENDPOINT, {
+  return dpopRequest(PAR_ENDPOINT, dpopProof, (proof) => ({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      DPoP: dpopProof,
+      DPoP: proof,
       ...basicHeader(basicAuth),
     },
     body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  const data = await response.json();
-  const dpopNonce = response.headers.get('dpop-nonce') || undefined;
-  return { data, dpopNonce };
+  }));
 }
 
 export const parService = { pushedAuthorization, pushedAuthorizationWithDpop };

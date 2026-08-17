@@ -484,11 +484,16 @@ it. When this script reports something, check whether the surrounding claim is s
   Nonces are OPTIONAL, controlled by `dpopNonceRequired`, which is **`false`** on this service — **and since
   2026-08-17 that is a ruling, not an omission: DR-20 declines it.** The reason is ours, not the
   specification's: **this repo's SPA discards the nonce it is sent.** `client/src/services/token.service.ts`
-  has `if (!response.ok) throw` on the line *before* it reads `DPoP-Nonce`, and `http.ts` repeats the shape at
-  nine call sites, so a `400 use_dpop_nonce` throws away the value that would have fixed it and
-  `sessionStorage.dpop_nonce` — written only from a *success* — never fills. Enabling the flag therefore breaks
-  every DPoP path in the SPA **permanently, not on the first request only**. Do not turn it on to make a
-  tutorial literal; fix the retry first. **The table below was written from the specification and has since
+  had `if (!response.ok) throw` on the line *before* it read `DPoP-Nonce`, so a `400 use_dpop_nonce` threw away
+  the value that would have fixed it and `sessionStorage.dpop_nonce` — written only from a *success* — never
+  filled. Enabling the flag broke every DPoP path in the SPA **permanently, not on the first request only**.
+  **Fixed the same day: `client/src/services/dpop-fetch.ts`** is now the single place a DPoP request is sent.
+  It caches `DPoP-Nonce` from success *and* failure and retries once with a **re-signed** proof — re-signed
+  because the nonce is inside the signature, which is why it takes a proof **factory** rather than a proof
+  string. All four DPoP service functions (`token.service.ts` ×2, `par.service.ts`, `rar.service.ts`) route
+  through it; do not add a fifth that does its own `fetch`. Live-verified with the flag temporarily on: the
+  old path 400s and loses the nonce, the new one succeeds on attempt 2, and a warm cache needs one attempt.
+  **The flag stays off on preference now, not on breakage** — see DR-20. **The table below was written from the specification and has since
   been confirmed live** — at the token endpoint (2026-08-15, 9449-W6) and at **PAR** (2026-08-17, DR-20), both
   by set → probe → revert with 0 unexpected field changes.
 

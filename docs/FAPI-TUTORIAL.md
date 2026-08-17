@@ -797,10 +797,11 @@ without nonces — the flag only controls nonce *enforcement*. So `dpopEnabled: 
 **On this deployment it reads `false` deliberately** — see
 [DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired). If you want nonces on in a
 deployment of your own, the switch is **Service Settings → Tokens and Claims → Advanced → DPoP Token** →
-Require Nonce, plus a non-zero duration — but **fix your client first**. A client that does not read
-`DPoP-Nonce` off the **error** response and retry cannot recover, and this repo's SPA is such a client: the
-`if (!response.ok) throw` in `client/src/services/token.service.ts` runs before the header is read, so the
-nonce arrives and is thrown away on every attempt.
+Require Nonce, plus a non-zero duration. **A client that does not read `DPoP-Nonce` off the *error* response
+and retry cannot recover** — and this repo's SPA was such a client until 2026-08-17, because the
+`if (!response.ok) throw` ran before the header was read. `client/src/services/dpop-fetch.ts` fixed that:
+every DPoP request now caches the nonce from success and failure alike and retries once with a re-signed
+proof. So this SPA copes; check that yours does before switching the flag on.
 
 ### "FAPI mode shows sp but Authlete doesn't enforce FAPI rules"
 
