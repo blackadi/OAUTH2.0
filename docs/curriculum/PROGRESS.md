@@ -131,6 +131,54 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
 - [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
 
+### 2026-08-17 (last) — a security claim nobody had run, and a rule about vendor tickets
+
+Two things, and the second explains why the first was worth doing at all.
+
+**1. Vendor tickets are not repo work items — ruled by the repo owner, and JARM-W6 is retired.** The audit had
+carried *"report the `form_post.jwt` anomaly to Authlete"* as **OWED** since 2026-08-15, on the grounds that
+dropping a found bug felt wrong. But no commit can discharge it, no check can verify it, and an audit with a
+permanently open row for an action that lives in somebody's inbox **cannot close on its own terms**. Retired,
+and `audit/JARM-W6-vendor-report.md` deleted with it. **The knowledge is kept and the obligation is dropped** —
+JARM-W2's characterisation (exactly one result code, `[A012305]`) and §22.2's six-row matrix are untouched.
+`RESUME.md` §0 now says nothing is outstanding, which is true for the first time.
+
+**2. And that rule immediately met its hard case.** A *second* vendor question was found untracked the same
+day: `modules/11…/lab.md` asserted that Authlete's `/gm` API lets one subject's token reach another subject's
+grant, marked it `UNVERIFIED`, and said it *"should be raised with the vendor rather than asserted."*
+
+**No transcript for it existed anywhere in the repo.** An assertion about a *security boundary*, published in a
+lab, carried for weeks on prose alone — the repo's own signature defect, in the file that teaches it.
+
+So it was **reproduced before anything was written**, and it is worse than the claim
+(`SERVICE-CONFIG-PROBE.md` §27). Two grants under different subjects, each given a distinguishing scope so the
+responses could be told apart:
+
+| Case | `action` | What came back |
+|---|---|---|
+| A's token → **B's** grant | **`OK`** | **B's grant, including `email`** |
+| B's token → **A's** grant | **`OK`** | **A's grant, including `profile`** |
+| A's token → **REVOKE B's grant** | `NO_CONTENT` | then B could not find **its own** grant — **A destroyed it** |
+| sanity: nonexistent grant | `NOT_FOUND` `[A283301]` | — |
+| sanity: bogus token | `UNAUTHORIZED` `[A279306]` | — |
+
+**The distinguishing scopes are the whole design.** With identical scopes, `OK` would have been consistent
+with an empty acknowledgement and the probe would have proved nothing — the same trap the device-code probe hit
+earlier the same day, and the second time in one day that *making the inputs distinguishable* was the step that
+turned a probe into a measurement. Both sanity rows discriminate, so Authlete demonstrably validates the token
+**and** validates the grant id, and never relates them.
+
+**What it settles for this repo:** `requireGrantOwnership` is **not** "deliberate extra strictness" — the
+phrase `AGENTS.md` used — it is a **compensating control for cross-subject read *and delete* at the vendor
+API**, and the only thing between that and the public internet. `AGENTS.md` now says so, and says not to
+weaken it on the grounds that Authlete already validates the token: it does, and that is a different question.
+
+**Consistent with rule 1, no new `OWED` row was created.** Whether the vendor behaviour is a defect or a
+deliberate delegation to the AS is not something this repo can answer; the fact is recorded and the
+attribution is labelled open rather than guessed. **Recording the fact is repo work; telling the vendor is
+not.** The probe script is deliberately **not committed** — a working cross-subject grant-deletion script is
+not something this repository needs to carry, and the tables above are enough to re-derive it.
+
 ### 2026-08-17 (later still) — every remaining `UNVERIFIED` marker sorted, and four settled
 
 The morning closed the three markers a **service flag** gated. This sweep asks a different question of what

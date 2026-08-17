@@ -440,6 +440,40 @@ So the honest finding is:
 > found. **Whether this is an upstream defect or a missing configuration is `UNVERIFIED`** and should be
 > raised with the vendor rather than asserted.
 
+> ### ✅ **captured 2026-08-17** — reproduced, and it is worse than the paragraph above says
+>
+> **The claim above had no transcript anywhere in this repo** until it was run. That is worth noticing before
+> the result: an assertion about a *security boundary*, published in a lab, carried for weeks on prose alone.
+> Full record in [`SERVICE-CONFIG-PROBE.md` §27](../../../../audit/02-findings/SERVICE-CONFIG-PROBE.md).
+>
+> Two grants created under **different subjects** on the same client, each given a distinguishing scope so the
+> two are told apart in the response — `profile` for A, `email` for B:
+>
+> | Case | `action` | What came back |
+> |---|---|---|
+> | control: A's token → A's grant | `OK` | A's grant (`profile`) |
+> | **A's token → B's grant** | **`OK`** | **B's grant — including `email`** |
+> | **B's token → A's grant** | **`OK`** | **A's grant — including `profile`** |
+> | sanity: A's token → nonexistent grant | `NOT_FOUND` `[A283301]` | — |
+> | sanity: bogus token → A's grant | `UNAUTHORIZED` `[A279306]` | — |
+>
+> **It is not an empty acknowledgement — the other subject's grant comes back.** The distinguishing scopes are
+> what prove it; with identical scopes, `OK` would have been consistent with an empty ack. And **`REVOKE`
+> crosses the boundary too**: A's token revoked B's grant (`NO_CONTENT`), after which B querying **its own**
+> grant got `NOT_FOUND`. **A destroyed B's grant.**
+>
+> The two sanity rows are why the middle rows count as a measurement: Authlete **does** validate the token and
+> **does** validate that the grant id exists. It never asks whether the one is entitled to the other.
+>
+> **So `requireGrantOwnership` is not "deliberate extra strictness" — it is a compensating control for
+> cross-subject read *and delete* at the vendor API**, and it is the only thing between that and the public
+> internet. The exercise's conclusion below stands; this strengthens it.
+>
+> **Still open, deliberately:** whether this is an upstream *defect* or a deliberate design that delegates
+> ownership to the AS. This repo cannot answer that, and **asking the vendor is not a repo work item** — the
+> same ruling that retired JARM-W6 on 2026-08-17. The behaviour is recorded; the attribution is labelled
+> open rather than guessed.
+
 That is the finding as filed, and every clause of it is still true. The repo's `requireGrantOwnership` is a
 **compensating control**, not a resolution: it stops the attack at this deployment's edge and leaves the
 upstream question exactly where it was. Say so when you write up a fix like this — a reader who thinks the
