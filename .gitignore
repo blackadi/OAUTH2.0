@@ -13,6 +13,21 @@
 logs/*
 !logs/.gitkeep
 
+# `node_modules/` has been listed here since this file was created — and it did not help, because
+# **.gitignore has no effect on a file already in the index.** One file slipped in before this file
+# existed and stayed tracked for four days despite the rule directly above it:
+# `node_modules/.vite/vitest/da39a3ee.../results.json`, a Vitest run cache, committed in 6eed35a and
+# fc63704 on 2026-08-13. `git check-ignore` reported it as **not ignored**, which is the tell.
+#
+# It came from running `vitest` at the **repo root** rather than in `server/` or `client/` — there is no
+# root `package.json` and no root Vitest config, so Vitest resolved no config at all (hence the cache
+# directory named `da39a3ee…`, the SHA-1 of the empty string) and globbed both packages' tests into one
+# results file. Most entries recorded `failed: true` because nothing resolved without each package's own
+# config. Untracked and deleted 2026-08-17.
+#
+# The lesson is the same one the `logs/` note above records, one layer out: adding the rule was step one,
+# and `git rm --cached` was the step that actually removed it. Run the tests with
+# `npm --prefix server run test` / `npm --prefix client run test`, never bare `vitest` at the root.
 node_modules/
 dist/
 coverage/
