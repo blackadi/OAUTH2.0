@@ -131,6 +131,41 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
 - [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
 
+### 2026-08-17 — Redis went live, which turned an untested branch into the live path
+
+`REDIS_URL` is now set and `authlete-redis` is up, so **connect-redis is the session store** rather than
+express-session's MemoryStore. That moves `utils/session-store.ts`'s connect-redis branch from hypothetical
+to load-bearing — and that branch was the one written from a *reading* of the library, with a hand-made fake
+in the test. The MemoryStore half has always been tested against the real thing; the Redis half never was,
+and CI has no Redis to test it with.
+
+**Checked by hand against a live `redis:7-alpine`, and the assertion holds:** `all()` returns an **array**,
+every element carries a string `.id`, and `destroySessionsForSubject` finds exactly alice's two sessions and
+spares bob's. Good news — but it was unverified for as long as it did not matter, and it now matters. The
+test's fake is annotated with that transcript, so it is **evidenced rather than invented**, and it says how
+to re-run it.
+
+**That also settles PR #22 (`connect-redis` 9 → 10), the one dependency bump worth reading.** Same probe
+against 10.0.0: identical shape, identical result. **v10's only breaking change is `engines.node` 18 → 22.**
+
+**Which surfaced the real finding, and it is the `NODE_ENV` bug again.** CI has pinned `node-version: 22`
+since it was written. The deployment ran **whatever Render defaulted to** — `render.yaml` has
+`runtime: node` with no version, there is no `.nvmrc`, and neither `package.json` had an `engines` field.
+**Nothing in the tree declared a Node floor**, so a green CI build never implied a working deploy, and
+`connect-redis@10` would have been the first thing to notice.
+
+Declared in three places, matching how `NODE_ENV` is handled and for the same reason: `engines.node` in both
+`package.json` files, `.nvmrc`, and `NODE_VERSION` in `render.yaml`. None load-bearing alone; raising the
+floor means changing all three.
+
+> **The pattern, third time this week:** a value the deployment depends on, tested in CI, and declared
+> nowhere the deployment can see. `NODE_ENV` was the first (a token-minting oracle reachable in production),
+> the client's missing `typecheck` was the second (16 test files never ran), and this is the third. **Ask
+> what CI proves about the deploy, not what it proves about the branch.**
+
+⚠️ **The next deploy may change Node major**, and that is the point rather than a side effect — it aligns the
+runtime with the version everything has actually been tested on.
+
 ### 2026-08-17 (last) — a security claim nobody had run, and a rule about vendor tickets
 
 Two things, and the second explains why the first was worth doing at all.
