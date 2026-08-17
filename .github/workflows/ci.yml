@@ -64,6 +64,20 @@ jobs:
       - name: Check route coverage (no new untested endpoints)
         run: node scripts/check-route-coverage.mjs
 
+      # Added 2026-08-17 (§7.3). Offline every push: the baseline must stay sorted, duplicate-free and
+      # consistent with the claim mapping. Live only on the weekly schedule, for the same reason
+      # `--links` is weekly — an Authlete configuration change is somebody else's action, not a reason
+      # to fail somebody's pull request.
+      - name: Check discovery baseline (offline)
+        run: node scripts/check-discovery.mjs
+
+      # Reports member drift BY NAME and cross-checks README's feature claims against the live
+      # document. Exists because on 2026-08-17 the document measured 66 members against a recorded 65
+      # and the extra member was UNATTRIBUTABLE — August had kept a count and not a list.
+      - name: Check discovery document against README claims
+        if: github.event_name == 'schedule'
+        run: node scripts/check-discovery.mjs --live
+
   client:
     runs-on: ubuntu-latest
 

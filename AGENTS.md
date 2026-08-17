@@ -354,7 +354,28 @@ behaviour *refusing* is now wrong, and every sentence explaining *why* it refuse
 node scripts/check-docs.mjs           # offline: source refs, bare paths, md line refs, prose pointers, endpoint paths, links, anchors. CI runs this on every push
 node scripts/check-docs.mjs --links   # also fetches external URLs. CI runs this weekly, not per-push
 node scripts/check-route-coverage.mjs # every route is named by some test. CI runs this on every push
+node scripts/check-discovery.mjs      # offline: the discovery baseline is sorted, deduped, consistent with the claim map. Every push
+node scripts/check-discovery.mjs --live          # member drift BY NAME + README claims vs the live document. Weekly
+node scripts/check-discovery.mjs --live --update # re-baseline. Review the reported diff FIRST
 ```
+
+**Three checks, and `check-discovery.mjs` is the newest (2026-08-17) — it exists because a *count* is
+not evidence.** On 2026-08-17 the discovery document measured **66** members against the **65** recorded on
+2026-08-15, and the extra member could not be attributed: August had kept a count and not a list. So
+`scripts/discovery-baseline.json` stores the **member list**, and drift is reported by name. A count tells
+you something changed; only a list tells you *what*.
+
+It does a second job the first two cannot: it asserts that **every feature `README.md` marks as working has
+its discovery member present, and every feature marked declined does not.** That second half is the guard
+against the DR-03 failure — a flag switched on without its paired doc change. Two design rules worth keeping:
+
+- **Live mode is weekly, not per-push.** An Authlete configuration change is somebody else's action; it is
+  not a reason to fail somebody's pull request. Same argument as `--links`.
+- **It states what it cannot see, in `NOT_VISIBLE`.** `fapiModes`, `accessTokenSignAlg` and `dpopNonceRequired`
+  have **no discovery member**, and `pkceRequired`/`idTokenSignAlg` are **per client** — so roughly half of any
+  profile's requirements are invisible to `/.well-known`, and a report written from discovery metadata alone
+  scores those rows PASS when nobody checked them. Printing the list is the difference between a check and a
+  false assurance.
 
 **`check-route-coverage.mjs` exists because a green test suite proved nothing four times running.** During
 the Phase 5 remediation, `POST /api/backchannel_logout` validated 5 of Back-Channel Logout §2.6's 11 required
