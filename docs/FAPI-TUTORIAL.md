@@ -244,14 +244,28 @@ All FAPI configuration happens in the [Authlete Console](https://console.authlet
 4. Enable the **FAPI Profile** option, and select **FAPI2_SECURITY**
 5. Click **Save**
 
-> **UNVERIFIED — check both names in your console.** Authlete's
+> ### ✅ **Settled 2026-08-17 — they are two separate settings, and both are unset here**
+>
+> This was `UNVERIFIED`: Authlete's
 > [FAPI 2.0 authorization-code-flow guide](https://developers.authlete.com/protocols-and-flows/compliance-profiles/authorization-code-flow-in-fapi-2-0-security-profile)
-> states the prerequisite as *"Supported Service Profiles"* needing to include **FAPI**, while this
-> server derives `mode` from `service.fapiModes` containing **`FAPI2_SECURITY`**
-> (`fapi.controller.ts:5-20`). Those are plausibly two separate settings that both need to be on, and
-> Authlete's [FAPI Basics](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-basics)
-> notes the static profile selection is *optional* when you drive compliance dynamically by scope
-> (Step 2). Do not treat either field name here as authoritative — confirm in the console.
+> states the prerequisite as *"Supported Service Profiles"* including **FAPI**, while this server derives
+> `mode` from `service.fapiModes` containing **`FAPI2_SECURITY`**. Both are real properties of `Service` in
+> Authlete 3.0.16, and the suspicion that they are distinct was correct:
+>
+> | Property | Values | Live here |
+> |---|---|---|
+> | `supportedServiceProfiles` | `FAPI` \| `OPEN_BANKING` | **unset** |
+> | `fapiModes` | six FAPI modes incl. `FAPI2_SECURITY` | **unset** |
+>
+> So set **both**. Authlete's
+> [FAPI Basics](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-basics) notes
+> the static profile selection is *optional* when you drive compliance dynamically by scope (Step 2).
+>
+> **⚠️ And `GET /api/fapi/config` cannot see the first one.** `computeFapiMode` reads `fapiModes` **only**,
+> so a service with `supportedServiceProfiles: ["FAPI"]` and no `fapiModes` is reported as
+> `mode: "disabled"` — a true value for the field it reads and a misleading one about the service. Not fixed:
+> [DR-02](../audit/05-decision-records.md#dr-02--fapi-20-security-profile) declines FAPI 2.0, so this is a
+> reporting gap on a profile the deployment does not claim. Recorded, not coded around.
 
 ### Step 2: Create a Scope with `fapi2=sp` Attribute
 
@@ -783,10 +797,11 @@ Authlete service does not have FAPI enabled. Go to Authlete Console → **Servic
 Advanced → FAPI** → enable the FAPI profile.
 
 `mode` is derived from `service.fapiModes` containing `FAPI2_SECURITY` (see `fapi.controller.ts:5-20`).
-**UNVERIFIED:** Authlete's FAPI 2.0 documentation phrases the prerequisite as *"Supported Service
-Profiles"* needing to include **FAPI**, while this server reads `fapiModes` for `FAPI2_SECURITY`. Those
-may be two separate settings that both need to be on. Check both in the console rather than trusting
-either name here.
+**Settled 2026-08-17 — set both.** They are two distinct `Service` properties:
+**`supportedServiceProfiles`** (`FAPI` | `OPEN_BANKING`), which is the "Supported Service Profiles" Authlete's
+documentation names, and **`fapiModes`** (six modes, incl. `FAPI2_SECURITY`), which is what this server reads.
+Both are unset on this deployment. Note `/api/fapi/config` reports only the second, so it would still say
+`disabled` with the first one on — see [Part 3](#part-3-authlete-console-setup).
 
 ### "dpopEnabled is false"
 

@@ -131,6 +131,49 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
 - [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
 
+### 2026-08-17 (later still) — every remaining `UNVERIFIED` marker sorted, and four settled
+
+The morning closed the three markers a **service flag** gated. This sweep asks a different question of what
+was left — **could a probe settle this?** — which nobody had asked. **The sort is the deliverable**; four
+settlements fell out of it. Full record: `SERVICE-CONFIG-PROBE.md` §26.
+
+`UNVERIFIED` turns out to be **four** distinct things, and the label hid the difference: **decision-gated**
+(a record says we will not produce it), **deliberately not probed** (settling it would make the docs worse),
+**partly answerable** (one half needs elapsed time or a client we lack), and **answerable at a cost** (needs
+a live configuration write). `docs/README.md`'s legend now carries the split, since that is where the
+convention is defined once.
+
+**Four settled, and three of the four found the marker partly wrong:**
+
+- **Device-flow user codes are matched byte for byte.** No case folding, no punctuation stripping, no
+  trimming; verification is non-consuming. The marker's advice — *uppercase and strip dashes before
+  submitting* — was **right**, and the dash row is the practical one: RFC 8628 §6.1's own example is
+  `WDJB-MJHT` while this service issues **dash-free** codes, so a UI that formats for readability must undo
+  it. ⚠️ **The first run of this probe was not a measurement.** It included "dashes stripped" as a variant,
+  which on a dash-free code is the *identical string* — three of seven variants were the same input, all
+  returned `VALID`, and it reads exactly like evidence of leniency. **Inserting** a dash is the test that
+  distinguishes. Same lesson Module 09b already records.
+- **`supportedServiceProfiles` is real.** The marker guessed *"plausibly two separate settings"*; confirmed —
+  it is a distinct `Service` property (`FAPI` | `OPEN_BANKING`) beside `fapiModes`, and **both are unset**.
+  New finding beside it: `computeFapiMode` reads `fapiModes` **only**, so a service with
+  `supportedServiceProfiles: ["FAPI"]` would still report `mode: "disabled"`. FAPI1-W2 made that function
+  total over one enum and never looked at the sibling field. Not fixed — DR-02 declines FAPI.
+- **`resource_indicators_supported` is not a member of anything.** RFC 8707 §5 registers exactly the
+  `resource` **request parameter** and the `invalid_target` **error code** — **no** AS metadata parameter.
+  So its absence is *correct*, not a gap Authlete declines to fill, and the original config row was wrong
+  twice over: no console field **and** no such member.
+- **`MCP-OAUTH-TUTORIAL.md:186` had gone stale in two of three claims** — 64 members is now **66**, and
+  `registration_endpoint` **is** present. That is the *same* wrong fact found in `README.md`'s MCP row
+  earlier the same day: one error, two documents, which is what a shared origin looks like.
+
+**Three markers were reviewed and deliberately left**, which is a ruling rather than an omission: capturing
+Authlete's exact `error_description` strings is easy and would make the docs **worse** — vendor text rots
+between versions, and printing it invites the parsing the marker warns against. **A marker can be the right
+answer rather than the absence of one.**
+
+Also built earlier the same day and worth reading together with this: `scripts/check-discovery.mjs`, which
+exists because the 66-vs-65 member drift was **unattributable** — August had kept a count and not a list.
+
 ### 2026-08-17 (later) — the two defects the marker work found, both fixed and both live-verified
 
 The marker pass recorded two code defects and deliberately left them, because each sat behind a declined

@@ -215,7 +215,23 @@ With the default `BASE20` charset, Authlete builds codes from the 20 non-vowel u
 
 **Authlete does not insert a hyphen.** A real code looks like `WDJBMJHT`, not `WDJB-MJHT`. The hyphenated form you see in RFC 8628 is the spec's illustrative example; RFC 8628 §6.1 recommends the *server* strip punctuation from user input, so adding a display hyphen is a presentation choice your device UI can make on its own.
 
-> `UNVERIFIED` — whether Authlete's `/device/verification` API lowercases, uppercases, or strips punctuation before matching is not stated in the published Authlete documentation. Do not rely on lenient matching. Uppercase and strip dashes in your own UI before submitting, per RFC 8628 §6.1.
+> ### ✅ **captured 2026-08-17** — matching is **byte for byte**, and the advice below was right
+>
+> This was `UNVERIFIED` because Authlete's published documentation does not state it. Probed directly
+> (`audit/02-findings/SERVICE-CONFIG-PROBE.md` §26.1), read-only:
+>
+> | Submitted | Result |
+> |---|---|
+> | exact, as issued | **`VALID`** |
+> | lowercased | `NOT_EXIST` `[A225301]` |
+> | **a dash inserted** mid-code | `NOT_EXIST` `[A225301]` |
+> | trailing newline | `NOT_EXIST` `[A225301]` |
+>
+> **No case folding, no punctuation stripping, no trimming.** So: uppercase and strip formatting in your own
+> UI before submitting, per RFC 8628 §6.1. The dash row is the one that will bite you — §6.1's own example
+> is `WDJB-MJHT`, and this service issues codes with **no dashes** (`BASE20`, 8 characters), so a UI that
+> adds a dash for readability must take it back off. Verification is **non-consuming**: the exact code still
+> answered `VALID` after five failed lookups.
 
 ### Verify in Discovery Document
 
@@ -667,7 +683,14 @@ curl -s -X POST http://localhost:3000/api/device/verification \
 # Response: 400 { "action": "EXPIRED" }
 ```
 
-> `UNVERIFIED` — whether Authlete returns `EXPIRED` indefinitely or eventually garbage-collects the record and returns `NOT_EXIST` is not documented. Treat **either** as "this code is dead, start over."
+> `UNVERIFIED` — whether Authlete returns `EXPIRED` indefinitely or eventually garbage-collects the record and
+> returns `NOT_EXIST` is not documented. Treat **either** as "this code is dead, start over."
+>
+> **Deliberately still open, and the split is now named** (2026-08-17). The question is really two: the
+> `EXPIRED` half is one call after `deviceFlowCodeDuration` elapses — **600 s** on this service — and is
+> straightforwardly testable. The garbage-collection half is not, because it needs an unknown amount of
+> *elapsed time* that no probe can shorten, and a negative result would only mean "not yet." Recorded as
+> **partly answerable** rather than unknown, so nobody re-derives the same dead end.
 
 ---
 

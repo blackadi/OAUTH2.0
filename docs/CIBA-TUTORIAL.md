@@ -461,9 +461,11 @@ HTTP/1.1 400 Bad Request
 > *error* response, the same convention RFC 8628's device flow uses. **A polling loop must not treat 400 as
 > terminal.** Confirmed by the 2026-08-12 run.
 >
-> **`UNVERIFIED` — the exact `error_description` text.** The `error` value is spec-defined and stable; the
-> description is Authlete's, carries a bracketed `[A...]` code, and changes between versions. Run it if you
-> need the string. Do not parse it.
+> **`UNVERIFIED` — the exact `error_description` text, and deliberately staying so.** The `error` value is
+> spec-defined and stable; the description is Authlete's, carries a bracketed `[A...]` code, and changes
+> between versions. Run it if you need the string. **Do not parse it** — which is why capturing it here was
+> reviewed on 2026-08-17 and declined: a printed vendor string rots silently and invites exactly the parsing
+> this line warns against.
 
 **On success** — shape **captured 2026-08-12**:
 ```json

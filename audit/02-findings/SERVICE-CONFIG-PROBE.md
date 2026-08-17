@@ -1110,6 +1110,101 @@ holding a secret whose hash was never bound to the session. §24.3 step 5 is whe
 > These make the code correct *if* either is switched on — which is what DR-20's revisit trigger asked for,
 > and what DR-04 needs before its remaining two blockers are the only ones left.
 
+## 26. The remaining `UNVERIFIED` markers, sorted — 2026-08-17
+
+§24 closed the three markers a *service flag* gated. This sorts what is left by a different question:
+**could a probe settle this?** Nobody had asked it. The sort is the deliverable; the probes below are what
+it turned up.
+
+| Marker | Class | Outcome |
+|---|---|---|
+| `DEVICE-FLOW-TUTORIAL.md:218` — user-code matching leniency | **probe-answerable** | ✅ **settled, §26.1** — the marker's advice was right |
+| `FAPI-TUTORIAL.md:247` + `:786` — "Supported Service Profiles" vs `fapiModes` | **schema-answerable** | ✅ **settled, §26.2** — two real settings, and a reporting gap |
+| `MCP-OAUTH-TUTORIAL.md:33` — does RFC 8707 register `resource_indicators_supported`? | **spec-answerable** | ✅ **settled, §26.3** — it registers no metadata member at all |
+| `MCP-OAUTH-TUTORIAL.md:186` — six members of a conformant document | **fetch-answerable** | ✅ **settled, §26.3** — two of its own claims were stale |
+| `DEVICE-FLOW-TUTORIAL.md:670` — `EXPIRED` forever, or garbage-collected to `NOT_EXIST`? | **partly answerable** | half is one call after `deviceFlowCodeDuration` (600 s); the garbage-collection half needs elapsed time nobody can shortcut. Stays `UNVERIFIED`, now with the split named |
+| `RAR-TUTORIAL.md:419` — the four unregistered `authorization_details` types | **answerable at a cost** | needs a service **write** to register a type. The refusal (`[A249302]`) is already captured; only the *success* shape is unseen. Not worth a write |
+| `TOKEN-EXCHANGE-TUTORIAL.md:611`, `CIBA-TUTORIAL.md:464`, `:515` — exact `error_description` strings | **deliberately not probed** | see below |
+| `FAPI-TUTORIAL.md:13`, `NATIVE-SSO-TUTORIAL.md` ×3, `modules/09b…/lab.md:802` | **decision-gated** | DR-02, DR-04, and "needs a wallet this repo does not contain" — each already names its decision |
+
+> **Why three markers are deliberately left unprobed, which is a ruling and not laziness.** Capturing
+> Authlete's exact `error_description` text is easy and would make the documentation **worse**. The strings
+> carry a bracketed vendor code and change between versions, so a captured string is a maintenance liability
+> that silently rots, and printing it invites a reader to parse it. The markers already give the correct
+> instruction — *read the `error` code, which is spec-defined and stable; do not parse the prose* — so
+> probing would replace good advice with a stale transcript. **A marker can be the right answer rather than
+> an absence of one.**
+
+### 26.1 Device-flow user codes are matched **byte for byte** (`DEVICE-FLOW-TUTORIAL.md:218`)
+
+Read-only; no write. Service issues `BASE20`, `userCodeLength: 0` → **8 characters, no dashes**.
+
+| Submitted | `action` | `resultCode` |
+|---|---|---|
+| exact, as issued (`VLPTDQJX`) | **`VALID`** | `A224001` |
+| lowercased | `NOT_EXIST` | `A225301` |
+| **a dash inserted mid-code** (`VLPT-DQJX`) | `NOT_EXIST` | `A225301` |
+| trailing newline | `NOT_EXIST` | `A225301` |
+| one character changed | `NOT_EXIST` | `A225301` |
+
+**No case folding, no punctuation stripping, no trimming.** The marker's advice — *"Do not rely on lenient
+matching. Uppercase and strip dashes in your own UI before submitting"* — is **confirmed**, and the dash row
+is the practical one: RFC 8628 §6.1's own example is `WDJB-MJHT`, so a UI that formats a code for readability
+must strip its own formatting back off before submitting. Verification is also **non-consuming** — the exact
+code still answered `VALID` after five failed lookups.
+
+> **The first run of this probe was not a measurement, and catching that is the transferable part.** It
+> included "dashes stripped" and "space instead of dash" as variants. This service issues **dash-free**
+> codes, so `replace(/-/g, "")` returned the identical string — three of seven variants were **the same
+> input**, and all three came back `VALID`, which reads exactly like evidence of lenient matching. Inserting
+> a dash rather than removing one is the test that distinguishes. Same lesson Module 09b records: *a probe
+> that cannot distinguish its inputs has stopped being a measurement.*
+
+### 26.2 `supportedServiceProfiles` is real, and `/api/fapi/config` cannot see it (`FAPI-TUTORIAL.md:247`, `:786`)
+
+The marker said Authlete's guide names *"Supported Service Profiles"* while this server reads `fapiModes`,
+and that these are *"plausibly two separate settings that both need to be on."* **Confirmed — they are two
+separate settings**, both real properties of `Service` in Authlete 3.0.16:
+
+| Property | Type | Live value |
+|---|---|---|
+| `supportedServiceProfiles` | array, enum `FAPI` \| `OPEN_BANKING` | **unset** |
+| `fapiModes` | array, six-member enum incl. `FAPI2_SECURITY` | **unset** |
+
+So the tutorial's Part 3 step (*"enable the FAPI Profile option, select FAPI2_SECURITY"*) sets `fapiModes`,
+and the Authlete guide's prerequisite sets `supportedServiceProfiles`. Both are unset here, consistent with
+DR-02.
+
+> **New, and worth more than the marker:** `computeFapiMode` in `fapi.controller.ts` reads **`fapiModes`
+> only**. So a service with `supportedServiceProfiles: ["FAPI"]` and no `fapiModes` would be reported as
+> `mode: "disabled"` — the *"a status page that cannot fail is not reporting anything"* problem one field
+> across. **FAPI1-W2 made `computeFapiMode` total over `fapiModes`' six members and never considered the
+> sibling property.** Not fixed here: DR-02 declines FAPI, and this is a reporting gap on a declined
+> profile, so it is recorded rather than coded around.
+
+### 26.3 `resource_indicators_supported` is not a thing (`MCP-OAUTH-TUTORIAL.md:33`, `:186`)
+
+The marker established that Authlete has no field for it and asked, as `UNVERIFIED`, *"whether RFC 8707
+registers such a metadata member at all."* **It does not.** RFC 8707 (*Resource Indicators for OAuth 2.0*,
+**Standards Track, February 2020**), §5, registers exactly two things: the **`resource` request parameter**
+and the **`invalid_target` error code**. It defines **no** authorization-server metadata parameter.
+
+**That is a stronger answer than the marker expected.** Its absence from the discovery document is not a gap
+Authlete declines to fill — **nothing should emit it**, because no specification defines it. The original
+"Required Authlete Configuration" row was wrong twice over: no console field *and* no such member.
+
+**And `:186`'s own claims were stale in two of three places** (checked live):
+
+| `:186` said | Live |
+|---|---|
+| a **64**-member document | **66** |
+| `registration_endpoint` **absent** | **present** — `/api/client/dcr/register` |
+| `resource_indicators_supported` absent | ✅ absent, and correctly so — see above |
+| `code_challenge_methods_supported` is `["plain","S256"]` | ✅ correct |
+
+The `registration_endpoint` error is the **same stale claim** found in `README.md`'s MCP row the same day —
+one wrong fact in two documents, which is what a shared origin looks like.
+
 ## Sources
 
 - Live probe 1: `GET /api/{serviceId}/service/get` — HTTP 200, 129 fields, 2026-08-10, authorised, read-only
