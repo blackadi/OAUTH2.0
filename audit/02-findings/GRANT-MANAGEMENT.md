@@ -53,6 +53,7 @@
 | Minting and returning `grant_id` | Authlete | `responseContent` on the token response |
 | Query / revoke execution | Authlete | `grantManagement.processRequest` |
 | **Checking that the caller owns the grant** | **This server** — Authlete does not do it, and its response carries no owner data | `middleware/require-grant-ownership.ts` |
+| **↳ and the consequence, reproduced 2026-08-17** | **Authlete** | cross-subject **query returns the other subject's grant**, and cross-subject **`REVOKE` destroys it** — `SERVICE-CONFIG-PROBE.md` §27. The middleware is a compensating control, not extra strictness |
 | Scope enforcement | Authlete, at this server's request | `introspectionRequest.scopes = [requiredScope]` (`:62`) |
 | Returning the §6.4 body | **This server** | `controllers/grant-management.controller.ts:26` — `responseContent` verbatim ✅ |
 

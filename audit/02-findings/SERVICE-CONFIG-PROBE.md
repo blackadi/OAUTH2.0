@@ -830,10 +830,12 @@ reachable. Configuring JARM removed the only trigger. **A defect that disappears
 feature correctly is easy to mistake for a defect in the feature**, and the way to tell them apart was to
 find a *second* error on the same mode, which row 4 is.
 
-**Consequence for JARM-W6 (report upstream):** it now has a minimal reproduction — one client with
-`responseModes` including `FORM_POST_JWT` and no `authorizationSignAlg`, one authorization request with
-`response_mode=form_post.jwt`, observe `action: LOCATION` carrying `<html>…`. That is a better bug report
-than the original observation, which could not say which of two conditions caused it.
+**A minimal reproduction, kept for the record:** one client with `responseModes` including `FORM_POST_JWT`
+and no `authorizationSignAlg`, one authorization request with `response_mode=form_post.jwt`, observe
+`action: LOCATION` carrying `<html>…`. That is far more useful than the original observation, which could not
+say which of two conditions caused it. *(**JARM-W6, the work item to report this upstream, was retired
+2026-08-17** — filing a vendor ticket is not a deliverable of this repository. The characterisation above is
+the part worth keeping.)*
 
 # Probe 11 — T2-17 batch 8, the two writes, 2026-08-15
 
@@ -1204,6 +1206,61 @@ Authlete declines to fill — **nothing should emit it**, because no specificati
 
 The `registration_endpoint` error is the **same stale claim** found in `README.md`'s MCP row the same day —
 one wrong fact in two documents, which is what a shared origin looks like.
+
+## 27. Authlete's `/gm` API does not relate a token to the grant it names — reproduced 2026-08-17
+
+`modules/11…/lab.md` asserted this: *"Cross-subject access to grant objects is possible… a direct call to the
+upstream `/gm` API reproduces `action: OK` for a token belonging to a different subject."* **No captured
+transcript for it existed anywhere in the repo.** It was the repo's own kind of defect — a claim carried in
+prose that nobody had re-derived — and it sat behind an `UNVERIFIED` marker saying the vendor should be asked.
+Run now, and it reproduces, **and it is materially worse than the claim**.
+
+**Method.** Read-only against service configuration; no service or client write. Two authorization-code flows
+with `grant_management_action=create` under **different subjects** on client `1523514379`, each given a
+distinguishing scope so the two grants are *distinguishable in the response* — `profile` for A, `email` for B.
+Both grants revoked at the end. Service diff afterwards: **0**.
+
+| Case | `action` | `resultCode` | Grant returned |
+|---|---|---|---|
+| **control** token A → grant A | `OK` | `A277001` | A's — scopes include `profile` |
+| **control** token B → grant B | `OK` | `A277001` | B's — scopes include `email` |
+| **token A → grant B** | **`OK`** | `A277001` | **B's — scopes include `email`** |
+| **token B → grant A** | **`OK`** | `A277001` | **A's — scopes include `profile`** |
+| sanity: token A → nonexistent grant | `NOT_FOUND` | `A283301` | — |
+| sanity: bogus token → grant A | `UNAUTHORIZED` | `A279306` | — |
+
+**Two things this establishes that the claim did not.**
+
+1. **It is not an empty acknowledgement — it returns the other subject's grant.** The distinguishing scopes
+   are why: token A asking about grant B gets back a document containing **`email`**, which only ever
+   belonged to B. Had both grants carried identical scopes, `OK` would have been consistent with an empty
+   ack, and the probe could not have told the difference. *(The same "make the inputs distinguishable" step
+   that the device-code probe needed in §26.1.)*
+2. **REVOKE crosses the boundary too, destructively.** Token A → `REVOKE` grant B answered `NO_CONTENT`
+   `A277001`; B then queried **its own** grant and got **`NOT_FOUND` `A283301`**. **A destroyed B's grant.**
+   So this is not only disclosure — it is cross-subject deletion.
+
+**Both sanity rows discriminate**, which is what makes the middle two rows a measurement: the API *does*
+validate the access token, and *does* validate that the grant id exists. It simply never asks whether the one
+is entitled to the other.
+
+> **What this settles for this repo, which is the reason it was worth running.** `middleware/require-grant-ownership.ts`
+> is the **only** thing standing between this and the public internet — it introspects the token and requires
+> the grant it was issued under to equal `:grantId`. `AGENTS.md` already described it as *deliberately
+> stricter* than the Grant Management specification. That framing is now confirmed as **too generous to
+> Authlete**: the middleware is not extra strictness, it is a **compensating control for cross-subject read
+> and delete at the vendor API**. Do not weaken it, and do not remove it on the grounds that Authlete
+> "validates the token" — it does, and that is not the same question.
+>
+> **The `UNVERIFIED` marker is retired on its facts and its instruction.** The behaviour is no longer
+> unverified. Whether it is an upstream *defect* or a deliberate vendor design that delegates ownership to
+> the AS is **still not something this repo can answer** — but per the 2026-08-17 ruling that retired
+> JARM-W6, *asking the vendor is not a repo work item*, so no new `OWED` row is created. The fact is
+> recorded; the attribution stays open and is labelled as such.
+
+**One deliberate omission:** the probe script is **not** committed. It lives in a scratchpad. A working
+cross-subject grant-deletion script is not something this repository needs to carry, and the table above is
+enough to re-derive it.
 
 ## Sources
 
