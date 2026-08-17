@@ -31,7 +31,7 @@
 | 2 | Append `iss` and `sid`; *"if either is included, both MUST be"* | §2 | ❌ absent |
 | 3 | Honour `frontchannel_logout_session_required` | §3 | ❌ absent; no client sets it |
 | 4 | Advertise `frontchannel_logout_supported` / `frontchannel_logout_session_supported` | §3 | ❌ both **absent** from the live discovery document (probe 3) |
-| 5 | Issue `sid` in ID Tokens when session-based front-channel logout is supported | §3 | ❌ no `sid` is issued; the only `sessionId` this server generates is the Native SSO UUID (`services/authorization.service.ts:111-115`), which is per-authorization and unrelated |
+| 5 | Issue `sid` in ID Tokens when session-based front-channel logout is supported | §3 | ❌ no `sid` is issued; the only `sessionId` this server generates is the Native SSO UUID (`services/authorization.service.ts:133-137`), which is per-authorization and unrelated |
 
 ## Authlete integration boundary
 
@@ -53,7 +53,7 @@ appears in ID Tokens as `sid` and can be matched later — §2's `iss`/`sid` pai
 `frontchannel_logout_session_supported` both depend on it.
 
 This server has no such identifier. `req.session` is an express-session cookie with no relationship to anything
-Authlete records, and the one `sessionId` it does generate (`services/authorization.service.ts:111-115`) is a
+Authlete records, and the one `sessionId` it does generate (`services/authorization.service.ts:133-137`) is a
 fresh UUID per authorization created only for Native SSO — see `NATIVE-SSO-1.0.md` F-2, which flags the same
 absence from the other direction.
 
@@ -85,7 +85,7 @@ That is a judgement, not a finding — Gate 4's to accept or reject.
 
 - OpenID Connect Front-Channel Logout 1.0 §§2, 3 — `https://openid.net/specs/openid-connect-frontchannel-1_0.html`, fetched this session. **Title, Final status and date (12 September 2022) confirmed**; the `iss`/`sid` pairing rule (*"if either is included, both MUST be"*) and both OP metadata definitions quoted.
 - Live probe 3 (2026-08-10): `frontchannel_logout_supported` and `frontchannel_logout_session_supported` absent; per-client `frontChannelLogoutUri` absent — `SERVICE-CONFIG-PROBE.md` §8, §10
-- Code: grep for `frontchannel` / `frontChannelLogoutUri` over `server/src` and `client/src` — zero occurrences; `services/authorization.service.ts:111-115` (the only session identifier this server generates)
+- Code: grep for `frontchannel` / `frontChannelLogoutUri` over `server/src` and `client/src` — zero occurrences; `services/authorization.service.ts:133-137` (the only session identifier this server generates)
 
 ## Proposed work items
 

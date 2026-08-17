@@ -131,6 +131,80 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
 - [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
 
+### 2026-08-17 — the three configuration-gated `UNVERIFIED` markers, taken to terminal states
+
+Post-audit work, not a remediation-plan item. Three markers in `docs/` survived only because an Authlete
+service flag was off. All three are now **DECLINED** — the flags stay as they are — with the decision written
+down and the markers rewritten to name the decision rather than an unexamined gap. **No configuration change
+ships:** every probe was set → observe → revert, each revert verified by a **read-back** rather than by the
+write's status code, with **0 unexpected field diffs** on all four cycles.
+
+| # | Flag | Live value | Outcome |
+|---|---|---|---|
+| 1 | `dpopNonceRequired` | `false` / duration `0` | **DECLINED** — new record **DR-20** |
+| 2 | `nativeSsoSupported` | `false` | **DECLINED** — **DR-04** re-ruled, upheld on evidence |
+| 3 | `accessTokenSignAlg` | unset | **DECLINED (defer)** — **DR-09** re-ruled, upheld |
+
+> **The finding that outranks all three: two of the three markers told the reader to flip a flag, and neither
+> instruction produces what it promises.** A marker that names a remedy nobody has executed reads as
+> *actionable* and is therefore **less** likely to be re-checked than a plain "unknown". That is a worse
+> failure mode than an honest gap, and it is invisible until somebody runs the instruction.
+
+**#1 — `PAR-TUTORIAL.md` said "turn on Require Nonce to make this section runnable".** It makes the SPA's DPoP
+flows fail **permanently**. `client/src/services/token.service.ts` has `if (!response.ok) throw` on the line
+*before* it reads `DPoP-Nonce`, and `http.ts` repeats the shape at nine call sites — so a `400 use_dpop_nonce`
+discards the value that would have fixed it, and `sessionStorage.dpop_nonce` (written only from a *success*)
+never fills. Not a failed first request: a failed every request, forever. That is DR-20's whole reason, and its
+revisit trigger is a client that retries. **What the probe removed as an objection is worth as much:** an
+authorization code **survives** a `use_dpop_nonce` refusal — the same code, retried with the nonce, yields
+`OK` — so the mechanism is fine and only our client is not. Also settled: PAR returns a `DPoP-Nonce` on its
+**`201 Created`**, so the header `FAPI-TUTORIAL.md` deleted in August as *"not producible here"* was
+**unreachable, not wrong**; and PAR's nonce error is **`A350308`**, not the token endpoint's `A254307`.
+
+**#2 — `NATIVE-SSO-TUTORIAL.md:33` asked a binary question and the answer was a third thing.** It asked whether
+a device-secret exchange reaches `token-exchange-response.handler.ts` (`TOKEN_EXCHANGE`) *"rather than …
+answering `OK`"*. Both phases answer **`NATIVE_SSO`**, so the exchange never touches that handler and its two
+deliberate defects are **irrelevant to Native SSO** — the warning was aimed one file to the left. Its
+instruction (*"settle it by enabling the flag"*) does not work either: the flag is the first of **three**
+blockers. **New defect, deliberately not fixed** — `controllers/native-sso-response.handler.ts:22-28` requires
+a `deviceSecret` that Authlete does **not** return on a Phase 1 exchange (SDK 1.0.0's own model says the AS
+*"is free to generate a new device secret"*), so Phase 1 answers **HTTP 500** the moment the flag goes on.
+Recorded as `NATIVE-SSO-1.0.md` **F-4**, S3/latent; fixing it would ship half of a declined feature. Once the AS
+mints one, everything downstream works — `/nativesso` → `A501001`, ID token with `sid` and a matching `ds_hash`.
+Third blocker: `tokenExchangeByConfidentialClientsOnly` is `true`, so **public** clients cannot do Phase 2
+(`A311304`) — and Native SSO exists for mobile apps, which are public clients.
+
+**#3 — the one instruction that was right, and it still must not be followed.** Setting `accessTokenSignAlg`
+*does* make `STEP-UP-AUTH-TUTORIAL.md` Part 4 literal: `typ: at+jwt` and **all eight** claims present, `acr`
+`"pwd"`, `auth_time` exactly the epoch passed to `/auth/authorization/issue`. **But the token carries no
+`aud`** — RFC 9068 **§2.2** makes it REQUIRED and **§3** requires a default when no `resource` is sent. So
+`RFC9068-…` **F-3 is promoted from predicted to observed**, and the trade is not opaque-versus-self-contained
+but **an honest gap versus a silent MUST violation in every token issued** — silent because nothing here
+validates `aud`. Satisfying §3 is now a **prerequisite** of 9068-W1, not an item beside it. DR-09's coupling
+also **undercounted by an order of magnitude**: 86 lines across 13 files, not two.
+
+**Stale claims found while re-deriving, and fixed** — none of them caused by this work:
+
+- **`audit/05-decision-records.md` contradicted itself in nine places.** Seven index rows read `⬜ open` for
+  records ruled on 2026-08-14, and **two bodies (DR-03, DR-05) read `⬜ open` for decisions already executed
+  against the live service** — while the table between them said *"every decision record is now closed."* **A
+  summary and the thing it summarises had drifted in opposite directions**, so a reader had even odds of being
+  told the reverse of the truth depending on which they consulted.
+- **`README.md`'s feature table**, twice: it said no client registers a `backchannel_logout_uri` (client
+  `1523514379` does, since BCL-W5) and that discovery has no `registration_endpoint` (it does —
+  `/api/client/dcr/register`; the real barrier is that it needs admin Basic auth rather than RFC 7591 §3's
+  initial access token).
+- **The discovery document is at 66 members**, not the 65 recorded on 2026-08-15 — measured identically at
+  `service/configuration`, `/api/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`.
+  **Not attributable**: both probes reverted with 0 diffs, and only a *count* was kept in August, not a member
+  list. `AGENTS.md` now says so: count it, do not quote it, and **if the number matters, keep the list.**
+- Stale line refs `authorization.service.ts:111-115` → `:133-137` in two finding files.
+
+One probe bug worth recording because it is the brief's own named failure mode: the first Native SSO run
+checked `client/create` for HTTP **200**, got **201**, threw, and the cleanup could not see a client it had
+already created. Caught by re-reading the client list rather than trusting the summary line; the orphan was
+deleted and confirmed **404**. Assign the handle *before* the validation that can throw.
+
 ### 2026-08-15 — T2-17: the last batch, and the audit closes
 
 **Why this matters to a future session: there is no next item.** Tiers 0–3 are complete, all 17 Tier 2 items

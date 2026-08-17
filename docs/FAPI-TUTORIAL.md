@@ -20,7 +20,7 @@
 > | `fapiModes` including `FAPI2_SECURITY` | **absent** — `/api/fapi/config` reports `mode: "disabled"` | Authlete enforces no FAPI rule anywhere in the flow |
 > | a scope carrying the `fapi2=sp` attribute | **`fapi_scope` is not a registered scope** | unknown scopes are silently dropped (`scopeRequired` is `false`), so the request *succeeds* with no FAPI enforcement and no error |
 > | PAR required | `parRequired` **`false`** on the service and on all four clients | PAR works, but nothing obliges a client to use it |
-> | `dpopNonceRequired` for the nonce dance | **`false`** (`dpopNonceDuration` 0) | **the `DPoP-Nonce` response headers shown in Part 4 cannot appear** |
+> | `dpopNonceRequired` for the nonce dance | **`false`** (`dpopNonceDuration` 0) — **off by decision** ([DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired), 2026-08-17), not by oversight | **the `DPoP-Nonce` response headers shown in Part 4 cannot appear here** — though the dance itself is captured, see [Step 3](#step-3-push-authorization-request-par) |
 >
 > **Two of Part 3's prerequisites *are* satisfied**, and were not when this file was written: client
 > `2176571218` has `tokenAuthMethod = PRIVATE_KEY_JWT` with a registered JWK Set (created 2026-08-12), and
@@ -411,19 +411,26 @@ HTTP/1.1 201 Created
 }
 ```
 
-> **Two corrections to what this block used to say.** It showed `expires_in: 90`; the live value is the
-> service's `pushedAuthReqDuration`, **600**. And it showed a `DPoP-Nonce: <serverNonce>` response header —
-> **`UNVERIFIED`, and not producible here**: `dpopNonceRequired` is `false`, so this server never issues a
-> nonce and never demands one. The nonce dance in [Part 4's later steps](#step-5-exchange-code-for-token) is
-> the specification's, not this deployment's.
+> **Two corrections to what this block used to say, and the second one has since been corrected again.** It
+> showed `expires_in: 90`; the live value is the service's `pushedAuthReqDuration`, **600**. And it showed a
+> `DPoP-Nonce: <serverNonce>` response header, removed on 2026-08-14 as **`UNVERIFIED`, and not producible
+> here**.
 >
-> **It is no longer merely the specification's, though.** The flag was turned on for three token-endpoint
-> calls on 2026-08-15 and turned back off, so the dance has been observed: a proof with no nonce earns
-> **400 `use_dpop_nonce`** *with* a `DPoP-Nonce` header, replaying that nonce succeeds, and a stale one earns
-> `use_dpop_nonce` again rather than `invalid_dpop_proof`. **Note the 400** — RFC 9449 §8 gives an
-> *authorization server* 400 and §9 gives a *resource server* 401, and getting that backwards stops a client
-> that only retries on 401 from ever starting the dance. The full transcript, including the nonce being
-> **time-based rather than one-time**, is in [`PAR-TUTORIAL.md`](PAR-TUTORIAL.md#dpop-nonce-handling).
+> **That removal was right about this deployment and misleading about the protocol — settled 2026-08-17.**
+> `dpopNonceRequired` was switched on and PAR was probed directly: Authlete answers the **`201 Created`** with
+> a `DPoP-Nonce` header, exactly as the deleted block showed. **The block was unreachable, not wrong.** So the
+> header is real, it belongs on a PAR success response, and you will not see it here because the flag is off —
+> now off **by decision** ([DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired)),
+> because enabling it breaks every DPoP flow in this repo's SPA. Note also that a nonce-less PAR request earns
+> **`[A350308]`**, *not* the token endpoint's `A254307` — one condition, two vendor codes.
+>
+> **The rest of the dance is captured too.** A proof with no nonce earns **400 `use_dpop_nonce`** *with* a
+> `DPoP-Nonce` header, replaying that nonce succeeds, and a stale one earns `use_dpop_nonce` again rather than
+> `invalid_dpop_proof`. **Note the 400** — RFC 9449 §8 gives an *authorization server* 400 and §9 gives a
+> *resource server* 401, and getting that backwards stops a client that only retries on 401 from ever starting
+> the dance. An **authorization code survives** such a refusal, so the retry costs a round trip rather than a
+> re-authorization. Full transcript, including the nonce being **time-based rather than one-time**, in
+> [`PAR-TUTORIAL.md`](PAR-TUTORIAL.md#dpop-nonce-handling).
 
 ### Step 4: Authorize
 
@@ -786,7 +793,14 @@ either name here.
 `dpopEnabled` reports `service.dpopNonceRequired`, which is **not** the same question. DPoP works fine
 without nonces — the flag only controls nonce *enforcement*. So `dpopEnabled: false` and
 `senderConstrainedTokens: "none"` can both appear on a service that issues DPoP-bound tokens correctly.
-If you want nonces on: **Service Settings → Tokens and Claims → Advanced → DPoP Token** → Require Nonce.
+
+**On this deployment it reads `false` deliberately** — see
+[DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired). If you want nonces on in a
+deployment of your own, the switch is **Service Settings → Tokens and Claims → Advanced → DPoP Token** →
+Require Nonce, plus a non-zero duration — but **fix your client first**. A client that does not read
+`DPoP-Nonce` off the **error** response and retry cannot recover, and this repo's SPA is such a client: the
+`if (!response.ok) throw` in `client/src/services/token.service.ts` runs before the header is read, so the
+nonce arrives and is thrown away on every attempt.
 
 ### "FAPI mode shows sp but Authlete doesn't enforce FAPI rules"
 

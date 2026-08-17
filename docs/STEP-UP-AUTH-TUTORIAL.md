@@ -14,7 +14,7 @@
 >
 > | What the file shows | Live status | What to do about it |
 > |---|---|---|
-> | [Part 4](#part-4-binding-auth-info-to-access-tokens)'s **JWT access-token payload** | **`UNVERIFIED`** — `accessTokenSignAlg` is **unset**, so this deployment issues opaque access tokens and there is no JWT to decode | The claims are still recorded against the token: the SDK's `IntrospectionResponse` models `acr` and `authTime`, which is RFC 9470 §6.2's other route. Set `accessTokenSignAlg` to make Part 4 literal |
+> | [Part 4](#part-4-binding-auth-info-to-access-tokens)'s **JWT access-token payload** | **Not reproducible here, and now checked against a real specimen** — `accessTokenSignAlg` is **unset** by decision ([DR-09](../audit/05-decision-records.md#dr-09--jwt-access-tokens-rfc-9068), re-ruled 2026-08-17), so this deployment issues opaque access tokens (43 characters, no dots) and there is no JWT to decode | The claims are still recorded against the token: the SDK's `IntrospectionResponse` models `acr` and `authTime`, which is RFC 9470 §6.2's other route. **Setting `accessTokenSignAlg` really would make Part 4 literal** — verified 2026-08-17 by setting it, minting one token and unsetting it — **but do not**: the resulting token carries **no `aud`**, which RFC 9068 §2.2 makes REQUIRED. See Part 4 |
 > | `urn:mace:incommon:iap:silver`, used as the strong ACR throughout | **not a registered ACR here.** `supportedAcrs` is `["pwd", "mfa"]` | Use **`mfa`** to reproduce anything in this file. An *unregistered* value fails earlier and for a different reason than an unsatisfiable one — see [`modules/09a…/lab.md` 4b](curriculum/modules/09a-interaction-extensions/lab.md) |
 > | the essential-ACR refusal | **runnable** — `mfa` is registered and deliberately unsatisfiable, which is exactly what makes the refusal path reachable | Request `mfa` as an essential `acr` and watch `ACR_NOT_SATISFIED` |
 > | [Part 5](#part-5-the-step-up-challenge-response)'s **max-age challenge** | **reachable, but only on one path** | See the note directly below |
@@ -180,10 +180,36 @@ For step-up to work, the access token must carry the authentication context. Aut
 
 ### JWT access token payload
 
-> **`UNVERIFIED` on this deployment (2026-08-14)** — `accessTokenSignAlg` is unset, so access tokens here are
-> opaque and no payload like the one below can be decoded. It is a correct RFC 9068 §2.2 shape and a correct
-> statement of what Authlete *would* embed; it is not a specimen from this service. The one JWT you can obtain
-> and decode here is the dev-only fixture from `GET /api/token/createLocalToken` (admin auth, non-production).
+> ### Not reproducible here — but **verified against a real specimen** (2026-08-17)
+>
+> `accessTokenSignAlg` is unset on this deployment, so access tokens here are **opaque** — 43 characters, no
+> dots — and no payload like the one below can be decoded from anything you obtain. That is a **decision**
+> ([DR-09](../audit/05-decision-records.md#dr-09--jwt-access-tokens-rfc-9068)), not an oversight.
+>
+> **The flag was set to `ES256` for exactly one token and unset again.** The payload below is now confirmed
+> rather than asserted:
+>
+> | | |
+> |---|---|
+> | header | `{"alg":"ES256","typ":"at+jwt","kid":"1"}` — `typ` is RFC 9068 §2.1's value, not `JWT` |
+> | **every claim shown below** | present — `sub`, `acr`, `auth_time`, `scope`, `iss`, `exp`, `iat`, `client_id` |
+> | `acr` / `auth_time` | `"pwd"` and the exact epoch passed to `/auth/authorization/issue`. **Part 4's central claim is true** |
+> | also present, not shown below | `jti`, and a **`grant_type`** claim that RFC 9068 does not define |
+> | ⚠️ **absent** | **`aud`** — see below |
+>
+> ### ⚠️ Why the flag is *still* off, and it is not inertia
+>
+> RFC 9068 **§2.2 makes `aud` REQUIRED**, and **§3** says that when a request carries no `resource` parameter
+> *"the authorization server MUST use a default resource indicator in the `aud` claim."* This service has no
+> default configured, and the specimen confirms the consequence: **no `aud` at all**. So switching
+> `accessTokenSignAlg` on would make **every access token this deployment issues** violate a MUST — silently,
+> because nothing in this repo validates `aud`, and every token would keep working. Recorded as
+> [`RFC9068-jwt-access-tokens.md`](../audit/02-findings/RFC9068-jwt-access-tokens.md) F-3, which was written as
+> a *prediction* and is now an observation.
+>
+> **The one JWT you can obtain and decode here** is the dev-only fixture from
+> `GET /api/token/createLocalToken` (admin auth, non-production) — and it is deliberately §2-shaped, so it is a
+> better specimen to study than the block below is to imagine.
 
 
 
