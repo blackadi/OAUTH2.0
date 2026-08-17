@@ -7,10 +7,26 @@ const mockLog = () =>
   Object.assign(vi.fn(), { error: vi.fn(), warn: vi.fn(), child: vi.fn() }) as unknown as CallableLogger
 
 /**
- * The two supported stores return different shapes from `all()`. Both were read to establish this:
- * express-session's MemoryStore builds an object keyed by session id, while connect-redis pushes an array and
- * attaches `sess.id`. A helper that handles only one silently terminates nothing against the other — which is
- * the whole failure mode this function exists to avoid.
+ * The two supported stores return different shapes from `all()`. express-session's MemoryStore builds an
+ * object keyed by session id, while connect-redis pushes an array and attaches `sess.id`. A helper that
+ * handles only one silently terminates nothing against the other — which is the whole failure mode this
+ * function exists to avoid.
+ *
+ * **The connect-redis fake below is evidenced, not invented** (2026-08-17). It was originally written from a
+ * *reading* of the library, and there is no test here that runs real connect-redis — CI has no Redis. So the
+ * shape was checked by hand against a live `redis:7-alpine`, writing three sessions and calling `all()`:
+ *
+ * | | `Array.isArray` | elements with a string `.id` | `destroySessionsForSubject` result |
+ * |---|---|---|---|
+ * | connect-redis **9.0.0** (installed) | `true` | 3 of 3 | found both of alice's, spared bob's |
+ * | connect-redis **10.0.0** (PR #22) | `true` | 3 of 3 | identical |
+ *
+ * Two reasons that mattered. `REDIS_URL` is now set, so **connect-redis is the live store** and this branch
+ * is the live path rather than the hypothetical one. And the v10 check settles the pending major bump on the
+ * dimension that could have broken it silently: v10's only breaking change is `engines.node` 18 → 22.
+ *
+ * Re-run it by hand if this fake ever needs to change — `docker compose up -d redis` and drive `store.all()`
+ * directly. A fake that nobody has compared against the real thing is a guess with a green tick next to it.
  */
 function storeReturning(sessions: unknown, destroy = vi.fn((_sid, cb) => cb?.(null))): Store {
   return {

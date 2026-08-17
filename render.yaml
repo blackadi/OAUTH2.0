@@ -34,6 +34,13 @@ services:
       # makes the intent explicit as well, so neither layer alone is load-bearing.
       - key: NODE_ENV
         value: production
+      # Pinned for the same reason as NODE_ENV directly above, and found the same way. The repo tested on
+      # Node 22 in CI and shipped to whatever Render happened to default to — so a green build never implied
+      # a working deploy, and nothing in the tree declared the floor. `.nvmrc` and `engines.node` say 22 too;
+      # three layers, none of them load-bearing alone. Raising this is a deliberate act: change all three.
+      - key: NODE_VERSION
+        value: "22"
+
       - key: PORT
         sync: false
       - key: AUTHLETE_SERVICE_ID
