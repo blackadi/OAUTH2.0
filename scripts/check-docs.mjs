@@ -144,6 +144,12 @@ const files = walk(ROOT);
 const ROUTES = new Set([...mountedRoutes()].map(normRoute));
 const problems = [];
 const add = (file, msg) => problems.push(`${relative(ROOT, file)}: ${msg}`);
+/**
+ * External URLs that did not return 2xx but are **not** evidence of a dead link — 401/403 (refused us),
+ * 429 (rate-limited), 5xx (their outage), timeouts and DNS failures. Reported, never fatal. Printed rather
+ * than swallowed, because a check that hides what it could not verify is a false assurance.
+ */
+const refused = [];
 
 let counts = { srcRefs: 0, barePaths: 0, mdRefs: 0, proseRefs: 0, endpoints: 0, contextualMdRefs: 0, relLinks: 0, anchors: 0, urls: 0 };
 
@@ -304,9 +310,22 @@ if (CHECK_LINKS) {
               headers: { "User-Agent": "Mozilla/5.0 (docs link check)" },
             });
             if (res.ok) return;
-            if (attempt === 1) add(file, `HTTP ${res.status} — ${url}`);
+            // **A link is "dead" only if the resource is gone.** 404/410 say that. 401/403/429 say the
+            // server is refusing *us* — bot protection, a login wall, a rate limit — and 5xx says it is
+            // having a bad day. None of those means the reader's link is broken, and failing the build on
+            // them turns a weekly gate into one people learn to ignore.
+            //
+            // This is not hypothetical: the 2026-08-17 scheduled run failed on ONE link,
+            // `https://support.authlete.com`, which answers **403 to a bare request and 200 to a browser**.
+            // The page was fine the whole time. Same argument that put `--links` on a schedule rather than
+            // on every push — a third party's behaviour is not a reason to fail somebody's pull request.
+            if (attempt === 1) {
+              if (res.status === 404 || res.status === 410) add(file, `HTTP ${res.status} — ${url}`);
+              else refused.push(`${relative(ROOT, file)}: HTTP ${res.status} — ${url}`);
+            }
           } catch (e) {
-            if (attempt === 1) add(file, `unreachable (${e.name}) — ${url}`);
+            // A timeout or DNS failure is also not proof the link is dead.
+            if (attempt === 1) refused.push(`${relative(ROOT, file)}: unreachable (${e.name}) — ${url}`);
           }
         }
       })
@@ -319,6 +338,15 @@ const scope =
   `${counts.mdRefs} markdown line refs, ${counts.proseRefs} prose pointers, ${counts.endpoints} endpoint paths, ${counts.relLinks} relative links, ${counts.anchors} anchors` +
   `${CHECK_LINKS ? `, ${counts.urls} external URLs` : " (external links skipped; pass --links)"}` +
   `\n   not checked: ${counts.contextualMdRefs} context-relative \`file.md:NNN\` refs — resolving them means guessing the document's subject`;
+
+// Print what could not be verified BEFORE the verdict, whether or not anything failed. A check that
+// silently drops the URLs it could not reach is claiming coverage it does not have.
+if (refused.length) {
+  console.log(`\n  ⚠️  ${refused.length} external URL(s) did not return 2xx and are NOT treated as dead —`);
+  console.log(`     the server refused us (401/403), rate-limited us (429), erred (5xx) or timed out.`);
+  console.log(`     Open them by hand if a claim depends on one; only 404/410 fails this check.`);
+  for (const r of refused) console.log(`       · ${r}`);
+}
 
 if (problems.length === 0) {
   console.log(`✅ docs check passed: ${scope}`);

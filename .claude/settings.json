@@ -6,7 +6,8 @@
       "WebFetch(domain:datatracker.ietf.org)",
       "WebFetch(domain:www.rfc-editor.org)",
       "WebFetch(domain:openid.net)",
-      "WebFetch(domain:darutk.medium.com)"
+      "WebFetch(domain:darutk.medium.com)",
+      "Bash(gh pr merge:*)"
     ]
   }
 }
