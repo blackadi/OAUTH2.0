@@ -68,19 +68,15 @@ const CallbackPage = () => {
         const dpopPrivateKeyRaw = sessionStorage.getItem('dpop_private_key');
         const signingPrivateKeyRaw = sessionStorage.getItem('fapi_signing_private_key');
         let body: TokenResponse;
-        let dpopNonce: string | undefined;
 
         if (dpopPrivateKeyRaw && signingPrivateKeyRaw) {
           const dpopPrivateKeyJwk = JSON.parse(dpopPrivateKeyRaw);
           const signingPrivateKeyJwk = JSON.parse(signingPrivateKeyRaw);
-          const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
-          const dpopProof = await createProof(
-            dpopPrivateKeyJwk,
-            'POST',
-            TOKEN_ENDPOINT,
-            undefined,
-            storedNonce,
-          );
+          // A factory, not a proof. On a `use_dpop_nonce` refusal the proof must be re-signed with the
+          // new nonce; the authorization code survives that refusal (verified live 2026-08-17), so the
+          // retry inside `dpopRequest` completes the exchange rather than forcing a re-authorization.
+          const dpopProof = (nonce?: string) =>
+            createProof(dpopPrivateKeyJwk, 'POST', TOKEN_ENDPOINT, undefined, nonce);
           const clientAssertion = await createClientAssertion(
             signingPrivateKeyJwk,
             storedClientId,
@@ -99,17 +95,11 @@ const CallbackPage = () => {
             dpopProof,
           );
           body = result.tokenResponse;
-          dpopNonce = result.dpopNonce;
         } else if (dpopPrivateKeyRaw) {
           const privateKeyJwk = JSON.parse(dpopPrivateKeyRaw);
-          const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
-          const dpopProof = await createProof(
-            privateKeyJwk,
-            'POST',
-            TOKEN_ENDPOINT,
-            undefined,
-            storedNonce,
-          );
+          // A factory, not a proof — see the note in the branch above.
+          const dpopProof = (nonce?: string) =>
+            createProof(privateKeyJwk, 'POST', TOKEN_ENDPOINT, undefined, nonce);
           const storedSecret = sessionStorage.getItem('authz_client_secret') || CLIENT_SECRET;
           const result: TokenResponseWithNonce = await tokenService.exchangeCodeForTokenWithDpop(
             {
@@ -123,7 +113,6 @@ const CallbackPage = () => {
             dpopProof,
           );
           body = result.tokenResponse;
-          dpopNonce = result.dpopNonce;
         } else {
           const storedSecret = sessionStorage.getItem('authz_client_secret') || CLIENT_SECRET;
           body = await tokenService.exchangeCodeForToken({
@@ -138,10 +127,6 @@ const CallbackPage = () => {
 
         setTokenSet(body);
         sessionStorage.setItem('active_client_id', storedClientId);
-
-        if (dpopNonce) {
-          sessionStorage.setItem('dpop_nonce', dpopNonce);
-        }
 
         const decodedIdToken = body.id_token ? jwtDecode<JwtPayload>(body.id_token) : {};
         setState({

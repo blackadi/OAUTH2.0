@@ -131,6 +131,175 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
 - [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
 
+### 2026-08-17 (later still) — every remaining `UNVERIFIED` marker sorted, and four settled
+
+The morning closed the three markers a **service flag** gated. This sweep asks a different question of what
+was left — **could a probe settle this?** — which nobody had asked. **The sort is the deliverable**; four
+settlements fell out of it. Full record: `SERVICE-CONFIG-PROBE.md` §26.
+
+`UNVERIFIED` turns out to be **four** distinct things, and the label hid the difference: **decision-gated**
+(a record says we will not produce it), **deliberately not probed** (settling it would make the docs worse),
+**partly answerable** (one half needs elapsed time or a client we lack), and **answerable at a cost** (needs
+a live configuration write). `docs/README.md`'s legend now carries the split, since that is where the
+convention is defined once.
+
+**Four settled, and three of the four found the marker partly wrong:**
+
+- **Device-flow user codes are matched byte for byte.** No case folding, no punctuation stripping, no
+  trimming; verification is non-consuming. The marker's advice — *uppercase and strip dashes before
+  submitting* — was **right**, and the dash row is the practical one: RFC 8628 §6.1's own example is
+  `WDJB-MJHT` while this service issues **dash-free** codes, so a UI that formats for readability must undo
+  it. ⚠️ **The first run of this probe was not a measurement.** It included "dashes stripped" as a variant,
+  which on a dash-free code is the *identical string* — three of seven variants were the same input, all
+  returned `VALID`, and it reads exactly like evidence of leniency. **Inserting** a dash is the test that
+  distinguishes. Same lesson Module 09b already records.
+- **`supportedServiceProfiles` is real.** The marker guessed *"plausibly two separate settings"*; confirmed —
+  it is a distinct `Service` property (`FAPI` | `OPEN_BANKING`) beside `fapiModes`, and **both are unset**.
+  New finding beside it: `computeFapiMode` reads `fapiModes` **only**, so a service with
+  `supportedServiceProfiles: ["FAPI"]` would still report `mode: "disabled"`. FAPI1-W2 made that function
+  total over one enum and never looked at the sibling field. Not fixed — DR-02 declines FAPI.
+- **`resource_indicators_supported` is not a member of anything.** RFC 8707 §5 registers exactly the
+  `resource` **request parameter** and the `invalid_target` **error code** — **no** AS metadata parameter.
+  So its absence is *correct*, not a gap Authlete declines to fill, and the original config row was wrong
+  twice over: no console field **and** no such member.
+- **`MCP-OAUTH-TUTORIAL.md:186` had gone stale in two of three claims** — 64 members is now **66**, and
+  `registration_endpoint` **is** present. That is the *same* wrong fact found in `README.md`'s MCP row
+  earlier the same day: one error, two documents, which is what a shared origin looks like.
+
+**Three markers were reviewed and deliberately left**, which is a ruling rather than an omission: capturing
+Authlete's exact `error_description` strings is easy and would make the docs **worse** — vendor text rots
+between versions, and printing it invites the parsing the marker warns against. **A marker can be the right
+answer rather than the absence of one.**
+
+Also built earlier the same day and worth reading together with this: `scripts/check-discovery.mjs`, which
+exists because the 66-vs-65 member drift was **unattributable** — August had kept a count and not a list.
+
+### 2026-08-17 (later) — the two defects the marker work found, both fixed and both live-verified
+
+The marker pass recorded two code defects and deliberately left them, because each sat behind a declined
+decision. Fixed now. **Neither fix flips a flag** — `dpopNonceRequired` and `nativeSsoSupported` are both
+still `false`. These make the code correct *if* either is ever switched on.
+
+**1. The SPA discarded the DPoP nonce it was sent.** New `client/src/services/dpop-fetch.ts` is the single
+place a DPoP request is sent. It caches `DPoP-Nonce` from **success and failure alike** — that one line is
+the bug fix — and retries once with a **re-signed** proof. Re-signed, not replayed: the nonce lives inside
+the signature, which is why `DpopProofSource` is a proof **factory** or a string, and why a string caller
+(the manual proof-builder in `FapiSection`) can never retry but still gets the nonce cached. All four DPoP
+service functions route through it; the `sessionStorage` juggling duplicated at five component sites is gone.
+
+**Verified against the live deployment, not just a mock** (`SERVICE-CONFIG-PROBE.md` §25.1). With
+`dpopNonceRequired: true`, three calls through the deployed `POST /api/token`:
+
+| | Attempts | Result |
+|---|---|---|
+| the **old** single-shot client | 1 | 400 `use_dpop_nonce`, **`DPoP-Nonce` present and discarded** → permanent failure |
+| `dpopRequest`, cold cache | **2** | refused, re-signed, `token_type: DPoP` + an access token |
+| `dpopRequest`, warm cache | **1** | accepted first time |
+
+> **The control row is the finding, not the fix row.** It shows the nonce arriving and being thrown away on
+> the real deployment. Everything before it was a reading of the code.
+
+**A test double was hiding it.** `par.service.test.ts`'s `fail()` helper omitted `headers`, which a real
+`Response` always has. Nothing noticed for as long as nothing read a header on the error path — which is
+precisely the defect. **An unfaithful double hides the bug its own code path contains.**
+
+**2. Native SSO Phase 1 answered HTTP 500.** `native-sso-response.handler.ts` required a `deviceSecret`
+Authlete does **not** return on an authorization-code exchange; SDK 1.0.0's model says the AS *"is free to
+generate a new device secret."* It now mints `randomBytes(32).toString("base64url")` and always sends
+`deviceSecretHash = base64url(SHA-256(secret))` — the value the 2026-08-17 probe watched Authlete echo as
+`ds_hash`. **Phase 2's secret is forwarded unchanged**, because replacing it would leave the second app
+holding a secret whose hash was never bound to the session. The 500 is kept only for a missing access token.
+
+The handler had **no unit test** — the integration file drives the two `/api/nativesso/*` routes and never
+reaches this path, which is why F-4 survived. New
+`tests/unit/controllers/native-sso-response.handler.test.ts`, 7 cases.
+
+**Neither decision moved.** DR-20's *revisit trigger is satisfied*, so its decline now rests on nonces being
+OPTIONAL and the transcripts being banked — preference grounds, where before it had a blocking one; enabling
+is an available decision now rather than a blocked one. DR-04 is **unchanged**: one of three blockers gone,
+and the two that remain are the draft's maturity and a service policy, not defects. **Fixing a defect inside
+a declined feature is not a step toward enabling it** — it is making the code honest about what it would do.
+
+Docs moved with the code, in the same commit: the ⛔ *"do not turn this on, it will break the SPA"* boxes in
+`PAR-TUTORIAL.md` and `FAPI-TUTORIAL.md` stopped being true and would otherwise have become the next stale
+instruction, which is the exact failure the morning's work was about.
+
+**1104 server / 75 files · 118 client / 17 · check-docs 167 files · 92 routes.**
+
+### 2026-08-17 — the three configuration-gated `UNVERIFIED` markers, taken to terminal states
+
+Post-audit work, not a remediation-plan item. Three markers in `docs/` survived only because an Authlete
+service flag was off. All three are now **DECLINED** — the flags stay as they are — with the decision written
+down and the markers rewritten to name the decision rather than an unexamined gap. **No configuration change
+ships:** every probe was set → observe → revert, each revert verified by a **read-back** rather than by the
+write's status code, with **0 unexpected field diffs** on all four cycles.
+
+| # | Flag | Live value | Outcome |
+|---|---|---|---|
+| 1 | `dpopNonceRequired` | `false` / duration `0` | **DECLINED** — new record **DR-20** |
+| 2 | `nativeSsoSupported` | `false` | **DECLINED** — **DR-04** re-ruled, upheld on evidence |
+| 3 | `accessTokenSignAlg` | unset | **DECLINED (defer)** — **DR-09** re-ruled, upheld |
+
+> **The finding that outranks all three: two of the three markers told the reader to flip a flag, and neither
+> instruction produces what it promises.** A marker that names a remedy nobody has executed reads as
+> *actionable* and is therefore **less** likely to be re-checked than a plain "unknown". That is a worse
+> failure mode than an honest gap, and it is invisible until somebody runs the instruction.
+
+**#1 — `PAR-TUTORIAL.md` said "turn on Require Nonce to make this section runnable".** It makes the SPA's DPoP
+flows fail **permanently**. `client/src/services/token.service.ts` has `if (!response.ok) throw` on the line
+*before* it reads `DPoP-Nonce`, and `http.ts` repeats the shape at nine call sites — so a `400 use_dpop_nonce`
+discards the value that would have fixed it, and `sessionStorage.dpop_nonce` (written only from a *success*)
+never fills. Not a failed first request: a failed every request, forever. That is DR-20's whole reason, and its
+revisit trigger is a client that retries. **What the probe removed as an objection is worth as much:** an
+authorization code **survives** a `use_dpop_nonce` refusal — the same code, retried with the nonce, yields
+`OK` — so the mechanism is fine and only our client is not. Also settled: PAR returns a `DPoP-Nonce` on its
+**`201 Created`**, so the header `FAPI-TUTORIAL.md` deleted in August as *"not producible here"* was
+**unreachable, not wrong**; and PAR's nonce error is **`A350308`**, not the token endpoint's `A254307`.
+
+**#2 — `NATIVE-SSO-TUTORIAL.md:33` asked a binary question and the answer was a third thing.** It asked whether
+a device-secret exchange reaches `token-exchange-response.handler.ts` (`TOKEN_EXCHANGE`) *"rather than …
+answering `OK`"*. Both phases answer **`NATIVE_SSO`**, so the exchange never touches that handler and its two
+deliberate defects are **irrelevant to Native SSO** — the warning was aimed one file to the left. Its
+instruction (*"settle it by enabling the flag"*) does not work either: the flag is the first of **three**
+blockers. **New defect, deliberately not fixed** — `controllers/native-sso-response.handler.ts:22-28` requires
+a `deviceSecret` that Authlete does **not** return on a Phase 1 exchange (SDK 1.0.0's own model says the AS
+*"is free to generate a new device secret"*), so Phase 1 answers **HTTP 500** the moment the flag goes on.
+Recorded as `NATIVE-SSO-1.0.md` **F-4**, S3/latent; fixing it would ship half of a declined feature. Once the AS
+mints one, everything downstream works — `/nativesso` → `A501001`, ID token with `sid` and a matching `ds_hash`.
+Third blocker: `tokenExchangeByConfidentialClientsOnly` is `true`, so **public** clients cannot do Phase 2
+(`A311304`) — and Native SSO exists for mobile apps, which are public clients.
+
+**#3 — the one instruction that was right, and it still must not be followed.** Setting `accessTokenSignAlg`
+*does* make `STEP-UP-AUTH-TUTORIAL.md` Part 4 literal: `typ: at+jwt` and **all eight** claims present, `acr`
+`"pwd"`, `auth_time` exactly the epoch passed to `/auth/authorization/issue`. **But the token carries no
+`aud`** — RFC 9068 **§2.2** makes it REQUIRED and **§3** requires a default when no `resource` is sent. So
+`RFC9068-…` **F-3 is promoted from predicted to observed**, and the trade is not opaque-versus-self-contained
+but **an honest gap versus a silent MUST violation in every token issued** — silent because nothing here
+validates `aud`. Satisfying §3 is now a **prerequisite** of 9068-W1, not an item beside it. DR-09's coupling
+also **undercounted by an order of magnitude**: 86 lines across 13 files, not two.
+
+**Stale claims found while re-deriving, and fixed** — none of them caused by this work:
+
+- **`audit/05-decision-records.md` contradicted itself in nine places.** Seven index rows read `⬜ open` for
+  records ruled on 2026-08-14, and **two bodies (DR-03, DR-05) read `⬜ open` for decisions already executed
+  against the live service** — while the table between them said *"every decision record is now closed."* **A
+  summary and the thing it summarises had drifted in opposite directions**, so a reader had even odds of being
+  told the reverse of the truth depending on which they consulted.
+- **`README.md`'s feature table**, twice: it said no client registers a `backchannel_logout_uri` (client
+  `1523514379` does, since BCL-W5) and that discovery has no `registration_endpoint` (it does —
+  `/api/client/dcr/register`; the real barrier is that it needs admin Basic auth rather than RFC 7591 §3's
+  initial access token).
+- **The discovery document is at 66 members**, not the 65 recorded on 2026-08-15 — measured identically at
+  `service/configuration`, `/api/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`.
+  **Not attributable**: both probes reverted with 0 diffs, and only a *count* was kept in August, not a member
+  list. `AGENTS.md` now says so: count it, do not quote it, and **if the number matters, keep the list.**
+- Stale line refs `authorization.service.ts:111-115` → `:133-137` in two finding files.
+
+One probe bug worth recording because it is the brief's own named failure mode: the first Native SSO run
+checked `client/create` for HTTP **200**, got **201**, threw, and the cleanup could not see a client it had
+already created. Caught by re-reading the client list rather than trusting the summary line; the orphan was
+deleted and confirmed **404**. Assign the handle *before* the validation that can throw.
+
 ### 2026-08-15 — T2-17: the last batch, and the audit closes
 
 **Why this matters to a future session: there is no next item.** Tiers 0–3 are complete, all 17 Tier 2 items

@@ -45,7 +45,7 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 > | **Client tests** | 109 / 16 |
 > | **`check-docs.mjs`** | clean, 166 files, ~1,400 references |
 > | **`check-route-coverage.mjs`** | 92 routes, **empty baseline** — a new route without a test breaks the build |
-> | **Discovery document** | 65 members |
+> | **Discovery document** | 65 members *(measured **66** on 2026-08-17 — the extra member is unattributable, because only a count was kept)* |
 >
 > #### What T2-17 itself taught, since it is the last entry
 >
@@ -63,6 +63,34 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 > JWT-bearer token to this AS's own issuer identifier** — valid nowhere, accepted by Authlete, HTTP 200, and
 > indistinguishable from a cleanup in review. **Re-derive every value an item hands you.** That instruction
 > earned its place across seventeen items and never once failed to.
+
+> #### Post-audit work, 2026-08-17 — the three configuration-gated `UNVERIFIED` markers
+>
+> **Not a plan item; the plan is still empty.** Three markers in `docs/` survived only because an Authlete
+> flag was off. All three are now **DECLINED** and the flags are unchanged — `dpopNonceRequired` (new record
+> **DR-20**), `nativeSsoSupported` (**DR-04** re-ruled), `accessTokenSignAlg` (**DR-09** re-ruled). Every probe
+> was set → observe → revert, each revert confirmed by a **read-back**, **0 unexpected field diffs**, so **no
+> configuration change ships**. Transcripts: `SERVICE-CONFIG-PROBE.md` **§24**.
+>
+> **The transferable finding: two of the three markers told the reader to flip a flag, and neither instruction
+> produces what it promises.** `PAR-TUTORIAL.md`'s *"turn on Require Nonce to make this section runnable"*
+> makes the SPA's DPoP flows fail **permanently** — `token.service.ts` throws on the line *before* it reads
+> `DPoP-Nonce`, so the nonce that would fix the retry is discarded on every attempt.
+> `NATIVE-SSO-TUTORIAL.md`'s *"settle it by enabling the flag and reading `action`"* stops at the first of
+> **three** blockers. **A marker naming a remedy nobody executed reads as actionable and is therefore *less*
+> likely to be re-checked than a plain "unknown".**
+>
+> Two things a future session should not re-derive. **`NATIVE-SSO-1.0.md` F-4 is new and deliberately unfixed**:
+> `native-sso-response.handler.ts:22-28` requires a `deviceSecret` Authlete does not return on Phase 1, so
+> enabling Native SSO yields **HTTP 500 on the first request**; fixing it alone would ship half of a declined
+> feature. And **`RFC9068-…` F-3 is now observed, not predicted** — a real `at+jwt` specimen carries **no
+> `aud`**, breaching §2.2 as well as §3, which makes satisfying §3 a *prerequisite* of 9068-W1.
+>
+> Also corrected while re-deriving, none of it caused by this work: **nine self-contradicting status labels in
+> `05-decision-records.md`** (seven index rows saying `⬜ open` for ruled records; **two bodies saying `⬜ open`
+> for decisions already executed live**), two stale `README.md` feature rows (`backchannel_logout_uri` **is**
+> registered; `registration_endpoint` **is** advertised), and the discovery document measuring **66** members
+> against the 65 recorded on 2026-08-15 — **not attributable**, because August kept a count and not a list.
 
 *(Rewritten 2026-08-14. Everything the previous version described as "next" is done and merged. Read this
 before §1.)*

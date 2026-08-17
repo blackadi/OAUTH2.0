@@ -909,6 +909,302 @@ support would have been the false half of a true claim.
 > the strength of a loopback would be the *advertised but unusable* defect this audit found four times, and
 > the discovery document is exactly where such a claim would mislead.
 
+## 24. The three configuration-gated `UNVERIFIED` markers, 2026-08-17
+
+Three markers in `docs/` survived only because a service flag was off. Each was taken to a terminal state:
+`dpopNonceRequired` and `nativeSsoSupported` **declined** (DR-20, DR-04 re-ruled), `accessTokenSignAlg`
+**deferred** (DR-09 upheld). All three were probed by set → probe → revert, and **every revert was confirmed
+by a read-back, not by the write's status code**.
+
+> **A methodological note that belongs before the transcripts, because it changed two conclusions.** Two of
+> the markers told the reader *"turn this flag on and you will see X."* **Neither instruction produces X.**
+> A marker that names a remedy nobody has executed is a hypothesis wearing the costume of a finding — and
+> because it reads as actionable, it is *less* likely to be re-checked than a plain "unknown".
+
+### 24.1 DR-20 — `dpopNonceRequired`, and the two things §23.1 could not have seen
+
+§23.1 (2026-08-15) observed the nonce dance at the **token** endpoint with `client_credentials`. Two
+questions it did not reach decide whether the flag can be left on:
+
+**Method.** `dpopNonceRequired: false → true`, `dpopNonceDuration: 0 → 300`; probes; both restored.
+Read → write → read-back → probe → revert → read-back. **0 unexpected field changes** in both directions,
+and the revert re-read confirmed `false` / `0`. Client `1678274156` was **driven, never written**.
+
+| # | Call | Proof carries | Result |
+|---|---|---|---|
+| A1 | `/auth/token`, `authorization_code` | **no `nonce`** | `BAD_REQUEST` `A254307`, `{"error":"use_dpop_nonce"}` **+ `dpopNonce`** |
+| A2 | `/auth/token`, **the same code again** | that nonce | **`OK` `A050001`** — access + refresh + ID token |
+| B1 | `/pushed_auth_req` | **no `nonce`** | `BAD_REQUEST` **`A350308`** + `dpopNonce` |
+| B2 | `/pushed_auth_req` | that nonce | **`CREATED` `A245001`**, and **`dpopNonce` present on the success too** |
+| C1 | `/auth/token`, no DPoP header at all | — | **`OK`** — unaffected |
+
+**A2 is the important row: an authorization code SURVIVES a `use_dpop_nonce` refusal.** The refusal happens
+before the code is redeemed, so the retry the specification asks for is genuinely available. That removes the
+obvious objection to enabling the flag — and makes the actual objection (§24.2) the only one.
+
+**B1/B2 settle `FAPI-TUTORIAL.md`'s PAR block.** That block used to show a `DPoP-Nonce` header on the
+`201 Created`, and the 2026-08-14 correction removed it as *"`UNVERIFIED`, and not producible here"*. Both
+halves were right about **this** deployment and the second was misleading about the protocol: with the flag
+on, Authlete returns a nonce on the PAR **success** response, exactly as the deleted block showed. The block
+was not wrong; it was unreachable. Note also that PAR's nonce error code is **`A350308`**, *not* the token
+endpoint's `A254307` — two codes for one condition, and §23.1 had only seen one of them.
+
+### 24.2 Why DR-20 declines anyway — the SPA discards the nonce it is sent
+
+`dpopNonceRequired` costs nothing to any caller that retries. **This repo contains no such caller.**
+
+```
+client/src/services/token.service.ts:36   if (!response.ok) throw new Error(await response.text());
+client/src/services/token.service.ts:38   const dpopNonce = response.headers.get('dpop-nonce') || undefined;
+```
+
+The throw is on the line **before** the header read, and `http.ts` repeats the shape at nine call sites. So
+on a `400 use_dpop_nonce` the SPA discards the `DPoP-Nonce` that came with it. `sessionStorage.dpop_nonce` is
+written only from a **success** response, so it is never populated — and the failure is therefore **permanent,
+not first-request-only**. Every DPoP path in the SPA (`FapiSection`, `ParSection`, `RarSection`,
+`CallbackPage`) fails on every attempt, forever.
+
+**This is what makes the existing marker's advice wrong.** `PAR-TUTORIAL.md` told the reader: *"To make the
+section runnable yourself: Service Settings → … → Require Nonce, plus a non-zero duration."* Following it does
+not make the section runnable — it makes the SPA's DPoP flows permanently fail, and the reader will read
+`A254307`'s misleading *"different from the expected one"* text while debugging a nonce they never sent.
+
+**Revisit trigger:** the SPA's HTTP layer reads `DPoP-Nonce` from error responses and retries once. That is a
+change to `client/src/services/dpop.service.ts` and the shared HTTP layer — the former is a **Security-critical
+surface** (*DPoP / proof-of-possession*). Once it exists, enabling costs nothing and DR-20 should be reopened.
+
+### 24.3 DR-04 — Native SSO, and the marker whose question had a third answer
+
+`NATIVE-SSO-TUTORIAL.md:33` asked whether a device-secret exchange reaches
+`token-exchange-response.handler.ts` (`action: TOKEN_EXCHANGE`) *"rather than handling Native SSO natively and
+answering `OK`"*, and instructed: *"Settle it by enabling the flag and reading `action`."*
+
+**Method.** `nativeSsoSupported: false → true` and `device_sso` added to `supportedScopes`; a **throwaway
+confidential client** created, used and deleted (the CU-W1 pattern — the four real clients were never
+written); both service fields restored. **0 unexpected field changes**; revert confirmed by read-back;
+client re-read returned **404**.
+
+| Step | Call | Result |
+|---|---|---|
+| 1 | `/auth/authorization`, `scope=openid device_sso` | `INTERACTION`, **`nativeSsoRequested: true`** |
+| 2 | `/auth/authorization/issue` **with `sessionId`** | `LOCATION` + code |
+| 3 | `/auth/token` (`authorization_code`) | **`NATIVE_SSO` `A050002`** — `responseContent` **undefined**, `deviceSecret` **ABSENT**, `sessionId` present |
+| 4 | `/nativesso`, AS-minted `deviceSecret` + `deviceSecretHash` | **`OK` `A501001`** — `device_secret` returned; ID token carries **`sid`** and **`ds_hash`**, and `ds_hash` equals our `base64url(SHA-256(secret))` |
+| 5 | `/auth/token`, token exchange with `actor_token_type=urn:openid:params:token-type:device-secret` | **`NATIVE_SSO` `A311002`** — and here `deviceSecret` **IS** present |
+
+**The answer is `NATIVE_SSO`, which is neither option the marker offered.** Both phases route to
+`case "NATIVE_SSO"` (`token.controller.ts:173`) → `handleNativeSso`. The device-secret exchange therefore
+**never reaches `token-exchange-response.handler.ts` at all**, so that handler's two deliberate defects —
+dropping `actor_token`, omitting `issued_token_type` — are **irrelevant to Native SSO**. The marker's warning
+pointed at the wrong file. *(Same shape as JARM-W2, where the answer was also neither option.)*
+
+**Three things the flag alone does not give you, in the order they bite.**
+
+1. **`sessionId` is mandatory.** Without it, `/auth/authorization/issue` answers `LOCATION` carrying
+   `error=server_error` — **`[A499201]` *"The 'sessionId' parameter must be provided … when the authorization
+   request requests a Native SSO-compliant ID token."*** `authorization.service.ts:135` already supplies one
+   (`crypto.randomUUID()` when `nativeSsoRequested`), so **this server clears the bar and a naive probe does
+   not**. Recorded because the first two probe runs failed here and the *downstream* symptom was
+   `[A050305] No such authorization code` — a code extracted from an error redirect that carried none.
+   **Right-looking failure, wrong cause**, and the same trap as `device/complete`'s two different 404s.
+2. **NEW — `handleNativeSso` cannot complete Phase 1, and returns HTTP 500.** Step 3 shows Authlete returns
+   **no `deviceSecret`** on the first authorization-code exchange; SDK 1.0.0's own model says the AS *"is free
+   to generate a new device secret"*. But `controllers/native-sso-response.handler.ts:22-28` reads
+   `result.deviceSecret` and, finding it absent, answers
+   `500 {"error":"server_error","error_description":"Missing accessToken or deviceSecret for Native SSO"}`.
+   **The server never mints a device secret and never computes `deviceSecretHash`.** So Phase 1 — the only way
+   to bootstrap Native SSO — is a guaranteed 500 the moment the flag goes on. Step 4 proves the rest of the
+   chain works *once the AS mints one*, which is what turns this from a guess into a scoped work item.
+   **Not fixed, deliberately:** DR-04 declines the feature, and fixing it would ship half of a declined
+   feature. Recorded in `NATIVE-SSO-1.0.md`.
+3. **Public clients cannot do Phase 2 here.** Step 5 first answered
+   **`[A311304] This service does not allow public clients to make token exchange requests`** —
+   `tokenExchangeByConfidentialClientsOnly` is `true`. Native SSO exists **for native mobile apps**, which are
+   public clients, so on this service the flag would advertise a capability the target client type cannot use.
+   `Part 6`'s checklist does not mention client type. (A wrong `audience` also earns **`[A311337]`**: it must be
+   the OP's issuer, not the client id.)
+
+**Discovery:** with the flag on, `native_sso_supported: true` appears and the document goes **66 → 67**
+members; it was the *only* member that moved. Reverted.
+
+> **DR-04's second ground is now proven rather than predicted.** The record said *"enabling the flag first
+> would produce a two-app sequence that half-works — worse teaching material than a stated gap."* It does not
+> even half-work: it produces a **500 on the first request**, from code that looks correct and compiles. The
+> decline stands, on stronger evidence than it was made with.
+
+### 24.4 One adjacent reading, not attributable
+
+The discovery document is at **66 members** (`service/configuration`, `/api/.well-known/openid-configuration`
+and `/.well-known/oauth-authorization-server` all agree). `AGENTS.md` and `RESUME.md` record **65** as of
+2026-08-15. Both probes above reverted with **0 field diffs**, so neither caused it, and no member list from
+2026-08-15 was kept to diff against — **so the extra member cannot be attributed here.** Recorded as an
+observation, not a finding. `AGENTS.md`'s own rule applies: *count it, do not quote it.*
+
+### 24.5 DR-09 — `accessTokenSignAlg`: the instruction was right, and the tokens would be non-conformant
+
+**Method.** `accessTokenSignAlg: unset → ES256`; **one** access token minted through
+`/auth/authorization` → `/auth/authorization/issue` (with `acr: "pwd"` and an `authTime`, as
+`services/authorization.service.ts` does) → `/auth/token`, with **no `resource` parameter**; field unset
+again. Client `1678274156` driven, never written. **0 unexpected field changes** in both directions, and a
+**post-revert token re-measured at 43 characters / 0 dots** — opaque again, proven rather than assumed.
+
+| | Before | With `accessTokenSignAlg: ES256` |
+|---|---|---|
+| access token | 43 chars, 0 dots | **500 chars, 2 dots** |
+| `jwtAccessToken` on the token response | absent | **present** |
+| header | — | `{"alg":"ES256","typ":"at+jwt","kid":"1"}` |
+| payload claims | — | `acr, auth_time, client_id, exp, grant_type, iat, iss, jti, scope, sub` |
+
+**`STEP-UP-AUTH-TUTORIAL.md`'s instruction is correct — the only one of today's three that was.**
+*"Set `accessTokenSignAlg` to make Part 4 literal."* Part 4 prints eight claims; **all eight are present**,
+`typ` is `at+jwt` per RFC 9068 §2.1, `acr` is `"pwd"`, and `auth_time` equals the epoch passed to
+`/auth/authorization/issue` exactly. Two claims are present that Part 4 does not show: `jti`, and a
+**`grant_type`** claim RFC 9068 does not define.
+
+> **⚠️ And the flag still must not be set — 9068-F3 is now observed rather than predicted.** With no
+> `resource` parameter the token carries **no `aud`**. RFC 9068 **§2.2 lists `aud` as REQUIRED** and **§3**
+> requires a default resource indicator when `resource` is absent. So enabling this flag makes **every access
+> token this deployment issues** violate a MUST — and it would be invisible, because nothing in this repo
+> validates `aud` and every token would keep working. **The choice is between an honest gap and a silent
+> violation**, which is a stronger argument for DR-09's defer than the one DR-09 was ruled on.
+>
+> The prerequisite is now specific: satisfy §3's default `aud` first. It is not "decide to flip a flag."
+
+**Blast radius, measured rather than recalled.** DR-09 named two couplings; `grep` for opaque-token claims
+returns **86 lines across 13 files** — `modules/04…/lab.md`'s `# → 43 chars, opaque`, five assertions in
+Module 04's README, plus Modules 02, 03, 06, 08 and 10, `AUDIT-PASS-A/B.md` and `PROGRESS.md`.
+
+## 25. The two fixes, verified live — 2026-08-17
+
+§24 declined all three flags and left two code defects recorded but unfixed. Both are now fixed, and both
+were **verified against Authlete rather than only against a mock**.
+
+### 25.1 The DPoP nonce retry — control, fix, and warm cache
+
+**Method.** `dpopNonceRequired: false → true`, `dpopNonceDuration: 0 → 300`; three `client_credentials`
+calls against the **deployed** `POST /api/token` (not Authlete directly, so this exercises this server's
+`setDpopNonce` relay too); both fields restored. Confidential client `1523514379` over Basic. Revert
+confirmed by read-back, **0 unexpected field diffs**.
+
+| | Attempts | Result |
+|---|---|---|
+| **Control — the old client** (single shot, header read after the throw) | 1 | **400** `use_dpop_nonce`, **`DPoP-Nonce` header PRESENT** — and discarded. Nothing cached, so the next attempt fails identically. **Permanent failure** |
+| **`dpopRequest`, cold cache** | **2** | refused, **re-signed with the returned nonce**, then `token_type: DPoP` + an access token |
+| **`dpopRequest`, warm cache** | **1** | accepted first time — the cached nonce was still valid |
+
+**The control row is the finding, not the fix row.** It shows the nonce arriving and being thrown away on
+the real deployment, which is what made DR-20's objection concrete rather than a reading of the code.
+
+### 25.2 Native SSO F-4 — the mint, and what it does not change
+
+The handler now mints a device secret when Authlete returns none and always sends
+`deviceSecretHash = base64url(SHA-256(secret))`. §24.3 step 4 had already confirmed Authlete accepts exactly
+that and echoes it as the ID token's `ds_hash`, so no further probe was needed — **the fix was written from
+an observation, not a guess.**
+
+**Phase 2's secret is forwarded unchanged rather than re-minted**, which is the part worth a test: on the
+token-exchange leg Authlete *does* return a `deviceSecret`, and replacing it would leave the second app
+holding a secret whose hash was never bound to the session. §24.3 step 5 is where that was observed.
+
+> **Neither fix enables anything.** `dpopNonceRequired` and `nativeSsoSupported` are both still `false`.
+> These make the code correct *if* either is switched on — which is what DR-20's revisit trigger asked for,
+> and what DR-04 needs before its remaining two blockers are the only ones left.
+
+## 26. The remaining `UNVERIFIED` markers, sorted — 2026-08-17
+
+§24 closed the three markers a *service flag* gated. This sorts what is left by a different question:
+**could a probe settle this?** Nobody had asked it. The sort is the deliverable; the probes below are what
+it turned up.
+
+| Marker | Class | Outcome |
+|---|---|---|
+| `DEVICE-FLOW-TUTORIAL.md:218` — user-code matching leniency | **probe-answerable** | ✅ **settled, §26.1** — the marker's advice was right |
+| `FAPI-TUTORIAL.md:247` + `:786` — "Supported Service Profiles" vs `fapiModes` | **schema-answerable** | ✅ **settled, §26.2** — two real settings, and a reporting gap |
+| `MCP-OAUTH-TUTORIAL.md:33` — does RFC 8707 register `resource_indicators_supported`? | **spec-answerable** | ✅ **settled, §26.3** — it registers no metadata member at all |
+| `MCP-OAUTH-TUTORIAL.md:186` — six members of a conformant document | **fetch-answerable** | ✅ **settled, §26.3** — two of its own claims were stale |
+| `DEVICE-FLOW-TUTORIAL.md:670` — `EXPIRED` forever, or garbage-collected to `NOT_EXIST`? | **partly answerable** | half is one call after `deviceFlowCodeDuration` (600 s); the garbage-collection half needs elapsed time nobody can shortcut. Stays `UNVERIFIED`, now with the split named |
+| `RAR-TUTORIAL.md:419` — the four unregistered `authorization_details` types | **answerable at a cost** | needs a service **write** to register a type. The refusal (`[A249302]`) is already captured; only the *success* shape is unseen. Not worth a write |
+| `TOKEN-EXCHANGE-TUTORIAL.md:611`, `CIBA-TUTORIAL.md:464`, `:515` — exact `error_description` strings | **deliberately not probed** | see below |
+| `FAPI-TUTORIAL.md:13`, `NATIVE-SSO-TUTORIAL.md` ×3, `modules/09b…/lab.md:802` | **decision-gated** | DR-02, DR-04, and "needs a wallet this repo does not contain" — each already names its decision |
+
+> **Why three markers are deliberately left unprobed, which is a ruling and not laziness.** Capturing
+> Authlete's exact `error_description` text is easy and would make the documentation **worse**. The strings
+> carry a bracketed vendor code and change between versions, so a captured string is a maintenance liability
+> that silently rots, and printing it invites a reader to parse it. The markers already give the correct
+> instruction — *read the `error` code, which is spec-defined and stable; do not parse the prose* — so
+> probing would replace good advice with a stale transcript. **A marker can be the right answer rather than
+> an absence of one.**
+
+### 26.1 Device-flow user codes are matched **byte for byte** (`DEVICE-FLOW-TUTORIAL.md:218`)
+
+Read-only; no write. Service issues `BASE20`, `userCodeLength: 0` → **8 characters, no dashes**.
+
+| Submitted | `action` | `resultCode` |
+|---|---|---|
+| exact, as issued (`VLPTDQJX`) | **`VALID`** | `A224001` |
+| lowercased | `NOT_EXIST` | `A225301` |
+| **a dash inserted mid-code** (`VLPT-DQJX`) | `NOT_EXIST` | `A225301` |
+| trailing newline | `NOT_EXIST` | `A225301` |
+| one character changed | `NOT_EXIST` | `A225301` |
+
+**No case folding, no punctuation stripping, no trimming.** The marker's advice — *"Do not rely on lenient
+matching. Uppercase and strip dashes in your own UI before submitting"* — is **confirmed**, and the dash row
+is the practical one: RFC 8628 §6.1's own example is `WDJB-MJHT`, so a UI that formats a code for readability
+must strip its own formatting back off before submitting. Verification is also **non-consuming** — the exact
+code still answered `VALID` after five failed lookups.
+
+> **The first run of this probe was not a measurement, and catching that is the transferable part.** It
+> included "dashes stripped" and "space instead of dash" as variants. This service issues **dash-free**
+> codes, so `replace(/-/g, "")` returned the identical string — three of seven variants were **the same
+> input**, and all three came back `VALID`, which reads exactly like evidence of lenient matching. Inserting
+> a dash rather than removing one is the test that distinguishes. Same lesson Module 09b records: *a probe
+> that cannot distinguish its inputs has stopped being a measurement.*
+
+### 26.2 `supportedServiceProfiles` is real, and `/api/fapi/config` cannot see it (`FAPI-TUTORIAL.md:247`, `:786`)
+
+The marker said Authlete's guide names *"Supported Service Profiles"* while this server reads `fapiModes`,
+and that these are *"plausibly two separate settings that both need to be on."* **Confirmed — they are two
+separate settings**, both real properties of `Service` in Authlete 3.0.16:
+
+| Property | Type | Live value |
+|---|---|---|
+| `supportedServiceProfiles` | array, enum `FAPI` \| `OPEN_BANKING` | **unset** |
+| `fapiModes` | array, six-member enum incl. `FAPI2_SECURITY` | **unset** |
+
+So the tutorial's Part 3 step (*"enable the FAPI Profile option, select FAPI2_SECURITY"*) sets `fapiModes`,
+and the Authlete guide's prerequisite sets `supportedServiceProfiles`. Both are unset here, consistent with
+DR-02.
+
+> **New, and worth more than the marker:** `computeFapiMode` in `fapi.controller.ts` reads **`fapiModes`
+> only**. So a service with `supportedServiceProfiles: ["FAPI"]` and no `fapiModes` would be reported as
+> `mode: "disabled"` — the *"a status page that cannot fail is not reporting anything"* problem one field
+> across. **FAPI1-W2 made `computeFapiMode` total over `fapiModes`' six members and never considered the
+> sibling property.** Not fixed here: DR-02 declines FAPI, and this is a reporting gap on a declined
+> profile, so it is recorded rather than coded around.
+
+### 26.3 `resource_indicators_supported` is not a thing (`MCP-OAUTH-TUTORIAL.md:33`, `:186`)
+
+The marker established that Authlete has no field for it and asked, as `UNVERIFIED`, *"whether RFC 8707
+registers such a metadata member at all."* **It does not.** RFC 8707 (*Resource Indicators for OAuth 2.0*,
+**Standards Track, February 2020**), §5, registers exactly two things: the **`resource` request parameter**
+and the **`invalid_target` error code**. It defines **no** authorization-server metadata parameter.
+
+**That is a stronger answer than the marker expected.** Its absence from the discovery document is not a gap
+Authlete declines to fill — **nothing should emit it**, because no specification defines it. The original
+"Required Authlete Configuration" row was wrong twice over: no console field *and* no such member.
+
+**And `:186`'s own claims were stale in two of three places** (checked live):
+
+| `:186` said | Live |
+|---|---|
+| a **64**-member document | **66** |
+| `registration_endpoint` **absent** | **present** — `/api/client/dcr/register` |
+| `resource_indicators_supported` absent | ✅ absent, and correctly so — see above |
+| `code_challenge_methods_supported` is `["plain","S256"]` | ✅ correct |
+
+The `registration_endpoint` error is the **same stale claim** found in `README.md`'s MCP row the same day —
+one wrong fact in two documents, which is what a shared origin looks like.
+
 ## Sources
 
 - Live probe 1: `GET /api/{serviceId}/service/get` — HTTP 200, 129 fields, 2026-08-10, authorised, read-only
@@ -917,6 +1213,7 @@ support would have been the false half of a true claim.
 - Live probe 6, 2026-08-12, authorised, **read-write** (T1-2, T1-3): `service/get`, `service/update`, `service/configuration`, `client/get/list`, `client/create`, `client/get`, `client/update`, plus live OAuth flows against the local server. Pre-write snapshots of `service/get`, `service/configuration` and `client/get/list` were taken first. **No key material or secret is recorded in this file**; the RSA key is identified by `kid` only
 - Live probe 9, 2026-08-12, authorised, **read-write** (B1-W6): `service/get` ×2, `service/update` ×1, one direct `POST /auth/token` with a refresh token to read the raw `ID_TOKEN_REISSUABLE` response, plus three authorization-code flows and their refreshes against the local server. Pre-write snapshot taken first. Tokens appear truncated or by length only; no `client_secret` or key material is recorded
 - Live probe 8, 2026-08-12, authorised, **read-write** (T1-5, T1-13): `service/get` ×5, `service/configuration` ×4, `service/update` ×3 (one of them a revert), plus `GET /api/fapi/config` and `GET /api/fapi/status` against the running server. The read-only proof ran **before** any write. Pre-write snapshots of `service/get` and `service/configuration` taken first; all schema parsing done locally against `Service$inboundSchema`. **No key material or secret is recorded here** — keys appear by `kid` only
+- Live probe 11, 2026-08-17, authorised, **read-write** (§24 — DR-20, DR-04, DR-09): `service/get` ×many, `service/update` ×8 (four of them reverts), `service/configuration` ×3, `client/create` + `client/delete` ×4 (throwaway clients, all re-read as **404** after deletion), plus `auth/authorization`, `auth/authorization/issue`, `auth/token`, `pushed_auth_req` and `nativesso`. Pre-write snapshot taken before each write; **every revert verified by a read-back rather than by the write's status**. The four registered clients were driven but **never written**. No key material, `client_secret` or device secret is recorded here — tokens appear truncated or by length only
 - `RFC 7517` §4.4 — `https://www.rfc-editor.org/rfc/rfc7517.html` — *"Use of this member is OPTIONAL"* (JSON Web Key, Standards Track, May 2015), fetched 2026-08-12
 - SDK 1.0.0: `models/clientauthmethod.ts`, `models/service.ts:634-642`, `models/granttype.ts`
 - Authlete flags page — `https://developers.authlete.com/configuration-reference/error-handling-debugging/flags-supported-in-authlete.md`

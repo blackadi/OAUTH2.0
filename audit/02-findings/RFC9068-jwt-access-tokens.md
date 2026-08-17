@@ -132,6 +132,62 @@ JWT access tokens. It becomes a live conformance gap the moment `accessTokenSign
 what work item 9068-W1 would do. Recorded now so that turning JWT ATs on does not quietly introduce a MUST
 violation.
 
+> ### ✅ Confirmed by direct observation, 2026-08-17 — this is no longer a prediction
+>
+> `accessTokenSignAlg` was set to `ES256`, one access token minted **with no `resource` parameter**, decoded,
+> and the field unset again (`SERVICE-CONFIG-PROBE.md` §24.5; 0 unexpected field diffs, post-revert token
+> re-measured as opaque). The result:
+>
+> ```
+> header   {"alg":"ES256","typ":"at+jwt","kid":"1"}
+> payload  acr, auth_time, client_id, exp, grant_type, iat, iss, jti, scope, sub
+>                                                    ^^^ no `aud`
+> ```
+>
+> **Two MUSTs, not one.** §3's default-resource-indicator MUST is the one this finding was written about, but
+> the absence also breaches **§2.2**, which lists `aud` among the REQUIRED claims outright. So the token is
+> non-conformant on its face, independently of how the audience would have been derived.
+>
+> **The severity stays S4 and the verdict stays *latent*** — nothing here issues a JWT access token, so no
+> non-conformant token has ever been emitted. What changed is the confidence: the sentence *"becomes a live
+> conformance gap the moment `accessTokenSignAlg` is set"* was an inference from `resource`-less opaque tokens,
+> and is now a measurement of the JWT itself.
+>
+> **This is why DR-09 upheld its defer on 2026-08-17.** The trade is not "opaque versus self-contained" — it is
+> **an honest, documented gap versus a silent MUST violation in every token issued**, silent because nothing in
+> this repo validates `aud` and every token would keep working. Fixing §3 first is now a **prerequisite** of
+> 9068-W1 rather than an item beside it.
+>
+> Two smaller observations from the same specimen: Authlete's `typ` **is** `at+jwt` (§2.1) and `jti` **is**
+> present, so five of §2.2's seven REQUIRED claims arrive without any work; and the payload carries a
+> **`grant_type`** claim that RFC 9068 does not define — harmless, but it is vendor output, not profile output.
+>
+> ### ⛔ And it cannot be fixed by configuration — checked 2026-08-17, the fourth instance of this trap
+>
+> The obvious remedy is *"configure a default resource indicator."* **There is no field to configure.**
+> Searched Authlete 3.0.16's vendored `docs/openapi-spec.json` for any `Service` or `Client` property
+> matching `/resource|audience/i`:
+>
+> | Schema | Matching properties | Any of them a default audience? |
+> |---|---|---|
+> | `Service` (193 properties) | `requestObjectAudienceChecked`, `resourceSignatureKeyId` | **no** — the first checks a *request object's* `aud` against the issuer; the second is the introspection **signing key** |
+> | `Client` (108 properties) | **none** | — |
+>
+> So §3's *"the authorization server MUST use a default resource indicator in the `aud` claim"* has **no
+> configuration surface on this vendor**, and the `aud` in a JWT access token here can only come from a
+> `resource` parameter the **client** chooses to send. An authorization server cannot compel that.
+>
+> **This changes the finding's disposition, not its severity.** It was written as *"fix this before enabling
+> JWT access tokens."* The accurate statement is: **enabling JWT access tokens on this deployment emits a
+> token missing a §2.2 REQUIRED claim whenever the client omits `resource`, and nothing in the Authlete
+> configuration layer can prevent it.** DR-09's defer is therefore not merely prudent — the alternative has
+> no clean form.
+>
+> **It is the fourth criterion in this audit to name a console setting that does not exist**, after RPL-W4
+> (`postLogoutRedirectUris`), T1-13 (`none` in the signing-algorithm lists) and VCI-W2 (`credential_issuer`
+> in AS discovery). The rule earned four times over: **check the field exists before writing "set X" as a
+> remedy** — and check both `Service` *and* `Client`, because three of the four were only half-searched.
+
 ## Documentation delta
 
 | Doc claim | Location | Reality | Verdict |
@@ -161,7 +217,7 @@ violation.
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 9068-W1 | Decide whether to turn JWT access tokens on | M | A Gate 4 decision. If yes: set `accessTokenSignAlg`, satisfy §3's default-`aud` MUST (F-3), and Module 04 gains a real `at+jwt` transcript. If no: Module 04's objectives are re-scoped to "explain and validate" rather than "produce", and `SPEC-INVENTORY.md:105` records the switch as off. **Interacts with Module 04's opaque-token exercises and with `docs/STEP-UP-AUTH-TUTORIAL.md` Part 4 — check both before flipping.** |
+| 9068-W1 | Decide whether to turn JWT access tokens on | M | ✅ **RULED — defer (DR-09, 2026-08-14; re-ruled 2026-08-17 on a live specimen).** Module 04's objectives are re-scoped to "explain and validate" rather than "produce". **Two corrections from the re-ruling.** (a) *"Satisfy §3's default-`aud` MUST"* is no longer a co-requisite but a **prerequisite**: F-3 is now observed, and enabling without it emits a token missing a §2.2 REQUIRED claim. (b) *"Interacts with Module 04's opaque-token exercises and `STEP-UP-AUTH-TUTORIAL.md` Part 4"* **undercounts by an order of magnitude** — `grep` returns **86 lines across 13 files**, adding Modules 02, 03, 06, 08, 10, `AUDIT-PASS-A/B.md` and `PROGRESS.md`. A blast radius carried in prose as two examples is a blast radius nobody has measured. |
 | 9068-W2 | Make the local dev JWT §2-shaped | S | ✅ **DONE 2026-08-14**, under plan mode. `typ: at+jwt`, plus `client_id`, `jti` and `scope`; the file comment cites §2.1/§2.2/§2.2.3 and names §3/§5 as still unmet (F-3). Dev-only gate and admin auth untouched, in that order. **`clientId` is a required positional parameter, not an option** — §2.2 makes the claim REQUIRED, and an optional field would let the specimen stay non-conformant by omission, which was the defect. `jti` is a fresh UUID per call and a test asserts two calls differ, because §4's replay guidance only works if tokens are distinguishable. `scope` is omitted rather than emitted empty: `scope: ""` tells a resource server the token grants nothing, which is not the same as saying nothing. **Two advertised no-ops found while doing it, and they are a fourth site for the *advertised-but-unusable* theme:** `openapi.routes.ts` documented `acr` and `authTime` as query parameters of this endpoint, and `localSignedToken` took three arguments — so it dropped both before `createLocalJWT`, which has accepted them since the RFC 9470 work, could see them. Both wired, and **an unparseable `authTime` now yields no claim rather than a number**: `Number("")` is `0`, which is finite, so the naive form would stamp `auth_time` as the Unix epoch — a fabricated authentication time, the exact thing 9470-W3 removed from the `prompt=none` path, and one a resource server would enforce `max_age` against. **This item's ordering note was wrong, and the correction is the transferable part:** it exempted W2 from plan mode by judging the *file* (`createLocalJWT.ts`, not on the surfaces list), but the fix threads `client_id`/`scope` through `token.operations.service.ts` **and** `token.management.controller.ts`, both listed under **Token issuance**. *The trigger is the concern, and the concern travels with the parameter.* New file `tests/unit/controllers/token.management.controller.test.ts` (16 cases) asserts the forwarding with the service mocked — the 200 path is deliberately **not** asserted at the route, because signing needs `JWT_PRIVATE_KEY_PEM` and a success case there would pass or fail depending on whose `.env` ran it. |
 | 9068-W3 | Separate the two halves of the Module 04 lesson | S | Audience restriction (runnable here, via introspection) is distinguished from self-contained tokens (not runnable), so learners know which claim they can verify. |
 | 9068-W4 | Label the step-up tutorial's JWT payload as illustrative | S | Part 4 states that this deployment conveys `acr`/`auth_time` through introspection (RFC 9470 §6.2), not in a JWT AT, and points at the §6.1 path as the alternative. |

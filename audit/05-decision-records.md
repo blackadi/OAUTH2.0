@@ -9,9 +9,12 @@ position to take, and where taking a different position would have been defensib
 obvious fix is a work item, not a decision. That distinction is why RFC 9901 gets no record (DR-19) and why
 `accessTokenDuration` does not either: shortening it is simply correct.
 
-**Nineteen records.** ~~Eleven are open rulings Gate 4 must make~~ — **ten**, since **DR-07 was ruled and
+**Twenty records.** ~~Eleven are open rulings Gate 4 must make~~ — **ten**, since **DR-07 was ruled and
 executed on 2026-08-12**; seven confirm standing declines with their rationale corrected; one is the
 meta-decision to write no record. DR-01's metadata half shipped with DR-07 without needing a re-ruling.
+**DR-20 was added 2026-08-17**, after the audit closed: `dpopNonceRequired` was the one configuration-gated
+`UNVERIFIED` marker with no record behind it, and a flag that has been switched on and reverted twice without
+anyone ruling on it is a decision postponed, not a decision made.
 
 Each record carries a **revisit trigger** — the condition under which the decision should be reopened. A
 decline with no trigger is a dead end rather than a decision.
@@ -19,17 +22,17 @@ decline with no trigger is a dead end rather than a decision.
 | # | Subject | Status | Gates |
 |---|---|---|---|
 | [DR-01](#dr-01--mutual-tls-rfc-8705) | Mutual TLS | **UPHELD** — decline, rationale corrected | FAPI 1.0 Part 2, FAPI 2.0's mTLS branch |
-| [DR-02](#dr-02--fapi-20-security-profile) | FAPI 2.0 Security Profile | ⬜ **open — recommend qualify, do not enable** | The most curriculum material of any record |
+| [DR-02](#dr-02--fapi-20-security-profile) | FAPI 2.0 Security Profile | ✅ **RULED 2026-08-14 — qualify the claim; do NOT enable the profile** | The most curriculum material of any record |
 | [DR-03](#dr-03--oid4vci-verifiable-credential-issuance) | OID4VCI | ✅ **DECIDED + EXECUTED 2026-08-14 — enabled.** `/vci/metadata` answers `OK`; F-1 closed | Module 09b, `README.md` |
-| [DR-04](#dr-04--native-sso) | Native SSO | ⬜ open — recommend do not enable | `NATIVE-SSO-TUTORIAL.md`, Module 09a |
+| [DR-04](#dr-04--native-sso) | Native SSO | ✅ **RULED 2026-08-14, RE-RULED 2026-08-17 — do NOT enable.** Upheld on live evidence; a new Phase-1 defect found | `NATIVE-SSO-TUTORIAL.md`, Module 09a |
 | [DR-05](#dr-05--cimd-and-the-mcp-claim) | CIMD / MCP | ✅ **DECIDED + EXECUTED 2026-08-14 — CIMD enabled; MCP still qualified** | `MCP-OAUTH-TUTORIAL.md` |
-| [DR-06](#dr-06--fapi-10-baseline-and-advanced) | FAPI 1.0 | ⬜ open — recommend document-only | Module 10 |
+| [DR-06](#dr-06--fapi-10-baseline-and-advanced) | FAPI 1.0 | ✅ **RULED 2026-08-14 — document-only** | Module 10 |
 | [DR-07](#dr-07--spiffe_jwt-and-the-nine-advertised-client-auth-methods) | `SPIFFE_JWT` | ✅ **DECIDED + EXECUTED 2026-08-12 — dropped; Ex 4 rebuilt, not retired** | **Module 10 Exercise 4** |
-| [DR-08](#dr-08--session-management-and-front-channel-logout) | Session Management + Front-Channel Logout | ⬜ open — recommend decline | Module 08 |
-| [DR-09](#dr-09--jwt-access-tokens-rfc-9068) | JWT access tokens | ⬜ open — recommend defer | Module 04, `STEP-UP-AUTH-TUTORIAL.md` Part 4 |
-| [DR-10](#dr-10--the-three-deliberate-token-exchange-defects) | Token-exchange defects | ⬜ open — **recommend keep** | Module 06 Ex 6a/6b/6c |
+| [DR-08](#dr-08--session-management-and-front-channel-logout) | Session Management + Front-Channel Logout | ✅ **RULED 2026-08-14 — decline both, as one decision** | Module 08 |
+| [DR-09](#dr-09--jwt-access-tokens-rfc-9068) | JWT access tokens | ✅ **RULED 2026-08-14, RE-RULED 2026-08-17 — defer.** Access tokens stay opaque | Module 04, `STEP-UP-AUTH-TUTORIAL.md` Part 4 |
+| [DR-10](#dr-10--the-three-deliberate-token-exchange-defects) | Token-exchange defects | ✅ **RULED 2026-08-14 — keep all three; 8693-W5 not approved** | Module 06 Ex 6a/6b/6c |
 | [DR-11](#dr-11--the-issuerhost-mismatch) | The issuer/host mismatch | ✅ **DECIDED + EXECUTED 2026-08-14 — aligned to the Render host; §3.3 passes; 8628-W5 closed** | Module 04, MCP, RFC 9207 |
-| [DR-12](#dr-12--agentsmds-security-critical-surfaces-list) | `AGENTS.md` surfaces list | ⬜ **open — decided below, per the brief** | Every future plan-mode trigger |
+| [DR-12](#dr-12--agentsmds-security-critical-surfaces-list) | `AGENTS.md` surfaces list | ✅ **RULED AND EXECUTED 2026-08-14 — five surfaces added, one exclusion made explicit** | Every future plan-mode trigger |
 | [DR-13](#dr-13--oid4vp) | OID4VP | **UPHELD** — structurally inapplicable | — |
 | [DR-14](#dr-14--haip-10) | HAIP 1.0 | **UPHELD** — cost-declined | — |
 | [DR-15](#dr-15--mdl--mdoc-isoiec-18013-5) | mDL / mdoc | **UPHELD** — declined, paywalled | The curriculum's verification promise |
@@ -37,18 +40,28 @@ decline with no trigger is a dead end rather than a decision.
 | [DR-17](#dr-17--hardware-security-keys) | HSK | **UPHELD** — document-only | — |
 | [DR-18](#dr-18--parameterized-scopes-and-scopeclient-attributes) | Vendor scope features | **UPHELD** — document-only | Module 04, Module 09a |
 | [DR-19](#dr-19--rfc-9901-sd-jwt--no-decision-record) | RFC 9901 | **DELIBERATELY NO RECORD** | — |
+| [DR-20](#dr-20--dpop-nonces-dpopnoncerequired) | DPoP nonces | ✅ **RULED 2026-08-17 — do NOT enable.** The SPA discards the nonce on the error path | `PAR-TUTORIAL.md`, `FAPI-TUTORIAL.md` |
 
 ---
 
-## Status at a glance — all 19 records ruled as of 2026-08-14
+## Status at a glance — all 20 records ruled as of 2026-08-17
 
 **Every decision record is now closed.** Nothing in this file is awaiting a ruling.
+
+> **Nine status labels in this file were stale until 2026-08-17, and the direction of the error is the
+> lesson.** Seven index rows still read `⬜ open` for records whose bodies had been ruled on 2026-08-14 — and
+> **two bodies (DR-03, DR-05) read `⬜ open` for decisions already executed against the live Authlete
+> service.** The table directly below had said *"every decision record is now closed"* the entire time. **A
+> summary and the thing it summarises drifted apart in opposite directions**, so whichever one a reader
+> happened to consult, there was a fifty-fifty chance of being told the opposite of the truth. Corrected while
+> re-ruling DR-04 and DR-09 — neither of which could be re-ruled without first noticing they were not, in
+> fact, open.
 
 | Ruling | Records |
 |---|---|
 | **Executed — configuration changed** | DR-03 (VCI enabled, + a credential-issuer JWK Set via VCI-W6), DR-05 (CIMD enabled), DR-07 (`SPIFFE_JWT` withdrawn, nine methods → five), DR-11 (issuer aligned) |
 | **Executed — documentation/code only** | DR-12 (five surfaces added, one exclusion made explicit), DR-17, DR-18 |
-| **Ruled: do not enable / decline** | DR-01 (mTLS), DR-02 (FAPI 2.0 — qualify, do not enable), DR-04 (Native SSO), DR-06 (FAPI 1.0, document-only), DR-08 (Session Management + Front-Channel Logout, as one), DR-13, DR-14, DR-15, DR-16 |
+| **Ruled: do not enable / decline** | DR-01 (mTLS), DR-02 (FAPI 2.0 — qualify, do not enable), DR-04 (Native SSO), DR-06 (FAPI 1.0, document-only), DR-08 (Session Management + Front-Channel Logout, as one), DR-13, DR-14, DR-15, DR-16, **DR-20 (DPoP nonces)** |
 | **Ruled: defer** | DR-09 (JWT access tokens) |
 | **Ruled: keep as-is** | DR-10 (the three deliberate token-exchange defects — 8693-W5 **not** approved) |
 | **Deliberately no record** | DR-19 (RFC 9901) |
@@ -148,7 +161,7 @@ FAPI-conformant. That is MCP-W5's option 2 and would serve DR-05 too.
 
 ## DR-03 — OID4VCI (Verifiable Credential Issuance)
 
-**Status: ⬜ open. Recommendation: enable — after DR-11.**
+**Status: ✅ DECIDED AND EXECUTED 2026-08-14 — enabled.** *(This line read `⬜ open` until 2026-08-17, three days after the write it describes landed on the live service. The index row above had been right the whole time; the body a reader scrolls to had not.)* The recommendation below is kept as written, because it is the reasoning the ruling was made on.
 
 **The choice.** `verifiableCredentialsEnabled = true` + `credentialIssuerMetadata` configured, or stop
 presenting VCI as shipped.
@@ -175,7 +188,42 @@ carries the same banner — theme 2's remedy (T2-8).
 
 ## DR-04 — Native SSO
 
-**Status: ✅ RULED 2026-08-14 — do NOT enable.** Both grounds stand unchanged, and the second is the binding one: `sid` derivation is a change to `services/authorization.service.ts`, which is on the Security-critical surfaces list, and **enabling the flag first would produce a two-app sequence that half-works** — worse teaching material than a stated gap. The paired doc change is done: `README.md` reads *"Not enabled — `nativeSsoSupported` is `false`"*, and `NATIVE-SSO-TUTORIAL.md` was rewritten under T2-1 with a whole-file `UNVERIFIED` banner naming the three settings responsible. As this record predicted, **declining and rewriting were the same commit**.
+**Status: ✅ RULED 2026-08-14 — do NOT enable. ✅ RE-RULED 2026-08-17 — upheld, on evidence rather than prediction.**
+
+> **What the 2026-08-17 re-derivation changed.** The 2026-08-14 ruling *predicted* that enabling the flag
+> *"would produce a two-app sequence that half-works."* A set → probe → revert (`SERVICE-CONFIG-PROBE.md` §24.3,
+> throwaway confidential client, 0 unexpected field changes, revert read-back confirmed) shows it does **not
+> half-work — it produces an HTTP 500 on the very first request**, and found three things the record did not
+> know:
+>
+> 1. **`controllers/native-sso-response.handler.ts:22-28` cannot complete Phase 1.** Authlete's
+>    `action: NATIVE_SSO` response to an authorization-code exchange carries **no `deviceSecret`** — SDK 1.0.0's
+>    own model says the AS *"is free to generate a new device secret"* — but the handler requires it and
+>    otherwise answers `500 server_error`. This server never mints one and never computes `deviceSecretHash`.
+>    **A new defect, deliberately NOT fixed:** fixing it ships half of a declined feature. Recorded in
+>    `NATIVE-SSO-1.0.md`. Once the AS mints a secret the rest of the chain works — `/nativesso` → `A501001`,
+>    ID token with `sid` and a matching `ds_hash` — which is what makes this a scoped work item rather than a
+>    guess.
+> 2. **`tokenExchangeByConfidentialClientsOnly` is `true`**, so Phase 2 is refused for **public** clients
+>    (`[A311304]`) — and Native SSO exists *for native mobile apps*, which are public clients. Enabling the flag
+>    would advertise a capability the specification's own target client type cannot use here.
+> 3. **`sessionId` is mandatory** at `/auth/authorization/issue` (`[A499201]`), and `authorization.service.ts:135`
+>    already supplies it. The server clears a bar a naive probe does not — worth knowing before anyone reads a
+>    failed probe as a server defect.
+>
+> **The `sid` question this record declined to answer is therefore not the first blocker, only the deepest
+> one.** Two shallower ones sit in front of it, and both are ours.
+>
+> **Update, same day: blocker 1 is fixed; the decline is unchanged.** `native-sso-response.handler.ts` now
+> mints a device secret when Authlete returns none and computes `deviceSecretHash` as
+> `base64url(SHA-256(secret))` — the value §24.3 step 4 observed Authlete echoing as `ds_hash`. Phase 1 no
+> longer answers HTTP 500. **That removes one of three blockers and none of the two original grounds.**
+> Native SSO 1.0 is still an Internet-Draft, the `sid` derivation is still a security-critical change to
+> `services/authorization.service.ts`, and `tokenExchangeByConfidentialClientsOnly` still refuses Phase 2 to
+> the public clients the specification exists to serve. **Fixing a defect in a declined feature is not a
+> step toward enabling it** — it is making the code honest about what it would do.
+
+Both grounds stand unchanged, and the second is the binding one: `sid` derivation is a change to `services/authorization.service.ts`, which is on the Security-critical surfaces list, and **enabling the flag first would produce a two-app sequence that half-works** — worse teaching material than a stated gap. The paired doc change is done: `README.md` reads *"Not enabled — `nativeSsoSupported` is `false`"*, and `NATIVE-SSO-TUTORIAL.md` was rewritten under T2-1 with a whole-file `UNVERIFIED` banner naming the three settings responsible. As this record predicted, **declining and rewriting were the same commit**.
 
 **The choice.** `nativeSsoSupported = true`, or stop claiming the feature works.
 
@@ -204,7 +252,7 @@ durable-session-identity work — the two share a prerequisite.
 
 ## DR-05 — CIMD and the MCP claim
 
-**Status: ⬜ open. Recommendation: enable CIMD; qualify the MCP claim. Two decisions, not one.**
+**Status: ✅ DECIDED AND EXECUTED 2026-08-14 — CIMD enabled; the MCP claim still qualified.** *(Same staleness as DR-03, corrected 2026-08-17.)* The recommendation below is kept as written, because it is the reasoning the ruling was made on. **Two decisions, not one.**
 
 **Why they separate.** CIMD is a capability with a flag. "MCP support" is a *conformance claim* about OAuth 2.1,
 and OAuth 2.1 forbids the implicit and password grants this curriculum exists to demonstrate. Enabling CIMD does
@@ -373,7 +421,35 @@ this record is reopened for all four at once. That is the point of recording the
 
 ## DR-09 — JWT access tokens (RFC 9068)
 
-**Status: ✅ RULED 2026-08-14 — defer.** Access tokens stay opaque. Taken as written: turning `accessTokenSignAlg` on changes the format of **every** access token this deployment issues, needs a plan, has two live curriculum couplings, and activates 9068-F3's latent §3 `aud` MUST. **All three "do these now" items are done**: 9068-W2 shipped in T1-19 batch 3 (the dev fixture is `typ: at+jwt` with all seven §2.2 claims); 9068-W4 shipped in T2-1 (Part 4's payload is marked `UNVERIFIED`, naming `accessTokenSignAlg`, and points at introspection as §6.2's route); and **9068-W3 shipped with this ruling** — Module 04 now separates **audience restriction (runnable here, via introspection)** from **self-contained tokens (not runnable)**, with the point that the two are *orthogonal*: you can audience-restrict an opaque token, and you can issue a JWT with no `aud` at all.
+**Status: ✅ RULED 2026-08-14 — defer. ✅ RE-RULED 2026-08-17 — defer upheld, with F-3 promoted from predicted to observed.**
+
+> **What the 2026-08-17 re-derivation established.** `accessTokenSignAlg` was set to `ES256`, **one** access
+> token minted and decoded, and the field unset again — `SERVICE-CONFIG-PROBE.md` §24.5, 0 unexpected field
+> diffs both ways, and a post-revert token confirmed opaque again (43 chars, 0 dots).
+>
+> **1. This record's own instruction is correct — and it is the only one of the three flags checked today whose
+> instruction was.** `STEP-UP-AUTH-TUTORIAL.md` said *"Set `accessTokenSignAlg` to make Part 4 literal."*
+> Setting it does exactly that: `typ: at+jwt`, and **all eight** claims Part 4 prints are present, with
+> `acr: "pwd"` and an `auth_time` equal to the value passed to `/auth/authorization/issue`. Authlete adds two
+> the tutorial does not show — `jti` and a **non-RFC-9068 `grant_type`**.
+>
+> **2. 9068-F3 is confirmed, and it is the reason to keep deferring rather than a footnote to it.** With no
+> `resource` parameter the token carries **no `aud` at all** — so enabling this flag makes every access token
+> this deployment issues violate **RFC 9068 §2.2**, which lists `aud` as REQUIRED, and **§3**, which requires a
+> default resource indicator. F-3 recorded that as *latent*; it is now measured. **Enabling would trade one
+> honest gap ("we do not issue JWTs") for a silent conformance violation in every token issued**, and the
+> tokens would still be accepted by everything, because nothing here checks.
+>
+> **3. The curriculum coupling is much larger than this record states.** Not *"Module 04's opaque-token
+> exercises and `STEP-UP-AUTH-TUTORIAL.md` Part 4"* but **86 lines across 13 files** — including
+> `modules/04…/lab.md`'s `# → 43 chars, opaque`, five separate assertions in Module 04's README, and Modules
+> 02, 03, 06, 08 and 10. Any future enablement must budget for that, and the count belongs in the record
+> rather than in whoever's head last grepped for it.
+>
+> **So the ruling is unchanged and better grounded: defer.** The prerequisite is now specific — satisfy §3's
+> default `aud` first, which is a service-configuration or code decision in its own right.
+
+Access tokens stay opaque. Taken as written: turning `accessTokenSignAlg` on changes the format of **every** access token this deployment issues, needs a plan, has two live curriculum couplings, and activates 9068-F3's latent §3 `aud` MUST. **All three "do these now" items are done**: 9068-W2 shipped in T1-19 batch 3 (the dev fixture is `typ: at+jwt` with all seven §2.2 claims); 9068-W4 shipped in T2-1 (Part 4's payload is marked `UNVERIFIED`, naming `accessTokenSignAlg`, and points at introspection as §6.2's route); and **9068-W3 shipped with this ruling** — Module 04 now separates **audience restriction (runnable here, via introspection)** from **self-contained tokens (not runnable)**, with the point that the two are *orthogonal*: you can audience-restrict an opaque token, and you can issue a JWT with no `aud` at all.
 
 **The choice.** Set `accessTokenSignAlg` so access tokens are `at+jwt`, or keep them opaque.
 
@@ -717,3 +793,72 @@ currently has no regression net, and the prior in-repo audit recorded it as *"CL
 
 **Revisit trigger.** DR-03 enables OID4VCI **and** this deployment issues SD-JWT VC credentials — at which point
 the AS acquires Issuer obligations and this record is replaced by a real one.
+
+---
+
+## DR-20 — DPoP nonces (`dpopNonceRequired`)
+
+**Status: ✅ RULED 2026-08-17 — do NOT enable. ⚠️ REVISIT TRIGGER SATISFIED the same day — the decline stands on narrower ground.**
+
+> **The blocking objection is gone.** This record declined nonces because the SPA discarded the nonce it was
+> sent, making every DPoP flow fail permanently. `client/src/services/dpop-fetch.ts` now captures
+> `DPoP-Nonce` on **success and failure alike** and retries once with a re-signed proof; all four DPoP
+> service functions route through it. **Verified against the live deployment**, not only a mock
+> (`SERVICE-CONFIG-PROBE.md` §25.1): with `dpopNonceRequired: true`, the old single-shot client gets a 400
+> and throws the nonce away, while `dpopRequest` is refused, re-signs, and succeeds on attempt 2 — then
+> needs only one attempt once the nonce is cached.
+>
+> **So this record no longer rests on the client.** What holds it up now is what was previously secondary:
+> nonces are **OPTIONAL** in RFC 9449 and required by nothing this deployment claims (FAPI 2.0 is declined
+> under DR-02), and **both transcripts are already banked**, so enabling adds no documentation value. Those
+> are real grounds, but they are *preference* grounds rather than *blocking* ones.
+>
+> **What that means for whoever reads this next: enabling is now an available decision, not a blocked one.**
+> It would need one more thing the old objection made moot — the tutorials' captured transcripts would have
+> to be re-captured with nonces in them, and `PAR-TUTORIAL.md`'s and `FAPI-TUTORIAL.md`'s "not reproducible
+> here" boxes would become wrong. That is a doc change with a known shape, not an unknown.
+
+**Original ruling below, unchanged.** Nonces stay off; the behaviour stays captured.
+
+**The choice.** `dpopNonceRequired = true` (with a non-zero `dpopNonceDuration`), so this deployment demands
+the RFC 9449 §8/§9 nonce dance — or leave it off and keep the dance as a captured transcript of a temporary
+configuration.
+
+**Why this record exists at all.** It is the one flag of the three with **no** curriculum coupling and **no**
+prior record, so nothing had ever decided it. The nonce transcript had been captured twice (§23.1 at the token
+endpoint on 2026-08-15, §24.1 at PAR on 2026-08-17) and both times the flag was reverted **without anyone
+ruling whether it should have been**. A reverted probe is not a decision; it is a decision postponed.
+
+**Why not enable — one binding reason, re-derived live.** Nonces cost nothing to a client that retries on
+`use_dpop_nonce`. **This repo contains no such client.** In `client/src/services/token.service.ts` the
+`if (!response.ok) throw` sits on the line **before** the `DPoP-Nonce` header is read, and `http.ts` repeats
+that shape at nine call sites — so the SPA **discards the nonce the server sends it**, and
+`sessionStorage.dpop_nonce` is only ever written from a *success*. The failure is therefore **permanent, not
+first-request-only**: every DPoP path in the SPA (`FapiSection`, `ParSection`, `RarSection`, `CallbackPage`)
+would fail on every attempt, with no route to recovery. Enabling would break four working demonstrations to
+make one prose section literal.
+
+**What the probe removed as an objection, and this is worth keeping.** The obvious fear — that a nonce refusal
+burns the authorization code — is **false**: the same code, retried with the nonce, yields `OK` (§24.1 row A2).
+The refusal happens before redemption. So the specification's retry really is available, and the *only* thing
+standing in the way is our own client. That is a much better reason to decline than the one that was assumed.
+
+**Two corrections that ship with this ruling.**
+
+- **`PAR-TUTORIAL.md` told readers to turn the flag on** *"to make the section runnable yourself"*. It does the
+  opposite. The instruction is replaced.
+- **The `DPoP-Nonce` header on PAR's `201` is real.** `FAPI-TUTORIAL.md` removed it on 2026-08-14 as *"not
+  producible here"*; §24.1 row B2 shows Authlete emitting it on the PAR success response. Accurate about the
+  deployment, misleading about the protocol — the block was unreachable, not wrong. PAR's nonce error is also
+  **`A350308`**, not the token endpoint's `A254307`.
+
+**Measured gap:** `dpopNonceRequired` **`false`**, `dpopNonceDuration` **`0`** (live, 2026-08-17). Nonces are
+**OPTIONAL** in RFC 9449 and are not required by anything this deployment claims; FAPI 2.0 is declined (DR-02).
+
+**What declining costs.** Nothing that is not already banked. Both transcripts exist, and the markers now say
+*"declined, and here is what it looks like"* instead of *"unverified"*.
+
+**Revisit trigger.** ~~The SPA's HTTP layer reads `DPoP-Nonce` from error responses and retries once.~~
+✅ **Done 2026-08-17** — `client/src/services/dpop-fetch.ts`, live-verified. The trigger this record was
+written with is spent; see the banner above for what now holds the decline up. **Remaining trigger:** DR-02
+flips, or somebody decides the tutorials should show the nonce dance as *reproducible* rather than captured.

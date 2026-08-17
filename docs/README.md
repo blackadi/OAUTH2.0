@@ -88,6 +88,25 @@ for longer — see [`modules/09a…/lab.md`](./curriculum/modules/09a-interactio
 rule and four worked examples. **A marker always names the field, and always carries a date**, because a
 marker whose premise has silently changed is worse than no marker at all.
 
+> ### `UNVERIFIED` is four different things, and the distinction was invisible until 2026-08-17
+>
+> Every marker was swept that day and sorted by one question nobody had asked: **could a probe settle this?**
+> The answer split them four ways, and a reader deserves to know which kind they are looking at:
+>
+> | Kind | Means | Example |
+> |---|---|---|
+> | **decision-gated** | a decision record says the deployment will not produce it | Native SSO ([DR-04](../audit/05-decision-records.md#dr-04--native-sso)), FAPI 2.0 (DR-02), JWT access tokens (DR-09) |
+> | **deliberately not probed** | settling it would make the documentation *worse* | the exact `error_description` strings — vendor text that rots between versions, and printing it invites parsing it |
+> | **partly answerable** | one half is testable, the other needs elapsed time or a client we lack | device-code garbage collection; issuing a real credential (needs a wallet) |
+> | **answerable at a cost** | a probe exists but requires a live configuration write | the unregistered RAR types |
+>
+> **The reason this matters is what the sweep found.** Two markers told the reader *"turn this on and you
+> will see X"*, and **neither instruction produced X** — one would have broken the SPA's DPoP flows
+> permanently, the other stopped at the first of three blockers. A third asked a yes/no question whose real
+> answer was neither option. **A marker that names a remedy nobody has executed reads as actionable, and is
+> therefore *less* likely to be re-checked than a plain "unknown."** Full sort:
+> [`SERVICE-CONFIG-PROBE.md` §26](../audit/02-findings/SERVICE-CONFIG-PROBE.md).
+
 > **Scope, so the label list is not itself an overclaim.** The convention was applied on **2026-08-14** to
 > the nine tutorials the RFC audit examined line by line: PAR, RAR, Device Flow, CIBA, Token Exchange,
 > Step-Up Auth, Native SSO, FAPI 2.0 and MCP. **PKCE, JWT Bearer, Backchannel Logout and Grant Management

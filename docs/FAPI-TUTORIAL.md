@@ -20,7 +20,7 @@
 > | `fapiModes` including `FAPI2_SECURITY` | **absent** — `/api/fapi/config` reports `mode: "disabled"` | Authlete enforces no FAPI rule anywhere in the flow |
 > | a scope carrying the `fapi2=sp` attribute | **`fapi_scope` is not a registered scope** | unknown scopes are silently dropped (`scopeRequired` is `false`), so the request *succeeds* with no FAPI enforcement and no error |
 > | PAR required | `parRequired` **`false`** on the service and on all four clients | PAR works, but nothing obliges a client to use it |
-> | `dpopNonceRequired` for the nonce dance | **`false`** (`dpopNonceDuration` 0) | **the `DPoP-Nonce` response headers shown in Part 4 cannot appear** |
+> | `dpopNonceRequired` for the nonce dance | **`false`** (`dpopNonceDuration` 0) — **off by decision** ([DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired), 2026-08-17), not by oversight | **the `DPoP-Nonce` response headers shown in Part 4 cannot appear here** — though the dance itself is captured, see [Step 3](#step-3-push-authorization-request-par) |
 >
 > **Two of Part 3's prerequisites *are* satisfied**, and were not when this file was written: client
 > `2176571218` has `tokenAuthMethod = PRIVATE_KEY_JWT` with a registered JWK Set (created 2026-08-12), and
@@ -244,14 +244,28 @@ All FAPI configuration happens in the [Authlete Console](https://console.authlet
 4. Enable the **FAPI Profile** option, and select **FAPI2_SECURITY**
 5. Click **Save**
 
-> **UNVERIFIED — check both names in your console.** Authlete's
+> ### ✅ **Settled 2026-08-17 — they are two separate settings, and both are unset here**
+>
+> This was `UNVERIFIED`: Authlete's
 > [FAPI 2.0 authorization-code-flow guide](https://developers.authlete.com/protocols-and-flows/compliance-profiles/authorization-code-flow-in-fapi-2-0-security-profile)
-> states the prerequisite as *"Supported Service Profiles"* needing to include **FAPI**, while this
-> server derives `mode` from `service.fapiModes` containing **`FAPI2_SECURITY`**
-> (`fapi.controller.ts:5-20`). Those are plausibly two separate settings that both need to be on, and
-> Authlete's [FAPI Basics](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-basics)
-> notes the static profile selection is *optional* when you drive compliance dynamically by scope
-> (Step 2). Do not treat either field name here as authoritative — confirm in the console.
+> states the prerequisite as *"Supported Service Profiles"* including **FAPI**, while this server derives
+> `mode` from `service.fapiModes` containing **`FAPI2_SECURITY`**. Both are real properties of `Service` in
+> Authlete 3.0.16, and the suspicion that they are distinct was correct:
+>
+> | Property | Values | Live here |
+> |---|---|---|
+> | `supportedServiceProfiles` | `FAPI` \| `OPEN_BANKING` | **unset** |
+> | `fapiModes` | six FAPI modes incl. `FAPI2_SECURITY` | **unset** |
+>
+> So set **both**. Authlete's
+> [FAPI Basics](https://developers.authlete.com/protocols-and-flows/compliance-profiles/fapi-basics) notes
+> the static profile selection is *optional* when you drive compliance dynamically by scope (Step 2).
+>
+> **⚠️ And `GET /api/fapi/config` cannot see the first one.** `computeFapiMode` reads `fapiModes` **only**,
+> so a service with `supportedServiceProfiles: ["FAPI"]` and no `fapiModes` is reported as
+> `mode: "disabled"` — a true value for the field it reads and a misleading one about the service. Not fixed:
+> [DR-02](../audit/05-decision-records.md#dr-02--fapi-20-security-profile) declines FAPI 2.0, so this is a
+> reporting gap on a profile the deployment does not claim. Recorded, not coded around.
 
 ### Step 2: Create a Scope with `fapi2=sp` Attribute
 
@@ -411,19 +425,26 @@ HTTP/1.1 201 Created
 }
 ```
 
-> **Two corrections to what this block used to say.** It showed `expires_in: 90`; the live value is the
-> service's `pushedAuthReqDuration`, **600**. And it showed a `DPoP-Nonce: <serverNonce>` response header —
-> **`UNVERIFIED`, and not producible here**: `dpopNonceRequired` is `false`, so this server never issues a
-> nonce and never demands one. The nonce dance in [Part 4's later steps](#step-5-exchange-code-for-token) is
-> the specification's, not this deployment's.
+> **Two corrections to what this block used to say, and the second one has since been corrected again.** It
+> showed `expires_in: 90`; the live value is the service's `pushedAuthReqDuration`, **600**. And it showed a
+> `DPoP-Nonce: <serverNonce>` response header, removed on 2026-08-14 as **`UNVERIFIED`, and not producible
+> here**.
 >
-> **It is no longer merely the specification's, though.** The flag was turned on for three token-endpoint
-> calls on 2026-08-15 and turned back off, so the dance has been observed: a proof with no nonce earns
-> **400 `use_dpop_nonce`** *with* a `DPoP-Nonce` header, replaying that nonce succeeds, and a stale one earns
-> `use_dpop_nonce` again rather than `invalid_dpop_proof`. **Note the 400** — RFC 9449 §8 gives an
-> *authorization server* 400 and §9 gives a *resource server* 401, and getting that backwards stops a client
-> that only retries on 401 from ever starting the dance. The full transcript, including the nonce being
-> **time-based rather than one-time**, is in [`PAR-TUTORIAL.md`](PAR-TUTORIAL.md#dpop-nonce-handling).
+> **That removal was right about this deployment and misleading about the protocol — settled 2026-08-17.**
+> `dpopNonceRequired` was switched on and PAR was probed directly: Authlete answers the **`201 Created`** with
+> a `DPoP-Nonce` header, exactly as the deleted block showed. **The block was unreachable, not wrong.** So the
+> header is real, it belongs on a PAR success response, and you will not see it here because the flag is off —
+> now off **by decision** ([DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired)),
+> because enabling it breaks every DPoP flow in this repo's SPA. Note also that a nonce-less PAR request earns
+> **`[A350308]`**, *not* the token endpoint's `A254307` — one condition, two vendor codes.
+>
+> **The rest of the dance is captured too.** A proof with no nonce earns **400 `use_dpop_nonce`** *with* a
+> `DPoP-Nonce` header, replaying that nonce succeeds, and a stale one earns `use_dpop_nonce` again rather than
+> `invalid_dpop_proof`. **Note the 400** — RFC 9449 §8 gives an *authorization server* 400 and §9 gives a
+> *resource server* 401, and getting that backwards stops a client that only retries on 401 from ever starting
+> the dance. An **authorization code survives** such a refusal, so the retry costs a round trip rather than a
+> re-authorization. Full transcript, including the nonce being **time-based rather than one-time**, in
+> [`PAR-TUTORIAL.md`](PAR-TUTORIAL.md#dpop-nonce-handling).
 
 ### Step 4: Authorize
 
@@ -776,17 +797,26 @@ Authlete service does not have FAPI enabled. Go to Authlete Console → **Servic
 Advanced → FAPI** → enable the FAPI profile.
 
 `mode` is derived from `service.fapiModes` containing `FAPI2_SECURITY` (see `fapi.controller.ts:5-20`).
-**UNVERIFIED:** Authlete's FAPI 2.0 documentation phrases the prerequisite as *"Supported Service
-Profiles"* needing to include **FAPI**, while this server reads `fapiModes` for `FAPI2_SECURITY`. Those
-may be two separate settings that both need to be on. Check both in the console rather than trusting
-either name here.
+**Settled 2026-08-17 — set both.** They are two distinct `Service` properties:
+**`supportedServiceProfiles`** (`FAPI` | `OPEN_BANKING`), which is the "Supported Service Profiles" Authlete's
+documentation names, and **`fapiModes`** (six modes, incl. `FAPI2_SECURITY`), which is what this server reads.
+Both are unset on this deployment. Note `/api/fapi/config` reports only the second, so it would still say
+`disabled` with the first one on — see [Part 3](#part-3-authlete-console-setup).
 
 ### "dpopEnabled is false"
 
 `dpopEnabled` reports `service.dpopNonceRequired`, which is **not** the same question. DPoP works fine
 without nonces — the flag only controls nonce *enforcement*. So `dpopEnabled: false` and
 `senderConstrainedTokens: "none"` can both appear on a service that issues DPoP-bound tokens correctly.
-If you want nonces on: **Service Settings → Tokens and Claims → Advanced → DPoP Token** → Require Nonce.
+
+**On this deployment it reads `false` deliberately** — see
+[DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired). If you want nonces on in a
+deployment of your own, the switch is **Service Settings → Tokens and Claims → Advanced → DPoP Token** →
+Require Nonce, plus a non-zero duration. **A client that does not read `DPoP-Nonce` off the *error* response
+and retry cannot recover** — and this repo's SPA was such a client until 2026-08-17, because the
+`if (!response.ok) throw` ran before the header was read. `client/src/services/dpop-fetch.ts` fixed that:
+every DPoP request now caches the nonce from success and failure alike and retries once with a re-signed
+proof. So this SPA copes; check that yours does before switching the flag on.
 
 ### "FAPI mode shows sp but Authlete doesn't enforce FAPI rules"
 

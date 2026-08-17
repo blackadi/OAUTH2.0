@@ -18,11 +18,16 @@ function ok(data: unknown, headers?: Record<string, string>) {
   } as Response);
 }
 
-function fail(status: number, body: string) {
+// `headers` is not optional on a real `Response`, and this double used to omit it. That went unnoticed
+// for as long as nothing read a header on the error path — which is exactly the bug DR-20 is about: the
+// `DPoP-Nonce` on a `use_dpop_nonce` refusal was being discarded. An unfaithful double hides the defect
+// its own code path contains.
+function fail(status: number, body: string, headers?: Record<string, string>) {
   return Promise.resolve({
     ok: false,
     status,
     text: () => Promise.resolve(body),
+    headers: new Headers(headers ?? {}),
   } as Response);
 }
 

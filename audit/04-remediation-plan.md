@@ -713,6 +713,25 @@ gate, after Tier 0–2 have closed the five open S1s and the false reporting.
 
 ### 7.3 One new mechanism worth building: the discovery-diff check
 
+> **✅ BUILT 2026-08-17 — `scripts/check-discovery.mjs`, wired into `ci.yml`.** Offline on every push
+> (baseline sorted, deduped, consistent with the claim map); `--live` on the weekly schedule, exactly as
+> this section proposes. **Two departures from the proposal below, both because a defect demanded them:**
+>
+> 1. **It stores the member LIST, not a count.** The proposal says "assert every feature marked working has
+>    its discovery member present" and says nothing about tracking the document itself. On 2026-08-17 the
+>    document measured **66** members against the **65** recorded on 2026-08-15 and the extra member was
+>    **unattributable** — August had kept a count. `scripts/discovery-baseline.json` now holds the names, and
+>    drift is reported by name in both directions.
+> 2. **It checks the declined features too.** The proposal covers *"every feature `README.md` marks as
+>    working"*. The more dangerous direction is the other one: a flag switched **on** without its paired doc
+>    change, which is what DR-03 did in August. So `native_sso_supported`, `check_session_iframe`,
+>    `frontchannel_logout_supported` and `backchannel_logout_session_supported` are asserted **ABSENT**.
+>
+> It also prints the **six** claims it cannot see (`fapiModes`, `accessTokenSignAlg`, `dpopNonceRequired`
+> have no discovery member; `pkceRequired` and `idTokenSignAlg` are per client), because a check that
+> silently omits half a profile's requirements reads as coverage it does not have. 14 claims corroborated,
+> 6 declared out of reach.
+
 Theme 2's remedy is currently *"correct four tables"*. They will drift again — that is what happened to Module
 10 (§6.3). ATT-W5 showed the whole posture is one call away, and this session used it to corroborate nineteen
 findings.
@@ -802,6 +821,6 @@ a defect *before* the audit did.
 4. **DR-12** — `middleware/errorHandler.ts` added to the surfaces list under its own concern row, plus the four
    adjacent candidates (§6.4).
 5. **§7.1** — accepting the wire-format deferral, or pulling 9126-W1 / CIBA-W1 / 8628-W4 into Tier 1.
-6. **§7.3** — build the discovery-diff check, or hand-correct the four tables and accept the drift.
+6. ~~**§7.3** — build the discovery-diff check, or hand-correct the four tables and accept the drift.~~ ✅ **Built 2026-08-17** — `scripts/check-discovery.mjs`; see §7.3.
 7. **9901-W4** — confirm RFC 9901 deliberately gets no decision record (`RFC9901-sd-jwt.md`'s verdict
    reasoning: an AS has no RFC 9901 obligations, so there is no choice to record).

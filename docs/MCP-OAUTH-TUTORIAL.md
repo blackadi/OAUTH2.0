@@ -30,10 +30,14 @@ your own request when the answer is a service flag.
 >   schema's properties in Authlete 3.0.16, **none** carries the word `resource` except
 >   `resourceSignatureKeyId`, and the string `resource_indicators_supported` appears nowhere in Authlete's own
 >   OpenAPI document. So the row for it in [Required Authlete Configuration](#required-authlete-configuration)
->   names **a setting that does not exist** — corrected below. **`UNVERIFIED`:** whether RFC 8707 registers
->   such a metadata member at all was not checked against the RFC for this note; what *is* established is that
->   this deployment does not emit it and Authlete offers no field to make it do so. The `resource` **request**
->   parameter is a separate question and is forwarded normally.
+>   names **a setting that does not exist** — corrected below. **✅ Settled 2026-08-17, and the answer is
+>   stronger than the question:** RFC 8707 (*Resource Indicators for OAuth 2.0*, **Standards Track, February
+>   2020**) §5 registers exactly two things — the **`resource` request parameter** and the **`invalid_target`
+>   error code**. It registers **no authorization-server metadata parameter at all.** So
+>   `resource_indicators_supported` is not a member Authlete declines to emit; **it is not a member.** Its
+>   absence from the discovery document is correct, and the original configuration row was wrong twice over:
+>   no console field *and* no such metadata member. The `resource` **request** parameter is a separate
+>   question and is forwarded normally.
 >
 > That is the **fourth** time in this audit that an instruction said "set X in the console" for an X with no
 > console field. The habit worth copying: check the field exists before writing the step.
@@ -183,12 +187,19 @@ The AI client first discovers the authorization server. MCP clients support two 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-> **`UNVERIFIED` — this is what a *conformant* AS returns, not what this one does.** Two of the six members
-> shown are **absent** from this deployment's 64-member document: `registration_endpoint` and
-> `resource_indicators_supported` (see the box at the top for why the second one cannot be added).
-> `code_challenge_methods_supported` is present but reads `["plain", "S256"]`, not `["S256"]` — the service
-> still permits `plain`, deliberately, because two teaching clients need it. Fetch the real thing rather than
-> trusting this block:
+> **This is what a *conformant* AS returns, not exactly what this one does — re-checked live 2026-08-17, and
+> two of this note's own claims had gone stale.** The document has **66** members, not 64, and
+> `registration_endpoint` **is** present (`/api/client/dcr/register`) — it was absent when this note was
+> written and is not now. What still holds:
+>
+> | Member | This deployment |
+> |---|---|
+> | `registration_endpoint` | ✅ **present** — though it requires admin Basic auth rather than RFC 7591 §3's initial access token, so an MCP client still cannot self-register |
+> | `resource_indicators_supported` | **absent, and correctly so** — no specification defines it; see the box at the top |
+> | `code_challenge_methods_supported` | `["plain", "S256"]`, not `["S256"]` — the service still permits `plain`, deliberately, because two teaching clients need it |
+>
+> **A stale count is why this block asked to be re-fetched, and it was right to.** Fetch the real thing
+> rather than trusting any of the above:
 >
 > ```bash
 > curl -s https://oauth2-0-ekh2.onrender.com/.well-known/oauth-authorization-server | python3 -m json.tool

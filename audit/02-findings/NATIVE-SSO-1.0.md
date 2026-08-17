@@ -18,7 +18,7 @@
    token endpoint, gated by the service flag `nativeSsoSupported`. The AS's own work is the two endpoints, the
    `sessionId` it generates at authorization time, and admin authentication.
 3. Code: all of it is present and looks correct — two endpoints, basic auth on both, `sessionId` generated at
-   `services/authorization.service.ts:111-115`, `NATIVE_SSO` handled in the token controller.
+   `services/authorization.service.ts:133-137`, `NATIVE_SSO` handled in the token controller.
 4. Docs: `README.md` lists Native SSO as **"Working"** and there is a full tutorial.
 5. Delta: `nativeSsoSupported = false` and `native_sso_supported` is absent from discovery, so nothing here can
    work. This is the sharpest instance of the repo's recurring "code exists, config disabled, feature table says
@@ -33,7 +33,7 @@
 |---|---|---|---|
 | 1 | Recognise the token-exchange grant with `subject_token_type=…:id_token` and `actor_token_type=urn:openid:params:token-type:device-secret` | draft 07 | ⊘ Authlete's, via `TokenResponseAction.NATIVE_SSO`; ❌ **unreachable** — F-1 |
 | 2 | With the `device_sso` scope, the AS **MUST** issue a `device_secret` and an `id_token` | draft 07 | ❌ unreachable — F-1 |
-| 3 | The ID token carries `ds_hash` (binding to the device secret) and `sid` | draft 07 | ⊘ Authlete's — the AS supplies `sessionId` (`services/authorization.service.ts:111-115`), which is the `sid` input |
+| 3 | The ID token carries `ds_hash` (binding to the device secret) and `sid` | draft 07 | ⊘ Authlete's — the AS supplies `sessionId` (`services/authorization.service.ts:133-137`), which is the `sid` input |
 | 4 | Before issuing to the second app: validate the device secret, the ID token signature, the `ds_hash` match, that `sid` is still active, and the client | draft 07 | ⊘ Authlete's, inside `nativeSso.process` — the AS forwards `accessToken`, `deviceSecret`, optional `deviceSecretHash` (`services/native-sso.service.ts:29-46`) |
 | 5 | Session termination | draft 07 | ✅ `POST /api/nativesso/logout` → `nativeSso.logout({ sessionId })` |
 | 6 | Advertise `native_sso_supported: true` | draft 07 | ❌ **absent** from the live discovery document — F-1 |
@@ -44,7 +44,7 @@
 |---|---|---|
 | The `NATIVE_SSO` token-endpoint action | Authlete | handled at `controllers/token.controller.ts` (in the action switch, `00-inventory.md` §5) |
 | Device-secret validation, `ds_hash` verification, session check | Authlete | `nativeSso.process` |
-| Generating the `sessionId` that becomes `sid` | **This server** | `services/authorization.service.ts:111-115` — `crypto.randomUUID()` when `nativeSsoRequested` |
+| Generating the `sessionId` that becomes `sid` | **This server** | `services/authorization.service.ts:133-137` — `crypto.randomUUID()` when `nativeSsoRequested` |
 | Exposing the two endpoints and authenticating the caller | **This server** | `controllers/native-sso.controller.ts:37,49` with `requireBasicAuth` at `:39,:51` |
 | Enabling the feature at all | Service configuration | `nativeSsoSupported` — **`false`** |
 
@@ -91,7 +91,7 @@ Probe 1 §3.6 already tabulated these and deferred them to B6/B7. Native SSO is 
 
 ## Finding F-2 — the `sid` the AS generates is fresh per authorization, with no session continuity (S3)
 
-`services/authorization.service.ts:111-115`:
+`services/authorization.service.ts:133-137`:
 
 ```ts
 if (req.session.authorization?.nativeSsoRequested) {
@@ -117,6 +117,78 @@ Also unreviewed for the same reason: `POST /api/nativesso/logout` takes a `sessi
 the caller chooses which session to terminate. It is behind admin Basic auth, so this is not an authorization
 gap — but nothing correlates that `sessionId` with anything the server recorded, because the server never stores
 the UUIDs it generates.
+
+## Finding F-4 — Phase 1 cannot complete: `handleNativeSso` demands a `deviceSecret` the AS is supposed to mint (S3, latent) — ✅ **FIXED 2026-08-17**
+
+> **✅ Fixed the same day it was found.** `controllers/native-sso-response.handler.ts` now mints
+> `randomBytes(32).toString("base64url")` when Authlete returns no `deviceSecret`, and always sends
+> `deviceSecretHash = base64url(SHA-256(secret))` — the value §24.3 step 4 observed Authlete echoing as the
+> ID token's `ds_hash`. The `500` is kept **only** for a missing `accessToken`, which is a genuine server
+> error. On Phase 2 Authlete *does* return a secret and it is forwarded **unchanged**, because replacing it
+> would leave the second app holding a secret whose hash was never bound to the session.
+>
+> Locked by `tests/unit/controllers/native-sso-response.handler.test.ts` (new — the handler had **no** unit
+> test, which is why this survived; the integration file drives the two `/api/nativesso/*` routes and never
+> reaches this path).
+>
+> **This does not move DR-04.** One of three blockers is gone; the draft status, the `sid` derivation
+> question and `tokenExchangeByConfidentialClientsOnly` remain. **Fixing a defect inside a declined feature
+> is not a step toward enabling it** — it is making the code honest about what it would do if enabled.
+
+*(The finding as written, kept because the reasoning is the durable part:)*
+
+**Found 2026-08-17**, by enabling `nativeSsoSupported` temporarily and walking the whole chain
+(`SERVICE-CONFIG-PROBE.md` §24.3). This is the finding F-2 said it could not produce, arrived at from the other
+end — not the `sid` question, but the step before it.
+
+Authlete answers a Phase 1 authorization-code exchange with **`action: NATIVE_SSO`** (`A050002`), a
+`responseContent` of `undefined`, and **no `deviceSecret`**. That is not an omission on Authlete's part. SDK
+1.0.0 documents `TokenResponse.deviceSecret` as:
+
+> *"If the response from the `/auth/token` API contains the `deviceSecret` parameter, its value should be used
+> as the value of this `deviceSecret` request parameter to the `/nativesso` API. **The authorization server may
+> choose to issue a new device secret; in that case, it is free to generate a new device secret and specify the
+> new value.**"*
+
+On a first exchange there is nothing to carry forward, so **the AS mints it**. `controllers/native-sso-response.handler.ts:22-28` does the opposite:
+
+```ts
+const deviceSecret = result.deviceSecret;
+if (!accessToken || !deviceSecret) {
+  return res.status(500).json({ error: "server_error",
+    error_description: "Missing accessToken or deviceSecret for Native SSO" });
+}
+```
+
+So the moment the flag goes on, **every Phase 1 request answers HTTP 500** — from code that compiles, reads
+correctly, and has a passing test suite. `deviceSecretHash` is likewise never computed; `native-sso.service.ts`
+accepts it as an optional input and `handleNativeSso` never supplies one.
+
+**Proven fixable, which is what makes this a scoped item rather than a worry.** With an AS-minted secret and
+`deviceSecretHash = base64url(SHA-256(secret))`, `/nativesso` answers **`OK` `A501001`** — *"A Native
+SSO-compliant ID token and a token response were generated successfully"* — returning `device_secret` and an ID
+token carrying `sid` plus a `ds_hash` that matched the supplied hash exactly. The Phase 2 exchange then reaches
+**`action: NATIVE_SSO`** (`A311002`), this time *with* `deviceSecret` present on the response, as the SDK
+documentation predicts.
+
+**Deliberately NOT fixed.** DR-04 declines the feature; landing this alone would ship half of a declined feature
+and produce precisely the *"two-app sequence that half-works"* that DR-04 exists to avoid. **Severity S3 and
+`latent`**: unreachable while the flag is `false`, and live the moment it is `true` — the same construction as
+9068-F3.
+
+**Two adjacent facts recorded here so they are not rediscovered:**
+
+- **`sessionId` is mandatory, and this server already supplies it.** Without it,
+  `/auth/authorization/issue` answers `LOCATION` carrying `error=server_error` — **`[A499201]`**. F-2 reads
+  `authorization.service.ts`'s fresh-UUID as a *weakness*; it is simultaneously the thing that keeps this
+  server past Authlete's first gate. A probe that bypasses the server fails here, and its **downstream**
+  symptom is `[A050305] No such authorization code` — a code extracted from an error redirect that carried
+  none. **Right-looking failure, wrong cause.**
+- **`tokenExchangeByConfidentialClientsOnly` is `true`**, so Phase 2 is refused for public clients
+  (**`[A311304]`**). Native SSO's subject is *native mobile apps*, which are public clients — so on this
+  service the flag would advertise a capability its own target client type cannot exercise. `Part 6`'s
+  console checklist does not mention client type. (A wrong `audience` earns **`[A311337]`**: it must be the
+  OP's issuer identifier, not the client id.)
 
 ## Finding F-3 — the recorded status and date do not match the served document (S3)
 
@@ -155,14 +227,14 @@ for spot re-verification in Phase 3; it can be closed there.
 - RFC 8693 §3 token-type identifiers (the `subject_token_type` used here) — `https://www.rfc-editor.org/rfc/rfc8693.txt`
 - Live probes 1 and 3 (2026-08-10): `nativeSsoSupported`, `native_sso_supported` — `SERVICE-CONFIG-PROBE.md` §3.6, §8
 - SDK 1.0.0: `NativeSsoResponseAction`, `NativeSsoLogoutResponseAction`, `TokenResponseAction.NATIVE_SSO` (`01-spec-matrix.md` §6)
-- Code: `services/native-sso.service.ts` (whole file), `controllers/native-sso.controller.ts:17,26,37,39,49,51`, `controllers/native-sso-response.handler.ts:42-58`, `services/authorization.service.ts:111-115`, `routes/native-sso.routes.ts:10-11`
+- Code: `services/native-sso.service.ts` (whole file), `controllers/native-sso.controller.ts:17,26,37,39,49,51`, `controllers/native-sso-response.handler.ts:42-58`, `services/authorization.service.ts:133-137`, `routes/native-sso.routes.ts:10-11`
 
 ## Proposed work items
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| NSSO-W1 | Set `nativeSsoSupported = true`, or stop claiming the feature works | S | **A Gate 4 decision, not a default.** If enabled: the tutorial's two-app sequence produces a real transcript and `native_sso_supported` appears in discovery. If not: `README.md`'s table says "implemented, service flag off" and the tutorial carries the same banner. |
-| NSSO-W2 | Settle the `sid` question | S | Conditional on W1. Run the two-app sequence and record whether a second app can exchange an ID token issued under an earlier `sessionId`. If it cannot, the `sessionId` must be derived from the browser session rather than freshly generated — a code change with a plan, since `services/authorization.service.ts` is on the **Security-critical surfaces** list. |
+| NSSO-W1 | Set `nativeSsoSupported = true`, or stop claiming the feature works | S | ✅ **RULED — do NOT enable (DR-04, 2026-08-14; re-ruled 2026-08-17 on live evidence).** `README.md` reads *"Not enabled — `nativeSsoSupported` is `false`"* and the tutorial carries the banner. **The re-ruling upgraded the record's reasoning**: the 2026-08-14 ruling predicted a *"two-app sequence that half-works"*; the probe shows it does not half-work but returns **HTTP 500 on the first request** (F-4). Enabling also adds `native_sso_supported` to discovery (66 → 67 members, the only member that moves). |
+| NSSO-W2 | Settle the `sid` question | S | Conditional on W1, therefore **not scheduled** — DR-04 declines W1. **Partly answered anyway, and the shape changed** (2026-08-17): the `sid` question is *not the first blocker*, it is the third. F-4's minting gap and `tokenExchangeByConfidentialClientsOnly` both sit in front of it, and both are ours rather than the vendor's. What *is* now known: Authlete does embed the supplied `sessionId` as **`sid`** in the Native SSO ID token, alongside a `ds_hash` matching the AS-computed hash, so the handle is honoured end to end within one authorization. Whether a *second* authorization's `sid` invalidates the first still needs the two-app sequence, and still means a planned change to `services/authorization.service.ts` (**Security-critical surfaces**) if it does. |
 | NSSO-W3 | Fix the status/date citation | S | ✅ **DONE 2026-08-14 (T2-14); confirmed and marked in T2-5's coverage sweep.** The row cites the document header (**draft 07, text dated 16 Jan 2025**) and the approval (**2025-10-17**) as separate, labelled facts, and the file's closing trap note generalises it: *"a document's own date is not its approval date — cite the approval for status, the header for content."* **Verified against the live file rather than taken from T2-14's summary**, which is the whole point of sweeping before fetching: this row had been done for a day and still read as open work, and re-fetching it would have spent a budgeted fetch on a settled question. |
 | NSSO-W4 | Add the four-row "claimed working / flag off" table to Phase 4 | S | ✅ **DONE 2026-08-14 (T2-8), and the table had drifted in *both* directions by the time it was written.** Two of the four features are now switched **on** — verifiable credentials (DR-03 + VCI-W6) and CIMD (DR-05) — so *"claimed working, flag off"* had become *"working, and not listed at all"*: **VCI and MCP appeared nowhere in `README.md`'s feature tables**, which is why the drift was invisible. Both now have rows, with the honest qualifications (VCI: *issuance needs a wallet this repo does not contain*; MCP: *CIMD works, MCP end to end does not, because OAuth 2.1's first MUST is that the AS reject `implicit` and `password` and both are enabled deliberately*). **The remedy is the derivation, not the four rows**: a note under the table names the five service fields the rows depend on, gives the read-only command that prints them, and records the captured values with a date. The command was **run before being published** — it prints `false`, `<absent>`, `true`, `<set>`, `true`, matching the prose character for character, and it deliberately prints `<set>` rather than `credentialJwks` itself because that field holds a private scalar. `json.dumps` rather than the bare value, so booleans read `false`/`true` and not Python's `False`/`True`. **Not made a CI check on purpose** — a service configuration change is not a reason to fail somebody's pull request, the same argument that schedules external link checking weekly; §7.3's discovery-diff proposal is the scheduled version. |
 

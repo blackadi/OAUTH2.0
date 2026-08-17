@@ -354,7 +354,28 @@ behaviour *refusing* is now wrong, and every sentence explaining *why* it refuse
 node scripts/check-docs.mjs           # offline: source refs, bare paths, md line refs, prose pointers, endpoint paths, links, anchors. CI runs this on every push
 node scripts/check-docs.mjs --links   # also fetches external URLs. CI runs this weekly, not per-push
 node scripts/check-route-coverage.mjs # every route is named by some test. CI runs this on every push
+node scripts/check-discovery.mjs      # offline: the discovery baseline is sorted, deduped, consistent with the claim map. Every push
+node scripts/check-discovery.mjs --live          # member drift BY NAME + README claims vs the live document. Weekly
+node scripts/check-discovery.mjs --live --update # re-baseline. Review the reported diff FIRST
 ```
+
+**Three checks, and `check-discovery.mjs` is the newest (2026-08-17) — it exists because a *count* is
+not evidence.** On 2026-08-17 the discovery document measured **66** members against the **65** recorded on
+2026-08-15, and the extra member could not be attributed: August had kept a count and not a list. So
+`scripts/discovery-baseline.json` stores the **member list**, and drift is reported by name. A count tells
+you something changed; only a list tells you *what*.
+
+It does a second job the first two cannot: it asserts that **every feature `README.md` marks as working has
+its discovery member present, and every feature marked declined does not.** That second half is the guard
+against the DR-03 failure — a flag switched on without its paired doc change. Two design rules worth keeping:
+
+- **Live mode is weekly, not per-push.** An Authlete configuration change is somebody else's action; it is
+  not a reason to fail somebody's pull request. Same argument as `--links`.
+- **It states what it cannot see, in `NOT_VISIBLE`.** `fapiModes`, `accessTokenSignAlg` and `dpopNonceRequired`
+  have **no discovery member**, and `pkceRequired`/`idTokenSignAlg` are **per client** — so roughly half of any
+  profile's requirements are invisible to `/.well-known`, and a report written from discovery metadata alone
+  scores those rows PASS when nobody checked them. Printing the list is the difference between a check and a
+  false assurance.
 
 **`check-route-coverage.mjs` exists because a green test suite proved nothing four times running.** During
 the Phase 5 remediation, `POST /api/backchannel_logout` validated 5 of Back-Channel Logout §2.6's 11 required
@@ -456,14 +477,25 @@ it. When this script reports something, check whether the surrounding claim is s
   **Presenting both channels at once is refused with `400 invalid_request`** (2026-08-13, 6749-W1) — see the
   dual-channel bullet below; the table's rows are therefore mutually exclusive by enforcement, not merely by
   convention. Getting the *channel* wrong is a 401 in both directions: creds-in-`parameters` for a Basic client gives `[A157357] The client identifier is not found at the expected location`, and Basic for a POST client gives `The client authentication method is 'client_secret_post' but the request does not include a client secret`. Header decoding uses `parseBasicAuth` (`src/utils/basic-auth.ts`), which splits on the **first** colon only so a secret may contain colons. **Known gap:** `clientCertificate`, `oauthClientAttestation` and `oauthClientAttestationPop` are accepted by Authlete's `/pushed_auth_req` but not forwarded — no client here uses them, so they are unverifiable end-to-end, and **since 2026-08-12 attestation is not advertised either** (see the next bullet).
-- **The service advertises five client-authentication methods, and the four it dropped were dropped on purpose** (2026-08-12, T1-5). `supportedTokenAuthMethods` is `NONE`, `CLIENT_SECRET_BASIC`, `CLIENT_SECRET_POST`, `CLIENT_SECRET_JWT`, `PRIVATE_KEY_JWT`. Withdrawn: `TLS_CLIENT_AUTH` and `SELF_SIGNED_TLS_CLIENT_AUTH` (mTLS is not implemented and `tlsClientCertificateBoundAccessTokens` is `false`, so both were unhonourable), `ATTEST_JWT_CLIENT_AUTH` (no Client Attester is configured and the discovery document has no `challenge_endpoint`), and `SPIFFE_JWT` (nothing here uses SPIFFE, and it broke `service.get()` — see the SDK note below). **Two side effects worth knowing.** Withdrawing attestation also removed `client_attestation_signing_alg_values_supported` and `client_attestation_pop_signing_alg_values_supported` from the discovery document — those two members exist only to describe that method, so one withdrawal removed three advertisements and took the document from 64 members to 62. **That 62 is a reading from 2026-08-12, not the current count** — DR-03, DR-05 and BCL-W5 have each added members since, and the document stands at **65** as of 2026-08-15. Count it, do not quote it. And `par.service.ts`'s un-forwarded attestation headers are now unreachable by construction rather than merely unused. Re-adding any of the four means re-checking the SDK enum first: a member `ClientAuthMethod` does not know takes `service.get()` down for every caller.
+- **The service advertises five client-authentication methods, and the four it dropped were dropped on purpose** (2026-08-12, T1-5). `supportedTokenAuthMethods` is `NONE`, `CLIENT_SECRET_BASIC`, `CLIENT_SECRET_POST`, `CLIENT_SECRET_JWT`, `PRIVATE_KEY_JWT`. Withdrawn: `TLS_CLIENT_AUTH` and `SELF_SIGNED_TLS_CLIENT_AUTH` (mTLS is not implemented and `tlsClientCertificateBoundAccessTokens` is `false`, so both were unhonourable), `ATTEST_JWT_CLIENT_AUTH` (no Client Attester is configured and the discovery document has no `challenge_endpoint`), and `SPIFFE_JWT` (nothing here uses SPIFFE, and it broke `service.get()` — see the SDK note below). **Two side effects worth knowing.** Withdrawing attestation also removed `client_attestation_signing_alg_values_supported` and `client_attestation_pop_signing_alg_values_supported` from the discovery document — those two members exist only to describe that method, so one withdrawal removed three advertisements and took the document from 64 members to 62. **That 62 is a reading from 2026-08-12, not the current count** — DR-03, DR-05 and BCL-W5 have each added members since; the document was recorded at **65** on 2026-08-15 and measures **66** on 2026-08-17, in all three places that serve it. The extra member could not be attributed, because no member *list* was kept to diff against — only a count. **Count it, do not quote it, and if the number matters, keep the list.** And `par.service.ts`'s un-forwarded attestation headers are now unreachable by construction rather than merely unused. Re-adding any of the four means re-checking the SDK enum first: a member `ClientAuthMethod` does not know takes `service.get()` down for every caller.
 - **Client credentials on both channels are refused, and the reason this is ours to enforce is worth keeping** (2026-08-13, 6749-W1). RFC 6749 §2.3.1: *"The client MUST NOT use more than one authentication method in each request."* **Authlete does not enforce it** — verified live 2026-08-12: a request carrying correct top-level credentials plus a **wrong** `client_secret` in the body is accepted and a token issued, because the top-level channel wins. Authlete's [strict-checking page](https://developers.authlete.com/configuration-reference/endpoints/strict-checking-on-client-authentication-parameters) governs only *method matching* (*"Authlete version 2.0 and later strictly check client type and client authentication method settings"*) and says nothing about presenting both, or about precedence. **Nor did this server resolve the conflict, despite appearing to**: the `clientId`/`clientSecret` assignment in `token.service.ts` sets only the *top-level* fields, while `parameters` is preferentially `req.rawBody`, so body credentials reached Authlete untouched and both channels genuinely crossed the boundary. So `hasDualChannelClientAuth()` (`src/utils/basic-auth.ts`) now refuses the shape at `token.controller.ts` and `par.controller.ts`, **before any Authlete call** — the same gate-before-call arrangement the introspection endpoints use, and the client-authentication counterpart of `extractAccessToken()`'s enforcement of RFC 6750 §2's identical rule for token *presentation*. Two things not to undo: **only a second *credential* counts** — a bare `client_id` beside a Basic header is not a second method, since §2.3.1's methods differ in where the *secret* travels and a public client legitimately sends `client_id` alone; and **both endpoints are covered**, because RFC 9126 §2 gives PAR the token endpoint's client authentication, so exempting one would rebuild the inconsistency this removed. **This is the third consequence of the raw-body design choice**, after signature fidelity and the RFC 9700 §4.2.4 credential leak — when a finding quotes a variable assignment in `token.service.ts` or `revocation.service.ts`, check what actually goes on the wire.
 - **`parseBasicAuth` (`src/utils/basic-auth.ts`) is the only Basic-auth decoder for OAuth client credentials** — used by both `token.service.ts` and `par.service.ts`. It splits on the first colon (a secret may contain colons), treats the scheme case-insensitively per RFC 9110 §11.1, and returns `undefined` rather than partial credentials when the payload has no colon, so a malformed header cannot clobber body-supplied `clientId`/`clientSecret`. Do not hand-roll `authorization.split(":")` again. `require-basic-auth.ts` stays separate on purpose: it validates *this deployment's* management credentials with `timingSafeEqual`, which is a different job from decoding a client's.
 - **DPoP nonce flow — and the status code differs by *which* server answers** (corrected 2026-08-14, 9449-W5).
-  Nonces are OPTIONAL, controlled by `dpopNonceRequired`, which is **`false`** on this service. **The table
-  below was written from the specification and has since been confirmed live** (2026-08-15, 9449-W6): the flag
-  was set to `true` for three token calls and reverted, with 0 unexpected field changes. See the observations
-  under the table — three of them are things RFC 9449 does not tell you.
+  Nonces are OPTIONAL, controlled by `dpopNonceRequired`, which is **`false`** on this service — **and since
+  2026-08-17 that is a ruling, not an omission: DR-20 declines it.** The reason is ours, not the
+  specification's: **this repo's SPA discards the nonce it is sent.** `client/src/services/token.service.ts`
+  had `if (!response.ok) throw` on the line *before* it read `DPoP-Nonce`, so a `400 use_dpop_nonce` threw away
+  the value that would have fixed it and `sessionStorage.dpop_nonce` — written only from a *success* — never
+  filled. Enabling the flag broke every DPoP path in the SPA **permanently, not on the first request only**.
+  **Fixed the same day: `client/src/services/dpop-fetch.ts`** is now the single place a DPoP request is sent.
+  It caches `DPoP-Nonce` from success *and* failure and retries once with a **re-signed** proof — re-signed
+  because the nonce is inside the signature, which is why it takes a proof **factory** rather than a proof
+  string. All four DPoP service functions (`token.service.ts` ×2, `par.service.ts`, `rar.service.ts`) route
+  through it; do not add a fifth that does its own `fetch`. Live-verified with the flag temporarily on: the
+  old path 400s and loses the nonce, the new one succeeds on attempt 2, and a warm cache needs one attempt.
+  **The flag stays off on preference now, not on breakage** — see DR-20. **The table below was written from the specification and has since
+  been confirmed live** — at the token endpoint (2026-08-15, 9449-W6) and at **PAR** (2026-08-17, DR-20), both
+  by set → probe → revert with 0 unexpected field changes.
 
   | Who answers | Missing nonce | Spec |
   |---|---|---|
@@ -475,19 +507,30 @@ it. When this script reports something, check whether the surrounding claim is s
   `invalid_dpop_proof`** — §8 makes rejection a MUST and lets the rejection carry a fresh nonce, and
   `use_dpop_nonce` is the code that means *"retry with this one"*. Reserve `invalid_dpop_proof` for a proof that
   is genuinely malformed. Token/PAR endpoints may return a nonce on success; protected resources return one only
-  on error. See `docs/FAPI-TUTORIAL.md` — but note its nonce material is marked `UNVERIFIED` for the same reason.
+  on error. See `docs/PAR-TUTORIAL.md` → *DPoP Nonce Handling* for the full captured transcript, and
+  `docs/FAPI-TUTORIAL.md` Step 3 for the PAR half — both are labelled **captured under a temporary
+  configuration**, which is a different claim from *"reproducible here"* and from `UNVERIFIED`.
 
-  **Observed 2026-08-15 with the flag temporarily on — three things RFC 9449 does not say:**
+  **Observed with the flag temporarily on — six things RFC 9449 does not say:**
 
-  - **The nonce is time-based, not one-time.** All three probe calls returned the *same* `DPoP-Nonce`,
-    including the successful one; it is valid for `dpopNonceDuration`. A client should **cache and reuse** it.
+  - **The nonce is time-based, not one-time.** Every probe call returned the *same* `DPoP-Nonce`,
+    including the successful ones; it is valid for `dpopNonceDuration`. A client should **cache and reuse** it.
     One written to treat a repeated nonce as a replay would be wrong.
-  - **A nonce comes back on success at the token endpoint**, confirming the sentence above for that endpoint.
-  - **Authlete's `[A254307]` message misdirects on first contact.** A request with **no** `nonce` claim and one
+  - **A nonce comes back on success at both AS endpoints** — the token endpoint (2026-08-15) *and* PAR's
+    `201 Created` (2026-08-17). That confirms the "may return a nonce on success" sentence above for both, and
+    it is why `FAPI-TUTORIAL.md`'s PAR block showing `201 + DPoP-Nonce` was **unreachable rather than wrong**.
+  - **PAR and the token endpoint use different vendor codes for one condition** — **`[A350308]`** at
+    `/pushed_auth_req`, **`[A254307]`** at `/auth/token`. Match on `error: use_dpop_nonce`, never on the code.
+  - **An authorization code SURVIVES a `use_dpop_nonce` refusal.** The refusal precedes redemption, so the same
+    code replayed with the nonce yields `OK` (verified 2026-08-17). The dance costs a round trip, not a
+    re-authorization — so a *retrying* client loses nothing, which is exactly why DR-20's objection is about
+    our client and not about the mechanism.
+  - **Authlete's message misdirects on first contact.** A request with **no** `nonce` claim and one
     with a **wrong** `nonce` produce the *same* code and the same text — *"The value of the 'nonce' claim in the
     DPoP proof JWT is different from the expected one."* There is nothing *different from expected* about a
     claim that was never sent, so somebody debugging a first request goes looking for a value they never
     supplied. The `error` code is `use_dpop_nonce` in both cases, which is the part a client acts on.
+  - **The flag gates *proofs*, not requests.** A token call carrying no DPoP header at all is unaffected.
 
   **The relay is already correct and the placement is why.** `token.controller.ts:69` calls
   `setDpopNonce(res, result.dpopNonce)` **before** the `switch`, so `OK`, `BAD_REQUEST` and every other branch

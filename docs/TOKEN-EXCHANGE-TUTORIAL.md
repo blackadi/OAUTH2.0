@@ -608,11 +608,15 @@ These are real and do take effect — they are enforced by Authlete before your 
 
 ## Part 10: Error Scenarios
 
-> **UNVERIFIED — read the `error` codes, not the prose.** The `error_description` strings below are
-> paraphrases written to show the shape of each failure. Authlete's real descriptions carry a bracketed
-> code (`[A1234xx]`) and different wording. The `error` values are the part that matters, because those
-> are spec-defined and stable; the descriptions are vendor text and change between versions. Run the
-> failures yourself if you need the exact strings.
+> **UNVERIFIED, and deliberately staying that way — read the `error` codes, not the prose.** The
+> `error_description` strings below are paraphrases written to show the shape of each failure. Authlete's real
+> descriptions carry a bracketed code (`[A1234xx]`) and different wording. The `error` values are the part
+> that matters, because those are spec-defined and stable; the descriptions are vendor text and change
+> between versions. Run the failures yourself if you need the exact strings.
+>
+> **Reviewed 2026-08-17 and left alone on purpose.** Capturing the real strings is easy, and it would make
+> this section *worse*: a captured vendor string rots silently between Authlete versions, and printing one
+> invites you to parse it. **A marker can be the right answer rather than the absence of one.**
 
 **Codes RFC 8693 §2.2.2 defines for this grant:** `invalid_request` (malformed request, or an input token
 that is invalid/expired/unsupported) and `invalid_target` (the AS is unwilling or unable to issue a token

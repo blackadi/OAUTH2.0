@@ -172,14 +172,12 @@ function FapiSection() {
         client_assertion: clientAssertion,
       });
 
-      const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
-      const proof = await createProof(
-        wizDpopKeyPair.privateKey, 'POST', PAR_ENDPOINT, undefined, storedNonce,
+      const { data } = await parService.pushedAuthorizationWithDpop(
+        { parameters: params.toString() },
+        // A factory, not a proof: a `use_dpop_nonce` retry needs a fresh signature, and `dpopRequest`
+        // owns the `dpop_nonce` store.
+        (nonce) => createProof(wizDpopKeyPair.privateKey, 'POST', PAR_ENDPOINT, undefined, nonce),
       );
-      const { data, dpopNonce } = await parService.pushedAuthorizationWithDpop(
-        { parameters: params.toString() }, proof,
-      );
-      if (dpopNonce) sessionStorage.setItem('dpop_nonce', dpopNonce);
       setWizParResult(data as { requestUri?: string; expiresIn?: number });
     });
     if (error) { toast.error(error); return; }
@@ -197,12 +195,9 @@ function FapiSection() {
       const accessToken = getAccessToken();
       if (!accessToken) throw new Error('No access token stored in context. Complete the authorize step first.');
       const athValue = await computeAth(accessToken);
-      const storedNonce = sessionStorage.getItem('dpop_nonce') || undefined;
-      const proof = await createProof(
-        wizDpopKeyPair!.privateKey, 'POST', USERINFO_ENDPOINT, athValue, storedNonce,
+      const { data } = await tokenService.userInfoWithDpop(accessToken, (nonce) =>
+        createProof(wizDpopKeyPair!.privateKey, 'POST', USERINFO_ENDPOINT, athValue, nonce),
       );
-      const { data, dpopNonce } = await tokenService.userInfoWithDpop(accessToken, proof);
-      if (dpopNonce) sessionStorage.setItem('dpop_nonce', dpopNonce);
       setWizUserinfoResult(data as Record<string, unknown>);
     });
     if (error) { toast.error(error); return; }

@@ -424,6 +424,11 @@ of the two shapes they are actually reading.
 > Open Banking practice, not transcripts from this service. To run one, register the name on the service
 > and on the client, then re-send.
 >
+> **Reviewed 2026-08-17: answerable, but only at the cost of a service write, so not done.** The *refusal*
+> is already captured — `[A249302]` is observed, not predicted. Only the **success** shape of the other
+> three types is unseen, and seeing it means registering a type on a live teaching service and remembering
+> to remove it. Recorded as a deliberate cost decision rather than left looking like nobody thought of it.
+>
 > Note `[A249302]` (*unsupported* type) is a different code from `[A249301]` (*absent* type) — the first
 > means "not registered here", the second "you sent an element with no `type` at all". Different fixes.
 

@@ -534,31 +534,67 @@ sequenceDiagram
 - Expired or missing nonce at PAR → server returns **400** `use_dpop_nonce` with a new `DPoP-Nonce`
 - SPA stores nonces in `sessionStorage` under `dpop_nonce`
 
-> **`UNVERIFIED` here — but no longer unobserved (updated 2026-08-15).** `dpopNonceRequired` is `false` and
-> `dpopNonceDuration` is `0` on this deployment, so nothing above is reproducible as you find it. **The flag
-> was switched on for three token-endpoint calls and switched back**, so the behaviour itself has now been
-> seen rather than only read:
+> ### **captured** under a temporary configuration — and **deliberately off here** (DR-20, 2026-08-17)
 >
-> | Proof carries | Result |
-> |---|---|
-> | no `nonce` | **400** `use_dpop_nonce`, **plus** a `DPoP-Nonce` header |
-> | that nonce | success |
-> | a stale/bogus `nonce` | **400** `use_dpop_nonce` — **not** `invalid_dpop_proof` |
+> `dpopNonceRequired` is **`false`** and `dpopNonceDuration` is **`0`** on this deployment, so nothing above is
+> reproducible as you find it. That is now a **decision**, not a gap: see
+> [`audit/05-decision-records.md` → DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired).
+> The flag has been switched on twice and reverted twice, so **the behaviour itself is captured** — at the token
+> endpoint on 2026-08-15 and at **PAR** on 2026-08-17:
 >
-> **Three things RFC 9449 does not tell you, and one of them changes how you write a client:**
+> | Endpoint | Proof carries | Result |
+> |---|---|---|
+> | `/api/token` | no `nonce` | **400** `use_dpop_nonce` `[A254307]`, **plus** a `DPoP-Nonce` header |
+> | `/api/token` | that nonce | **success** — and a `DPoP-Nonce` again |
+> | `/api/token` | a stale/bogus `nonce` | **400** `use_dpop_nonce` — **not** `invalid_dpop_proof` |
+> | `/api/par` | no `nonce` | **400** `use_dpop_nonce` **`[A350308]`** + a `DPoP-Nonce` |
+> | `/api/par` | that nonce | **201 Created** — **and a `DPoP-Nonce` on the success too**, which is the header the diagram above draws |
+> | either | no DPoP header at all | unaffected — the flag gates *proofs*, not requests |
 >
-> - **The nonce is time-based, not one-time.** All three calls returned the *same* `DPoP-Nonce`, including
->   the successful one — it is valid for `dpopNonceDuration`. So **cache it and reuse it**. A client that
->   treats a repeated nonce as a replay attempt would be wrong.
-> - **A nonce comes back on success too** at the token endpoint, not only on the error that demands one.
-> - **Authlete's `[A254307]` message misdirects on first contact**: a proof with *no* `nonce` and one with a
->   *wrong* `nonce` produce the same code and the same text, *"the value of the 'nonce' claim … is different
->   from the expected one"* — describing a mismatch that did not happen. Trust the `error` code, not the prose.
+> **Four things RFC 9449 does not tell you, and two of them change how you write a client:**
+>
+> - **The nonce is time-based, not one-time.** Every call returned the *same* `DPoP-Nonce`, including the
+>   successful ones — it is valid for `dpopNonceDuration`. So **cache it and reuse it**. A client that treats a
+>   repeated nonce as a replay attempt would be wrong.
+> - **A nonce comes back on success**, at PAR as well as at the token endpoint — not only on the error that
+>   demands one. So the `201 + DPoP-Nonce` shape in the diagram is real.
+> - **PAR and the token endpoint use different result codes for one condition** — `A350308` and `A254307`. Match
+>   on the `error` code `use_dpop_nonce`, never on the vendor code.
+> - **Authlete's message misdirects on first contact**: a proof with *no* `nonce` and one with a *wrong* `nonce`
+>   produce the same code and the same text, *"the value of the 'nonce' claim … is different from the expected
+>   one"* — describing a mismatch that did not happen. Trust the `error` code, not the prose.
+>
+> **A retried request is not a lost request.** An authorization code **survives** a `use_dpop_nonce` refusal —
+> the refusal happens before the code is redeemed, so the same code replayed with the nonce succeeds. The dance
+> costs a round trip, not a re-authorization.
+>
+> ### The SPA used to break if you turned this on. It no longer does — fixed 2026-08-17
+>
+> **This box used to say "do not turn this flag on".** It was right at the time, and the reason is worth
+> keeping because it is a defect shape rather than a one-off:
+>
+> ```
+> client/src/services/token.service.ts:36   if (!response.ok) throw new Error(...);   ← threw first
+> client/src/services/token.service.ts:38   response.headers.get('dpop-nonce')        ← never reached
+> ```
+>
+> The throw sat on the line **before** the header read, so the SPA **discarded the very nonce the server sent
+> to make the retry possible** — and `sessionStorage.dpop_nonce` is only ever written from a *success*, which
+> could then never happen. Not a failed first request: a failed **every** request, forever.
+>
+> **`client/src/services/dpop-fetch.ts` now owns every DPoP request.** It captures `DPoP-Nonce` on success
+> *and* failure, and retries once with a **re-signed** proof — re-signed because the nonce lives inside the
+> signature, so a cached proof string cannot be reused. Verified against the live deployment with the flag
+> temporarily on: the old single-shot path gets a 400 and loses the nonce; the new one is refused, re-signs,
+> and succeeds on attempt 2, then needs a single attempt once the nonce is cached.
+>
+> **The flag is still off** — see [DR-20](../audit/05-decision-records.md#dr-20--dpop-nonces-dpopnoncerequired),
+> which now rests on nonces being OPTIONAL and the transcripts being banked, rather than on the client being
+> unable to cope. If you enable it on a deployment of your own, this SPA will work.
 >
 > **DPoP itself works without any of this** — nonces are OPTIONAL in RFC 9449, and the flag controls nonce
-> *enforcement*, not whether tokens can be sender-constrained. To make the section runnable yourself: **Service
-> Settings → Tokens and Claims → Advanced → DPoP Token → Require Nonce**, plus a non-zero duration. The `DPoP`
-> sender-constraining that *does* work here is demonstrated end to end, with captured responses, in
+> *enforcement*, not whether tokens can be sender-constrained. The `DPoP` sender-constraining that *does* work
+> here is demonstrated end to end, with captured responses, in
 > [`FAPI-TUTORIAL.md` Part 6](FAPI-TUTORIAL.md#part-6-failure-demonstrations).
 
 ---
