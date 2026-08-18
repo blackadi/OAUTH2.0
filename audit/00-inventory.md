@@ -548,3 +548,4 @@ it the genuine gap.
 - [x] No verdicts written (correct for Phase 0).
 - [x] Spec scope reconciled against `llms.txt`, with additions and exclusions stated and reasoned.
 - [ ] *Not applicable at Phase 0:* verdict coverage, decision records, `DOC_INCORRECT` consequences, rebuild assessment — Phases 2–4.
+  - ✅ **All four delivered in later phases**, as intended: verdict coverage and `DOC_INCORRECT` consequences across the 55 files in `02-findings/`; **21** decision records in `05-decision-records.md`; the rebuild assessment in `04-remediation-plan.md` §3 (**no rebuild**). The box stays unticked because it records the honest **Phase 0** state.

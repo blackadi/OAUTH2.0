@@ -131,6 +131,78 @@ against it before calling the capstone complete._
 - [x] **2026-08-14 — T2-5: citation provenance, and the sweep that saved five fetches** (below)
 - [x] **2026-08-15 — T2-17 COMPLETE, and with it Phase 5 and the whole RFC audit** (below)
 
+### 2026-08-18 — the audit's own labels were the last stale thing in it, and one decision had never been written
+
+**A full review of `audit/` against the repo rather than against its own prose.** Every gate green — server
+**1104 / 75**, client **118 / 17**, `typecheck` clean, `lint` 0 errors, `check-docs` 166 files,
+`check-route-coverage` 92 routes with an empty baseline, `check-discovery` baseline 66 members. Tiers 0–3 are
+genuinely complete and the S1 register really is **8 found, 0 remain**. The audit's substance held up.
+
+**Its labels did not, in about a dozen places** — the same defect the file had already caught in itself on
+2026-08-17 and not finished. `04-remediation-plan.md` and `05-decision-records.md` both still opened with
+*"Status: ⬜ awaiting Gate 4"* for a gate approved on 2026-08-12; §9 read as a live question list; the S1
+register still called RFC 7636 and RFC 9470 **OPEN** months after both were downgraded; `RESUME.md` named a
+branch merged in PR #47, still called Phase 5 *"🔨 in progress"* four lines after §0 declares it closed, and
+carried two stale queues. All corrected, and the strike-through convention kept where a paragraph was written
+while the stale line was true — **deletion loses the reason, correction keeps it.**
+
+> **The sharpest one, because it was wrong by fifteen minutes.** `RESUME.md` §0 said *"`NATIVE-SSO-1.0.md` F-4
+> is new and **deliberately unfixed**"* — and `bd79638`, the same afternoon, fixed it: the handler now mints
+> `randomBytes(32)` when Authlete returns no `deviceSecret`, and `NATIVE-SSO-1.0.md:121` has said ✅ FIXED
+> throughout. **The summary and the thing it summarised drifted apart inside one session.** That is the
+> failure mode this file's own 2026-08-17 entry names, recurring immediately, which argues the fix is
+> structural: *write the closure in the same commit as the work, or the summary is fiction by the next one.*
+
+**One decision had never been written, and nothing could have noticed.** `FED-W2` has read ⛔ *blocked on "a
+Tier 3-shaped decision"* since 2026-08-13, pointing at a decision record that **did not exist** — so the audit
+could truthfully report *"all 20 decision records are ruled"* while a twenty-first was outstanding and
+invisible. Written up as **DR-21 (OpenID Federation)** with the live evidence (`[A316201]`, no federation JWK
+Set) and a recommendation to **decline**: nothing claims federation works, so unlike Theme 2 there is no false
+advertisement to correct; and an entity configuration with no trust anchor is *demonstrable, not
+interoperable* — the same caveat BCL-W5 already carries, and one closed loop is a teaching artefact where two
+would be a pattern. **Ruled the same day: decline.** So `FED-W2` moves from ⛔ *blocked* to ⛔ *closed by
+ruling* — and that distinction is the record's whole point, because a reader can now tell *"nobody got to it"*
+from *"we looked at it and said no."* All **21** records are ruled; nothing is awaiting an answer.
+
+> **The severity was deliberately NOT downgraded with the ruling**, and the consistency argument is the
+> reusable part. `NATIVE-SSO-1.0.md` is also a ruled decline and is also still S2. **A decision to decline
+> changes whether a gap will be closed; it does not change how large the gap is.** Downgrading on a ruling
+> would make severity mean *"how much we intend to do about it"* — a different axis, and one that would
+> quietly re-rank every declined feature in the audit. `RFC8705-mutual-tls.md` **did** fall S2 → S4, and the
+> difference is instructive: a work item *shipped* there (8705-W1), rather than a decline being reaffirmed.
+
+> **The transferable finding: a blocked work item whose blocker is a decision is evidence that the decision
+> exists.** The decision register was built by asking *"where did the audit find a choice?"* — and this choice
+> was found by Phase 5, after the register closed. **Check that a record answers a blockage; a pointer to a
+> decision is not a decision.**
+
+**Eight deliberate opens are now tabulated in one place** — `04-remediation-plan.md` **§7.5**, each with its
+reopen condition: `accessTokenDuration` at 86400 (Modules 07/10 rest on it), the logout rate limiter (left out
+of T0-3 visibly, verified still absent in `routes/logout.routes.ts`), 9701-W3's six silently-dropped
+introspection fields (two are caller key material, hence a plan not a doc line), 7662-W6, four unachievable
+vendor items, **FED-W2** (declined, DR-21), RFC 9068 F-3, and retired JARM-W6. **They were previously
+discoverable only by reading 55 files.**
+
+**And every `AGENTS.md:NNN` citation in the repo was wrong** — seventeen of them, across four files. `:225`
+and `:230` pointed at a configuration-flag table where the Security-critical surfaces rows had moved to
+`:280-281`; `:303` at *"Two rules learned the hard way"* instead of the DPoP nonce bullet; `:137`, `:358-360`
+and `:363` likewise. **They were already stale before this session touched the file**, and `check-docs.mjs`
+cannot see it: an in-range wrong line number passes. All seventeen replaced with **content anchors** (*"the
+**Access control** row"*, *"the **DPoP nonce flow** bullet"*), which is this repo's own rule —
+`04-remediation-plan.md` §7.4 step 7, and the reason `PROGRESS.md` refs were converted the same way. Side
+effect: the checker's unverifiable-reference count dropped **464 → 447**.
+
+**Also refreshed:** `AGENTS.md`'s test counts, which read **939 / 69** against an actual **1104 / 75** — the
+unit breakdown had 5 categories where there are 7 (`config/` and `views/` were missing, and `config/` holds
+the test that asserts the fail-safe `NODE_ENV` default). A note now says to re-run rather than carry them.
+
+**Ruled while reviewing: `audit/` stays.** It is load-bearing, not archival — **27 files outside it reference
+it**, including four server source files and seven tests that cite a finding as the reason the test exists,
+and **17 markdown links** that `check-docs.mjs` validates, so deleting the directory fails CI on the next
+push. `README.md` also sells it as the evidence behind every status in its own feature table; removing it
+would turn those into unsourced claims, which is precisely Theme 2. And DR-02/04/09/20/21 are **live policy** —
+without them the next person "fixes" a deliberate decline.
+
 ### 2026-08-17 — Redis went live, which turned an untested branch into the live path
 
 `REDIS_URL` is now set and `authlete-redis` is up, so **connect-redis is the session store** rather than
@@ -3003,7 +3075,7 @@ references** section. RFC 7800 is the substantive one — it defines the `cnf` c
 (`x5t#S256`) and SD-JWT key binding (`jwk`) all depend on, so Modules 05, 09b and 10 all rest on it.
 
 **Also resolved:** Stage 1's critique item 5 ("`AGENTS.md` says 21 sections but there are 20") is **no longer
-true** — `AGENTS.md:137` says 20, and `client/src/App.tsx` has exactly 20 `sectionComponents` entries. No edit
+true** — `AGENTS.md`'s **Sections** bullet says 20, and `client/src/App.tsx` has exactly 20 `sectionComponents` entries. No edit
 needed; the item is closed.
 - [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
 

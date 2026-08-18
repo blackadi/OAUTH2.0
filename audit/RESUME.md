@@ -5,21 +5,46 @@ the state so a new session resumes without re-reading the repo, re-fetching spec
 Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` §5 second.
 
 - **Last updated:** 2026-08-17 — ✅ **THE AUDIT IS CLOSED, and now nothing is outstanding at all.** Tiers 0–3 all complete; T2-17 shipped; nothing in the remediation plan is open. **JARM-W6 — the last open row — was RETIRED on 2026-08-17**, ruled out of scope: filing a vendor support ticket is not a deliverable of this repository. The finding is kept, the obligation is not. Read §0 in full before anything else — and note that everything after this sentence in this bullet is **historical narrative kept because its rulings still hold**, not a to-do list. *(The remainder is the 2026-08-13/14 state.)* *(The remainder of this bullet is the 2026-08-13 state, kept because its rulings still hold.)* (Gate 4 approved; **Phase 5 in progress — Tier 0 complete; Tier 1: T1-1 … T1-10 and T1-17 shipped, T1-13 closed as unachievable, T1-21 declined**, see `04-remediation-plan.md` §1.2). **T1-9 + T1-10 + 6749-W1 shipped 2026-08-13**: `/api/gm/:grantId` is now a protected resource in the same sense UserInfo is — `DPoP` accepted, the §7.2 downgrade refused, an RFC 6750 §3.1-shaped no-token challenge — every `htu` derives from `dpopHttpTarget()` so a query string no longer breaks proof validation, a caller can no longer choose the introspection `targetUri`, and dual-channel client credentials are refused at `/api/token` and `/api/par`. **Two probes rewrote that design before any code**: `/gm` checks the DPoP binding independently of the ownership introspection (`[A281305]`), and one proof serves both calls. **B1-W1 + B1-W2 + MS-W1 also shipped 2026-08-13**: `/api/jar/process` was unauthenticated and returned Authlete's whole authorization response **including the `ticket`** — a credential — plus `service` and `client`, always with status 200; it is now admin-only with an allowlist, and `jar.controller.ts` joins the surfaces list (**a DR-12 dependency settled**). RFC 9701 JWT introspection returns a signed `token-introspection+jwt` instead of **500**, the profile's only live one — and it signs with the key T1-2 registered, so an earlier ⚙️ action is what made a later code fix produce a signature. **`rsUri` is required for that path and must not be defaulted or sent unconditionally** — see `AGENTS.md`. **T1-14 + T1-15 shipped 2026-08-13 too**: `POST /api/backchannel_logout` performed **5 of §2.6's 11 validation steps** — no `iss`, no `aud`, no `iat` bound, no `sub`/`sid` presence, no `nonce` rejection — and then destroyed **`req.session`**, which is the *caller's* session, so it terminated nothing while answering 200. Both fixed and driven live against a locally-served JWKS. The `jwt.verify` rule is in `AGENTS.md` and **its second clause is the one that gets skipped**: pass `issuer`/`audience`, *and* refuse when they are unconfigured, because omitting an option silently downgrades the check. Two new settings (`BACKCHANNEL_LOGOUT_ISSUER`/`_AUDIENCE`) — **not** `JWT_ISSUER`, since there this server is the RP. **BCL-W3 and BCL-W7 rode along.** The entry is **S2 → S3**. **T1-16 + T1-18 shipped 2026-08-13**: one line (`requestBody: {}`) turned federation's **400 blaming the caller** into a **500 naming the missing configuration** — but **FED-W1's criteria cannot be met by it**, because an entity statement needs a federation JWK Set on the service (`[A316201]`), so **FED-W2 stays blocked** on a feature-enablement decision. **FED-W5 closed with no change of its own**, since the controller mapping was already right once the SDK stopped throwing — the same defect shape as BCL-W3 but a different fix, because *where the throw happens* decides which. **T1-20 shipped 2026-08-13**: `ciba.service.ts` never read `Authorization: Basic`, so the `CLIENT_SECRET_BASIC` configuration `AGENTS.md` *recommends* for CIBA could not authenticate. Three channels now, matching PAR; `appendToParams` extracted to `utils/params.ts`. Verified live — Basic reaches `USER_IDENTIFICATION`, and body credentials for that client now correctly earn `401 [A157357]` instead of being **silently converted** onto the Basic channel. **The three S1 residues are closed as documentation**: `README.md` opens with a *"Read this before you copy anything"* table of the four deliberate departures, and the feature tables carry honest statuses (FAPI 2.0 / Native SSO / Federation **Not enabled**, Backchannel Logout **Partial**, PKCE **supported, not required**). **A CI gap was found while verifying**: the client job ran `vite build` alone, which does not typecheck, so `npm run typecheck` was never invoked and **16 client test files never ran** — 4 real type errors had accumulated. Fixed, and both gates added to `ci.yml`. **1081 server tests / 73 files; 109 client tests / 16 files** (721/63 before the route-coverage backlog was drained, 969/70 before T1-19 batches 2 and 3 — see §0). **`npm run lint` was added to both CI jobs on 2026-08-14**; it had never run on either, and the client's was failing with 4 errors and 7 warnings. **TIER 1 IS COMPLETE as of 2026-08-14** — `T1-19` (all 13 items, three batches) and `T1-11` (the JAR half on 08-13, the four spec-shaped endpoints on 08-14). What remains in the plan is Tier 2's 11 open documentation items and Tier 3's decisions. **PKCE is now ENFORCED (2026-08-13) and `RFC7636-pkce.md` drops S1 → S3** — `pkceRequired` + `pkceS256Required` are `true` on `4277838306` and `2176571218`, verified live (`[A124301]` with no challenge, `[A124308]` on `plain`, `INTERACTION` on `S256`). **`1523514379` and `1678274156` stay unenforced deliberately** and must not be "fixed": Module 02 teaches the plain flow and Module 03 shows what it costs, so the lesson needs a client that still permits it — recorded in `AGENTS.md`. **Gate 4 Q1 is superseded**; it asked whether the entry stays S1 until PKCE is *actually* required, and it now is. Note §7.2's Tier 1 exit criterion is **under-specified** — it covers only the ⚙️ half of a tier titled *configuration and contained code*, and says *three* probes where T1-17 had five; fix it before using it to judge the tier complete. **T1-17 answered all five unprobed behaviours and deleted work rather than creating it**: `9449-W4` resolved *in our favour* (`/auth/introspection` enforces `cnf.jkt` with no proof — `[A065308]`), so **9449-W3 stays S2 and T1-10 is not escalated**; `7523-W1` showed Authlete refuses a no-`exp` assertion (`[A314305]`), demoting **7523-W2** to defence-in-depth; `GM-W2` works end to end with **no AS code**; `8628-W6` is substituted. Only **6749-W1** still owes a ruling — Authlete does *not* reject dual-channel credentials and the strict-checking page is silent, so the plan's "no code change if Authlete already rejects" escape does not apply. **Do not re-run these five probes.** **S1 register: 8 found, 0 remain — verified entry by entry on 2026-08-13, not asserted.** Current severities: `ERRORHANDLER-…` **closed**; `OIDC-RP-INITIATED-LOGOUT-1.0` **S4**; `RFC8628-…`, `RFC7662-…`, `RFC9470-…`, `RFC7636-pkce`, `FAPI-2.0-SECURITY-PROFILE`, `RFC9700-…` all **S3**. The last three fell on 2026-08-13 — PKCE by being enforced, the other two because `README.md` stopped claiming what was not true. The latent S1 (9470 F-3) is retired rather than downgraded. **The ⚙️ configuration block is complete.** **T1-5 shipped with DR-07 ruled and executed** — nine advertised client-auth methods → five, `service.get()` works, and both FAPI endpoints answer `200` with live values for the first time since 2026-08-06; Module 10 Ex 4 was **rebuilt, not retired**. **T1-4 is deliberately half-landed** — the 24-hour lifetime is kept on purpose (GM-W1/FAPI1-W3 open by decision). **B1-W6 is closed**: `idTokenReissuable` is now `true` and kept, because the `ID_TOKEN_REISSUABLE` branch was calling the wrong Authlete API and now calls `POST /idtoken/reissue`.
-- **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `audit/phase3-and-tier0-fixes`
+- **Repo:** `/home/blackadi/Documents/OAUTH2.0`. **The audit branch `audit/phase3-and-tier0-fixes` is long merged** (PR #47, `19b0cd5`) — every fix below is on `main`. Do not go looking for that branch.
 - **Skill:** `.claude/skills/rfc-audit/SKILL.md` — invoke with `/rfc-audit` or follow it directly
 - **Verify anything under `audit/` still resolves:** `node scripts/check-docs.mjs` — currently **166 markdown files, clean**, validating ~1,400 references across six forms. Also run `node scripts/check-route-coverage.mjs` — **92 routes, empty baseline**, so a new endpoint without a test breaks the build.
 
 ---
 
-## 0. START HERE — the next piece of work, and why it is that one
+## 0. START HERE — the state of the audit, and why there is nothing to pick up
 
-> ### ✅ THE AUDIT IS CLOSED. There is no next item.
+> ### ✅ THE AUDIT IS CLOSED. Nothing is owed, and no ruling is outstanding.
 >
-> **Tiers 0, 1, 2 and 3 are complete.** T2-17 — the last row in the plan — shipped **2026-08-15**. Every
-> decision record is ruled, every probe the audit owed is spent, and the remediation plan has no open work.
+> **Tiers 0, 1, 2 and 3 are complete.** T2-17 — the last row in the plan — shipped **2026-08-15**. Every probe
+> the audit owed is spent, the remediation plan has no open work, and **all 21 decision records are ruled**
+> (DR-21, the last, on 2026-08-18).
 >
-> **Do not go looking for the next item. There isn't one.** If you are here to change something, you are
+> **Do not go looking for the next work item. There isn't one.** If you are here to change something, you are
 > starting new work, not continuing this.
+>
+> #### The last record to arrive was invisible until somebody looked for it — DR-21, OpenID Federation
+>
+> **Written and ruled 2026-08-18.** `FED-W2` had read ⛔ *blocked on a Tier 3-shaped decision* since
+> 2026-08-13, pointing at a decision record that **did not exist** — so this file could truthfully say
+> *"every decision record is ruled"* while a twenty-first was outstanding and unwritten.
+> [`05-decision-records.md` → DR-21](05-decision-records.md#dr-21--openid-federation) states the question, the
+> live evidence (`[A316201]`, no federation JWK Set) and the ruling: **do not enable.** With no trust anchor
+> and no federation peer, an entity statement would be signed by us, for us, and validated by nobody —
+> *demonstrable, not interoperable*, which is the caveat BCL-W5 already carries. `README.md` never claimed
+> federation works, so declining corrects nothing and hides nothing.
+>
+> **The transferable finding: a blocked work item whose blocker is a decision is evidence that the decision
+> exists.** The decision register was built by asking *"where did the audit find a choice?"*, and this choice
+> was found by Phase 5 — after that register had closed. Check that a *record* answers a blockage; a pointer
+> to a decision is not a decision.
+>
+> #### Where the deliberate opens live
+>
+> Eight things are open **on purpose** — `accessTokenDuration`, the logout rate limiter, 9701-W3's six dropped
+> fields, 7662-W6, four unachievable vendor items, **FED-W2 (declined, DR-21)**, RFC 9068 F-3, and retired
+> JARM-W6. They are tabulated once,
+> with their reopen conditions, in **`04-remediation-plan.md` §7.5**. That table is the answer to *"is anything
+> left?"* — not a backlog, and not an omission either.
 >
 > #### Nothing is owed. The one item that used to be was retired on 2026-08-17
 >
@@ -46,12 +71,14 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 > | | |
 > |---|---|
 > | **S1 findings** | 8 found, **0 remain** |
-> | **Tier 0 / 1 / 2 / 3** | complete · complete · **17 of 17** · **19 of 19 ruled** |
-> | **Server tests** | **1097 / 74 files** (721/63 at the start of Phase 5) |
-> | **Client tests** | 109 / 16 |
+> | **Tier 0 / 1 / 2 / 3** | complete · complete · **17 of 17** · **21 of 21 ruled** |
+> | **Decision records** | **21, all ruled** — four enabled, eleven declined, one deferred, one defect kept on purpose, one deliberate non-record |
+> | **Open by decision** | 8 items, all in `04-remediation-plan.md` **§7.5** — not a backlog |
+> | **Server tests** | **1104 / 75 files** *(re-run 2026-08-18; 1097/74 at audit close, 721/63 at the start of Phase 5)* |
+> | **Client tests** | **118 / 17** *(re-run 2026-08-18)* |
 > | **`check-docs.mjs`** | clean, 166 files, ~1,400 references |
 > | **`check-route-coverage.mjs`** | 92 routes, **empty baseline** — a new route without a test breaks the build |
-> | **Discovery document** | 65 members *(measured **66** on 2026-08-17 — the extra member is unattributable, because only a count was kept)* |
+> | **Discovery document** | **66 members, and now a LIST** — `scripts/discovery-baseline.json`, captured 2026-08-17. The 65→66 move was unattributable precisely because August kept only a count; that is the defect `check-discovery.mjs` exists to prevent recurring |
 >
 > #### What T2-17 itself taught, since it is the last entry
 >
@@ -86,10 +113,17 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 > **three** blockers. **A marker naming a remedy nobody executed reads as actionable and is therefore *less*
 > likely to be re-checked than a plain "unknown".**
 >
-> Two things a future session should not re-derive. **`NATIVE-SSO-1.0.md` F-4 is new and deliberately unfixed**:
-> `native-sso-response.handler.ts:22-28` requires a `deviceSecret` Authlete does not return on Phase 1, so
-> enabling Native SSO yields **HTTP 500 on the first request**; fixing it alone would ship half of a declined
-> feature. And **`RFC9068-…` F-3 is now observed, not predicted** — a real `at+jwt` specimen carries **no
+> Two things a future session should not re-derive. **`NATIVE-SSO-1.0.md` F-4 — ⚠️ this bullet said
+> *"deliberately unfixed"* until 2026-08-18, and it was wrong by about fifteen minutes.** The finding was real
+> — `native-sso-response.handler.ts` required a `deviceSecret` Authlete does not return on Phase 1, so
+> enabling Native SSO yielded **HTTP 500 on the first request** — but it was **fixed the same day it was
+> found** (`bd79638`, 2026-08-17): the handler now mints `randomBytes(32)` when Authlete returns none, always
+> sends `deviceSecretHash`, forwards Authlete's own secret unchanged on Phase 2, and keeps the 500 **only**
+> for a missing `accessToken`. Locked by a new `native-sso-response.handler.test.ts` — the handler had no unit
+> test, which is why it survived. `NATIVE-SSO-1.0.md:121` has said ✅ FIXED throughout. **The lesson is the one
+> this file keeps re-learning: a summary and the thing it summarises drift apart, and the summary is the one
+> people read.** DR-04 still declines the feature; the fix removes a *latent* defect, it does not enable
+> anything. And **`RFC9068-…` F-3 is now observed, not predicted** — a real `at+jwt` specimen carries **no
 > `aud`**, breaching §2.2 as well as §3, which makes satisfying §3 a *prerequisite* of 9068-W1.
 >
 > Also corrected while re-deriving, none of it caused by this work: **nine self-contradicting status labels in
@@ -327,7 +361,7 @@ exported) · **T2-13** (the 60s/60min error — **it was in three files, not one
 > locked by **12 CLI-level tests** — the script's first ever. Its justification is one line: CUR-3c-W4's fix
 > broke a lab command I had added minutes earlier, and only *running* it showed that.
 
-**Tier 2 remaining (1):** T2-17. *(T2-5 shipped 2026-08-14 — see §0.)*
+~~**Tier 2 remaining (1):** T2-17.~~ ✅ **T2-17 shipped 2026-08-15 — Tier 2 is 17 of 17.** *(Line kept struck through rather than deleted, because the paragraphs below it were written while it was true.)*
 
 **T2-14 shipped 2026-08-14, and it spent the audit's last two fetches — both of which went against the audit.**
 
@@ -604,16 +638,17 @@ was mostly a writing task, not a configuration one.**
 > identity — so building it for any one consumer reopens all four. Treating them as four independent gaps was the
 > mistake Phase 2 corrected.
 
-**Then, in order:** **P4** Tier 2's 17 documentation items,
-**T2-1 first** (the `UNVERIFIED` convention across nine tutorials — six S2s collapse into one writing task) ·
-**P5** the remaining Tier 3 decisions (DR-02 qualify-don't-enable, DR-04 don't enable, DR-06/08/09/10/12 and
-the seven standing declines) plus **`CLIENT-UPDATE-FIELD-LOSS`**, which I recommend fixing: `buildClientInput`
-names ~40 of the `Client` schema's 108 properties against a **replace-semantics** API, so an admin `PATCH`
-silently clears the rest.
+~~**Then, in order:** P4 Tier 2's 17 documentation items, T2-1 first · P5 the remaining Tier 3 decisions plus
+`CLIENT-UPDATE-FIELD-LOSS`.~~ ✅ **All of it shipped.** Tier 2 closed 2026-08-15 (T2-17 last); every Tier 3
+decision is ruled; and **`CLIENT-UPDATE-FIELD-LOSS` was fixed on 2026-08-14 (CU-W2)** — `update()` is
+read-modify-write, and CU-W1's live probe then showed Authlete **REPLACES**, so an omitted `tokenAuthMethod`
+reset to `NONE` rather than merely clearing. *This queue is kept struck through as a record of what was
+planned, not as a list of what to do.*
 
-**Current baselines:** **1081 server tests / 73 files**, **109 client / 16**, server lint **4 pre-existing
-warnings** (client lint clean at `--max-warnings 0`), `check-docs` **167 files**, route coverage **92 routes,
-empty baseline**.
+**Baselines at the time this section was written (2026-08-14):** 1081 server tests / 73 files, 109 client / 16,
+`check-docs` 167 files. **Current, re-measured 2026-08-18:** **1104 server / 75 files** · **118 client / 17** ·
+server lint **0 errors, 4 pre-existing warnings** (client lint clean at `--max-warnings 0`) · `check-docs`
+**166 files** · route coverage **92 routes, empty baseline** · `check-discovery` baseline **66 members**.
 
 ## 1. Phase status
 
@@ -630,8 +665,8 @@ empty baseline**.
 | 1 — specification matrix | `audit/01-spec-matrix.md` | ✅ complete, Gate 1 approved |
 | 2 — per-spec deep audit | `audit/02-findings/` — **55 files** | ✅ **complete**, all batches B1–B7 approved at Gate 2 |
 | 3 — curriculum audit | `audit/03-curriculum-audit.md` | ✅ **complete** — 3a, 3b, 3c, 3d all written |
-| 4 — synthesis + remediation plan | `audit/04-remediation-plan.md`, `audit/05-decision-records.md` | ✅ **complete** — awaiting Gate 4. **§8 below is superseded by those two files** |
-| 5 — execution | code + docs | 🔨 **in progress** — Gate 4 approved. **Tier 0 complete: T0-1, T0-2, T0-5, T0-6 (2026-08-11), T0-3, T0-4 (2026-08-12). Tier 1: T1-1 … T1-7 (2026-08-12), the ⚙️ block complete; T1-13 closed as unachievable.** RFC 9700 S1 closed; `id_token_hint` verified so **BCL-W5 is unblocked**; §2's confirmation MUST met; §3's per-client matching shipped as far as the vendor permits. The logout entry is **S1 → S4** and all five RPL items are closed. **T1-1 closed the last easily-exploitable open S1**; **T1-7 retired the latent one.** Three S1s remain, all non-exploitable and all now **narrower than their entries**: `FAPI-2.0-…` (the false attestation is gone; open on `README.md`'s claim), `RFC7636-pkce.md` (the false report is gone in both halves; open on the unenforced control), `RFC9700-…` (open on F-2's ROPC framing alone). **T1-5 closed the last of the false-reporting halves** by making `service.get()` work — see `SERVICE-CONFIG-PROBE.md` §17. |
+| 4 — synthesis + remediation plan | `audit/04-remediation-plan.md`, `audit/05-decision-records.md` | ✅ **complete; Gate 4 approved 2026-08-12.** **§8 below is superseded by those two files** |
+| 5 — execution | code + docs | ✅ **COMPLETE 2026-08-15** (last row T2-17; JARM-W6 retired 2026-08-17). Tier 0 ✅ · Tier 1 ✅ · Tier 2 **17/17** ✅ · Tier 3 **all decisions ruled** — see `04-remediation-plan.md` §7 and §7.5 for what is open *by decision*. **S1 register: 8 found, 0 remain.** *The historical detail this row used to carry is preserved below:* Gate 4 approved. **Tier 0 complete: T0-1, T0-2, T0-5, T0-6 (2026-08-11), T0-3, T0-4 (2026-08-12). Tier 1: T1-1 … T1-7 (2026-08-12), the ⚙️ block complete; T1-13 closed as unachievable.** RFC 9700 S1 closed; `id_token_hint` verified so **BCL-W5 is unblocked**; §2's confirmation MUST met; §3's per-client matching shipped as far as the vendor permits. The logout entry is **S1 → S4** and all five RPL items are closed. **T1-1 closed the last easily-exploitable open S1**; **T1-7 retired the latent one.** Three S1s remain, all non-exploitable and all now **narrower than their entries**: `FAPI-2.0-…` (the false attestation is gone; open on `README.md`'s claim), `RFC7636-pkce.md` (the false report is gone in both halves; open on the unenforced control), `RFC9700-…` (open on F-2's ROPC framing alone). **T1-5 closed the last of the false-reporting halves** by making `service.get()` work — see `SERVICE-CONFIG-PROBE.md` §17. | |
 
 > **Phase 4 output, and what it settled.** Read [`04-remediation-plan.md`](04-remediation-plan.md) first — its
 > §1.1 supersedes §6 below, and its §2 supersedes §8.3.
