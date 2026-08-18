@@ -3,7 +3,7 @@
 
 # Server
 /server/src/ @blackadi
-/server/tests/ @blackidi
+/server/tests/ @blackadi
 
 # Client
 /client/src/ @blackadi
