@@ -19,7 +19,10 @@
 > **FED-W2 is blocked, and now precisely.** There is no entity statement to verify against §3, and there will
 > not be until a **federation JWK Set is configured on the service** — a ⚙️ action no work item schedules,
 > and a *feature-enablement* decision rather than a fix, so it is not taken unilaterally. It belongs with the
-> Tier 3 "claimed working, flag off" family (Theme 2). Note `README.md` makes no federation claim, so nothing
+> Tier 3 "claimed working, flag off" family (Theme 2) — **and is now recorded there as DR-21, ruled
+> 2026-08-18: do not enable.** Note this entry is the *mildest* member of that family, because nothing ever
+> claimed federation works: `README.md` reads *"Not enabled — no federation JWK Set is configured"* and the
+> SPA shows the honest 500, so there is no false advertisement to correct — only a capability to decline. Note `README.md` makes no federation claim, so nothing
 > is currently false; the SPA's OIDC Federation section will show the honest 500.
 >
 > **Coverage note:** `federation.service.ts` had **no tests**, and could not have had any — the shared
@@ -27,7 +30,19 @@
 > *"every SDK method"*. Both are fixed.
  1.0
 
-- **Verdict:** `PARTIAL` — both endpoints are non-functional
+> ## ⛔ RULED 2026-08-18 — the feature is DECLINED, and the verdict below is unchanged on purpose
+>
+> [`05-decision-records.md` → DR-21](../05-decision-records.md#dr-21--openid-federation): **do not enable.**
+> Both endpoints stay non-functional, answering **500** with `[A316201]` naming the missing federation JWK Set.
+>
+> **The severity is deliberately NOT downgraded**, and the consistency argument is why: `NATIVE-SSO-1.0.md`
+> is also a ruled decline and is also still **S2**. A decision to decline changes *whether the gap will be
+> closed*; it does not change *how large the gap is*. Downgrading on a ruling would make severity mean
+> "how much we intend to do about it", which is a different axis and would quietly re-rank every declined
+> feature in the audit. Compare `RFC8705-mutual-tls.md`, which **did** fall S2 → S4 — because a work item
+> (8705-W1) *shipped*, not because the decline was reaffirmed.
+
+- **Verdict:** `PARTIAL` — both endpoints are non-functional *(by decision since 2026-08-18 — DR-21)*
 - **Severity:** **S2**
 - **Status:** OpenID **Final**, **17 February 2026** — verified this session. **`SPEC-INVENTORY.md` and `01-spec-matrix.md` record "1.1, Final, 5 May 2026", which the served document does not support — see F-3.**
 - **Authlete version:** 3.0 (`api-reference/federation-endpoint/*`)
@@ -158,7 +173,7 @@ mechanism to catch it existed — this entry just gets there first.
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | FED-W1 | Pass `{ requestBody: {} }` to `federation.configuration` | S | ⚠️ **SHIPPED 2026-08-13, criteria unmet by construction — see the banner.** The line is in and a test asserts it. But the stated outcome (*200 with `application/entity-statement+jwt`*) needs a **federation JWK Set on the service**, which the item never mentions; without it Authlete answers `[A316201]`. **It does not unblock W2.** What it does deliver is honesty: both routes now return **500 with the real reason** instead of **400 blaming the caller**, which closes **FED-W5**. |
-| FED-W2 | Verify the entity statement against §3 | S | ⛔ **BLOCKED 2026-08-13, and the blocker is now identified.** No entity statement exists to verify: `[A316201]` — no federation JWK Set is configured on the service. The prerequisite is a ⚙️ service write that enables a feature, not a fix, so it is a **Tier 3-shaped decision** and is not taken here. Reopen after that decision; the verification steps as written remain correct. |
+| FED-W2 | Verify the entity statement against §3 | S | ⛔ **CLOSED BY RULING 2026-08-18 — not blocked, declined.** [`05-decision-records.md` → DR-21](../05-decision-records.md#dr-21--openid-federation) rules **do not enable**: with no trust anchor and no federation peer, an entity statement would be signed by us, for us, and validated by nobody — *demonstrable, not interoperable*, the caveat BCL-W5 already carries. **The verification steps below stay correct and are kept for whoever reopens this.** *(Originally ⛔ blocked 2026-08-13 pointing at a decision that no record held; written up and ruled on 2026-08-18. The gap — a work item blocked on an unwritten decision — is itself recorded in DR-21.)* No entity statement exists to verify: `[A316201]` — no federation JWK Set is configured on the service. The prerequisite is a ⚙️ service write that enables a feature, not a fix, so it is a **Tier 3-shaped decision** and is not taken here. Reopen after that decision; the verification steps as written remain correct. |
 | FED-W3 | Reconcile the version and date | S | ✅ **DONE 2026-08-14 (T2-5) — and the second branch applied: 1.1 is real and now sourced.** Fetched `openid.net/specs/openid-federation-1_1.html` **and** `…-final.html` (identical): *"OpenID Federation 1.1"*, **Final**, **5 May 2026**. Also `…-1_0.html`: *"OpenID Federation 1.0"*, **Final**, **17 February 2026**. Both dates in the inventory were **already right**. **The relationship was not, and that is the finding.** 1.1's own abstract says it *"introduces no new functionality not present in OpenID Federation 1.0"* — it is a **split**, not an upgrade: the protocol-specific half moved to a separate Final of the same date, **OpenID Federation for OpenID Connect 1.1** (`…-connect-1_1.html`), which now has its own row. So *"superseded by 1.1 — cite 1.1"* was actively misleading for this repo, whose **two** federation surfaces landed in **different documents**: the entity configuration endpoint is 1.1 §9, while `POST /api/federation/registration` (Explicit Registration) is in the Connect document. A reviewer following the old shorthand would have searched 1.1 for a registration requirement, found nothing, and concluded it was dropped. |
 | FED-W4 | Add the per-row provenance discipline | S | Phase 4 process item: every `SPEC-INVENTORY.md` row records the URL fetched and the header line the status/date came from. Would have caught all three instances of F-3's class. |
 | FED-W5 | Report the failure as a server error until W1 ships | S | ✅ **CLOSED 2026-08-13 by FED-W1 itself**, which is the outcome this item was the fallback for. With `requestBody` present the SDK no longer throws on a 400; Authlete's `INTERNAL_SERVER_ERROR` reaches the controller, whose mapping was **already correct**, and the caller gets 500. Verified live at both routes. No separate change was needed — the same shape as **BCL-W3**, which did need one because the throw happened in our code. |

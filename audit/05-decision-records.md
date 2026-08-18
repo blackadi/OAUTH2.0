@@ -2,19 +2,24 @@
 
 - **Written:** 2026-08-11
 - **Companion:** [`04-remediation-plan.md`](04-remediation-plan.md) — the ordered plan these records gate
-- **Status:** ⬜ awaiting **Gate 4**
+- **Status:** ✅ **CLOSED. All 21 records are ruled.** Gate 4 approved 2026-08-12; **DR-21** (OpenID Federation) was written and ruled **2026-08-18** — it had been invisible until then, implied by `FED-W2`'s blocked state and recorded nowhere. **Nothing in this file is awaiting an answer.**
 
 **What belongs here.** A record for each **genuine choice** — a case where the audit found no defect to fix but a
 position to take, and where taking a different position would have been defensible. A missing feature with an
 obvious fix is a work item, not a decision. That distinction is why RFC 9901 gets no record (DR-19) and why
 `accessTokenDuration` does not either: shortening it is simply correct.
 
-**Twenty records.** ~~Eleven are open rulings Gate 4 must make~~ — **ten**, since **DR-07 was ruled and
-executed on 2026-08-12**; seven confirm standing declines with their rationale corrected; one is the
-meta-decision to write no record. DR-01's metadata half shipped with DR-07 without needing a re-ruling.
-**DR-20 was added 2026-08-17**, after the audit closed: `dpopNonceRequired` was the one configuration-gated
-`UNVERIFIED` marker with no record behind it, and a flag that has been switched on and reverted twice without
-anyone ruling on it is a decision postponed, not a decision made.
+**Twenty-one records.** Twelve were rulings Gate 4 had to make and all twelve are made; seven confirm standing
+declines with their rationale corrected; one is the meta-decision to write no record. DR-01's metadata half
+shipped with DR-07 without needing a re-ruling.
+
+**Two were added after the audit closed, and both for the same reason — a decision that had been *taken by
+default* rather than made.** **DR-20** (2026-08-17): `dpopNonceRequired` had been switched on and reverted
+twice without anyone ruling on it, which is a decision postponed. **DR-21** (2026-08-18): OpenID Federation was
+never recorded at all, yet `FED-W2` sat ⛔ blocked pointing at *"a Tier 3-shaped decision"* that no record
+held — so the audit could report "every decision is ruled" while one was merely unwritten. **A blocked work
+item whose blocker is a decision is evidence that the decision exists**; if no record answers it, the record is
+missing, not the decision. Both are now ruled.
 
 Each record carries a **revisit trigger** — the condition under which the decision should be reopened. A
 decline with no trigger is a dead end rather than a decision.
@@ -41,12 +46,13 @@ decline with no trigger is a dead end rather than a decision.
 | [DR-18](#dr-18--parameterized-scopes-and-scopeclient-attributes) | Vendor scope features | **UPHELD** — document-only | Module 04, Module 09a |
 | [DR-19](#dr-19--rfc-9901-sd-jwt--no-decision-record) | RFC 9901 | **DELIBERATELY NO RECORD** | — |
 | [DR-20](#dr-20--dpop-nonces-dpopnoncerequired) | DPoP nonces | ✅ **RULED 2026-08-17 — do NOT enable.** The SPA discards the nonce on the error path | `PAR-TUTORIAL.md`, `FAPI-TUTORIAL.md` |
+| [DR-21](#dr-21--openid-federation) | OpenID Federation | ✅ **RULED 2026-08-18 — do NOT enable.** No trust anchor exists, so an entity statement would be signed by us, for us, validated by nobody | `FED-W2`, the SPA's OIDC Federation section |
 
 ---
 
-## Status at a glance — all 20 records ruled as of 2026-08-17
+## Status at a glance — all 21 records ruled as of 2026-08-18
 
-**Every decision record is now closed.** Nothing in this file is awaiting a ruling.
+**Every decision record is closed.** Nothing in this file is awaiting a ruling. The last to arrive was **DR-21 (OpenID Federation)**, written *and* ruled on 2026-08-18 after the cleanup found that `FED-W2` had been blocked since 2026-08-13 on a decision no record held — so this file could report *"all 20 records ruled"* while a twenty-first was outstanding and unwritten.
 
 > **Nine status labels in this file were stale until 2026-08-17, and the direction of the error is the
 > lesson.** Seven index rows still read `⬜ open` for records whose bodies had been ruled on 2026-08-14 — and
@@ -61,14 +67,14 @@ decline with no trigger is a dead end rather than a decision.
 |---|---|
 | **Executed — configuration changed** | DR-03 (VCI enabled, + a credential-issuer JWK Set via VCI-W6), DR-05 (CIMD enabled), DR-07 (`SPIFFE_JWT` withdrawn, nine methods → five), DR-11 (issuer aligned) |
 | **Executed — documentation/code only** | DR-12 (five surfaces added, one exclusion made explicit), DR-17, DR-18 |
-| **Ruled: do not enable / decline** | DR-01 (mTLS), DR-02 (FAPI 2.0 — qualify, do not enable), DR-04 (Native SSO), DR-06 (FAPI 1.0, document-only), DR-08 (Session Management + Front-Channel Logout, as one), DR-13, DR-14, DR-15, DR-16, **DR-20 (DPoP nonces)** |
+| **Ruled: do not enable / decline** | DR-01 (mTLS), DR-02 (FAPI 2.0 — qualify, do not enable), DR-04 (Native SSO), DR-06 (FAPI 1.0, document-only), DR-08 (Session Management + Front-Channel Logout, as one), DR-13, DR-14, DR-15, DR-16, **DR-20 (DPoP nonces)**, **DR-21 (OpenID Federation)** |
 | **Ruled: defer** | DR-09 (JWT access tokens) |
 | **Ruled: keep as-is** | DR-10 (the three deliberate token-exchange defects — 8693-W5 **not** approved) |
 | **Deliberately no record** | DR-19 (RFC 9901) |
 
 > ### The shape of the outcome is worth reading before the individual records
 >
-> **Four records enabled something; nine declined; one deferred; one kept a defect on purpose.** That ratio is
+> **Four records enabled something; eleven declined; one deferred; one kept a defect on purpose.** That ratio is
 > not timidity — it is what happens when a *teaching* deployment is audited against production profiles. The
 > recurring reason for declining is the same one, stated three times independently: **DR-02, DR-06 and DR-04 all
 > collide with the retired-grant curriculum**, because requiring PKCE-S256 and PAR removes the very behaviours
@@ -80,9 +86,10 @@ decline with no trigger is a dead end rather than a decision.
 > prerequisite, durable OP session identity. Building it for any one consumer reopens all four at once. Treating
 > them as independent was the mistake Phase 2 corrected, and it is the mistake most likely to recur.
 >
-> **What is left is not decisions.** One Tier 2 documentation batch remains (**T2-17**). **T2-5 shipped
-> 2026-08-14 and DR-08's three documentation consequences are discharged with it**; DR-13's role list and
-> DR-14/DR-15's inventory rows were applied in the same pass. No record is blocked on anything.
+> **Nothing is left.** Every Tier 2 row is shipped — **T2-17, the last, on 2026-08-15** — and DR-08's three
+> documentation consequences were discharged by T2-5, with DR-13's role list and DR-14/DR-15's inventory rows
+> applied in the same pass. **No record is blocked on anything, and none is awaiting an answer** (DR-21, the
+> last, was ruled 2026-08-18).
 
 ---
 
@@ -352,8 +359,8 @@ one unrecognised value rejects the whole 129-field response. So `authleteApi.ser
 
 | Route | Effect | State |
 |---|---|---|
-| Drop `SPIFFE_JWT` from the service | `service.get()` works; both endpoints work | ⬜ **this decision** |
-| Wait for an SDK that knows the member | Same, on someone else's schedule | ⬜ not actionable |
+| Drop `SPIFFE_JWT` from the service | `service.get()` works; both endpoints work | ✅ **this decision — executed 2026-08-12** |
+| Wait for an SDK that knows the member | Same, on someone else's schedule | ⛔ not actionable |
 | **Fix the status inversion** so the failure is honest | Endpoints still fail — but with **500**, not 200 | ✅ **shipped 2026-08-11** (EH-W1) |
 
 **Why the general problem matters more than this member.** Any client-auth method Authlete adds in future breaks
@@ -569,7 +576,7 @@ should have the learner *observe* the §3.3 mismatch before it is fixed — a be
 | `services/jwt-verification.service.ts` | Token issuance | ✅ added |
 | `controllers/introspection-standard.controller.ts` | Token presentation & introspection | ✅ added |
 | `controllers/jar.controller.ts` | Access control | ✅ **already added** — the conditional was *"once B1-W2 settles its auth posture"*, and **B1-W2 shipped 2026-08-13** |
-| `controllers/fapi.controller.ts` | — | ⬜ **declined**, and the exclusion is now *explicit* in `AGENTS.md` rather than implied |
+| `controllers/fapi.controller.ts` | — | ⛔ **declined**, and the exclusion is now *explicit* in `AGENTS.md` rather than implied |
 
 **Two things the execution added beyond the decision.** The `errorHandler.ts` row carries its three grounds in
 the file itself — it sets the status of every failure across all 57 SDK call sites, it is the **sole gate on
@@ -580,16 +587,18 @@ down: it **reports** posture rather than deciding outcomes, and its tests pin it
 unhardened service, which is stronger protection than a review gate. **An exclusion that is only implied is an
 exclusion somebody will undo.**
 
-**Re-verified against `AGENTS.md` on 2026-08-11.** `RESUME.md` §5.3 named four candidate additions and recorded
-two as landed. **Three have landed:**
+**Re-verified against `AGENTS.md` on 2026-08-11 — superseded by the table above.** *(Kept because it records the
+state the decision was taken from. `RESUME.md` §5.3 named four candidate additions and recorded two as landed;
+three had. The `⬜ open` row below was closed on 2026-08-14 and is answered by the ✅ table at the top of this
+record — do not read it as current.)*
 
 | File | Row | State |
 |---|---|---|
-| `routes/device.routes.ts` | Access control (`AGENTS.md:225`) | ✅ landed |
-| `middleware/development-only.ts` | Access control (`AGENTS.md:225`) | ✅ landed |
-| `services/logout.service.ts` | Session termination & redirect targets (`AGENTS.md:230`) | ✅ landed |
-| `controllers/logout.controller.ts` | Session termination & redirect targets (`AGENTS.md:230`) | ✅ landed |
-| **`middleware/errorHandler.ts`** | — | ⬜ **open** |
+| `routes/device.routes.ts` | Access control — the **Access control** row of `AGENTS.md`'s Security-critical surfaces table | ✅ landed |
+| `middleware/development-only.ts` | Access control — same row | ✅ landed |
+| `services/logout.service.ts` | the **Session termination & redirect targets** row | ✅ landed |
+| `controllers/logout.controller.ts` | the **Session termination & redirect targets** row | ✅ landed |
+| **`middleware/errorHandler.ts`** | — | ⬜ open *(as of 2026-08-11 — **closed 2026-08-14**, see above)* |
 
 ### Decision: add `middleware/errorHandler.ts`, under its own concern row
 
@@ -862,3 +871,78 @@ standing in the way is our own client. That is a much better reason to decline t
 ✅ **Done 2026-08-17** — `client/src/services/dpop-fetch.ts`, live-verified. The trigger this record was
 written with is spent; see the banner above for what now holds the decline up. **Remaining trigger:** DR-02
 flips, or somebody decides the tutorials should show the nonce dance as *reproducible* rather than captured.
+
+---
+
+## DR-21 — OpenID Federation
+
+**Status: ✅ RULED 2026-08-18 — do NOT enable.** *(Written and ruled the same day. The recommendation below was accepted as written; it is kept in full because it is the reasoning the ruling was made on.)*
+
+**Why this record exists at all, and why it is late.** Every other Tier 3 question was written up in Phase 4.
+This one was not, and nothing noticed for five days — because the *work item* recorded the blockage instead.
+`FED-W2` has read ⛔ **BLOCKED** since 2026-08-13 with the words *"a **Tier 3-shaped decision** … not taken
+here"*, pointing at a record that does not exist. So the audit could truthfully report *"all 20 decision
+records are ruled"* while a twenty-first was outstanding and invisible.
+
+> **The transferable finding: a blocked work item whose blocker is a decision is evidence that the decision
+> exists.** The register of decisions was built by asking *"where did the audit find a choice?"* — and this
+> choice was found by Phase 5, after that register was closed. **When an item blocks on "a decision", check
+> that a record answers it**; a pointer to a decision is not a decision. Same shape as DR-20, where a flag had
+> been toggled twice with nobody ruling on it.
+
+### The question
+
+Configure a **federation JWK Set** on Authlete service `3693555522`, so `GET /.well-known/openid-federation`
+can produce a real entity configuration — or leave both federation endpoints answering an honest 500?
+
+### What is actually true today, established by probe (2026-08-13, FED-W1)
+
+| Call | Result |
+|---|---|
+| `federation.configuration` with no `requestBody` (pre-fix) | **400** — `[A258201] … Content-Type header is not specified`, i.e. the caller blamed for our fault |
+| `federation.configuration` with `requestBody: {}` (shipped) | **200 HTTP**, `action: INTERNAL_SERVER_ERROR` — `[A316201] Because a JWK Set for federation has not been set up, this service cannot generate entity configuration` |
+
+So the shipped fix **changed the failure rather than removing it**, deliberately: both routes now answer **500
+naming the missing configuration**. FED-W5 closed with it, because the controller's action mapping was already
+correct and had only ever seen a thrown SDK error.
+
+### The ruling: decline, and for three reasons in descending order of weight
+
+1. **Nothing claims it works, so nothing is false.** `README.md` makes no federation claim and the SPA's OIDC
+   Federation section shows the honest 500. This is the *opposite* of Theme 2 ("claimed working, flag off") —
+   there is no false advertisement to correct, which is why declining costs nothing a reader can observe.
+2. **Enabling it would be demonstrable, not interoperable — and this repo has been caught by that distinction
+   before.** An entity configuration is only meaningful inside a trust chain with a **trust anchor and at least
+   one peer**, and there is none. Enabling the flag would produce a signed document that nobody validates
+   against anybody, which is exactly the caveat `AGENTS.md` already records for back-channel logout (BCL-W5:
+   *"the loop is closed against ourselves, so do not write up a successful delivery as 'back-channel logout
+   works'"*). One such closed loop is a teaching artefact; a second is a pattern.
+3. **It is a key-material write, and key material is the one thing this audit never added casually.** T1-2's
+   RSA key and VCI-W6's credential-issuer key were each preceded by a stated purpose and followed by a
+   read-back diff. A federation JWK Set with no federation to join has no purpose to state.
+
+**Consistent with the standing shape of these records:** DR-02 (FAPI 2.0), DR-04 (Native SSO) and DR-08
+(Session Management) all decline a feature whose prerequisites the deployment does not have, and all three say
+the same thing — *a teaching deployment audited against production profiles will decline more than it enables.*
+
+### What declining costs
+
+- **`FED-W2` is ⛔ closed by ruling, not blocked pending one.** Its verification steps remain correct and are
+  worth keeping for whoever reopens this; what changed on 2026-08-18 is that the thing standing in front of it
+  is a **decision on the record** rather than a question nobody had asked. *That distinction is the whole point
+  of this record: a reader can now tell "nobody got to it" from "we looked at it and said no."*
+- Both federation endpoints keep answering 500. That is already the documented behaviour.
+- `federation.service.ts` keeps its tests (added by T1-16, which also fixed the shared mock's missing
+  `federation` member).
+
+### What enabling would cost, if it is ever ruled the other way
+
+One `service/update` writing `federationJwks` (read → write → read-back → key-by-key diff, per the standing
+probe discipline), then FED-W2's §3 verification, then a documentation pass — `README.md` gains a federation
+row, and `SPEC-INVENTORY.md`'s Federation rows move from *"endpoints non-functional"*. **Per `AGENTS.md`, the
+service write and its paired documentation change ship in the same commit** — this is precisely the control
+DR-03 skipped on 2026-08-14, which silently invalidated a whole Module 09b exercise.
+
+**Revisit trigger.** A trust anchor or federation peer becomes available to test against, **or** a curriculum
+module is written that needs a real entity statement. Not before — an entity configuration with no federation
+is a signature in search of a verifier.

@@ -244,3 +244,4 @@ Recorded honestly rather than filled with plausible detail:
 - [x] Disagreements between sources recorded rather than smoothed (§5, four of them).
 - [x] Source gaps stated rather than filled (§8).
 - [ ] **Not satisfied:** exact titles/statuses/dates for most rows are carried from `SPEC-INVENTORY.md` rather than re-fetched. This is the Gate 0 delta ruling working as intended; §7 lists the 10 rows that will be re-fetched.
+  - ✅ **Discharged after Phase 1.** §7's ten rows were re-fetched in **T2-5** (2026-08-14), each recorded with its URL and header line in a new *Provenance* section of `SPEC-INVENTORY.md`, plus four more in **T2-4**. Three rows were **confirmed rather than corrected**, and that is recorded too — a pass reporting only errors cannot distinguish *checked and correct* from *never checked*. The box stays unticked because it records the honest **Phase 1** state.

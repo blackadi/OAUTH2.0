@@ -4,7 +4,8 @@
 - **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `audit/phase3-and-tier0-fixes`
 - **Inputs:** [`00-inventory.md`](00-inventory.md), [`01-spec-matrix.md`](01-spec-matrix.md), [`02-findings/`](02-findings) (55 entries), [`03-curriculum-audit.md`](03-curriculum-audit.md), [`RESUME.md`](RESUME.md)
 - **Companion:** [`05-decision-records.md`](05-decision-records.md) — the twelve genuine choices, written up separately
-- **Status:** ⬜ awaiting **Gate 4**. Phase 4 is read-and-analyse only; nothing here is executed until Gate 4 approves it.
+- **Status:** ✅ **CLOSED.** Gate 4 approved 2026-08-12; Tiers 0–3 all executed, the last row (T2-17) shipped 2026-08-15, and JARM-W6 was retired 2026-08-17. **Nothing in §7 is awaiting a ruling or a commit.** What remains open is listed in §7.1 (five deferred items) and §7.5 (the standing deliberate opens) — each with a reason, none as a queue.
+- **How to read this file now:** it is a *record of what was decided and why*, not a work list. Rows marked ⬜ inside §7 tier tables are **open by decision**, not unscheduled.
 - **Baseline at time of writing:** 514 tests / 53 files passing, `node scripts/check-docs.mjs` clean
 
 This document does four things no earlier phase could: it re-verifies the S1 register against the **working
@@ -41,7 +42,7 @@ the target had reasoned from a primary source. The three found here:
 | The audit said | The working tree says | Where |
 |---|---|---|
 | "~120 work-item IDs" (`RESUME.md:317`) | **280** — 239 Phase 2 + 41 Phase 3 | §5.1 |
-| Two of the four `AGENTS.md` surface additions are open | **One.** `controllers/logout.controller.ts` landed too — `AGENTS.md:230` | §6.4 |
+| Two of the four `AGENTS.md` surface additions are open | **One.** `controllers/logout.controller.ts` landed too — the **Session termination & redirect targets** row | §6.4 |
 | EH-W3 and EH-W5 remain open | **Both closed.** All five EH items shipped 2026-08-11 | §1.2 |
 
 ### 1.1 The S1 register, re-verified against the working tree
@@ -59,8 +60,8 @@ against its Phase 2 entry — **two entries still describe pre-fix code in their
 | 4 | [`FAPI-2.0-SECURITY-PROFILE.md`](02-findings/FAPI-2.0-SECURITY-PROFILE.md) | S1 | **Partially remediated.** All six posture fields read live (`server/src/controllers/fapi.controller.ts:51-64`). **FAPI2-W1 ✅, FAPI2-W2 ✅**; W3/W4/W5/W6 open | ✅ banner + severity revised S1→S2 |
 | 5 | [`RFC7662-token-introspection.md`](02-findings/RFC7662-token-introspection.md) | S1 | **CLOSED 2026-08-12 (T1-1).** Both endpoints now require admin Basic auth (`requireBasicAuth`, fails closed) and carry `generalLimiter`; the gate runs **before** any Authlete call, so a rejected caller learns nothing. F-1, F-2 and F-3 all closed — F-3 by deleting the hand-rolled decoder rather than porting it. **S1 → S3**; the residue is that this is admin auth, not client auth (**7662-W6**). `introspection_endpoint_auth_methods_supported: []` stays accurate, since no *client* method is supported | ✅ banner + severity revised S1→S3 |
 | 6 | [`RFC9700-security-bcp.md`](02-findings/RFC9700-security-bcp.md) | S1 | ~~OPEN~~ → **CLOSED 2026-08-11 (T0-1).** `body: parameters` is gone from both sites; they log `{ length }` only, locked by `server/tests/unit/services/credential-logging.test.ts`. **9700-W1 ✅ and 9700-W2 ✅**, severity **S1 → S2** on F-4a's residue. The non-F-1 findings stand: discovery confirms `implicit` + `password` in `grant_types_supported` and `plain` in `code_challenge_methods_supported` | ✅ banner + severity revised S1→S2 |
-| 7 | [`RFC7636-pkce.md`](02-findings/RFC7636-pkce.md) | S1 | **OPEN, narrowed — a fourth downgrade is available at Gate 4.** The false-reporting half died with FAPI2-W1. The substantive half is live: `plain` is advertised, and `pkceRequired` is *still unreadable* because `service.get()` throws, so 7636-W3 cannot be closed until the enum gap is | ⚠️ severity basis halved |
-| 8 | [`RFC9470-step-up-authentication.md`](02-findings/RFC9470-step-up-authentication.md) | latent S1 | **OPEN, and reachable through an advertised capability.** `server/src/controllers/authorization.controller.ts:107-111` still fabricates `{acr:"pwd", authTime: now}`; `server/src/services/authorization.service.ts:101-102` forwards both to Authlete. **New:** `prompt_values_supported` includes `"none"`, so the path is *advertised in discovery* | ✅ its own header reads **S2 + latent S1**, not S1 |
+| 7 | [`RFC7636-pkce.md`](02-findings/RFC7636-pkce.md) | ~~S1~~ → **S3** | ✅ **CLOSED 2026-08-13.** The false-reporting half died with FAPI2-W1; `service.get()` was repaired by T1-5, so `pkceRequired` is readable; and PKCE is now **enforced** (`pkceRequired` + `pkceS256Required` on `4277838306` and `2176571218`, verified live — `[A124301]` with no challenge, `[A124308]` on `plain`). `1523514379` and `1678274156` stay unenforced **deliberately**, because Modules 02 and 03 teach the plain flow. Gate 4 Q1 is superseded by the enforcement | ✅ downgraded S1 → S3 |
+| 8 | [`RFC9470-step-up-authentication.md`](02-findings/RFC9470-step-up-authentication.md) | ~~latent S1~~ → **S3** | ✅ **RETIRED 2026-08-12 (T1-7).** The fabrication block is deleted; `utils/step-up.ts` answers absence as "no", and OIDC-W1 shipped with 9470-W3 as one change so the route was built correctly rather than built at all. *Superseded description follows:* | **OPEN, and reachable through an advertised capability.** `server/src/controllers/authorization.controller.ts:107-111` still fabricates `{acr:"pwd", authTime: now}`; `server/src/services/authorization.service.ts:101-102` forwards both to Authlete. **New:** `prompt_values_supported` includes `"none"`, so the path is *advertised in discovery* | ✅ its own header reads **S2 + latent S1**, not S1 |
 
 **Two honesty notes on the count.** Entry 8's own header reads *"S2 — with one latent S1"*, so "eight S1s" is
 `RESUME.md` §6's framing rather than eight S1 severity headers; the precise composition is **seven S1 headers
@@ -88,10 +89,10 @@ curriculum grep — **not** a reason to leave it open, and the plan does not.
 |---|---|---|
 | 2026-08-10 | **8628-W1, 8628-W2** (device approval oracle + rate limits) | `server/src/routes/device.routes.ts:25-32`, `server/tests/unit/routes/device.routes.test.ts` |
 | 2026-08-10 | The logout open redirect (**not RPL-W1** — see §6.3; RPL-W1 landed 2026-08-12) | `server/src/services/logout.service.ts:131-138` |
-| 2026-08-10 | Three of four `AGENTS.md` surface additions | `AGENTS.md:225`, `AGENTS.md:230` |
-| 2026-08-11 | **EH-W1, EH-W2, EH-W3, EH-W4, EH-W5** — all five | `server/src/middleware/errorHandler.ts:25-33`; `AGENTS.md:358-360`; Module 10 Ex 4 reframed |
+| 2026-08-10 | Three of four `AGENTS.md` surface additions | the **Access control** and **Session termination & redirect targets** rows of the surfaces table |
+| 2026-08-11 | **EH-W1, EH-W2, EH-W3, EH-W4, EH-W5** — all five | `server/src/middleware/errorHandler.ts:25-33`; `AGENTS.md`'s `errorStatusFrom` note; Module 10 Ex 4 reframed |
 | 2026-08-11 | **FAPI2-W1, FAPI2-W2** (widened from five literals to six fields) | `server/src/controllers/fapi.controller.ts:51-64` |
-| 2026-08-11 | **9700-W1, 9700-W2** — **T0-1, the first Phase 5 action.** Request-body logging stopped at both sites | `server/src/services/token.service.ts:57-60`, `server/src/services/revocation.service.ts:64-67`, `server/tests/unit/services/credential-logging.test.ts`; `AGENTS.md:363` |
+| 2026-08-11 | **9700-W1, 9700-W2** — **T0-1, the first Phase 5 action.** Request-body logging stopped at both sites | `server/src/services/token.service.ts:57-60`, `server/src/services/revocation.service.ts:64-67`, `server/tests/unit/services/credential-logging.test.ts`; `AGENTS.md`'s **Never log a request body — log its length** bullet |
 | 2026-08-11 | **T0-5, T0-6** — the MCP opening sentence, both stale entries banner-ed, and 21 drifted citations re-anchored | `docs/MCP-OAUTH-TUTORIAL.md:3`; the two entry banners; §6.3 |
 | 2026-08-11 | **RPL-W2** — **T0-2.** `id_token_hint` verified rather than decoded; **BCL-W5 unblocked** | `server/src/utils/verify-id-token-hint.ts`, `server/src/services/logout.service.ts:176`, `server/tests/unit/utils/verify-id-token-hint.test.ts` |
 | 2026-08-12 | **RPL-W3** — **T0-3.** RP-Initiated Logout §2's confirmation MUST; the CSRF-able `GET` is closed | `server/src/routes/logout.routes.ts:21-22`, `showConfirmation` in `server/src/services/logout.service.ts:296`, `server/src/views/logout-confirm.ejs`, `server/tests/unit/routes/logout.routes.test.ts` |
@@ -479,11 +480,11 @@ columns must be checked before any Tier 1 configuration change ships.**
 | Lab | Broken by | Mitigation | State |
 |---|---|---|---|
 | Module 00 Ex 2 — expects `key count: 1`, EC key at `keys[0]` | **OIDC-W2** | **CUR-3a-W3** — select by `kty === 'EC'`, drop the count | ✅ **landed together 2026-08-12 (T1-2).** The register worked exactly as intended. Two further hits the register did not name were found by the §7.4 grep and fixed in the same commit: Module 08 §6d, whose *transcript inverts* (it printed the RS256-less list and reasoned about the violation), and `modules/11…/README.md`'s *"one EC P-256 key"* |
-| Module 04 introspection steps; Module 11 exercises using unauthenticated admin access as live exploits | **7662-W1** | `grep -rn "introspection" docs/curriculum/modules`; expected outputs go 200 → 401 | ⬜ **grep before, not after** |
-| Module 04 opaque-token exercises; `STEP-UP-AUTH-TUTORIAL.md` Part 4 | **9068-W1** | 9068-W3 (separate the two halves) and 9068-W4 (label the payload) first | ⬜ Tier 3 |
+| Module 04 introspection steps; Module 11 exercises using unauthenticated admin access as live exploits | **7662-W1** | `grep -rn "introspection" docs/curriculum/modules`; expected outputs go 200 → 401 | ✅ **done with T1-1, 2026-08-12** — the grep ran first and found **21 call sites** across six module labs, both root scripts, three tutorials and two exam files; Module 04's *"Break it"* and Module 07's Exercise 5a both **inverted** and were reframed |
+| Module 04 opaque-token exercises; `STEP-UP-AUTH-TUTORIAL.md` Part 4 | **9068-W1** | 9068-W3 (separate the two halves) and 9068-W4 (label the payload) first | ✅ **ruled — DR-09 defers, re-ruled 2026-08-17.** Access tokens stay opaque, so no lab breaks. 9068-W3 and 9068-W4 both shipped; Part 4 is labelled against a real specimen |
 | Module 10 Ex 4 — the 200-with-stack-trace | Dropping **`SPIFFE_JWT`** — **not** EH-W1 | **EH-W4 ✅** reframed it as *two defects, one symptom*; the 200 kept as a dated historical transcript | ✅ **and the register's prediction was wrong in the useful direction.** T1-5 dropped the member on 2026-08-12 and the exercise was **not** retired: it now walks *three* dated states and teaches the closed-enum mechanism, which is legible only after the fix. **The general rule this yields:** before paying a curriculum cost, ask whether the lab is about the *symptom* or the *mechanism*. A symptom-based lab dies with the fix; a mechanism-based one gets a second data point |
 | Module 10 lab — the `-- no token --` transcript at `/api/gm` | **9449-W3** (T1-10), via the RFC 6750 §3.1 half | Update the transcript in the same commit; the `curl` prints the status line and `WWW-Authenticate` instead of a body | ✅ **landed 2026-08-13, and the lab got *better* rather than merely current.** The §3.1 change was ruled on separately before the code was written, precisely because it cost a live transcript. The replacement teaches the thing the old transcript hid: an absent token is not an *invalid* one, so an empty error beats a wrong one, and a client written to retry on `invalid_token` would have looped instead of prompting for login. A short `Bearer`/`DPoP` pairing section came with it. **Module 11 was checked and is unaffected** — all seven of its `/gm` calls present valid Bearer tokens |
-| Module 06 Ex 6b — the four silent discards | **8693-W5** | Not recommended. If taken: lab + quiz-answers + Part 12 + `PROGRESS.md` in the same commit | ⬜ Tier 3, discouraged |
+| Module 06 Ex 6b — the four silent discards | **8693-W5** | Not recommended. If taken: lab + quiz-answers + Part 12 + `PROGRESS.md` in the same commit | ⛔ **NOT APPROVED — DR-10, 2026-08-14.** All three deliberate defects are kept; the lab is not at risk |
 | Module 01 Ex 3 + Module 07 §3b — both hinge on ROPC succeeding | **FAPI2-W5** | ✅ **already mitigated** — both modules name `fapiModes` (3d-F2) | ✅ closed |
 | Module 05 Ex 3–4 | if `parRequired` were ever set `true` | ✅ Module 05 already declares the dependency (`lab.md:23-35`) | ✅ closed |
 
@@ -566,11 +567,11 @@ two.**
 
 | File | Concern row | State |
 |---|---|---|
-| `routes/device.routes.ts` | Access control | ✅ **landed** — `AGENTS.md:225` |
+| `routes/device.routes.ts` | Access control | ✅ **landed** — the **Access control** row of `AGENTS.md`'s surfaces table |
 | `middleware/development-only.ts` | Access control | ✅ landed (added with it) |
-| `services/logout.service.ts` | Session termination & redirect targets | ✅ **landed** — `AGENTS.md:230` |
-| `controllers/logout.controller.ts` | Session termination & redirect targets | ✅ **landed** — `AGENTS.md:230` |
-| **`middleware/errorHandler.ts`** | — | ⬜ **the only one still open** |
+| `services/logout.service.ts` | Session termination & redirect targets | ✅ **landed** — the **Session termination & redirect targets** row |
+| `controllers/logout.controller.ts` | Session termination & redirect targets | ✅ **landed** — the same row |
+| **`middleware/errorHandler.ts`** | **Failure disclosure & status derivation** — a new row | ✅ **landed 2026-08-14 (DR-12)**, with its three grounds written into `AGENTS.md` |
 
 **Decision: add it.** Full reasoning in [`05-decision-records.md`](05-decision-records.md) DR-12. In short — it
 decides the HTTP status of every failure across all 57 SDK call sites, it *and only it* gates stack-trace
@@ -789,6 +790,22 @@ a defect *before* the audit did.
    is not past EOF. **Prefer an edit that does not move lines at all** when one exists — T0-1 kept both of its
    blocks at four lines for exactly this reason.
 
+### 7.5 The standing deliberate opens — what is open on purpose, and why
+
+Distinct from §7.1's deferrals (which are *scheduled work nobody has started*). These are decisions to **leave
+something as it is**, and each would be a regression to "fix" without reopening the reasoning first.
+
+| Item | Open because | Reopen when |
+|---|---|---|
+| **GM-W1 = FAPI1-W3 = OIDC-W4** — `accessTokenDuration` stays **86400** | The write was applied, verified (`expires_in: 3600`) and **reverted the same session**: ~55 deployment-specific references move with it, and two are *arguments* rather than transcripts — Module 07's audit lab ranks the 24-hour lifetime as finding (iv), Module 10's thesis uses it as its worked example. Shortening it dissolves the finding the curriculum exists to teach | The curriculum stops depending on it, or the deployment stops being a teaching server |
+| **RP-Initiated Logout F-1's second half** — no rate limiter on `GET`/`POST /api/logout` | Left out of T0-3 **deliberately and visibly**, so the aggravating factor stays legible rather than being closed outside the item's acceptance criteria | Someone adds a limiter — a ~3-line change to `routes/logout.routes.ts` reusing `generalLimiter`. Nothing blocks it |
+| **9701-W3** — six `StandardIntrospectionRequest` fields accepted and silently dropped | Two of the six (`sharedKeyForSign`, `sharedKeyForEncryption`) are **caller-supplied key material**, and `introspection.service.ts` is a Security-critical surface. Forwarding secrets from a request body to the vendor is a design decision needing a plan, not a line in a documentation batch | Decide **per field**: forward it, or reject it with a 400. An accepted-and-ignored `sharedKeyForSign` is worse than a refusal, because the caller believes the response was signed with their key |
+| **7662-W6** — introspection is admin-authenticated, not client-authenticated | Nothing here can validate a *client* secret, and whether Authlete's `standardProcess` rejects bad ones is unestablished. Demanding one would look like protection and provide none | The Authlete behaviour is established by probe |
+| **JOSE-W2 / MS-W3 / VCI-W2's AS half / RPL-W4** | ⚠️ **Unachievable — no vendor knob exists.** Each was established by *writing* and reading back, not by reading the schema | Authlete adds the field. Check the field exists **before** writing "set X" as a criterion — this trap fired four times |
+| **FED-W2** — the federation entity statement is never verified | ⛔ **Closed by ruling, not blocked** — DR-21 (2026-08-18) declines OpenID Federation. Both endpoints answer **500** naming the missing JWK Set, and `README.md` says *"Not enabled"*, so unlike the rest of Theme 2 there is no false claim to correct. Enabling would produce a statement signed by us, for us, validated by nobody | A trust anchor or federation peer becomes available, **or** a module needs a real entity statement. The verification steps in `OPENID-FEDERATION.md` are kept for that day |
+| **RFC 9068 F-3** — no `aud` on the `at+jwt` specimen | DR-09 defers JWT access tokens; §3's default-`aud` MUST is a *prerequisite* of 9068-W1, not a separate item | DR-09 is reopened |
+| **JARM-W6** — the `form_post.jwt` vendor anomaly | 🚫 **Retired 2026-08-17.** Filing a vendor support ticket is not a deliverable of this repository. The knowledge is kept (JARM-W2 + §22.2's matrix); the obligation is dropped. Unreachable here regardless | Never, as a repo work item |
+
 ---
 
 ## 8. What Phase 5 must not do
@@ -807,20 +824,17 @@ a defect *before* the audit did.
 
 ---
 
-## 9. Gate 4 — what needs a ruling
+## 9. Gate 4 — every question, and how it was answered
 
-1. **The S1 count and the fourth downgrade.** §1.1 states 8 found / 3 downgraded / 5 open. Does
-   `RFC7636-pkce.md` join the downgraded column now that its false-reporting half is fixed, or stay S1 until
-   PKCE is actually required?
-2. **The tier order.** Two open S1s (RFC 7662, RFC 9470) sit in Tier 1 rather than Tier 0, both for curriculum
-   reasons stated in §1.1. Accept, or promote either to Tier 0?
-3. **The nineteen decision records** in [`05-decision-records.md`](05-decision-records.md) — eleven open rulings,
-   seven confirmations of standing declines, and one deliberate non-record. In particular **DR-02** (FAPI 2.0),
-   which gates the most curriculum material; **DR-07** (`SPIFFE_JWT`), the only route that retires Module 10
-   Exercise 4; and **DR-11** (the issuer/host mismatch), which four other records wait on.
-4. **DR-12** — `middleware/errorHandler.ts` added to the surfaces list under its own concern row, plus the four
-   adjacent candidates (§6.4).
-5. **§7.1** — accepting the wire-format deferral, or pulling 9126-W1 / CIBA-W1 / 8628-W4 into Tier 1.
-6. ~~**§7.3** — build the discovery-diff check, or hand-correct the four tables and accept the drift.~~ ✅ **Built 2026-08-17** — `scripts/check-discovery.mjs`; see §7.3.
-7. **9901-W4** — confirm RFC 9901 deliberately gets no decision record (`RFC9901-sd-jwt.md`'s verdict
-   reasoning: an AS has no RFC 9901 obligations, so there is no choice to record).
+> ✅ **Gate 4 was approved 2026-08-12 and every item below is resolved.** Kept in question form because the
+> answers are only legible beside what was asked.
+
+| # | Question | Ruling |
+|---|---|---|
+| 1 | **The S1 count and the fourth downgrade** — does `RFC7636-pkce.md` join the downgraded column, or stay S1 until PKCE is actually required? | ✅ **Superseded, not answered.** PKCE was *enforced* on 2026-08-13 (`pkceRequired` + `pkceS256Required` on `4277838306` and `2176571218`), so the condition the question turned on stopped being true. Entry is **S3**. Final register: **8 found, 0 remain** |
+| 2 | **The tier order** — promote RFC 7662 or RFC 9470 out of Tier 1 into Tier 0? | ✅ **Accepted as written.** Both shipped inside Tier 1 anyway — 7662 on 2026-08-12 (T1-1), 9470 on 2026-08-12 (T1-7) — so the promotion would have changed nothing but the label |
+| 3 | **The decision records** — eleven open rulings, seven standing declines, one non-record | ✅ **All ruled.** The file now carries **20** records (DR-20 added 2026-08-17), plus **DR-21** for OpenID Federation, added **and ruled** during the 2026-08-18 cleanup. Shape: four enabled, **eleven declined**, one deferred, one defect kept on purpose, one deliberate non-record |
+| 4 | **DR-12** — add `middleware/errorHandler.ts` under its own concern row, plus the four adjacent candidates | ✅ **Ruled and executed 2026-08-14.** Five surfaces added; `fapi.controller.ts` declined **explicitly**, because an exclusion that is only implied is one somebody will undo |
+| 5 | **§7.1** — accept the wire-format deferral, or pull 9126-W1 / CIBA-W1 / 8628-W4 into Tier 1? | ✅ **Deferral accepted.** The *response* half shipped as T1-11; the request half stays deferred. See §7.1 |
+| 6 | ~~**§7.3** — build the discovery-diff check, or hand-correct the four tables and accept the drift~~ | ✅ **Built 2026-08-17** — `scripts/check-discovery.mjs`, wired into `ci.yml`. See §7.3 |
+| 7 | **9901-W4** — confirm RFC 9901 deliberately gets no decision record | ✅ **Confirmed — DR-19.** An AS has no RFC 9901 obligations, so there is no choice to record |
