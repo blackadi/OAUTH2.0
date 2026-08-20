@@ -142,7 +142,7 @@ Both were **verified live** by the repo (`PROGRESS.md:1518-1533`, `modules/08…
 
 Two aggravating factors:
 
-1. **`GET /api/logout` carries no middleware at all** — no CSRF, no rate limiter, no authentication (`00-inventory.md` §3.5). So the redirect is reachable by any third-party page. *(Half closed 2026-08-12: `csrfProtection` now runs on both methods and the redirect is reachable only from a submitted confirmation form. **The rate limiter is still absent** — see F-2's banner.)*
+1. **`GET /api/logout` carries no middleware at all** — no CSRF, no rate limiter, no authentication (`00-inventory.md` §3.5). So the redirect is reachable by any third-party page. *(Fully closed. 2026-08-12: `csrfProtection` runs on both methods and the redirect is reachable only from a submitted confirmation form. 2026-08-20: `generalLimiter` added to both, so the endpoint now carries CSRF **and** a limiter.)*
 2. **`AGENTS.md` presents this as working validation**: *"Logout endpoint validates `post_logout_redirect_uri` against `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` env vars."* True as a description of the mechanism, and it reads as an assurance.
 
 **The fix is small and the repo already knew it.** The `PROGRESS.md` entry as it stood on 2026-08-10 read *"Fix is one line — exact comparison against a registered set."* **That sentence no longer exists**: the entry was rewritten when the fix shipped, and now records the fix instead (`PROGRESS.md:1518-1533`, with both fixes recorded at `:1799` — the 2026-08-10 origin comparison and its supersession by T0-4). Quoted here from the pre-fix revision (`git show b5e60d4~1:docs/curriculum/PROGRESS.md`, line 401) because the prediction is part of the finding's evidence. Note the contrast that same entry draws, which survives the rewrite at `PROGRESS.md:1523-1524`: the **authorization** endpoint gets exact matching right (400, no `Location`). Two redirect-validating code paths, one correct.
@@ -171,7 +171,8 @@ Two aggravating factors:
 > one-shot `GET` fails 8 of them. Module 08 Exercise 6b was **reframed, not retired** — its `GET` loop now
 > demonstrates this fix and its new `POST` loop preserves the original open-redirect discrimination.
 >
-> **Still open on this endpoint:** no rate limiter (F-1's aggravating factor 1, second half). T0-3 shipped
+> **CLOSED 2026-08-20 — `generalLimiter` (60/min, per IP) is on both methods**, with two loop-until-429 tests
+> last in `tests/unit/routes/logout.routes.test.ts`. What follows is why it stayed open until then. T0-3 shipped
 > RPL-W3's acceptance criteria and deliberately nothing else.
 >
 > The finding text below is preserved as the historical record, with its **pre-fix** line numbers.

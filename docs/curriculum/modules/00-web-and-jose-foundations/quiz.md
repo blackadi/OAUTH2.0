@@ -70,7 +70,7 @@ What is wrong, and what is the consequence?
 ```
 Name **two** distinct attacks this enables and the fix.
 
-**Q12.** (JOSE-structure reading — DPoP preview.) RFC 9449 §4.3 says a DPoP proof presented **with an access
+**Q12.** (JOSE-structure reading — DPoP preview.) RFC 9449 §7.1 says a DPoP proof presented **with an access
 token** must carry an `ath` claim (the base64url SHA-256 hash of that access token). A client instead sends a
 proof whose payload contains a `sub` claim and no `ath`. Decoding the proof "looks fine." Why will the server
 reject or ignore the binding, and what is the one-line fix?

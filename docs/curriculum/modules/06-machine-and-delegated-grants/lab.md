@@ -17,7 +17,22 @@ curl -s "$API/health" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("e
 ok
 ```
 
-You need `$API`, `$CLIENT_ID`, `$CLIENT_SECRET`, `$PUB_CLIENT_ID`, `$REDIRECT_URI`, `$LAB_USER`, `$LAB_PASS`.
+You need `$API`, `$CLIENT_ID`, `$CLIENT_SECRET`, `$PUB_CLIENT_ID`, `$REDIRECT_URI`, `$LAB_USER`, `$LAB_PASS`
+— plus **`$PKJWT_CLIENT_ID` and `$PKJWT_PRIVATE_JWK` for Exercise 4's second half only**. Check them now,
+because a blank one fails much later and the error does not name the variable:
+
+```bash
+for v in API CLIENT_ID CLIENT_SECRET PUB_CLIENT_ID REDIRECT_URI LAB_USER LAB_PASS; do
+  printf '%-18s %s\n' "$v" "$([ -n "${!v}" ] && echo set || echo '** BLANK **')"
+done
+printf '%-18s %s\n' PKJWT_CLIENT_ID "$([ -n "$PKJWT_CLIENT_ID" ] && echo set || echo 'blank — skip "Now do it on a client that *is* permitted"')"
+printf '%-18s %s\n' PKJWT_PRIVATE_JWK "$([ -n "$PKJWT_PRIVATE_JWK" ] && echo set || echo 'blank — same')"
+```
+
+> **If the two `PKJWT_*` rows are blank**, they are simply not in your `curriculum.env` yet —
+> `curriculum.env.example` describes what to put there. Skip that one sub-step; nothing else in this lab
+> depends on it. Running it anyway gives you `SyntaxError: Unexpected end of JSON input` from
+> `JSON.parse(process.env.PKJWT_PRIVATE_JWK)`, which looks like a broken lab rather than an unset variable.
 
 ### Service and client configuration this lab assumes
 

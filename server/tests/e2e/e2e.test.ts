@@ -595,7 +595,6 @@ if (!hasRealAuthleteCreds) {
     describeIf(hasManagement)("JWT-Secured Authorization Request (OIDC Core §6)", () => {
       const redirectUri = process.env.REDIR || "http://localhost:3000"
       let reqObjCid = ""
-      let reqObjSecret = ""
 
       afterAll(async () => {
         if (reqObjCid) {
@@ -630,7 +629,6 @@ if (!hasRealAuthleteCreds) {
           })
         expect(createRes.status).toBe(201)
         reqObjCid = String(createRes.body.clientId)
-        reqObjSecret = String(createRes.body.clientSecret)
 
         // Sign the request object JWT with authorization request params.
         // `aud` MUST be the OP's issuer identifier (RFC 9101 §4, OIDC Core §6.1), not the
@@ -1661,14 +1659,12 @@ if (!hasRealAuthleteCreds) {
       describe("private_key_jwt (RFC 7523 §2.1)", () => {
         let pkjId = ""
         let jwtAssertion = ""
-        let keyMaterial: { privateKey: any } | null = null
 
         beforeAll(async () => {
           const { generateKeyPair, exportJWK, SignJWT } = await import("jose")
           const crypto = await import("node:crypto")
 
           const { publicKey, privateKey } = await generateKeyPair("ES256", { extractable: true })
-          keyMaterial = { privateKey }
           const kid = "pkj-e2e-key"
           const jwk = { ...(await exportJWK(publicKey)), kid, use: "sig", alg: "ES256" }
 

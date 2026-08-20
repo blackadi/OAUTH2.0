@@ -8,8 +8,6 @@ import {
 } from "../utils/validation";
 import { requireBasicAuth } from "../middleware/require-basic-auth";
 import { handleControllerError } from "../utils/controller-error";
-import { AppError } from "../utils/app-error";
-import logger from "../utils/logger";
 
 const checkAuth = requireBasicAuth("nativesso");
 

@@ -2,8 +2,8 @@
 
 **The short version:** every module so far assumed one shape for the interaction — a browser redirect, one
 authentication that lasts the whole session, and coarse scopes to describe what was authorized. Four
-extensions lift four of those assumptions, and each one is a single unset field away from working on this
-deployment. **JARM** signs the response. **CIBA** removes the browser. **RFC 9470** lets a resource server
+extensions lift four of those assumptions, and each one turns on with a single configuration field on this
+deployment — all four of which are now set, so the lab shows you both states side by side. **JARM** signs the response. **CIBA** removes the browser. **RFC 9470** lets a resource server
 demand *stronger* authentication mid-session. **RAR** replaces "read write" with a structured description of
 what you are actually asking for.
 
@@ -544,10 +544,12 @@ Four assumptions lifted, and one theme: **the interaction is itself a thing you 
    has parameters. Not otherwise.
 5. **Native SSO** is a 2nd Implementer's Draft. Cite it as one.
 
-And the meta-lesson, which is really about how to read this whole area: **each of these four was one unset
-configuration field away from working.** Not one required a code change to the authorization server. The
-distance between "this deployment does not support X" and "this deployment supports X" is very often a console
-field — which cuts both ways, because it is equally the distance between a control being enforced and not.
+And the meta-lesson, which is really about how to read this whole area: **each of these four was one
+configuration field away from working**, and each has since been switched on. Not one required a code change
+to the authorization server. The distance between "this deployment does not support X" and "this deployment
+supports X" is very often a console field — which cuts both ways, because it is equally the distance between
+a control being enforced and not, and because **it can be crossed without anybody updating the documentation
+that described the old state.** The lab carries a preflight for exactly that reason.
 
 ## Assigned reading
 
@@ -562,8 +564,9 @@ Read after the lesson, before the lab:
 
 ## Then do the lab
 
-**[lab.md](lab.md)** — five exercises. Each begins from a precise refusal, traces it to the single field
-responsible, and then runs the mechanism for real.
+**[lab.md](lab.md)** — five exercises. Each pairs a precise refusal with the same request succeeding
+elsewhere, traces the difference to the single field responsible, and then runs the mechanism for real. Start
+with its preflight: what you see depends on how your service and clients are configured.
 
 Then **[quiz.md](quiz.md)** — 19 items. Tier 4 is the gate.
 

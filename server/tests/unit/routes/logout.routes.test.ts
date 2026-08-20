@@ -214,4 +214,28 @@ describe("logout routes — the §2 confirmation step", () => {
       expect(res.text).toContain("Signed out");
     });
   });
+
+  // OIDC-RP-INITIATED-LOGOUT-1.0 F-1's second aggravating factor. T0-3 shipped the confirmation page and
+  // nothing else; the limiter was left out visibly rather than folded in, and this closes it. `generalLimiter`
+  // is 60/min keyed by IP and shared across this file's requests, so this loops until it trips rather than
+  // assuming a fixed count.
+  //
+  // MUST STAY LAST IN THE FILE: once the limiter is saturated it stays so for the rest of the window, so any
+  // test added after this one would see 429 instead of its own assertion. Same arrangement, and the same
+  // reason, as `introspection.routes.test.ts`.
+  describe("rate limiting", () => {
+    it("rate-limits GET /api/logout (429) without changing what it validates", async () => {
+      let sawTooMany = false;
+      for (let i = 0; i < 90 && !sawTooMany; i++) {
+        const res = await request(app).get("/api/logout");
+        if (res.status === 429) sawTooMany = true;
+      }
+      expect(sawTooMany).toBe(true);
+    });
+
+    it("rate-limits POST /api/logout too — the half that destroys a session", async () => {
+      const res = await request(app).post("/api/logout").type("form").send({ _csrf: "irrelevant" });
+      expect(res.status).toBe(429);
+    });
+  });
 });

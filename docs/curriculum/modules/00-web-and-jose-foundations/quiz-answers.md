@@ -56,7 +56,7 @@ HMACs with the issuer's *public* RSA key (which is public); a verifier that hono
 uses that key will validate the forgery. **Fix:** remove `none`, and pin a single algorithm bound to the key
 type (e.g. `RS256` only), never selected from the token header.
 
-**Q12.** **Why it fails:** RFC 9449 §4.3 requires the proof to bind to the specific access token via `ath` =
+**Q12.** **Why it fails:** RFC 9449 §7.1 requires the proof to bind to the specific access token via `ath` =
 base64url(SHA-256(access_token)). A `sub` claim carries no binding, so the server cannot confirm the proof was
 made for *this* token and rejects/ignores the DPoP binding — decoding "looks fine" precisely because structure
 ≠ semantics. **Fix:** compute and include `ath` (the `decode-jwt.mjs --ath` flag shows the value); drop `sub`.

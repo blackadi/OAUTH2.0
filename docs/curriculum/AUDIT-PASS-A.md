@@ -85,7 +85,11 @@ labelled as a neutral "routing choice," which teaches a learner to replicate it.
 
 ### A-004 · Module 00 cites RFC 9449 §2.1, a section that does not exist
 
-> ✅ **FIXED 2026-08-02** — both occurrences in `modules/00-web-and-jose-foundations/` (quiz stem and answer key) now cite **§4.2 "DPoP Proof JWT Syntax"**, with the key noting explicitly that RFC 9449 has no §2.1. Module 05's seven correct §4.2 citations were left untouched. **`AGENTS.md` carries the same "§2.1" error and is outside `docs/curriculum/` — fix it there too or it will re-propagate.**
+> ✅ **FIXED 2026-08-02** — both occurrences in `modules/00-web-and-jose-foundations/` (quiz stem and answer key) now cite **§4.2 "DPoP Proof JWT Syntax"**, with the key noting explicitly that RFC 9449 has no §2.1. Module 05's seven correct §4.2 citations were left untouched.
+>
+> ⚠️ **The `AGENTS.md` half went unfixed for 18 days, and the prediction came true.** This entry closed with *"`AGENTS.md` carries the same '§2.1' error … fix it there too or it will re-propagate"* — and it was not fixed. On **2026-08-20** it re-propagated exactly as warned: a Module 05 lab rewrite copied `AGENTS.md`'s adjacent `ath` citation into two new places. Both `AGENTS.md` citations are now corrected (§2.1 → **§4.2**; the `ath` MUST → **§7.1**), and `AGENTS.md:474` carries an inline note that §2.1 does not exist so the pointer cannot be "restored".
+>
+> **The transferable lesson: a finding that names a fix outside its own scope does not get made by being written down.** The audit had the right answer, in the right place, 18 days early. What was missing was any mechanism that fails when the out-of-scope half is skipped — `check-docs.mjs` validates that references *resolve*, not that section numbers are *real*.
 
 | Field | Content |
 |---|---|

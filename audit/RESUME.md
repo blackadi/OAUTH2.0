@@ -40,7 +40,7 @@ Authlete. Read this first; read `00-inventory.md` §11 and `01-spec-matrix.md` �
 >
 > #### Where the deliberate opens live
 >
-> Eight things are open **on purpose** — `accessTokenDuration`, the logout rate limiter, 9701-W3's six dropped
+> Seven things are open **on purpose** — `accessTokenDuration`, ~~the logout rate limiter~~ (**closed 2026-08-20**), 9701-W3's six dropped
 > fields, 7662-W6, four unachievable vendor items, **FED-W2 (declined, DR-21)**, RFC 9068 F-3, and retired
 > JARM-W6. They are tabulated once,
 > with their reopen conditions, in **`04-remediation-plan.md` §7.5**. That table is the answer to *"is anything

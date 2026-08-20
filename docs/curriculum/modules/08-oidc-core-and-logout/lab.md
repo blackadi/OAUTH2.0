@@ -1085,15 +1085,36 @@ for (const k of ["end_session_endpoint","backchannel_logout_supported","frontcha
 
 ```
 end_session_endpoint               "https://…/api/logout"
-backchannel_logout_supported       "ABSENT"
+backchannel_logout_supported       true
 frontchannel_logout_supported      "ABSENT"
 check_session_iframe               "ABSENT"
 ```
 
-Which is, in this one instance, **accurate**: the endpoint exists in code but does not function, and discovery
-does not claim it does. Compare with Module 07's finding that the same document misdescribes the revocation
-endpoint. Metadata here is neither reliably right nor reliably wrong, which is the worst of both — and is
-exactly why the audit method has three sources.
+**Two of those three absences are honest, and the `true` is the one to think hard about.**
+`frontchannel_logout_supported` and `check_session_iframe` are absent because those mechanisms are declined
+here — nothing is claimed, nothing is owed.
+
+`backchannel_logout_supported: true` is newer (**2026-08-15**) and it is a genuine claim: the service carries
+`backchannelLogoutSupported`, and one client has a `backchannel_logout_uri` registered, so there really is
+somebody to deliver a logout token to. **But that client is this deployment itself.** The registered URI
+points back at this server's own `/api/backchannel_logout`, so the loop is closed against us — there is no
+third-party RP anywhere in it.
+
+So read the discovery document as what it is: *"this OP will deliver back-channel logout tokens to RPs that
+register a URI"* — true — and **not** as *"back-channel logout has been shown to work with another party"* —
+which nobody has tested. **Demonstrable is not interoperable**, and a capability matrix built from this
+document cannot tell the two apart.
+
+> **This is the third state from Module 09a arriving in a different guise.** Not *advertised but unusable* —
+> the mechanism runs. Call it **advertised and self-tested**: the claim is true, the evidence for it is
+> circular, and only someone who checked *who* the registered `backchannel_logout_uri` belongs to would know.
+> Compare with Module 07's finding that this same document misdescribes the revocation endpoint. Metadata here
+> is neither reliably right nor reliably wrong, which is the worst of both — and is exactly why the audit
+> method has three sources.
+>
+> Until **2026-08-15** this member was absent and this step said discovery was *"accurate: the endpoint exists
+> in code but does not function, and discovery does not claim it does."* Both halves of that changed on the
+> same day. If you are running against your own service, `backchannelLogoutSupported` decides which you see.
 
 ### 6d — One more from discovery
 

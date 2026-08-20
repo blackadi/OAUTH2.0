@@ -553,7 +553,10 @@ only thing the advertisement ever did was mislead a client into trying.
 2. **Withdrawal has side effects worth checking.** Dropping `attest_jwt_client_auth` also removed
    `client_attestation_signing_alg_values_supported` and `client_attestation_pop_signing_alg_values_supported`,
    because those two members exist only to describe that method. One withdrawal, three advertisements gone,
-   and the document went from 64 members to 62.
+   and the document went from 64 members to 62. **Those are readings from 2026-08-12, not today's count** —
+   several members have been added since, so count your own document rather than quoting this sentence. That
+   is the rule `AGENTS.md` states as *"count it, do not quote it"*, and the reason `scripts/check-discovery.mjs`
+   stores a member **list**: a count tells you something changed, only a list tells you what.
 3. **This is the state Module 09a calls *advertised but unusable*, and it cost trust in the metadata** — the
    fourth column of that table. Compare it with the other three states there, and note that a report written
    from discovery metadata alone would have scored all nine of these methods as supported.
