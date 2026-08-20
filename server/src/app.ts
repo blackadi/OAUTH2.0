@@ -4,7 +4,7 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import { sessionMiddleware } from "./middleware/session";
-import requestId from "express-request-id";
+import { requestId } from "./middleware/request-id";
 import morgan from "morgan";
 import logger, { createCallableLogger, baseLogger } from "./utils/logger";
 
@@ -88,7 +88,8 @@ export function createApp() {
       maxAge: 86400,
     })
   );
-  // request id middleware (adds `req.id`)
+  // request id middleware (adds `req.id`, echoes `X-Request-Id`).
+  // An inbound `X-Request-Id` is honoured only if it is a real UUID — see `middleware/request-id.ts`.
   app.use(requestId());
 
   // attach a per-request logger (req.logger)

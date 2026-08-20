@@ -173,7 +173,7 @@ flowchart LR
     REQ["Incoming Request"] --> S1["1. Static Files<br/><i>public/ directory</i>"]
     S1 --> S2["2. Security Headers<br/><i>X-Frame-Options, HSTS, etc.</i>"]
     S2 --> S3["3. CORS<br/><i>ALLOWED_ORIGINS</i>"]
-    S3 --> S4["4. Request ID<br/><i>req.id (uuid)</i>"]
+    S3 --> S4["4. Request ID<br/><i>req.id (uuid v4, inbound must be a UUID)</i>"]
     S4 --> S5["5. Per-request Logger<br/><i>req.logger</i>"]
     S5 --> S6["6. Morgan Access Logs<br/><i>→ Winston</i>"]
     S6 --> S7["7. Metrics<br/><i>Prometheus duration + counter</i>"]
@@ -209,7 +209,7 @@ Middleware executes top-to-bottom. Key behaviors:
 | 1 | Static | Serves files from `public/` | `NODE_ENV` for path resolution |
 | 2 | Security Headers | Sets 4 headers always (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) + HSTS in production |
 | 3 | CORS | `Access-Control-*` headers | `ALLOWED_ORIGINS` env var |
-| 4 | Request ID | Adds `req.id` (UUID v1) | — |
+| 4 | Request ID | Adds `req.id` (**UUID v4**); echoes `X-Request-Id`. An inbound `X-Request-Id` is adopted **only if it is a well-formed UUID**, else replaced | — |
 | 5 | Logger | Creates Winston child with `reqId` | `LOG_LEVEL` env var |
 | 6 | Morgan | HTTP access logs via Winston | `MORGAN_FORMAT` |
 | 7 | Metrics | Starts timer, increments counter on finish | — |

@@ -174,7 +174,7 @@ flowchart LR
 |-----------|------|---------|
 | Security Headers | `app.ts` (inline) | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS (prod only) |
 | CORS | `app.ts` (inline) | Restricts origins to `ALLOWED_ORIGINS` env var |
-| Request ID | `app.ts` (inline) | UUID v1 on `req.id` |
+| Request ID | `src/middleware/request-id.ts` | **UUID v4** on `req.id`; inbound `X-Request-Id` accepted only if a valid UUID |
 | Request Logger | `app.ts` (inline) | Winston child logger on `req.logger` |
 | Morgan | `app.ts` (inline) | HTTP access logs via Winston stream |
 | Metrics | `src/middleware/metrics.ts` | Prometheus duration histogram + request counter |

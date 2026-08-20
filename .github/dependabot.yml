@@ -28,20 +28,6 @@ updates:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
-      # express-request-id 2.x/3.x are pure ESM ("type": "module"). This server
-      # compiles to CommonJS (tsconfig `module: node16`, and dist/app.js really
-      # does emit `require("express-request-id")`), and `engines.node` is ">=22"
-      # while `require(esm)` only landed unflagged in 22.12 — so the bump is a
-      # runtime failure on any Node 22.0-22.11 the floor currently permits.
-      # There is nothing to gain either: v3 only removes options this repo never
-      # passes (`attributeName`, `uuidVersion`), and its shipped types.d.ts
-      # declares `Express.Request` as a type alias rather than an interface
-      # merge, which collides with this repo's own augmentation for `req.logger`.
-      # If the transitive `uuid` advisory ever becomes reachable, replace the
-      # package with `crypto.randomUUID()` rather than upgrading it.
-      - dependency-name: "express-request-id"
-        update-types: ["version-update:semver-major"]
-
   - package-ecosystem: "npm"
     directory: "/client"
     schedule:
