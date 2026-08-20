@@ -397,11 +397,13 @@ Step 13 is the point of the whole module. In Modules 02–04 that arrow succeeds
 
 ## Lab
 
-See **[lab.md](lab.md)**. You will run a full PAR flow and prove the `request_uri` is single-use; watch the AS
-reject an unsigned JAR request object; find `iss` in every response including errors; build a DPoP proof by
-hand and obtain a `token_type: DPoP` token; **compute the RFC 7638 thumbprint yourself and match it against
-`cnf.jkt`**; then break the proof four ways — DER signature, missing `jwk`, wrong `htu`, and correct — and
-finally discover why a DPoP-bound token cannot be spent at this server's resource endpoint.
+See **[lab.md](lab.md)**. You will run a full PAR flow and prove the `request_uri` is single-use; register a
+client signing key and watch a signed JAR request object beat the query string that contradicts it; find `iss`
+in every response including errors; build a DPoP proof by hand and obtain a `token_type: DPoP` token;
+**compute the RFC 7638 thumbprint yourself and match it against `cnf.jkt`**; break the proof at the token
+endpoint three ways — DER signature, missing `jwk`, wrong `htu`; then **spend the bound token** at UserInfo and
+watch four different rejections when you present it wrongly, including the `Bearer` downgrade RFC 9449 §7.2
+makes a MUST-reject.
 
 ## Decision record — mTLS was considered and declined (2026-07-28)
 

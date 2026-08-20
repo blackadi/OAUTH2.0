@@ -1,10 +1,14 @@
 # Module 09a — Lab
 
 **The short version:** five exercises, each with the same shape — **request the extension, read the refusal,
-find the one field responsible, enable it, re-run.** That shape is the lab's real content. Four of these five
-mechanisms are fully implemented on this deployment and switched off by a single unset value, and being able to
-go from an error string to the exact field is the skill that separates "this AS doesn't support X" from "X is
-one console field away."
+find the one field responsible, then see the same request succeed where that field is set.** That shape is the
+lab's real content. Every one of these five mechanisms is fully implemented on this deployment and gated by a
+single value, and being able to go from an error string to the exact field is the skill that separates "this
+AS doesn't support X" from "X is one console field away."
+
+**You will not change any configuration to do this.** The four fields these exercises turn on were switched on
+in August 2026 and stayed on, so the lab now shows you both states side by side instead — mostly by asking two
+different clients the same question. Start with the preflight below; it tells you which client is which.
 
 ## Before you start
 
@@ -43,8 +47,52 @@ cli () { curl -s -H "Authorization: Bearer $AUTHLETE_BEARER_TOKEN" \
 > and **date the marker**, because a marker whose premise has silently changed is worse than none at all.
 > Module 08 had one that was wrong for a fortnight and three documents inherited it.
 >
-> If you are running this against **your own** Authlete service, these four settings are almost certainly
-> still unset; each step says which one it needs.
+> **And then the premise changed anyway — which is why this lab now starts with a preflight.** Those four
+> settings were applied on 2026-08-12 and **they are still applied**. So on this deployment the "ask for it
+> before it is configured" steps below no longer refuse: they succeed, and a lab written to show a refusal
+> prints nothing. Read the preflight, then read each step's **Where this stands** note.
+
+### Preflight — read your own configuration first
+
+This lab is about *capability*, so what it does depends entirely on what your service and client are set to.
+Run this before anything else and keep the output next to you:
+
+```bash
+svc | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const d=JSON.parse(s);
+  console.log("SERVICE");
+  for (const k of ["supportedAcrs","supportedAuthorizationDetailsTypes","supportedBackchannelTokenDeliveryModes"])
+    console.log("  "+k.padEnd(40), JSON.stringify(k in d ? d[k] : "ABSENT"))})'
+for c in "$CLIENT_ID" "$PUB_CLIENT_ID"; do
+  cli "$c" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const d=JSON.parse(s);
+    console.log("CLIENT "+d.clientId+"  ("+d.clientType+", "+d.tokenAuthMethod+")");
+    for (const k of ["authorizationSignAlg","bcDeliveryMode"])
+      console.log("  "+k.padEnd(40), JSON.stringify(k in d ? d[k] : "ABSENT"))})'
+done
+```
+
+On the deployment these transcripts came from:
+
+```
+SERVICE
+  supportedAcrs                            ["pwd","mfa"]
+  supportedAuthorizationDetailsTypes       ["payment_initiation"]
+  supportedBackchannelTokenDeliveryModes   ["POLL","PING","PUSH"]
+CLIENT 1523514379  (CONFIDENTIAL, CLIENT_SECRET_BASIC)
+  authorizationSignAlg                     "ES256"
+  bcDeliveryMode                           "POLL"
+CLIENT 1678274156  (PUBLIC, NONE)
+  authorizationSignAlg                     "ABSENT"
+  bcDeliveryMode                           "ABSENT"
+```
+
+**Two clients, and the difference between them is what this lab now runs on.** Where a step needs a
+*not-configured* client to show you a refusal, it uses `$PUB_CLIENT_ID`; where it needs a configured one to
+show you the feature working, it uses `$CLIENT_ID`. That is deliberate and it is more honest than mutating
+your service twice per exercise: **you get both states on one deployment, at the same time, and nothing you
+run changes what the next student sees.**
+
+Where no such pair exists — ACRs and RAR types are *service*-wide, and only one confidential client can do
+CIBA — the step says so and shows the historical refusal as a dated row instead of asking you to reproduce it.
 
 > **Vendor behavior.** Bracketed codes (`[A012305]`, `[A249302]`, …) are Authlete's. HTTP statuses, `error`
 > values, claim names and parameter names are spec-defined.
@@ -82,8 +130,8 @@ for (const k of ["supportedAcrs","supportedAuthorizationDetailsTypes","supported
 ```
 
 ```
-supportedAcrs                                  "ABSENT"
-supportedAuthorizationDetailsTypes             "ABSENT"
+supportedAcrs                                  ["pwd","mfa"]
+supportedAuthorizationDetailsTypes             ["payment_initiation"]
 supportedBackchannelTokenDeliveryModes         ["POLL","PING","PUSH"]
 backchannelAuthenticationEndpoint              "https://…/api/ciba/authentication"
 backchannelAuthReqIdDuration                   600
@@ -93,14 +141,29 @@ authorizationResponseDuration                  600
 nativeSsoSupported                             false
 ```
 
+Now the same read for **both** clients, because the two disagree and the disagreement is the exercise:
+
 ```bash
-cli | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const d=JSON.parse(s);
+for c in "$CLIENT_ID" "$PUB_CLIENT_ID"; do
+cli "$c" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const d=JSON.parse(s);
+console.log("--- client", d.clientId, "("+d.clientType+") ---");
 for (const k of ["responseModes","authorizationSignAlg","authorizationEncryptionAlg","bcDeliveryMode",
   "bcNotificationEndpoint","bcUserCodeRequired","defaultMaxAge","authTimeRequired","grantTypes"])
   console.log(k.padEnd(30), JSON.stringify(k in d ? d[k] : "ABSENT"))})'
+done
 ```
 
 ```
+--- client 1523514379 (CONFIDENTIAL) ---
+responseModes                  ["QUERY","FRAGMENT","FORM_POST","JWT","QUERY_JWT","FRAGMENT_JWT","FORM_POST_JWT"]
+authorizationSignAlg           "ES256"
+bcDeliveryMode                 "POLL"
+bcUserCodeRequired             false
+defaultMaxAge                  0
+authTimeRequired               false
+grantTypes                     [… "CIBA" …]
+
+--- client 1678274156 (PUBLIC) ---
 responseModes                  ["QUERY","FRAGMENT","FORM_POST","JWT","QUERY_JWT","FRAGMENT_JWT","FORM_POST_JWT"]
 authorizationSignAlg           "ABSENT"
 bcDeliveryMode                 "ABSENT"
@@ -110,21 +173,26 @@ authTimeRequired               false
 grantTypes                     [… "CIBA" …]
 ```
 
-**Now predict.** Fill this in before running anything:
+**Now predict.** Fill this in from *your own* preflight output before running anything — and fill in a row per
+client where the deciding field is per-client:
 
-| Extension | Will it work? | Which field decides |
-|---|---|---|
-| JARM | | |
-| CIBA | | |
-| Step-up (RFC 9470) | | |
-| RAR | | |
-| Native SSO | | |
+| Extension | Works on `$CLIENT_ID`? | Works on `$PUB_CLIENT_ID`? | Which field decides |
+|---|---|---|---|
+| JARM | | | |
+| CIBA | | | |
+| Step-up (RFC 9470) | | | |
+| RAR | | | |
+| Native SSO | | | |
 
 The interesting rows are JARM and CIBA, and they are interesting for the same reason: **the capability is
-listed and the enabling value is missing.** The client's `responseModes` includes `JWT`, `QUERY_JWT`,
-`FRAGMENT_JWT`, `FORM_POST_JWT` — JARM is *permitted*. Its `authorizationSignAlg` is absent — JARM is not
-*configured*. The client's `grantTypes` includes `CIBA` and the service advertises all three delivery modes;
-the client's `bcDeliveryMode` is absent.
+listed on both clients and the enabling value is present on only one.** Both clients' `responseModes`
+include `JWT`, `QUERY_JWT`, `FRAGMENT_JWT`, `FORM_POST_JWT` — JARM is *permitted* for both. Only
+`1523514379` has an `authorizationSignAlg` — JARM is *configured* for one. Both have `CIBA` in `grantTypes`
+and the service advertises all three delivery modes; only one has a `bcDeliveryMode`.
+
+**That is the whole lesson in one table, and you did not have to change anything to see it.** A capability
+matrix built from `responseModes` and `grantTypes` alone would score these two clients identically. They are
+not identical.
 
 **"Permitted but not configured" is a third state**, distinct from Module 07's "supported but not required."
 Supported-but-not-required is a security finding — the mechanism works and nothing insists on it.
@@ -159,11 +227,28 @@ a green tick in a capability matrix.
 
 ## Exercise 2 — JARM
 
-### 2a — Ask for a signed response
+### 2a — Ask for a signed response, from a client that cannot sign one
+
+> **Where this stands.** `$CLIENT_ID` has `authorizationSignAlg: ES256` — JARM is configured there, so asking
+> it for a signed response *succeeds* and shows you nothing. `$PUB_CLIENT_ID` has no `authorizationSignAlg`,
+> so it is the one that still refuses. `autherr` targets `$CLIENT_ID`; `autherr_for` takes a client id:
 
 ```bash
-echo "response_mode=jwt";           autherr --data-urlencode "response_mode=jwt"
-echo "response_mode=query.jwt";     autherr --data-urlencode "response_mode=query.jwt"
+autherr_for () { local C="$1"; shift
+  curl -s -o /dev/null -w '%{redirect_url}\n' -G "$API/authorization" \
+    --data-urlencode "response_type=code" --data-urlencode "client_id=$C" \
+    --data-urlencode "redirect_uri=$REDIRECT_URI" --data-urlencode "scope=openid" \
+    --data-urlencode "state=x" "$@" \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+      const t=s.trim(); if(!t){console.log("  (no redirect — no error)");return;}
+      const u=new URL(t); const q=u.searchParams.size?u.searchParams:new URLSearchParams(u.hash.slice(1));
+      console.log(" ", q.get("error")??"(none)", "|", (q.get("error_description")??"").slice(0,160))})'
+}
+```
+
+```bash
+echo "response_mode=jwt";           autherr_for "$PUB_CLIENT_ID" --data-urlencode "response_mode=jwt"
+echo "response_mode=query.jwt";     autherr_for "$PUB_CLIENT_ID" --data-urlencode "response_mode=query.jwt"
 ```
 
 ```
@@ -181,6 +266,24 @@ response_mode=query.jwt
 specification-defined form (`authorization_signed_response_alg`, from the JARM spec) rather than in the
 vendor's internal spelling (`authorizationSignAlg`). Note the value of that: you can go from this string to
 the JARM spec without knowing anything about Authlete.
+
+Now send the identical request to the *other* client and watch the refusal disappear:
+
+```bash
+echo "same request, configured client:"; autherr_for "$CLIENT_ID" --data-urlencode "response_mode=jwt"
+```
+
+```
+same request, configured client:
+  (none) |
+```
+
+`(none)` means the redirect carried no `error` at all — the request was accepted and you were sent to the
+login page, which is what success looks like at this stage.
+
+**Same service, same request, two clients, two outcomes** — and the deciding field is one line of client
+metadata. That is *permitted but not configured* in a single pair of transcripts, which is what Exercise 1
+asked you to predict.
 
 And note the conclusion, which matters for how you read this repo:
 
@@ -360,6 +463,8 @@ Answerable from the lesson, and worth writing down:
 
 ### 3a — Ask for a decoupled authentication
 
+Start with the request as most people first write it — credentials in the JSON body:
+
 ```bash
 curl -s -o /dev/null -w 'status=%{http_code}\n' -X POST "$API/ciba/authentication" \
   -H "Content-Type: application/json" \
@@ -371,15 +476,50 @@ curl -s -X POST "$API/ciba/authentication" -H "Content-Type: application/json" \
 ```
 
 ```
-status=400
-{"resultCode":"A169301","resultMessage":"[A169301] The backchannel token delivery mode of the client
-application is not set.","action":"BAD_REQUEST","responseContent":"{\"error\":\"unauthorized_client\",
-\"error_description\":\"[A169301] The backchannel token delivery mode of the client application is not
-set.\",\"error_uri\":\"https://docs.authlete.com/#A169301\"}","clientId":…
+status=401
+{"resultCode":"A157357","resultMessage":"[A157357] The client identifier is not found at the expected
+location: The 'client_secret_basic' client authentication method expects the basic authentication in the
+'Authorization' header.","action":"UNAUTHORIZED","responseContent":"{\"error\":\"invalid_client\",
+\"error_description\":\"[A157357] The client identifier is not found at the expected location: …
 ```
 
-The field is `bcDeliveryMode`. But **look at the response body itself**, because there is a second lesson here
-that has nothing to do with CIBA:
+**Read that carefully, because it is not about CIBA at all.** `$CLIENT_ID` is registered
+`CLIENT_SECRET_BASIC`, and since **2026-08-13** this server picks the client-authentication channel from how
+you presented the credentials rather than guessing — the same three-channel rule PAR follows. Body
+credentials for a Basic client are refused instead of being silently converted. So the *first* thing this
+endpoint checks is who you are, and you have not proved it yet.
+
+This is the error-ordering lesson from Module 05 arriving on a new endpoint: **one error code tells you only
+about the first check that failed.** Fix the channel and ask again:
+
+```bash
+curl -s -X POST "$API/ciba/authentication" -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d "{\"parameters\":\"scope=openid&login_hint=$LAB_USER\"}" | head -c 300
+```
+
+```
+{"resultCode":"A179001","resultMessage":"[A179001] The backchannel authentication request was processed
+successfully.","action":"USER_IDENTIFICATION","clientId":1523514379,"clientIdAlias":"1523514379",
+"clientIdAliasUsed":true,"clientName":"test","scopes":[{"name":"openid","defaultEntry":false}],"hin…
+```
+
+> **Where this stands — and the refusal this step used to open with.** `$CLIENT_ID` now has
+> `bcDeliveryMode: POLL`, so the request succeeds. Before **2026-08-12** it did not, and the refusal named
+> the field:
+>
+> | Date | `bcDeliveryMode` | Result |
+> |---|---|---|
+> | before **2026-08-12** | unset | `400` — `[A169301] The backchannel token delivery mode of the client application is not set.` |
+> | now | `POLL` | `200` — `A179001` **USER_IDENTIFICATION** |
+>
+> **You cannot reproduce row 1 here**, and it is worth knowing why: the public client would show you an unset
+> `bcDeliveryMode`, but CIBA refuses it earlier with `[A168311] Public clients are not allowed to use the CIBA
+> flow` — CIBA Core §7.1 requires client authentication, so there is no public-client path to this refusal.
+> One confidential client is configured for CIBA and it is the one you just used. Take row 1 as recorded
+> evidence, the way you took the VCI table in Module 09b.
+
+But **look at either response body**, because there is a second lesson here that has nothing to do with CIBA:
 
 The endpoint returned Authlete's **entire internal response object** — `resultCode`, `resultMessage`, `action`,
 `clientId`, and a `responseContent` string that contains the *actual* OAuth error body, JSON-escaped inside
@@ -467,9 +607,11 @@ and which gets it right. Same deployment, two conventions.
 The full poll-mode sequence:
 
 ```bash
-# 1. Client asks the AS to authenticate the user out of band
-AR=$(curl -s -X POST "$API/ciba/authentication" -H "Content-Type: application/json" \
-  -d "{\"parameters\":\"scope=openid&login_hint=$LAB_USER&binding_message=W7-3F2\",\"clientId\":\"$CLIENT_ID\",\"clientSecret\":\"$CLIENT_SECRET\"}")
+# 1. Client asks the AS to authenticate the user out of band.
+#    Basic auth, not body credentials — $CLIENT_ID is CLIENT_SECRET_BASIC (see 3a).
+AR=$(curl -s -X POST "$API/ciba/authentication" -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d "{\"parameters\":\"scope=openid&login_hint=$LAB_USER&binding_message=W7-3F2\"}")
 echo "$AR" | head -c 300
 TICKET=$(echo "$AR" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).ticket||""))')
 
@@ -540,55 +682,104 @@ Notice `binding_message=W7-3F2` in step 1. Now reason about why it is there:
 
 ### 4a — Ask for an authentication context
 
+> **Where this stands.** `supportedAcrs` is `["pwd","mfa"]` on this service, so asking for `pwd` now succeeds.
+> ACRs are **service**-wide — there is no second client to contrast with, the way 2a used one for JARM — so
+> this step asks for an ACR nobody registered instead. Same lesson, and it stays true however your service is
+> configured, which is exactly the trick Exercise 5a uses for RAR types.
+
 ```bash
-echo "acr_values=pwd";  autherr --data-urlencode "acr_values=pwd"
-echo "essential acr";   autherr --data-urlencode 'claims={"id_token":{"acr":{"essential":true,"values":["mfa"]}}}'
+echo "registered value:";   autherr --data-urlencode "acr_values=pwd"
+echo "unregistered value:"; autherr --data-urlencode "acr_values=totally-unregistered"
+echo "unregistered, essential:"; autherr --data-urlencode 'claims={"id_token":{"acr":{"essential":true,"values":["totally-unregistered"]}}}'
 ```
 
 ```
-acr_values=pwd
-  invalid_request | [A021303] ACR values cannot be specified by any means ('claim', 'acr_values' or
-                    'default_acr_values') because this service supports no ACR value.
-essential acr
-  invalid_request | [A021303] ACR values cannot be specified by any means ('claim', 'acr_values' or
-                    'default_acr_values') because this service supports no ACR value.
+registered value:
+  (none) |
+unregistered value:
+  invalid_request | [A021304] The ACR value 'totally-unregistered' is not supported by this service.
+unregistered, essential:
+  invalid_request | [A021304] The ACR value 'totally-unregistered' is not supported by this service.
 ```
 
-**Both routes are closed by the same field**, and note what the message tells you: `acr_values`, the `claims`
-parameter, and `default_acr_values` on the client are three ways to ask, all gated on the service having at
-least one ACR.
+**The AS refuses to accept a request naming an authentication context it cannot provide**, and it refuses at
+the authorization endpoint, before any user is involved. Note it does not matter whether you asked via
+`acr_values` or via an essential `claims` entry — both are ways of *asking*, and both are checked against the
+same registry.
 
-This is worth pausing on, because it is a genuinely surprising interaction with Module 08. The ID tokens you
-validated there **carried `acr: "pwd"`**. The server records a satisfied ACR on login
-(`session.controller.ts`) and Authlete puts it in the token. So the deployment *emits* an ACR it will not let
-you *request*.
+> **The refusal this step used to open with.** Before **2026-08-12** the service had no ACRs at all, and then
+> *any* ACR request — including `pwd` — was refused with a different code:
+>
+> ```
+> invalid_request | [A021303] ACR values cannot be specified by any means ('claim', 'acr_values' or
+>                   'default_acr_values') because this service supports no ACR value.
+> ```
+>
+> `[A021303]` means *"this service has no ACRs"*; `[A021304]` means *"this service has ACRs and yours is not
+> one of them."* Two codes, two different questions — the same distinction as `[A005332]` versus `[A005352]`
+> in Module 05.
 
-**That is ACR theatre in its purest form:** a claim asserting an authentication context, on a service that has
-declared no authentication contexts. A resource server reading `acr: "pwd"` and making a decision on it is
-relying on a value that means whatever the login handler happened to write. Add it to your notes with that
-framing — the value is not wrong, it is *unaccountable*.
+**All three routes are gated by the same field**, and note what the messages tell you: `acr_values`, the
+`claims` parameter, and `default_acr_values` on the client are three ways to ask, all checked against
+`supportedAcrs`.
 
-### 4b — Enable ACRs, then force a challenge
+**And here is the interaction with Module 08 worth pausing on.** The ID tokens you validated there **carried
+`acr: "pwd"`**. The server records a satisfied ACR on login (`session.controller.ts`) and Authlete puts it in
+the token. Before 2026-08-12 the service declared *no* ACRs, so the deployment was emitting an `acr` it would
+not let you request — a claim asserting an authentication context on a service that had declared none. **That
+is ACR theatre in its purest form**, and it is why `supportedAcrs` was set.
 
-Console → **Service** → Supported ACRs → add `pwd` and `mfa` → Save.
+The lesson survives the fix, and is worth carrying: a resource server reading `acr: "pwd"` is trusting that
+the value means something the AS will stand behind. Registering the value is what makes it *accountable* —
+it does not make it *true*. Nothing about `supportedAcrs` verifies that the login handler did what `pwd`
+claims. Which is exactly what half two below demonstrates.
+
+### 4b — Force a challenge
+
+> **Where this stands.** `supportedAcrs` is already `["pwd","mfa"]` — the console step this section used to
+> open with (**Service → Supported ACRs → add `pwd` and `mfa`**) is done. Confirm, then run the three halves:
 
 ```bash
 svc | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("supportedAcrs =",JSON.parse(s).supportedAcrs))'
 ```
 
-Then the two halves of RFC 9470.
+Then the three halves of RFC 9470.
 
 **Half one — a satisfiable ACR.** Request `acr_values=pwd`, complete the flow, and confirm the ID token's `acr`
 and the introspection response's `acr`/`auth_time`. This should succeed: the login handler satisfies `pwd`.
 
 **Half two — an unsatisfiable *essential* ACR.** Request `mfa` as an essential claim. The login handler cannot
-satisfy it, so the authorization must **fail** rather than downgrade:
+satisfy it, so the authorization must **fail** rather than downgrade.
+
+**`autherr` is the wrong tool here, and that is the lesson.** It only hits `/authorization`, and at that point
+nobody has authenticated yet — so there is nothing to compare `mfa` against and no error to return. The
+refusal happens at the **login POST**, once the AS knows what authentication actually occurred. You have to
+complete the flow:
 
 ```bash
-autherr --data-urlencode 'claims={"id_token":{"acr":{"essential":true,"values":["mfa"]}}}'
+J=$(mktemp)
+ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- "$REDIRECT_URI")
+CLAIMS=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' -- '{"id_token":{"acr":{"essential":true,"values":["mfa"]}}}')
+L1=$(curl -s -i -c "$J" -b "$J" \
+  "$API/authorization?response_type=code&client_id=$CLIENT_ID&redirect_uri=$ENC&scope=openid&state=ACRTEST&claims=$CLAIMS" \
+  | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+echo "after /authorization -> ${L1:0:40}…"          # a login page, NOT an error
+C1=$(curl -s -b "$J" -c "$J" "http://localhost:3000$L1" | grep -o 'name="_csrf" value="[^"]*"' | cut -d'"' -f4)
+curl -s -i -b "$J" -c "$J" -X POST "$API/session/login" \
+  -d "username=$LAB_USER" -d "password=$LAB_PASS" --data-urlencode "_csrf=$C1" \
+  | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}' \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const q=new URL(s.trim()).searchParams;
+      console.log("after login ->", q.get("error"), "|", q.get("error_description"))})'
 ```
 
-Expect a redirect error. This is the distinction that matters: `acr_values` is a **preference** the AS may not
+```
+after /authorization -> /api/session/login?response_type=…
+after login -> unmet_authentication_requirements | [A060305] The authorization request requests 'acr' as
+               essential, but the authentication performed for the end-user satisfies none of the requested ACRs.
+```
+
+**The request was accepted and the *authentication* was refused** — two different checks at two different
+moments. This is the distinction that matters: `acr_values` is a **preference** the AS may not
 meet; an `acr` claim marked `"essential": true` (OIDC Core §5.5.1) is a **requirement** it must refuse rather
 than silently satisfy with something weaker. The repo's `session.controller.ts` implements exactly that —
 `ACR_NOT_SATISFIED` when `acrEssential` is set and the satisfied ACR does not match, `EXCEEDS_MAX_AGE` when
@@ -789,18 +980,22 @@ not much use to a team that has to operate the result.)
 
 ## Verification block
 
-- [ ] You predicted, from configuration alone, which of the five extensions would fail — and were right.
+- [ ] You predicted, from configuration alone, which of the five extensions would fail **on which client** —
+      and were right.
 - [ ] You can explain the difference between "supported but not required" (Module 07) and "permitted but not
       configured", and why both look identical in a capability matrix.
-- [ ] `response_mode=jwt` returned `[A012305]` naming `authorization_signed_response_alg`, and you can state
-      why that means **no server code** is needed for JARM here.
+- [ ] `response_mode=jwt` returned `[A012305]` on `$PUB_CLIENT_ID` and nothing at all on `$CLIENT_ID`, and you
+      can state why that means **no server code** is needed for JARM here.
 - [ ] You traced the `form_post.jwt` 302-with-HTML to `action: LOCATION` from the AS, and can say why that
       makes it vendor behaviour rather than a repo defect.
-- [ ] CIBA returned `[A169301]`, and you noticed the response body is a vendor envelope rather than an OAuth
-      error — and can say which field inside it should have been the response.
+- [ ] Body credentials at the CIBA endpoint returned `[A157357]`, Basic auth reached `USER_IDENTIFICATION`,
+      and you noticed that *both* response bodies are vendor envelopes rather than OAuth objects — and can say
+      which field inside them should have been the response.
 - [ ] You can name the three CIBA delivery modes and defend a choice for a terminal behind NAT.
-- [ ] `acr_values=pwd` returned `[A021303]`, **and** you found `acr: "pwd"` in a live ID token — and can
-      explain why holding both facts at once is a finding.
+- [ ] An unregistered `acr_values` returned `[A021304]` while `pwd` was accepted, and you can state what
+      `[A021303]` meant on the same service before any ACR was registered.
+- [ ] An essential `mfa` was accepted at `/authorization` and refused at the login POST with `[A060305]`, and
+      you can say why those are two different checks at two different moments.
 - [ ] All four RAR malformations returned distinct diagnostics under one spec error code, and you can say what
       that demonstrates about structure versus strings.
 - [ ] You wrote a `WWW-Authenticate` challenge and can say what breaks if `acr_values` is omitted.
