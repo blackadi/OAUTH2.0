@@ -239,7 +239,7 @@ Ordered as applied in `app.ts`:
 1. Static file serving (`public/`)
 2. Security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS in prod)
 3. CORS (`ALLOWED_ORIGINS`)
-4. Request ID (`req.id` — UUID v1)
+4. Request ID (`req.id` — **UUID v4**; an inbound `X-Request-Id` is honoured only if it is a valid UUID)
 5. Per-request logger (`req.logger` — Winston child)
 6. Morgan access logs (→ Winston)
 7. Metrics (Prometheus histogram + counter)

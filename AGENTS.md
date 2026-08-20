@@ -653,6 +653,30 @@ it. When this script reports something, check whether the surrounding claim is s
 - The `server/logs/` directory is gitignored (except `.gitkeep`)
 - **SDK is pinned to the exact version `@authlete/typescript-sdk@1.0.0` — no caret, and this is deliberate.** `1.1.5`/`1.1.6` are numerically *higher* but are **older code**: Speakeasy auto-versioning ran the package up to 1.1.6 in Nov 2025, upstream then restarted at `0.0.1-beta`, and on 2026-04-08 hand-set the version back to a stable `1.0.0` (commit *"Promote SDK to stable v1.0.0 and align Speakeasy config"*, `versioningStrategy: automatic` → `manual`), published 2026-04-09 as npm's `latest`. Widening this to `^1.0.0` resolves *up* to 1.1.6 and silently reintroduces three bugs — see `docs/DEVELOPMENT.md` → SDK Version Pin. A Dependabot `ignore` rule in `.github/dependabot.yml` blocks that "upgrade". **GitHub's releases page shows v1.1.6 as "Latest" — ignore it**: every later release is flagged `prerelease=true` and the Apr 2026 stable 1.0.0 got no GitHub release at all, so the badge is stale metadata, not currency.
 - The repo previously carried `patches/@authlete+typescript-sdk+1.1.6.patch` via `patch-package`. **It is gone, and must not come back** — all three of its fixes are native to 1.0.0 (verified against `openapi-spec`).
+- **JWK→PEM conversion is Node-native, and `jwk-to-pem` must not come back** (2026-08-20). It was a direct
+  dependency of `utils/jwksClient.ts` and `utils/verify-id-token-hint.ts`, and it pulls in `elliptic`, whose
+  advisory **GHSA-848j-6mx2-7j84 has no patched release** — there was nothing to upgrade to.
+  `crypto.createPublicKey({ key: jwk, format: "jwk" })` does the same job and has since Node 15.12.
+  **The swap was proven equivalent before it was made, not after**: over EC P-256/P-384/P-521 and RSA 2048
+  (RS256 and PS256) the exported SPKI PEM is **byte-identical**, `jsonwebtoken` verifies against either, and
+  the failure behaviour matches case for case — `kid`/`use`/`alg` extras ignored, and malformed keys, unknown
+  `kty`, `oct` and `{}` all throwing. A JWK carrying a private `d` yields a **public** key from both, so no
+  private half can leak into a value named "public key" — asserted now by a test in `jwksClient.test.ts`.
+  **The old `jwksClient` tests proved none of this**: they `vi.mock`ed the converter away and fed it
+  `{ kty: "EC", x: "xval", y: "yval" }`, which is not a key at all and throws in both libraries once the mock
+  is removed. They use real generated keys now, like `verify-id-token-hint.test.ts` always did.
+- **`req.id` is a UUID v4 minted here, and an inbound `X-Request-Id` is honoured only if it is a valid UUID**
+  (2026-08-20; `middleware/request-id.ts`, replacing the `express-request-id` package). The package pinned
+  `uuid@3.4.0` (GHSA-w5hq-g745-h8pq, unreachable here — it needs v3/v5/v6 with a `buf` and the package calls
+  v4 with none), and its only escape was a pure-ESM major that this CommonJS build cannot `require` on the
+  Node 22 floor. `crypto.randomUUID()` replaced ~25 lines of dependency with ~10 of local code.
+  **The behaviour change is the point.** `express-request-id` adopted whatever `X-Request-Id` the caller sent —
+  verified live, an **8,000-character value reached `req.id` intact** and was written to `logs/audit-*.log`
+  (90-day retention) and every line of `logs/app-*.log`. CR/LF is rejected by Node's parser and obs-fold is
+  not honoured, so log-line *injection* was never reachable; the exposure was **volume and provenance**. A
+  caller can now write at most 36 characters of hex, and only in the shape of a UUID. Three documents said
+  `req.id` was "UUID v1" until this change; it has always been v4. **`req.id` is a correlation identifier and
+  is never read for authorization** — its only consumers are `app.ts`'s child logger and `middleware/audit-log.ts`.
 - **`authleteApi.service.get()` works, and what it took is the durable lesson** (broken 2026-08-06 → 2026-08-12). Authlete returned `supportedTokenAuthMethods` including `SPIFFE_JWT`; SDK 1.0.0's `ClientAuthMethod` is a **closed** Zod enum of eight members that does not include it, so one unrecognised value rejected the whole response. `GET /api/fapi/config` and `GET /api/fapi/status` — the only two `service.get()` call sites, both in `fapi.controller.ts` — were down for six days. **Fixed by withdrawing the member at the service** (T1-5, `supportedTokenAuthMethods` nine members → five), never by a `patch-package` patch, which stays forbidden.
 
   **The gap is one enum, and it sits in three fields, not one.** `ClientAuthMethod` types `supportedTokenAuthMethods`, `supportedRevocationAuthMethods` **and** `supportedIntrospectionAuthMethods`. Only the first was ever set here — the other two are absent, so the drop was a single field — but setting either sibling to a list containing a member the SDK does not know breaks `service.get()` again, and every document that discussed this named only `supportedTokenAuthMethods`. **It is the only such gap in the schema**: of the 16 enum-typed fields reachable from `Service`, the other 15 match Authlete 3.0.16 member-for-member, and no field is Authlete-nullable while the SDK refuses null (checked 2026-08-12 by diffing the SDK's `Service$inboundSchema` against `docs/openapi-spec.json`, then confirmed live — the failing response produced **exactly one** Zod issue out of 132 fields).
