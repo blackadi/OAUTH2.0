@@ -512,7 +512,13 @@ throwaway. This service also carries a client that is *permanently* registered f
 CID_SAVE="$CID"; export CID="$PKJWT_CLIENT_ID"
 KID=$(node -e 'process.stdout.write(JSON.parse(process.env.PKJWT_PRIVATE_JWK).kid)')
 
-jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", key: J.registeredKey(), kid: "'"$KID"'"})'
+# This client has `pkceRequired: true` — unlike $CLIENT_ID, which Module 02 keeps permissive on purpose.
+# Reuse the $CH from Step 5, or mint a fresh pair:
+V=$(node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))')
+CH=$(node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("base64url"))' -- "$V")
+
+jar 'J.requestObject({clientId: process.env.CID, iss: "'"$ISS"'", key: J.registeredKey(), kid: "'"$KID"'",
+  over: {code_challenge: "'"$CH"'", code_challenge_method: "S256"}})'
 ```
 
 ```
@@ -520,6 +526,13 @@ action: INTERACTION
 [A004001] Authlete has successfully issued a ticket to the service (API Key = …) for the authorization request from the client (ID = …). [response_type=code, openid=false]
 scopes: ["profile"]
 ```
+
+> **Drop the `code_challenge` and you get `[A124301]`, not a signature error** — and that is worth doing
+> once. The AS answers `action: LOCATION` with *"The authorization request does not contain 'code_challenge'
+> parameter"*, which means your **signature already verified**: the request object was unpacked and its
+> contents checked before PKCE was evaluated. A failed signature is `[A005328]` and never gets that far.
+> Two clients, two PKCE postures, the same signed object — this is the table in `AGENTS.md` showing up in
+> your own terminal.
 
 No console step, no `/tmp` key. Now send the **unsigned** object to this client and compare with Step 2, which
 sent the identical object to `$CLIENT_ID`:
