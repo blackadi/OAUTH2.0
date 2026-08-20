@@ -41,7 +41,7 @@ npm --prefix server run test:unit         # unit tests only (806 tests, 68 files
 npm --prefix server run test:integration  # integration tests only (298 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
-npm --prefix server run test:e2e          # E2E (100 tests, requires real Authlete creds)
+npm --prefix server run test:e2e          # E2E (101 tests, requires real Authlete creds)
 
 # Client dev (Vite on :3001, proxies /api -> localhost:3000)
 npm --prefix client run dev
@@ -106,7 +106,25 @@ docker compose up -d prometheus grafana
   - `tests/unit/config/` — 1 file, `app.config.test.ts`, which asserts **the default itself** (`NODE_ENV` absent ⇒ `production`) — the `development-only` tests mock the config module and so can never see it
   - `tests/unit/views/` — 1 file
 - **Integration tests**: 7 files (298 tests) — full Express stack with mocked SDK, via `createApp()`. `routes.test.ts` is the general one; the other six were written to drain the route-coverage backlog and each drives one module's routes **through its middleware chain**, asserting the auth posture first: `client.routes.test.ts` (16 routes), `admin-surfaces.routes.test.ts` (token/HSK/federation/JAR/device-consent/health/route-index, 16), `vci.routes.test.ts` (10), `backchannel-logout.routes.test.ts` (4), `native-sso.routes.test.ts` (2), `root.routes.test.ts` (2). **Prefer adding to these over a new controller test** when the thing under test is a gate, a status mapping or a route parameter — a controller test calls the handler directly and cannot see any of it
-- **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (100 tests) — real Authlete API, 26 section headers fixed for sequential numbering
+- **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (**101 tests: 99 pass, 2 skipped outside development**) —
+  real Authlete API, 26 section headers fixed for sequential numbering. The two skips are the device-flow
+  approval chain, which drives the development-only `POST /api/device/complete`.
+
+  > **This suite rots silently, and on 2026-08-20 it was found 11 of 100 failing.** Every failure was a
+  > stale expectation from an intentional change — T1-11's spec-shaped bodies (PAR, DCR, Device), CIBA-W3's
+  > client-auth channel, T1-1's introspection gate, T1-10's protected-resource challenge, T1-14/15's
+  > fail-closed back-channel receiver, and the 2026-08-10 development-only gate on device completion. Not one
+  > was a server defect. It had been red for **ten days**.
+  >
+  > **The cause is structural: nothing runs it.** It is not in `ci.yml` — deliberately, since it spends real
+  > Authlete quota and trips the ~15-call rate limit — and this file tells you not to run it casually. So the
+  > usual signal that a behaviour change needs a test update never fires here. **After any change to a
+  > response body, a status mapping or an auth gate, assume e2e is stale until you have run it**, the same way
+  > you would grep the curriculum. A green `npm test` says nothing about this file.
+  >
+  > It also hid a genuine test bug for far longer: the DCR update had **never** sent a conformant RFC 7592
+  > §2.2 request — the metadata document must contain `client_id`, and sending only the changed field earns
+  > `[A214301]`.
 - Run with `npm --prefix server run test` — **1104 tests across 75 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — 118 tests / 17 files
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)

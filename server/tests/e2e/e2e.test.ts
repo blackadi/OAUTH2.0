@@ -440,9 +440,23 @@ if (!hasRealAuthleteCreds) {
         if (!token) return
         const res = await request
           .post("/api/introspection/standard")
+          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
           .type("form")
           .send({ token })
         expect(res.status).toBe(200)
+      })
+
+      // T1-1 (2026-08-12) put admin Basic auth on both introspection endpoints, before any Authlete
+      // call, because an unauthenticated introspection endpoint is a token-scanning oracle (RFC 7662
+      // §2.1). Pin the gate itself, not only the happy path.
+      it("refuses standard introspection without admin credentials", async () => {
+        const token = resolveToken()
+        if (!token) return
+        const res = await request
+          .post("/api/introspection/standard")
+          .type("form")
+          .send({ token })
+        expect(res.status).toBe(401)
       })
 
       it("Authlete-specific introspection responds (may 401 if token unrecognized)", async () => {
@@ -888,10 +902,15 @@ if (!hasRealAuthleteCreds) {
         expect(res.status).toBe(403)
       })
 
-      it("rejects query with no Bearer token", async () => {
+      it("rejects query with no Bearer token, RFC 6750 §3.1 shaped", async () => {
         const res = await request.get("/api/gm/some-grant")
         expect(res.status).toBe(401)
-        expect(res.body).toHaveProperty("error", "invalid_token")
+        // T1-10 (2026-08-13) made this a protected resource in the same sense UserInfo is. §3.1 wants
+        // **no body and no error code** when the request carried no authentication information at all —
+        // the challenge is the response. Asserting a JSON `error` here would be asserting a defect.
+        expect(res.headers["www-authenticate"]).toBeTruthy()
+        expect(res.headers["www-authenticate"]).toMatch(/DPoP|Bearer/)
+        expect(res.body).toEqual({})
       })
 
       it("checks grant ownership before scope (revoke token used for query)", async () => {
@@ -956,8 +975,14 @@ if (!hasRealAuthleteCreds) {
           .post("/api/backchannel_logout")
           .type("form")
           .send({ logout_token: logoutToken })
-        // Accept 200 (verified) or 400 (JWKS_URI unreachable in test env)
-        expect([200, 400]).toContain(res.status)
+        // 200 when the token verifies; 400 when it is rejected on its merits; **500 when the receiver
+        // is not configured** — `JWKS_URI` is unset on this deployment, and T1-14/T1-15 (2026-08-13)
+        // made an unconfigured expectation refuse rather than downgrade the check to "any issuer, any
+        // key". That is the `jwt.verify` rule in AGENTS.md, and 500 here is the rule working.
+        expect([200, 400, 500]).toContain(res.status)
+        if (res.status === 500) {
+          expect(res.body).toHaveProperty("error")
+        }
       })
 
       it("rejects missing logout_token with 400", async () => {
@@ -1000,10 +1025,14 @@ if (!hasRealAuthleteCreds) {
         // Accept 201 (success) or 400 (DCR not enabled on service)
         if (res.status === 400) return
         expect(res.status).toBe(201)
-        expect(res.body).toHaveProperty("action", "CREATED")
-        const content = JSON.parse(res.body.responseContent)
-        state.dcrClientId = content.client_id
-        state.dcrToken = content.registration_access_token
+        // T1-11 (2026-08-14): the body is **RFC 7591 §3.2.1's registration response**, not Authlete's
+        // envelope with it nested in a `responseContent` string. A conforming client reads `client_id`
+        // at the top level; it used to have to unwrap a vendor field to reach it.
+        expect(res.body).toHaveProperty("client_id")
+        expect(res.body).not.toHaveProperty("action")
+        expect(res.body).not.toHaveProperty("resultCode")
+        state.dcrClientId = res.body.client_id
+        state.dcrToken = res.body.registration_access_token
         expect(state.dcrClientId).toBeTruthy()
         expect(state.dcrToken).toBeTruthy()
       })
@@ -1014,7 +1043,10 @@ if (!hasRealAuthleteCreds) {
           .post("/api/client/dcr/get")
           .send({ token: state.dcrToken, clientId: state.dcrClientId })
         expect(res.status).toBe(200)
-        expect(res.body).toHaveProperty("action")
+        // T1-11 applies to all four /api/client/dcr/* endpoints, not just register: the body is the
+        // RFC 7592 client-information response, with no vendor envelope around it.
+        expect(res.body).toHaveProperty("client_id")
+        expect(res.body).not.toHaveProperty("action")
       })
 
       it("updates the registered client", async () => {
@@ -1022,12 +1054,26 @@ if (!hasRealAuthleteCreds) {
         const res = await request
           .post("/api/client/dcr/update")
           .send({
-            json: JSON.stringify({ client_name: "Updated E2E App" }),
+            // RFC 7592 §2.2: the update request carries the **full** client metadata document, and
+            // `client_id` must be inside it. Sending only the field being changed earns
+            // `[A214301] The 'client_id' field must be present in the registration update request` —
+            // this test had never sent a conformant update, and nobody saw it because e2e is not in CI.
+            // Same REPLACE semantics as CU-W1: omitted members are not merged, they are reset.
+            json: JSON.stringify({
+              client_id: state.dcrClientId,
+              client_name: "Updated E2E App",
+              redirect_uris: [redirectUri],
+              grant_types: ["authorization_code"],
+              response_types: ["code"],
+              token_endpoint_auth_method: "client_secret_basic",
+            }),
             token: state.dcrToken,
             clientId: state.dcrClientId,
           })
         expect(res.status).toBe(200)
-        expect(res.body).toHaveProperty("action")
+        expect(res.body).toHaveProperty("client_id")
+        expect(res.body).not.toHaveProperty("action")
+        expect(res.body.client_name).toBe("Updated E2E App")
       })
 
       it("deletes the registered client", async () => {
@@ -1050,10 +1096,13 @@ if (!hasRealAuthleteCreds) {
       it("sends backchannel authentication request", async () => {
         const res = await request
           .post("/api/ciba/authentication")
+          // CIBA-W3 (2026-08-13): `ciba.service.ts` now picks the client-auth channel from how the
+          // caller presented the credentials, matching `par.service.ts`. CID is CLIENT_SECRET_BASIC, so
+          // body credentials are correctly refused with 401 [A157357] instead of being silently
+          // converted onto the Basic channel. Present them the way the client is registered.
+          .auth(process.env.CID!, process.env.SEC!)
           .send({
             parameters: "login_hint=admin&scope=openid",
-            clientId: process.env.CID,
-            clientSecret: process.env.SEC,
           })
         expect([200, 400]).toContain(res.status)
         if (res.status === 200) {
@@ -1106,10 +1155,13 @@ if (!hasRealAuthleteCreds) {
       it("sends backchannel authentication for denied flow", async () => {
         const res = await request
           .post("/api/ciba/authentication")
+          // CIBA-W3 (2026-08-13): `ciba.service.ts` now picks the client-auth channel from how the
+          // caller presented the credentials, matching `par.service.ts`. CID is CLIENT_SECRET_BASIC, so
+          // body credentials are correctly refused with 401 [A157357] instead of being silently
+          // converted onto the Basic channel. Present them the way the client is registered.
+          .auth(process.env.CID!, process.env.SEC!)
           .send({
             parameters: "login_hint=admin&scope=openid",
-            clientId: process.env.CID,
-            clientSecret: process.env.SEC,
           })
         expect([200, 400]).toContain(res.status)
         if (res.status === 200) {
@@ -1338,14 +1390,15 @@ if (!hasRealAuthleteCreds) {
           })
         expect([200, 400]).toContain(res.status)
         if (res.status === 200) {
-          expect(res.body).toHaveProperty("action", "OK")
-          expect(res.body).toHaveProperty("deviceCode")
-          expect(res.body).toHaveProperty("userCode")
-          expect(res.body).toHaveProperty("verificationUri")
-          expect(res.body).toHaveProperty("expiresIn")
-          expect(res.body).toHaveProperty("interval")
-          deviceCode = res.body.deviceCode
-          userCode = res.body.userCode
+          // T1-11 (2026-08-14): exactly RFC 8628 §3.2's snake_case body, not Authlete's envelope with
+          // camelCase names beside an `action`. Probe-confirmed as 8628-W6.
+          expect(res.body).toHaveProperty("device_code")
+          expect(res.body).toHaveProperty("user_code")
+          expect(res.body).toHaveProperty("verification_uri")
+          expect(res.body).toHaveProperty("expires_in")
+          expect(res.body).not.toHaveProperty("action")
+          deviceCode = res.body.device_code
+          userCode = res.body.user_code
         }
       })
 
@@ -1360,7 +1413,18 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("scopes")
       })
 
-      it("completes device flow with AUTHORIZED result", async () => {
+      // This pair drives approval through the **unauthenticated** `POST /api/device/complete`, which has
+      // been development-only since 2026-08-10 — outside development the gate answers 404 and the device
+      // code is never authorized, so the exchange below has nothing to redeem. Vitest sets
+      // NODE_ENV=test, so both are skipped rather than asserted against a gate that is doing its job;
+      // the gate itself is pinned by "complete is development-only and 404s outside development" above.
+      //
+      // The production-safe path is `POST /device/consent`, which authenticates the user first. Driving
+      // it needs a browser leg (login + CSRF) — see Module 02's device-flow lab, and
+      // `tests/unit/routes/device.routes.test.ts`, which covers the route with its middleware chain.
+      const itInDevelopment = process.env.NODE_ENV === "development" ? it : it.skip
+
+      itInDevelopment("completes device flow with AUTHORIZED result", async () => {
         if (!userCode) return
         const res = await request
           .post("/api/device/complete")
@@ -1369,7 +1433,7 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("action", "SUCCESS")
       })
 
-      it("exchanges device_code for access token", async () => {
+      itInDevelopment("exchanges device_code for access token", async () => {
         if (!deviceCode) return
         const res = await request
           .post("/api/token")
@@ -1405,15 +1469,21 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("action", "NOT_EXIST")
       })
 
-      it("complete returns 404 for non-existent user_code", async () => {
+      // `POST /api/device/complete` approves a pending device authorization **as any subject the caller
+      // names**, with no authentication of that subject — a token-minting oracle for anyone who can read
+      // a user code off a screen (RFC 8628 §5.5). Since 2026-08-10 it is development-only and answers a
+      // flat 404 anywhere else, deliberately not 401/403, so a deployed instance does not reveal that
+      // the endpoint exists. Vitest sets NODE_ENV=test, so these assert the gate, which is the more
+      // valuable property. The authenticated path, `POST /device/consent`, works in every environment.
+      it("complete is development-only and 404s outside development", async () => {
         const res = await request
           .post("/api/device/complete")
           .send({ userCode: "NONEXISTENT", result: "AUTHORIZED", subject: "admin" })
         expect(res.status).toBe(404)
-        expect(res.body).toHaveProperty("action", "USER_CODE_NOT_EXIST")
+        expect(res.body).toEqual({ error: "not_found" })
       })
 
-      it("complete with ACCESS_DENIED still succeeds (records the denial)", async () => {
+      it("complete with ACCESS_DENIED is also behind the development-only gate", async () => {
         // Create a fresh device authorization to deny
         const authRes = await request
           .post("/api/device/authorization")
@@ -1428,14 +1498,19 @@ if (!hasRealAuthleteCreds) {
         const res = await request
           .post("/api/device/complete")
           .send({
-            userCode: authRes.body.userCode,
+            userCode: authRes.body.user_code,
             result: "ACCESS_DENIED",
             subject: "admin",
           })
-        // The complete API call itself succeeds (records the denial).
-        // The 403 error comes later when the client polls /api/token.
-        expect(res.status).toBe(200)
-        expect(res.body).toHaveProperty("action", "SUCCESS")
+        // In development this records the denial and answers SUCCESS — `ACCESS_DENIED` is a request
+        // `result`, not a response action, and the device learns of it as `access_denied` on its next
+        // token poll. Outside development the gate answers 404 first, which is what runs here.
+        expect([200, 404]).toContain(res.status)
+        if (res.status === 200) {
+          expect(res.body).toHaveProperty("action", "SUCCESS")
+        } else {
+          expect(res.body).toEqual({ error: "not_found" })
+        }
       })
 
       it("token exchange rejects invalid device_code", async () => {
@@ -1768,8 +1843,12 @@ if (!hasRealAuthleteCreds) {
         // Accept 201 or 429 (Authlete rate limit)
         expect([201, 429]).toContain(res.status)
         if (res.status === 201) {
-          expect(res.body).toHaveProperty("action", "CREATED")
-          expect(res.body).toHaveProperty("requestUri")
+          // T1-11 (2026-08-14): exactly RFC 9126 §2.2's body — `{"expires_in":…,"request_uri":"urn:…"}` —
+          // not the envelope with a camelCase `requestUri` beside an `action` and a `resultCode`.
+          expect(res.body).toHaveProperty("request_uri")
+          expect(res.body).toHaveProperty("expires_in")
+          expect(res.body).not.toHaveProperty("action")
+          expect(String(res.body.request_uri)).toMatch(/^urn:/)
         }
       })
 
@@ -1789,8 +1868,8 @@ if (!hasRealAuthleteCreds) {
         // Accept 201 or 429 (Authlete rate limit)
         expect([201, 429]).toContain(pushRes.status)
         if (pushRes.status !== 201) return
-        expect(pushRes.body).toHaveProperty("action", "CREATED")
-        const requestUri = pushRes.body.requestUri as string
+        expect(pushRes.body).toHaveProperty("request_uri")   // RFC 9126 §2.2, not the vendor envelope
+        const requestUri = pushRes.body.request_uri as string
         expect(requestUri).toBeTruthy()
 
         const parAgent = supertest.agent(app)
