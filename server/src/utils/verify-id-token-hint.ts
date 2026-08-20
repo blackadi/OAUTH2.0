@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import type { Algorithm } from "jsonwebtoken";
-import jwkToPem from "jwk-to-pem";
+import { createPublicKey, type webcrypto } from "node:crypto";
 
 /**
  * Verify an `id_token_hint` supplied to the RP-Initiated Logout endpoint.
@@ -50,7 +50,7 @@ export const ID_TOKEN_HINT_ALGS: Algorithm[] = [
   "PS512",
 ];
 
-/** A JWK as served by this service's JWKS. Only `kid` is read here; `jwk-to-pem` reads the rest. */
+/** A JWK as served by this service's JWKS. Only `kid` is read here; `createPublicKey` reads the rest. */
 export interface HintVerificationJwk {
   kid?: string;
   kty?: string;
@@ -129,10 +129,16 @@ export function verifyIdTokenHint(
   for (const jwk of candidates) {
     let pem: string;
     try {
-      pem = jwkToPem(jwk as unknown as Parameters<typeof jwkToPem>[0]);
+      // Node's own JWK→PEM, not `jwk-to-pem`: that package pulls in `elliptic`, whose advisory
+      // (GHSA-848j-6mx2-7j84) has no patched release. Proven byte-identical over EC P-256/384/521 and
+      // RSA 2048 before the swap, with matching throw behaviour — see `utils/jwksClient.ts`.
+      pem = createPublicKey({ key: jwk as webcrypto.JsonWebKey, format: "jwk" })
+        .export({ type: "spki", format: "pem" })
+        .toString();
     } catch {
-      // A key this library cannot convert (an unexpected `kty`, a malformed member) is skipped rather
-      // than aborting the loop — another key in the set may still verify the hint.
+      // A key that cannot be converted (an unexpected `kty`, a malformed member) is skipped rather
+      // than aborting the loop — another key in the set may still verify the hint. Node throws
+      // `ERR_CRYPTO_INVALID_JWK` on exactly the inputs `jwk-to-pem` threw on, so this stays reachable.
       lastError = "jwk_conversion_failed";
       continue;
     }

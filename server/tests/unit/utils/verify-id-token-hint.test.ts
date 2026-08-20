@@ -87,6 +87,23 @@ describe("verifyIdTokenHint", () => {
       expect(verifyIdTokenHint(hint, { jwks: [op.jwk, second.jwk], issuer: ISSUER }).subject).toBe(SUBJECT)
     })
 
+    it("skips an unconvertible key and keeps going to a good one", () => {
+      // The `jwk_conversion_failed` branch. Conversion moved from `jwk-to-pem` to Node's
+      // `createPublicKey` (dropping `elliptic`, whose GHSA-848j-6mx2-7j84 has no fix), so the throw now
+      // comes from Node as ERR_CRYPTO_INVALID_JWK — the branch must stay reachable, and a bad key in the
+      // set must not deny service for a good one sharing the kid-less fallback path.
+      const junk = { kty: "EC", crv: "P-256", x: "not-a-point", y: "not-a-point" }
+      const hint = sign(op, genuine())
+      expect(verifyIdTokenHint(hint, { jwks: [junk, op.jwk], issuer: ISSUER }).subject).toBe(SUBJECT)
+    })
+
+    it("reports jwk_conversion_failed when every candidate is unconvertible", () => {
+      const junk = { kty: "EC", crv: "P-256", x: "not-a-point", y: "not-a-point" }
+      const result = verifyIdTokenHint(sign(op, genuine()), { jwks: [junk], issuer: ISSUER })
+      expect(result.subject).toBeUndefined()
+      expect(result.reason).toBe("jwk_conversion_failed")
+    })
+
     it("accepts an expired hint and reports it as expired", () => {
       // Deliberate: a hint is an *old* token by definition. The signature still proves the OP issued it.
       const hint = sign(op, genuine({ exp: Math.floor(Date.now() / 1000) - 86_400 }))
@@ -150,7 +167,7 @@ describe("verifyIdTokenHint", () => {
       expect(verify(sign(op, genuine()), { issuer: "" }).reason).toBe("no_expected_issuer")
     })
 
-    it("skips a key jwk-to-pem cannot convert rather than aborting", () => {
+    it("skips a key that cannot be converted rather than aborting", () => {
       const junk = { kid: "op-key-1", kty: "oct", k: "not-an-asymmetric-key" }
       const result = verifyIdTokenHint(sign(op, genuine()), {
         jwks: [junk, op.jwk],
