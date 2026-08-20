@@ -425,6 +425,8 @@ Revoke all tokens for a session. No admin auth — client auth via body `clientI
 
 RP-Initiated Logout is **two requests**. OpenID Connect RP-Initiated Logout 1.0 §2 requires the OP to ask the End-User before ending the session, and asking is also what keeps a state-changing operation off a bare `GET`.
 
+Both methods carry `generalLimiter` (60/min per IP).
+
 ### `GET /api/logout`
 Renders the logout confirmation page. **Destroys nothing.**
 

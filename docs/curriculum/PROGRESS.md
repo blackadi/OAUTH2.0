@@ -177,8 +177,8 @@ from *"we looked at it and said no."* All **21** records are ruled; nothing is a
 > decision is not a decision.**
 
 **Eight deliberate opens are now tabulated in one place** — `04-remediation-plan.md` **§7.5**, each with its
-reopen condition: `accessTokenDuration` at 86400 (Modules 07/10 rest on it), the logout rate limiter (left out
-of T0-3 visibly, verified still absent in `routes/logout.routes.ts`), 9701-W3's six silently-dropped
+reopen condition: `accessTokenDuration` at 86400 (Modules 07/10 rest on it), ~~the logout rate limiter~~
+(**closed 2026-08-20** — `generalLimiter` on both methods; it had been left out of T0-3 visibly), 9701-W3's six silently-dropped
 introspection fields (two are caller key material, hence a plan not a doc line), 7662-W6, four unachievable
 vendor items, **FED-W2** (declined, DR-21), RFC 9068 F-3, and retired JARM-W6. **They were previously
 discoverable only by reading 55 files.**
@@ -3077,7 +3077,7 @@ references** section. RFC 7800 is the substantive one — it defines the `cnf` c
 **Also resolved:** Stage 1's critique item 5 ("`AGENTS.md` says 21 sections but there are 20") is **no longer
 true** — `AGENTS.md`'s **Sections** bullet says 20, and `client/src/App.tsx` has exactly 20 `sectionComponents` entries. No edit
 needed; the item is closed.
-- [ ] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28, see below)
+- [x] Stage 4 — consistency pass **+ backfill all four exams** (decided 2026-07-28) — **done; box ticked 2026-08-20 after verifying rather than assuming.** All four exams and all four answer keys exist and reconcile: Exam A 15 items / 100 pts, B 15 / 100, C 15 / 100, Final 12 / 100, and every item id has a matching answer-key section (`A1–A15`, `B1–B15`, `C1–C15`, `F1–F12`). The box had been unticked since 2026-07-28 while the work was finished, which is the same drift class the audit keeps finding — a record that says *not done* about something that is.
 
 ### Gated source changes — BOTH RESOLVED 2026-07-28
 

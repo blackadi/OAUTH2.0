@@ -262,7 +262,7 @@ Ordered as applied in `app.ts`:
 | `tokenLimiter` | 20/min | `POST /api/token` | Skipped when Basic auth present |
 | `authLimiter` | 60/min | `GET /api/authorization` | — |
 | `loginLimiter` | 5/min | `POST /api/session/login` | — |
-| `generalLimiter` | 60/min | Session, DCR, CIBA, PAR, device browser routes | — |
+| `generalLimiter` | 60/min | Session, DCR, CIBA, PAR, VCI, federation, device browser routes, **`GET`/`POST /api/logout`** | — |
 
 Rate limiting uses `express-rate-limit` with in-memory store.
 
