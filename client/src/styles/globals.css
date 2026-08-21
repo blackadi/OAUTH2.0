@@ -18,6 +18,36 @@
   --sidebar-width: 14rem;
 }
 
+/**
+ * Tailwind v4 generates utilities from `@theme`, NOT from custom properties on `:root`.
+ *
+ * Without this block the `:root` values above are declared and never consumed: `bg-card`,
+ * `border-border`, `text-muted-foreground`, `bg-muted`, `bg-input`, `ring-ring`, `bg-background`
+ * and `text-foreground` are classes that do not exist, and every one of their ~160 usages across
+ * 28 files emits nothing. Verified against the built stylesheet — 0 of 8 selectors present, while
+ * the `:root` block survived intact. The visible symptoms were transparent cards, invisible
+ * hairline borders, secondary text rendering at full foreground contrast, and — because the form
+ * primitives pair `ring-ring` with `focus:outline-none` — no visible keyboard focus anywhere in
+ * the app.
+ *
+ * `inline` matters: it makes the generated utility resolve to `var(--card)` at use time, so `:root`
+ * stays the single source of these values and a light theme is a `:root` override rather than a
+ * second set of utilities.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;

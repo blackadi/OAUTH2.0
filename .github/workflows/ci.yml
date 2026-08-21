@@ -78,6 +78,16 @@ jobs:
         if: github.event_name == 'schedule'
         run: node scripts/check-discovery.mjs --live
 
+      # Added 2026-08-21. The client's entire semantic palette was dead: Tailwind v4 generates utilities
+      # from `@theme`, `globals.css` declared the values on `:root` only, and ~160 usages of `bg-card`,
+      # `border-border`, `text-muted-foreground`, `bg-muted`, `bg-input`, `ring-ring`, `bg-background` and
+      # `text-foreground` across 28 files compiled to nothing. Every other gate stayed green because the
+      # symptoms were purely visual — transparent cards, invisible borders, and no visible keyboard focus
+      # anywhere, since the form primitives pair `ring-ring` with `focus:outline-none`. Neither `tsc`,
+      # ESLint, vitest nor `vite build` can see a class that does not exist. This can, offline.
+      - name: Check theme tokens (every semantic utility is mapped in @theme)
+        run: node scripts/check-theme-tokens.mjs
+
   client:
     runs-on: ubuntu-latest
 

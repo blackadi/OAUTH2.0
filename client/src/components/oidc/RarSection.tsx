@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { rarService } from '@/services';
+import type { ParSuccessResponse } from '@/services/par.service';
 import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { generateKeyPair, createProof } from '@/services/dpop.service';
@@ -34,7 +35,7 @@ function RarSection() {
   const [scope, setScope] = useState('openid');
   const [usePar, setUsePar] = useState(false);
   const [useDpop, setUseDpop] = useState(false);
-  const [parResult, setParResult] = useState<{ requestUri?: string; expiresIn?: number } | null>(null);
+  const [parResult, setParResult] = useState<ParSuccessResponse | null>(null);
   const [pkceVerifier, setPkceVerifier] = useState(() => sessionStorage.getItem('pkce_code_verifier') || '');
 
   const doc = getDoc('rar', 'push');
@@ -101,23 +102,29 @@ function RarSection() {
 
   const handlePushAndRedirect = async () => {
     const { data, error: err } = await call(doPush);
-    if (data) {
-      const d = data as { requestUri?: string };
-      if (d?.requestUri) {
-        const cid = clientId || 'your_client_id';
-        setParResult({ requestUri: d.requestUri, expiresIn: (data as { expiresIn?: number }).expiresIn });
-        window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.requestUri)}`;
-      }
-    } else {
+    if (!data) {
       toast.error(err);
+      return;
     }
+    // RFC 9126 §2.2 names these `request_uri` and `expires_in`. Reading Authlete's camelCase
+    // `requestUri` here made this button a silent no-op: the value was `undefined`, the guard below
+    // failed, and because `data` itself is truthy the error branch never ran either.
+    const d = data as ParSuccessResponse;
+    if (!d.request_uri) {
+      // A 201 with no `request_uri` is not something to swallow — say so rather than doing nothing.
+      toast.error('PAR succeeded but returned no request_uri — see the response below');
+      setParResult(d);
+      return;
+    }
+    const cid = clientId || 'your_client_id';
+    setParResult(d);
+    window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`;
   };
 
   const handlePushOnly = async () => {
     const { data, error: err } = await call(doPush);
     if (data) {
-      const d = data as { requestUri?: string; expiresIn?: number };
-      setParResult(d);
+      setParResult(data as ParSuccessResponse);
       toast.success('PAR (RAR) request completed');
     } else {
       toast.error(err);
@@ -213,7 +220,7 @@ function RarSection() {
               Push PAR Only
             </Button>
           )}
-          {parResult?.requestUri && (
+          {parResult?.request_uri && (
             <Button variant="secondary" onClick={handleReset} size="sm">
               Reset
             </Button>
@@ -222,11 +229,11 @@ function RarSection() {
       </div>
 
       {parResult && !usePar && <JsonBlock data={parResult} label="Response" />}
-      {parResult?.requestUri && (
+      {parResult?.request_uri && (
         <div className="mt-4 p-3 bg-slate-800 rounded-lg border border-slate-700 space-y-2">
           <p className="text-xs text-slate-300 font-mono break-all">
             <span className="text-slate-500">request_uri: </span>
-            {parResult.requestUri}
+            {parResult.request_uri}
           </p>
         </div>
       )}

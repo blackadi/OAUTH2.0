@@ -308,7 +308,10 @@ const AuthFlowsSection: React.FC = () => {
                     <Input label="Client ID" value={jwtId} onChange={(e) => setJwtId(e.target.value)} placeholder="Your registered client ID" />
                     <Input label="Client Secret" type="password" value={jwtSecret} onChange={(e) => setJwtSecret(e.target.value)} placeholder="Client secret (optional)" />
                   </div>
-                  <Button onClick={() => handleCall(jwtId, jwtSecret, () => tokenService.jwtBearerGrant(jwtAssertion, jwtId || undefined, jwtSecret || undefined, jwtScope || undefined))} loading={loading} disabled={!jwtAssertion || loading !== null} className="w-full sm:w-auto">
+                  {/* `disabled` reads `loading` directly — it was `loading !== null`, and this hook's
+                      `loading` is a boolean, so the button could never enable and the RFC 7523 grant
+                      was unreachable. See the note in StepUpSection: same idiom, same cause. */}
+                  <Button onClick={() => handleCall(jwtId, jwtSecret, () => tokenService.jwtBearerGrant(jwtAssertion, jwtId || undefined, jwtSecret || undefined, jwtScope || undefined))} loading={loading} disabled={!jwtAssertion || loading} className="w-full sm:w-auto">
                     <FileText className="h-4 w-4 mr-2" />
                     Exchange JWT for Token
                   </Button>

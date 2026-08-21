@@ -8,6 +8,24 @@ export interface ParResponseWithNonce {
 }
 
 /**
+ * The 201 body of `POST /api/par` — **RFC 9126 §2.2's own shape, not Authlete's envelope**.
+ *
+ * Since T1-11 the server answers with exactly `{"expires_in":600,"request_uri":"urn:…"}`. It used to
+ * forward the vendor envelope, whose members are camelCase `requestUri`/`expiresIn` beside an `action`
+ * and a `resultCode`. Both spellings therefore exist in this repo's history, and reading the old one
+ * yields `undefined` rather than an error: `RarSection` kept reading `requestUri` after the change, so
+ * its "push and redirect" button silently did nothing at all — no redirect, no message.
+ *
+ * This type exists so the next such change is a compile error instead of a dead button. Every member is
+ * optional because nothing here parses the response and a debugging surface should render a missing
+ * field as absent rather than throw — the same reasoning as `JarProcessResult`.
+ */
+export interface ParSuccessResponse {
+  request_uri?: string;
+  expires_in?: number;
+}
+
+/**
  * Client credentials to present via HTTP Basic, for `client_secret_basic` clients.
  *
  * Authlete matches the channel credentials arrive on against the client's registered auth

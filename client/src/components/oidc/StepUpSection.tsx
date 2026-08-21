@@ -170,10 +170,16 @@ function StepUpSection() {
                 onChange={(e) => setMaxAge(e.target.value)}
                 placeholder="e.g. 300"
               />
+              {/* `disabled` reads `loading` directly. It used to be `loading !== null`, and
+                  `useAsyncCall` reports `loading` as a *boolean* — so the comparison was always true
+                  and this button, the only control in the section, was permanently disabled. The
+                  `!== null` idiom belongs to `useDiscriminatedAsyncCall`, whose `loading` is
+                  `T | null`; TypeScript permits a null comparison against any type, so nothing
+                  flagged the copy. Locked by tests/sections.smoke.test.tsx. */}
               <Button
                 onClick={handleIntrospect}
                 loading={loading}
-                disabled={!at || loading !== null}
+                disabled={!at || loading}
                 className="w-full sm:w-auto"
               >
                 <ShieldAlert className="h-4 w-4 mr-2" />

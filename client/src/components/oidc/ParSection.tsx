@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { parService } from '@/services';
+import type { ParSuccessResponse } from '@/services/par.service';
 import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { generateKeyPair, createProof } from '@/services/dpop.service';
@@ -27,7 +28,7 @@ function ParSection() {
   const [authMethod, setAuthMethod] = useState<'post' | 'basic' | 'none'>('post');
   const [useDpop, setUseDpop] = useState(false);
   // Mirrors RFC 9126 §2.2's response body. The server returned Authlete's camelCase envelope until T1-11.
-  const [parResult, setParResult] = useState<{ request_uri?: string; expires_in?: number } | null>(null);
+  const [parResult, setParResult] = useState<ParSuccessResponse | null>(null);
   // Read once, lazily, at first render. This used to be an empty `useState` plus a mount effect that called
   // `setPkceVerifier` synchronously — which is a cascading render for a value that is known before the first
   // paint, and which `react-hooks` flags. Lazy initialisation is the same read with no second render.
@@ -94,7 +95,7 @@ function ParSection() {
   const handlePush = async () => {
     const { data, error: err } = await call(doParRequest);
     if (data) {
-      const d = data as { request_uri?: string; expires_in?: number };
+      const d = data as ParSuccessResponse;
       setParResult(d);
       toast.success('PAR request completed');
     } else {
@@ -107,7 +108,7 @@ function ParSection() {
     if (data) {
       // RFC 9126 §2.2 names this `request_uri`. The server used to hand back Authlete's camelCase
       // `requestUri` inside its envelope; T1-11 made the response the specification's body.
-      const d = data as { request_uri?: string };
+      const d = data as ParSuccessResponse;
       if (d?.request_uri) {
         const cid = clientId || parameters.match(/client_id=([^&]+)/)?.[1] || '';
         window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`;

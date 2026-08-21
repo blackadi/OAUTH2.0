@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "lint": "eslint src/ --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "check:theme": "node ../scripts/check-theme-tokens.mjs",
     "format": "prettier --check src/",
     "format:fix": "prettier --write src/",
     "test": "vitest run",

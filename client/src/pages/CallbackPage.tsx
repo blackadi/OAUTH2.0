@@ -150,7 +150,7 @@ const CallbackPage = () => {
     <Card className="max-w-2xl mx-auto">
       <CardHeader>
         <CardTitle>Callback</CardTitle>
-        {state.loading && <CardDescription>Exchanging authorization code for tokens\u2026</CardDescription>}
+        {state.loading && <CardDescription>Exchanging authorization code for tokens…</CardDescription>}
       </CardHeader>
       <CardContent>
         {state.loading && (
