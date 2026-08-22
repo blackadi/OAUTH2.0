@@ -48,7 +48,13 @@ function GrantManagementSection() {
     ...(useDpop && dpopKey
       ? {
           dpopProof: (nonce?: string) =>
-            createProof(dpopKey, 'GET', `${GRANT_MANAGEMENT_ENDPOINT}/${grantId}`, undefined, nonce),
+            createProof(
+              dpopKey,
+              'GET',
+              `${GRANT_MANAGEMENT_ENDPOINT}/${grantId}`,
+              undefined,
+              nonce,
+            ),
         }
       : {}),
   });

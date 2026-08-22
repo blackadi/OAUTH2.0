@@ -18,7 +18,16 @@ import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
 import { useCredentials } from '@/context/CredentialContext';
 
-type VciOp = 'metadata' | 'jwtissuer' | 'jwks' | 'wellknown' | 'offer-create' | 'offer-info' | 'cred-issue' | 'cred-batch' | 'deferred-issue';
+type VciOp =
+  | 'metadata'
+  | 'jwtissuer'
+  | 'jwks'
+  | 'wellknown'
+  | 'offer-create'
+  | 'offer-info'
+  | 'cred-issue'
+  | 'cred-batch'
+  | 'deferred-issue';
 
 const VCI_OPS: { value: VciOp; label: string; group: string }[] = [
   { value: 'metadata', label: 'Metadata', group: 'Discovery' },
@@ -69,7 +78,9 @@ function VciSection() {
   // --- Shared credential state ---
   const [credAccessToken, setCredAccessToken] = useState(() => getAccessToken() || '');
   const [issueOrderJson, setIssueOrderJson] = useState('{"requestIdentifier":"cred-1"}');
-  const [batchRequestsJson, setBatchRequestsJson] = useState('[{"format":"vc+sd-jwt","vct":"https://credentials.example.com/identity_credential"}]');
+  const [batchRequestsJson, setBatchRequestsJson] = useState(
+    '[{"format":"vc+sd-jwt","vct":"https://credentials.example.com/identity_credential"}]',
+  );
   const [deferredOrderJson, setDeferredOrderJson] = useState('{"transactionId":"..."}');
 
   const auth = adminId && adminSecret ? btoa(`${adminId}:${adminSecret}`) : '';
@@ -89,8 +100,12 @@ function VciSection() {
   function renderCheckbox(label: string, checked: boolean, onChange: (v: boolean) => void) {
     return (
       <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)}
-          className="accent-indigo-500 w-3.5 h-3.5 rounded border-border bg-muted/30" />
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="accent-indigo-500 w-3.5 h-3.5 rounded border-border bg-muted/30"
+        />
         {label}
       </label>
     );
@@ -102,44 +117,83 @@ function VciSection() {
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/metadata</p>
-            <p className="text-xs text-muted-foreground/60">Returns the credential issuer metadata including supported credential configurations.</p>
-            <Button onClick={() => handleCall(() => vciService.getMetadata())} loading={loading}>Fetch Metadata</Button>
+            <p className="text-xs text-muted-foreground/60">
+              Returns the credential issuer metadata including supported credential configurations.
+            </p>
+            <Button onClick={() => handleCall(() => vciService.getMetadata())} loading={loading}>
+              Fetch Metadata
+            </Button>
           </div>
         );
       case 'jwtissuer':
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/jwtissuer</p>
-            <p className="text-xs text-muted-foreground/60">Returns JWT VC issuer metadata (issuer identifier + JWKS URI).</p>
-            <Button onClick={() => handleCall(() => vciService.getJwtIssuer())} loading={loading}>Fetch JWT Issuer</Button>
+            <p className="text-xs text-muted-foreground/60">
+              Returns JWT VC issuer metadata (issuer identifier + JWKS URI).
+            </p>
+            <Button onClick={() => handleCall(() => vciService.getJwtIssuer())} loading={loading}>
+              Fetch JWT Issuer
+            </Button>
           </div>
         );
       case 'jwks':
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/jwks</p>
-            <p className="text-xs text-muted-foreground/60">Returns the public keys used to sign verifiable credentials.</p>
-            <Button onClick={() => handleCall(() => vciService.getJwks())} loading={loading}>Fetch JWKS</Button>
+            <p className="text-xs text-muted-foreground/60">
+              Returns the public keys used to sign verifiable credentials.
+            </p>
+            <Button onClick={() => handleCall(() => vciService.getJwks())} loading={loading}>
+              Fetch JWKS
+            </Button>
           </div>
         );
       case 'wellknown':
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/well-known</p>
-            <p className="text-xs text-muted-foreground/60">Same as Metadata, but served at the OID4VCI-specified well-known path (convenience alias).</p>
-            <Button onClick={() => handleCall(() => vciService.getWellKnown())} loading={loading}>Fetch Well-Known</Button>
+            <p className="text-xs text-muted-foreground/60">
+              Same as Metadata, but served at the OID4VCI-specified well-known path (convenience
+              alias).
+            </p>
+            <Button onClick={() => handleCall(() => vciService.getWellKnown())} loading={loading}>
+              Fetch Well-Known
+            </Button>
           </div>
         );
       case 'offer-create': {
         return (
           <div className="space-y-4">
             <AdminAuth label="Admin" />
-            <Input label="Credential Configuration IDs (JSON array)" value={offerCredConfigIds} onChange={(e) => setOfferCredConfigIds(e.target.value)} placeholder='["VerifiedEmployee"]' />
-            <Input label="Subject (optional)" value={offerSubject} onChange={(e) => setOfferSubject(e.target.value)} placeholder="user123" />
-            <Input label="Duration in seconds (optional)" value={offerDuration} onChange={(e) => setOfferDuration(e.target.value)} placeholder="3600" />
-            <Input label="Context (optional)" value={offerContext} onChange={(e) => setOfferContext(e.target.value)} placeholder="Free-form context string" />
+            <Input
+              label="Credential Configuration IDs (JSON array)"
+              value={offerCredConfigIds}
+              onChange={(e) => setOfferCredConfigIds(e.target.value)}
+              placeholder='["VerifiedEmployee"]'
+            />
+            <Input
+              label="Subject (optional)"
+              value={offerSubject}
+              onChange={(e) => setOfferSubject(e.target.value)}
+              placeholder="user123"
+            />
+            <Input
+              label="Duration in seconds (optional)"
+              value={offerDuration}
+              onChange={(e) => setOfferDuration(e.target.value)}
+              placeholder="3600"
+            />
+            <Input
+              label="Context (optional)"
+              value={offerContext}
+              onChange={(e) => setOfferContext(e.target.value)}
+              placeholder="Free-form context string"
+            />
             <div className="space-y-1">
-              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground/60">Grant Types</p>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                Grant Types
+              </p>
               <div className="flex flex-wrap gap-4">
                 {renderCheckbox('Pre-Authorized Code', preAuthGrant, setPreAuthGrant)}
                 {renderCheckbox('Authorization Code', authCodeGrant, setAuthCodeGrant)}
@@ -147,31 +201,57 @@ function VciSection() {
             </div>
             {preAuthGrant && (
               <div className="space-y-3 pl-3 border-l-2 border-indigo-500/30">
-                <p className="text-xs text-accent-text/60">Transaction code (tx_code) settings for pre-authorized code flow</p>
-                <Input label="Transaction Code (optional)" value={txCodeVal} onChange={(e) => setTxCodeVal(e.target.value)} placeholder="e.g. 123456" />
-                <Select label="Input Mode" options={[
-                  { value: '', label: '(none)' },
-                  { value: 'numeric', label: 'Numeric' },
-                  { value: 'text', label: 'Text' },
-                ]} value={txCodeMode} onChange={(e) => setTxCodeMode(e.target.value)} />
-                <Input label="Description (optional)" value={txCodeDesc} onChange={(e) => setTxCodeDesc(e.target.value)} placeholder="e.g. Enter the code shown on screen" />
+                <p className="text-xs text-accent-text/60">
+                  Transaction code (tx_code) settings for pre-authorized code flow
+                </p>
+                <Input
+                  label="Transaction Code (optional)"
+                  value={txCodeVal}
+                  onChange={(e) => setTxCodeVal(e.target.value)}
+                  placeholder="e.g. 123456"
+                />
+                <Select
+                  label="Input Mode"
+                  options={[
+                    { value: '', label: '(none)' },
+                    { value: 'numeric', label: 'Numeric' },
+                    { value: 'text', label: 'Text' },
+                  ]}
+                  value={txCodeMode}
+                  onChange={(e) => setTxCodeMode(e.target.value)}
+                />
+                <Input
+                  label="Description (optional)"
+                  value={txCodeDesc}
+                  onChange={(e) => setTxCodeDesc(e.target.value)}
+                  placeholder="e.g. Enter the code shown on screen"
+                />
               </div>
             )}
-            <Button onClick={() => {
-              const body: Record<string, unknown> = {};
-              try { body.credentialConfigurationIds = JSON.parse(offerCredConfigIds); } catch { body.credentialConfigurationIds = [offerCredConfigIds]; }
-              if (offerSubject) body.subject = offerSubject;
-              if (offerDuration) body.duration = Number(offerDuration);
-              if (offerContext) body.context = offerContext;
-              body.preAuthorizedCodeGrantIncluded = preAuthGrant;
-              body.authorizationCodeGrantIncluded = authCodeGrant;
-              if (preAuthGrant && txCodeVal) {
-                body.txCode = txCodeVal;
-                if (txCodeMode) body.txCodeInputMode = txCodeMode;
-                if (txCodeDesc) body.txCodeDescription = txCodeDesc;
-              }
-              handleCall(() => vciService.createOffer(body, auth));
-            }} loading={loading}>Create Offer</Button>
+            <Button
+              onClick={() => {
+                const body: Record<string, unknown> = {};
+                try {
+                  body.credentialConfigurationIds = JSON.parse(offerCredConfigIds);
+                } catch {
+                  body.credentialConfigurationIds = [offerCredConfigIds];
+                }
+                if (offerSubject) body.subject = offerSubject;
+                if (offerDuration) body.duration = Number(offerDuration);
+                if (offerContext) body.context = offerContext;
+                body.preAuthorizedCodeGrantIncluded = preAuthGrant;
+                body.authorizationCodeGrantIncluded = authCodeGrant;
+                if (preAuthGrant && txCodeVal) {
+                  body.txCode = txCodeVal;
+                  if (txCodeMode) body.txCodeInputMode = txCodeMode;
+                  if (txCodeDesc) body.txCodeDescription = txCodeDesc;
+                }
+                handleCall(() => vciService.createOffer(body, auth));
+              }}
+              loading={loading}
+            >
+              Create Offer
+            </Button>
           </div>
         );
       }
@@ -179,64 +259,151 @@ function VciSection() {
         return (
           <div className="space-y-3">
             <AdminAuth label="Admin" />
-            <Input label="Offer Identifier" value={offerIdentifier} onChange={(e) => setOfferIdentifier(e.target.value)} placeholder="offer-id" />
-            <Button onClick={() => handleCall(() => vciService.getOfferInfo({ identifier: offerIdentifier }, auth))} loading={loading}>Get Offer Info</Button>
+            <Input
+              label="Offer Identifier"
+              value={offerIdentifier}
+              onChange={(e) => setOfferIdentifier(e.target.value)}
+              placeholder="offer-id"
+            />
+            <Button
+              onClick={() =>
+                handleCall(() => vciService.getOfferInfo({ identifier: offerIdentifier }, auth))
+              }
+              loading={loading}
+            >
+              Get Offer Info
+            </Button>
           </div>
         );
       case 'cred-issue':
         return (
           <div className="space-y-3">
-            <Input label="Access Token" value={credAccessToken} onChange={(e) => setCredAccessToken(e.target.value)} placeholder="access-token"
-              onFocus={handleTokenFocus} />
+            <Input
+              label="Access Token"
+              value={credAccessToken}
+              onChange={(e) => setCredAccessToken(e.target.value)}
+              placeholder="access-token"
+              onFocus={handleTokenFocus}
+            />
             <p className="text-xs text-muted-foreground">
-              Uses <code>Authorization: Bearer</code> header. Auto-filled from token vault on focus. Get a token from <strong>Auth Flows</strong> (authorization code, client credentials, or pre-authorized code).
+              Uses <code>Authorization: Bearer</code> header. Auto-filled from token vault on focus.
+              Get a token from <strong>Auth Flows</strong> (authorization code, client credentials,
+              or pre-authorized code).
             </p>
-            <Textarea label="Order (JSON)" rows={6} value={issueOrderJson} onChange={(e) => setIssueOrderJson(e.target.value)}
-              placeholder='{"requestIdentifier":"cred-1"}' />
-            <Button onClick={() => {
-              let order: unknown = {};
-              try { order = JSON.parse(issueOrderJson); } catch { order = { requestIdentifier: issueOrderJson }; }
-              handleCall(() => vciService.issueCredential({ accessToken: credAccessToken, order }));
-            }} loading={loading}>Issue Credential</Button>
+            <Textarea
+              label="Order (JSON)"
+              rows={6}
+              value={issueOrderJson}
+              onChange={(e) => setIssueOrderJson(e.target.value)}
+              placeholder='{"requestIdentifier":"cred-1"}'
+            />
+            <Button
+              onClick={() => {
+                let order: unknown = {};
+                try {
+                  order = JSON.parse(issueOrderJson);
+                } catch {
+                  order = { requestIdentifier: issueOrderJson };
+                }
+                handleCall(() =>
+                  vciService.issueCredential({ accessToken: credAccessToken, order }),
+                );
+              }}
+              loading={loading}
+            >
+              Issue Credential
+            </Button>
           </div>
         );
       case 'cred-batch':
         return (
           <div className="space-y-3">
-            <Input label="Access Token" value={credAccessToken} onChange={(e) => setCredAccessToken(e.target.value)} placeholder="access-token"
-              onFocus={handleTokenFocus} />
-            <p className="text-xs text-muted-foreground">Request multiple credential types at once (OID4VCI §10). Each entry specifies the format and credential type.</p>
+            <Input
+              label="Access Token"
+              value={credAccessToken}
+              onChange={(e) => setCredAccessToken(e.target.value)}
+              placeholder="access-token"
+              onFocus={handleTokenFocus}
+            />
+            <p className="text-xs text-muted-foreground">
+              Request multiple credential types at once (OID4VCI §10). Each entry specifies the
+              format and credential type.
+            </p>
             <div className="p-2 rounded bg-indigo-500/8 border border-indigo-500/20">
               <p className="text-xs text-accent-text/70">
-                <strong>credential_requests</strong> format (OID4VCI):<br />
-                <code className="text-[0.6rem]">{'[{"format":"vc+sd-jwt","vct":"..."},{"format":"mso_mdoc","doctype":"..."}]'}</code>
+                <strong>credential_requests</strong> format (OID4VCI):
+                <br />
+                <code className="text-[0.6rem]">
+                  {'[{"format":"vc+sd-jwt","vct":"..."},{"format":"mso_mdoc","doctype":"..."}]'}
+                </code>
               </p>
             </div>
-            <Textarea label="Requests (JSON array)" rows={8} value={batchRequestsJson} onChange={(e) => setBatchRequestsJson(e.target.value)}
-              placeholder='[{"format":"vc+sd-jwt","vct":"https://credentials.example.com/identity_credential"},{"format":"mso_mdoc","doctype":"org.iso.18013.5.1.mDL"}]' />
-            <Button onClick={() => {
-              let parsed: unknown = [];
-              try { parsed = JSON.parse(batchRequestsJson); } catch { parsed = []; }
-              handleCall(() => vciService.batchCredential({ accessToken: credAccessToken, credential_requests: parsed }));
-            }} loading={loading}>Batch Issue</Button>
+            <Textarea
+              label="Requests (JSON array)"
+              rows={8}
+              value={batchRequestsJson}
+              onChange={(e) => setBatchRequestsJson(e.target.value)}
+              placeholder='[{"format":"vc+sd-jwt","vct":"https://credentials.example.com/identity_credential"},{"format":"mso_mdoc","doctype":"org.iso.18013.5.1.mDL"}]'
+            />
+            <Button
+              onClick={() => {
+                let parsed: unknown = [];
+                try {
+                  parsed = JSON.parse(batchRequestsJson);
+                } catch {
+                  parsed = [];
+                }
+                handleCall(() =>
+                  vciService.batchCredential({
+                    accessToken: credAccessToken,
+                    credential_requests: parsed,
+                  }),
+                );
+              }}
+              loading={loading}
+            >
+              Batch Issue
+            </Button>
           </div>
         );
       case 'deferred-issue':
         return (
           <div className="space-y-3">
-            <Input label="Access Token" value={credAccessToken} onChange={(e) => setCredAccessToken(e.target.value)} placeholder="access-token"
-              onFocus={handleTokenFocus} />
+            <Input
+              label="Access Token"
+              value={credAccessToken}
+              onChange={(e) => setCredAccessToken(e.target.value)}
+              placeholder="access-token"
+              onFocus={handleTokenFocus}
+            />
             <p className="text-xs text-muted-foreground">
-              Poll for a credential that was deferred (returned 202 Accepted with <code>transaction_id</code>). Set the <code>transactionId</code> from the issue response.
-              Requires the <strong>same access token</strong> used at the Credential tab — the server validates it via Authlete&apos;s deferred <em>parse</em> API before issuing.
+              Poll for a credential that was deferred (returned 202 Accepted with{' '}
+              <code>transaction_id</code>). Set the <code>transactionId</code> from the issue
+              response. Requires the <strong>same access token</strong> used at the Credential tab —
+              the server validates it via Authlete&apos;s deferred <em>parse</em> API before
+              issuing.
             </p>
-            <Textarea label="Order (JSON)" rows={6} value={deferredOrderJson} onChange={(e) => setDeferredOrderJson(e.target.value)}
-              placeholder='{"transactionId":"..."}' />
-            <Button onClick={() => {
-              let order: unknown = {};
-              try { order = JSON.parse(deferredOrderJson); } catch { order = { transactionId: deferredOrderJson }; }
-              handleCall(() => vciService.issueDeferred({ accessToken: credAccessToken, order }));
-            }} loading={loading}>Issue Deferred</Button>
+            <Textarea
+              label="Order (JSON)"
+              rows={6}
+              value={deferredOrderJson}
+              onChange={(e) => setDeferredOrderJson(e.target.value)}
+              placeholder='{"transactionId":"..."}'
+            />
+            <Button
+              onClick={() => {
+                let order: unknown = {};
+                try {
+                  order = JSON.parse(deferredOrderJson);
+                } catch {
+                  order = { transactionId: deferredOrderJson };
+                }
+                handleCall(() => vciService.issueDeferred({ accessToken: credAccessToken, order }));
+              }}
+              loading={loading}
+            >
+              Issue Deferred
+            </Button>
           </div>
         );
     }
@@ -245,45 +412,78 @@ function VciSection() {
   const currentGroup = activeOp ? toOpGroup(activeOp) : undefined;
 
   return (
-    <SectionPanel title="Verifiable Credential Issuance (OID4VCI)" description="Issue verifiable credentials via Authlete">
+    <SectionPanel
+      title="Verifiable Credential Issuance (OID4VCI)"
+      description="Issue verifiable credentials via Authlete"
+    >
       {/* How VCI Works — Collapsible Guidance */}
-      <details className="mb-5 p-3 rounded-lg bg-indigo-500/8 border border-indigo-500/20 group" open>
+      <details
+        className="mb-5 p-3 rounded-lg bg-indigo-500/8 border border-indigo-500/20 group"
+        open
+      >
         <summary className="text-xs text-accent-text font-medium cursor-pointer list-none flex items-center gap-2 select-none">
           <span className="text-xs opacity-60 group-open:opacity-100 transition-transform">▶</span>
           How VCI works — step-by-step guide
         </summary>
         <div className="mt-3 space-y-3 text-xs text-accent-text/70">
           <p>
-            OID4VCI lets a wallet app request signed digital credentials from this server.
-            The server delegates credential issuance to Authlete. There are two flows:
+            OID4VCI lets a wallet app request signed digital credentials from this server. The
+            server delegates credential issuance to Authlete. There are two flows:
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20">
               <p className="font-medium text-accent-text mb-1">Flow A: Pre-Authorized Code</p>
               <ol className="list-decimal ml-4 space-y-0.5 text-accent-text/60">
-                <li><strong>Discover</strong> — Check what credential types the server supports (Metadata tab)</li>
-                <li><strong>Create Offer</strong> (admin) — Create an offer with pre-authorized code grant</li>
-                <li>Copy the <code>preAuthorizedCode</code> from the offer response</li>
-                <li><strong>Get Token</strong> — Exchange the code at the token endpoint: <code>grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code&pre-authorized_code=&lt;code&gt;</code></li>
-                <li><strong>Issue</strong> — Paste the access token and request a credential</li>
+                <li>
+                  <strong>Discover</strong> — Check what credential types the server supports
+                  (Metadata tab)
+                </li>
+                <li>
+                  <strong>Create Offer</strong> (admin) — Create an offer with pre-authorized code
+                  grant
+                </li>
+                <li>
+                  Copy the <code>preAuthorizedCode</code> from the offer response
+                </li>
+                <li>
+                  <strong>Get Token</strong> — Exchange the code at the token endpoint:{' '}
+                  <code>
+                    grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code&pre-authorized_code=&lt;code&gt;
+                  </code>
+                </li>
+                <li>
+                  <strong>Issue</strong> — Paste the access token and request a credential
+                </li>
               </ol>
             </div>
             <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20">
               <p className="font-medium text-accent-text mb-1">Flow B: Authorization Code</p>
               <ol className="list-decimal ml-4 space-y-0.5 text-accent-text/60">
-                <li><strong>Discover</strong> — Check supported credential types</li>
-                <li><strong>Create Offer</strong> (admin) — Create an offer with authorization code grant</li>
-                <li><strong>Get Token</strong> — Go to Auth Flows → Authorization Code, log in, get tokens</li>
+                <li>
+                  <strong>Discover</strong> — Check supported credential types
+                </li>
+                <li>
+                  <strong>Create Offer</strong> (admin) — Create an offer with authorization code
+                  grant
+                </li>
+                <li>
+                  <strong>Get Token</strong> — Go to Auth Flows → Authorization Code, log in, get
+                  tokens
+                </li>
                 <li>The access token is auto-populated in the Issue tab from the token vault</li>
-                <li><strong>Issue</strong> — Paste the access token (if not already filled) and request a credential</li>
+                <li>
+                  <strong>Issue</strong> — Paste the access token (if not already filled) and
+                  request a credential
+                </li>
               </ol>
             </div>
           </div>
           <p>
-            After issuing, if the server returns <code>202 ACCEPTED</code> with a <code>transaction_id</code>,
-            use the <strong>Deferred</strong> tab to poll for the credential — carrying the same access token,
-            which that endpoint now requires.
-            Use the <strong>Batch</strong> tab to request multiple credential types in one call (OID4VCI §10).
+            After issuing, if the server returns <code>202 ACCEPTED</code> with a{' '}
+            <code>transaction_id</code>, use the <strong>Deferred</strong> tab to poll for the
+            credential — carrying the same access token, which that endpoint now requires. Use the{' '}
+            <strong>Batch</strong> tab to request multiple credential types in one call (OID4VCI
+            §10).
           </p>
         </div>
       </details>
@@ -295,7 +495,14 @@ function VciSection() {
       {GROUPS.map((group) => (
         <div key={group} className="mb-4 last:mb-0">
           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5">{group}</p>
-          <TabBar options={VCI_OPS.filter((o) => o.group === group).map(({ value, label }) => ({ value, label }))} value={activeOp} onChange={setActiveOp} />
+          <TabBar
+            options={VCI_OPS.filter((o) => o.group === group).map(({ value, label }) => ({
+              value,
+              label,
+            }))}
+            value={activeOp}
+            onChange={setActiveOp}
+          />
         </div>
       ))}
 
@@ -311,11 +518,15 @@ function VciSection() {
           leftLabel="Configuration"
           rightLabel="Response"
           left={<div className="space-y-3">{renderOp(activeOp)}</div>}
-          right={result ? <JsonBlock data={result} /> : (
-            <div className="flex items-center justify-center h-32 rounded-lg border border-dashed border-border text-xs text-muted-foreground/40">
-              Run an operation to see the response here
-            </div>
-          )}
+          right={
+            result ? (
+              <JsonBlock data={result} />
+            ) : (
+              <div className="flex items-center justify-center h-32 rounded-lg border border-dashed border-border text-xs text-muted-foreground/40">
+                Run an operation to see the response here
+              </div>
+            )
+          }
         />
       )}
 

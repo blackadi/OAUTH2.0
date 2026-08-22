@@ -42,11 +42,10 @@ export function base64UrlEncode(data: ArrayBuffer | Uint8Array): string {
  * signs with, and what `client_secret_jwt`'s asymmetric sibling is configured for on this service.
  */
 export async function generateP256KeyPair(extras: Partial<JWK> = {}): Promise<CryptoKeyPair> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
-  );
+  const keyPair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+    'verify',
+  ]);
 
   const publicJwk = (await crypto.subtle.exportKey('jwk', keyPair.publicKey)) as JWK;
   const privateJwk = (await crypto.subtle.exportKey('jwk', keyPair.privateKey)) as JWK;

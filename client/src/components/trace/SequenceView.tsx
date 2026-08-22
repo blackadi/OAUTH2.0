@@ -41,7 +41,8 @@ function laneFor(entry: TraceEntry): LaneId {
     }
   })();
 
-  if (/^\/api\/(token|client)\/|^\/api\/hsk\/|^\/api\/backchannel_logout\//.test(path)) return 'admin';
+  if (/^\/api\/(token|client)\/|^\/api\/hsk\/|^\/api\/backchannel_logout\//.test(path))
+    return 'admin';
   if (/^\/api\/(userinfo|gm)\b/.test(path)) return 'rs';
   if (/^\/api\/(health|metrics)\b/.test(path)) return 'admin';
   return 'as';
@@ -170,7 +171,9 @@ function SequenceView({ traces, onSelect, selectedId }: SequenceViewProps) {
                 y={y - ROW_HEIGHT / 2 + 4}
                 width={width}
                 height={ROW_HEIGHT - 6}
-                className={cn(isSelected ? 'fill-indigo-500/10' : 'fill-transparent hover:fill-muted/40')}
+                className={cn(
+                  isSelected ? 'fill-indigo-500/10' : 'fill-transparent hover:fill-muted/40',
+                )}
               />
 
               {/* request */}
@@ -211,7 +214,8 @@ function SequenceView({ traces, onSelect, selectedId }: SequenceViewProps) {
                 fill={stroke}
                 style={{ fontSize: 9, fontFamily: 'var(--font-mono, monospace)' }}
               >
-                {entry.status === 0 ? 'network error' : entry.status} · {Math.round(entry.durationMs)} ms
+                {entry.status === 0 ? 'network error' : entry.status} ·{' '}
+                {Math.round(entry.durationMs)} ms
               </text>
             </g>
           );

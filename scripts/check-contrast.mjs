@@ -99,7 +99,7 @@ function readPalette(selectorSource) {
   return out;
 }
 const darkBlock = globals.match(/:root \{([\s\S]*?)\}/)[1];
-const lightBlock = globals.match(/:root\[data-theme="light"\]\s*\{([\s\S]*?)\}/)[1];
+const lightBlock = globals.match(/:root\[data-theme=[\"\']light[\"\']\]\s*\{([\s\S]*?)\}/)[1];
 const THEMES = {
   dark: readPalette(darkBlock),
   light: readPalette(lightBlock),

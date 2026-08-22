@@ -45,7 +45,12 @@ async function signEs256(
 
 async function signRs256(payload: Record<string, unknown>): Promise<{ token: string; jwk: Jwk }> {
   const pair = await crypto.subtle.generateKey(
-    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
     true,
     ['sign', 'verify'],
   );
@@ -53,7 +58,11 @@ async function signRs256(payload: Record<string, unknown>): Promise<{ token: str
   publicJwk.kid = 'test-rsa';
   const head = b64urlJson({ alg: 'RS256', typ: 'JWT', kid: 'test-rsa' });
   const body = b64urlJson(payload);
-  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', pair.privateKey, enc.encode(`${head}.${body}`));
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    pair.privateKey,
+    enc.encode(`${head}.${body}`),
+  );
   return { token: `${head}.${body}.${b64url(signature)}`, jwk: publicJwk };
 }
 

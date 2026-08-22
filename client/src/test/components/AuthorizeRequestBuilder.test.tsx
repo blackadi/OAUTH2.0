@@ -12,9 +12,7 @@ const SEED = {
 
 function mount(props: Partial<Parameters<typeof AuthorizeRequestBuilder>[0]> = {}) {
   const onSend = vi.fn();
-  render(
-    <AuthorizeRequestBuilder endpoint={ENDPOINT} seed={SEED} onSend={onSend} {...props} />,
-  );
+  render(<AuthorizeRequestBuilder endpoint={ENDPOINT} seed={SEED} onSend={onSend} {...props} />);
   return { onSend };
 }
 
@@ -80,7 +78,9 @@ describe('parameters the panel could not previously reach', () => {
   it('an edit shadows the seed rather than being overwritten by it', async () => {
     mount();
     await waitForGenerated();
-    fireEvent.change(screen.getByLabelText('client_id value'), { target: { value: 'other-client' } });
+    fireEvent.change(screen.getByLabelText('client_id value'), {
+      target: { value: 'other-client' },
+    });
     expect(paramsOf(previewUrl()).get('client_id')).toBe('other-client');
   });
 
@@ -151,7 +151,9 @@ describe('PKCE', () => {
     const { onSend } = mount();
     await waitForGenerated();
 
-    fireEvent.change(screen.getByLabelText('code_challenge value'), { target: { value: 'tampered' } });
+    fireEvent.change(screen.getByLabelText('code_challenge value'), {
+      target: { value: 'tampered' },
+    });
 
     expect(screen.getByText(/no longer matches the verifier/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Send authorization request/i }));

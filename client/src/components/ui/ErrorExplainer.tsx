@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle, ChevronDown, ChevronRight, BookOpen, Wrench, FlaskConical } from 'lucide-react';
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  BookOpen,
+  Wrench,
+  FlaskConical,
+} from 'lucide-react';
 import { decodeError, statusHint } from '@/utils/decode-error';
 import { cn } from '@/utils/cn';
 
@@ -48,10 +55,15 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
    * wording, is useful. Found by a test that expected to see that note and could not.
    */
   const hasExplanation =
-    decoded.recognised || Boolean(hint) || Boolean(decoded.authleteCode) || Boolean(decoded.oauthError);
+    decoded.recognised ||
+    Boolean(hint) ||
+    Boolean(decoded.authleteCode) ||
+    Boolean(decoded.oauthError);
 
   return (
-    <div className={cn('rounded-lg border border-red-500/25 bg-red-500/5 overflow-hidden', className)}>
+    <div
+      className={cn('rounded-lg border border-red-500/25 bg-red-500/5 overflow-hidden', className)}
+    >
       <div className="flex gap-2 items-start px-3 py-2">
         <AlertCircle className="h-4 w-4 text-danger-text mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
@@ -65,9 +77,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
               onClick={() => setShowFullRaw((f) => !f)}
               className="mt-1 text-[0.65rem] text-danger-text/70 hover:text-danger-text bg-transparent border-none cursor-pointer p-0 underline"
             >
-              {showFullRaw
-                ? 'Show less'
-                : `Show all ${error.length.toLocaleString()} characters`}
+              {showFullRaw ? 'Show less' : `Show all ${error.length.toLocaleString()} characters`}
             </button>
           )}
           {hasExplanation && (
@@ -124,10 +134,10 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
 
           {decoded.authleteCode && !decoded.authleteNote && !decoded.authleteVendor && (
             <p className="text-[0.7rem] text-muted-foreground">
-              <code className="text-warning-text">{decoded.authleteCode}</code> is an Authlete result code
-              this tool has no entry for — it is neither in the vendored specification nor in this
-              repo&apos;s verified findings. The message beside it is the vendor&apos;s own words and is
-              the best available description.
+              <code className="text-warning-text">{decoded.authleteCode}</code> is an Authlete
+              result code this tool has no entry for — it is neither in the vendored specification
+              nor in this repo&apos;s verified findings. The message beside it is the vendor&apos;s
+              own words and is the best available description.
             </p>
           )}
 
@@ -146,7 +156,8 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
 
           {hint && !decoded.recognised && (
             <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
-              <span className="font-mono text-warning-text">HTTP {decoded.status ?? status}</span> — {hint}
+              <span className="font-mono text-warning-text">HTTP {decoded.status ?? status}</span> —{' '}
+              {hint}
             </p>
           )}
         </div>

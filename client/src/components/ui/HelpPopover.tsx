@@ -64,24 +64,27 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
     );
   }, []);
 
-  const trapFocus = useCallback((e: KeyboardEvent) => {
-    if (e.key !== 'Tab') return;
-    const elements = getFocusableElements();
-    if (elements.length === 0) return;
-    const first = elements[0];
-    const last = elements[elements.length - 1];
-    if (e.shiftKey) {
-      if (document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
+  const trapFocus = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const elements = getFocusableElements();
+      if (elements.length === 0) return;
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
-    } else {
-      if (document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }, [getFocusableElements]);
+    },
+    [getFocusableElements],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -137,63 +140,77 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
         aria-controls="help-popover-panel"
       >
         <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <text x="8" y="12" textAnchor="middle" fontSize="11" fill="currentColor" fontWeight="600">i</text>
+          <text x="8" y="12" textAnchor="middle" fontSize="11" fill="currentColor" fontWeight="600">
+            i
+          </text>
         </svg>
       </button>
-      {open && createPortal(
-        <div
-          id="help-popover-panel"
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-          style={{ position: 'fixed', top, left, width }}
-          className={cn(
-            'z-[9999] bg-surface-2 border border-border rounded-lg shadow-xl text-xs text-foreground',
-            placement === 'top' && 'origin-bottom',
-          )}
-        >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-            <strong className="text-sm">{title}</strong>
-            <button
-              onClick={close}
-              className="bg-transparent border-none text-muted-foreground hover:text-danger-text cursor-pointer p-0.5"
-              aria-label="Close help"
+      {open &&
+        createPortal(
+          <div
+            id="help-popover-panel"
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            style={{ position: 'fixed', top, left, width }}
+            className={cn(
+              'z-[9999] bg-surface-2 border border-border rounded-lg shadow-xl text-xs text-foreground',
+              placement === 'top' && 'origin-bottom',
+            )}
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+              <strong className="text-sm">{title}</strong>
+              <button
+                onClick={close}
+                className="bg-transparent border-none text-muted-foreground hover:text-danger-text cursor-pointer p-0.5"
+                aria-label="Close help"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+            <div
+              className="px-3 py-2 flex flex-col gap-2 overflow-y-auto"
+              style={{ maxHeight: MAX_HEIGHT - 44 }}
             >
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </div>
-          <div className="px-3 py-2 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: MAX_HEIGHT - 44 }}>
-            <p className="m-0 leading-relaxed">{description}</p>
-            {params && params.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <strong className="text-xs text-muted-foreground uppercase tracking-wider">Parameters</strong>
+              <p className="m-0 leading-relaxed">{description}</p>
+              {params && params.length > 0 && (
                 <div className="flex flex-col gap-1">
-                  {params.map((p, i) => (
-                    <div key={i} className="flex flex-col gap-0.5">
-                      <code className="text-xs text-accent-text bg-indigo-500/10 px-1 py-0.5 rounded">{p.name}</code>
-                      <span className="text-xs text-foreground-muted">{p.desc}</span>
-                    </div>
-                  ))}
+                  <strong className="text-xs text-muted-foreground uppercase tracking-wider">
+                    Parameters
+                  </strong>
+                  <div className="flex flex-col gap-1">
+                    {params.map((p, i) => (
+                      <div key={i} className="flex flex-col gap-0.5">
+                        <code className="text-xs text-accent-text bg-indigo-500/10 px-1 py-0.5 rounded">
+                          {p.name}
+                        </code>
+                        <span className="text-xs text-foreground-muted">{p.desc}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {returns && (
-              <div className="flex flex-col gap-1">
-                <strong className="text-xs text-muted-foreground uppercase tracking-wider">Returns</strong>
-                <p className="m-0 text-xs text-foreground-muted">{returns}</p>
-              </div>
-            )}
-            {tips && (
-              <div className="flex flex-col gap-1 border-t border-border pt-2">
-                <strong className="text-xs text-muted-foreground uppercase tracking-wider">Tips</strong>
-                <p className="m-0 text-xs text-foreground-muted">{tips}</p>
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body,
-      )}
+              )}
+              {returns && (
+                <div className="flex flex-col gap-1">
+                  <strong className="text-xs text-muted-foreground uppercase tracking-wider">
+                    Returns
+                  </strong>
+                  <p className="m-0 text-xs text-foreground-muted">{returns}</p>
+                </div>
+              )}
+              {tips && (
+                <div className="flex flex-col gap-1 border-t border-border pt-2">
+                  <strong className="text-xs text-muted-foreground uppercase tracking-wider">
+                    Tips
+                  </strong>
+                  <p className="m-0 text-xs text-foreground-muted">{tips}</p>
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

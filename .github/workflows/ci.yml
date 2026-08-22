@@ -135,6 +135,16 @@ jobs:
       # existed, the mechanism did not.
       - run: npm run lint
 
+      # Added 2026-08-22, and the third instance of the same shape: `format` sat in package.json from
+      # the start and CI never invoked it, exactly as `typecheck` and `lint` had. It was failing on 64
+      # files before anyone looked, and a further 23 were added on top without a word from any gate.
+      # A script with no mechanism behind it is a preference.
+      #
+      # `.prettierignore` excludes `src/data/*.generated.ts`: `extract-authlete-codes.mjs --check`
+      # asserts that file is byte-identical to what the generator emits, so reformatting it would break
+      # that check on the next run for no benefit.
+      - run: npm run format
+
       - run: npm run test
 
       # Added 2026-08-22. Ratcheting thresholds, set just under what the suite achieves, so coverage can

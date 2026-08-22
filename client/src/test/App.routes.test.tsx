@@ -193,7 +193,9 @@ describe('shared management credentials (F-18)', () => {
     // half the app's surface demanded the same two values again on every navigation.
     fireEvent.click(screen.getAllByRole('link', { name: /Client Management/i })[0]);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { level: 2, name: /Client Management/i })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('heading', { level: 2, name: /Client Management/i }),
+      ).toBeInTheDocument(),
     );
 
     expect(await screen.findByLabelText(/Admin Client ID/i)).toHaveValue('mgmt-client');
@@ -203,7 +205,9 @@ describe('shared management credentials (F-18)', () => {
   it('says the credential is shared, once both halves are present', async () => {
     renderAt('/admin');
     fireEvent.change(await screen.findByLabelText(/Admin Client ID/i), { target: { value: 'a' } });
-    fireEvent.change(await screen.findByLabelText(/Admin Client Secret/i), { target: { value: 'b' } });
+    fireEvent.change(await screen.findByLabelText(/Admin Client Secret/i), {
+      target: { value: 'b' },
+    });
     expect(screen.getByText(/Shared across every admin section/i)).toBeInTheDocument();
   });
 });

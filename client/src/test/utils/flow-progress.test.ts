@@ -28,7 +28,10 @@ describe('authorization code progress', () => {
   });
 
   it('marks authorize complete once the request was actually sent', () => {
-    const p = authorizationCodeProgress({ ...NOTHING, traces: [trace('/api/authorization', true, 'GET')] });
+    const p = authorizationCodeProgress({
+      ...NOTHING,
+      traces: [trace('/api/authorization', true, 'GET')],
+    });
     expect(p.completedSteps).toContain('authz');
     expect(p.currentStep).toBe('login');
   });
@@ -41,7 +44,11 @@ describe('authorization code progress', () => {
   });
 
   it('completes the token step only with a token in hand', () => {
-    const withCode = authorizationCodeProgress({ ...NOTHING, authorizeSent: true, codeReceived: false });
+    const withCode = authorizationCodeProgress({
+      ...NOTHING,
+      authorizeSent: true,
+      codeReceived: false,
+    });
     expect(withCode.completedSteps).not.toContain('token');
 
     const done = authorizationCodeProgress({
@@ -56,7 +63,10 @@ describe('authorization code progress', () => {
 
   it('does not claim a step that produced no request and no token', () => {
     // The defect this replaces jumped straight to the last step the moment any result existed.
-    const p = authorizationCodeProgress({ ...NOTHING, traces: [trace('/api/discovery', true, 'GET')] });
+    const p = authorizationCodeProgress({
+      ...NOTHING,
+      traces: [trace('/api/discovery', true, 'GET')],
+    });
     expect(p.completedSteps).toEqual([]);
   });
 
@@ -89,7 +99,10 @@ describe('two-step progress', () => {
   });
 
   it('ignores management calls to /api/token/list, which are not token requests', () => {
-    const p = twoStepProgress({ traces: [trace('/api/token/list', true, 'GET')], hasToken: false }, 'auth');
+    const p = twoStepProgress(
+      { traces: [trace('/api/token/list', true, 'GET')], hasToken: false },
+      'auth',
+    );
     expect(p.completedSteps).toEqual([]);
   });
 });

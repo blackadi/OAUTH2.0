@@ -9,7 +9,11 @@ beforeEach(() => {
 });
 
 function ok(data: unknown) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) } as Response);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as Response);
 }
 
 describe('dcrService.dcrRegister', () => {

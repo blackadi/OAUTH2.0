@@ -142,10 +142,7 @@ export function redactBody(body: string | undefined): string | undefined {
     out = out.replace(new RegExp(`(${param}=)[^&]*`, 'gi'), '$1●●●●●●');
     // JSON: `"clientSecret": "value"` in either spelling
     const camel = param.replace(/_([a-z])/g, (_m, c) => c.toUpperCase());
-    out = out.replace(
-      new RegExp(`("(?:${param}|${camel})"\\s*:\\s*)"[^"]*"`, 'gi'),
-      '$1"●●●●●●"',
-    );
+    out = out.replace(new RegExp(`("(?:${param}|${camel})"\\s*:\\s*)"[^"]*"`, 'gi'), '$1"●●●●●●"');
   }
   return out;
 }

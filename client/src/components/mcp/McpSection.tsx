@@ -14,12 +14,7 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { Spinner } from '@/components/ui/Spinner';
 import { getDoc } from '@/data/operationDocs';
-import {
-  API_BASE_URL,
-  CLIENT_ID,
-  REDIRECT_URI,
-  DEFAULT_SCOPES,
-} from '@/config';
+import { API_BASE_URL, CLIENT_ID, REDIRECT_URI, DEFAULT_SCOPES } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { useCredentials } from '@/context/CredentialContext';
 
@@ -104,7 +99,9 @@ function McpSection() {
   };
 
   const handleResourceMetadata = async () => {
-    const { data, error: err } = await call(() => mcpService.fetchProtectedResourceMetadata(resourceUrl));
+    const { data, error: err } = await call(() =>
+      mcpService.fetchProtectedResourceMetadata(resourceUrl),
+    );
     if (data) {
       toast.success('Protected resource metadata loaded');
     } else {
@@ -123,7 +120,9 @@ function McpSection() {
 
   // Wizard step handlers
   const wizStepDiscover = useCallback(async () => {
-    const { data, error: err } = await wizCall('Discover AS', () => mcpService.fetchAsMetadata(wizIssuer));
+    const { data, error: err } = await wizCall('Discover AS', () =>
+      mcpService.fetchAsMetadata(wizIssuer),
+    );
     if (data) {
       const asData = data as AsMetadata;
       setWizAsData(asData);
@@ -138,7 +137,9 @@ function McpSection() {
       toast.error('Enter a CIMD URL first');
       return;
     }
-    const { data, error: err } = await wizCall('Fetch CIMD', () => mcpService.fetchCimdMetadata(wizCimdUrl));
+    const { data, error: err } = await wizCall('Fetch CIMD', () =>
+      mcpService.fetchCimdMetadata(wizCimdUrl),
+    );
     if (data) {
       const cimdData = data as CimdMetadata;
       setWizCimdData(cimdData);
@@ -171,12 +172,17 @@ function McpSection() {
     );
     if (data) {
       const raw = data as Record<string, unknown>;
-      const responseContent = typeof raw.responseContent === 'string' ? JSON.parse(raw.responseContent as string) : raw;
+      const responseContent =
+        typeof raw.responseContent === 'string' ? JSON.parse(raw.responseContent as string) : raw;
       const clientId = (responseContent.client_id || responseContent.clientId || '') as string;
-      const clientSecret = (responseContent.client_secret || responseContent.clientSecret || '') as string;
+      const clientSecret = (responseContent.client_secret ||
+        responseContent.clientSecret ||
+        '') as string;
       if (clientId) {
         setWizClientId(clientId);
-        toast.success(`DCR registered: client_id=${clientId}${clientSecret ? ' (confidential)' : ' (public)'}`);
+        toast.success(
+          `DCR registered: client_id=${clientId}${clientSecret ? ' (confidential)' : ' (public)'}`,
+        );
       }
     } else {
       toast.error(err);
@@ -223,7 +229,16 @@ function McpSection() {
     } else {
       toast.error(err);
     }
-  }, [wizCode, wizCodeVerifier, wizAsData, wizIssuer, wizClientId, wizRedirectUri, wizResource, wizCall]);
+  }, [
+    wizCode,
+    wizCodeVerifier,
+    wizAsData,
+    wizIssuer,
+    wizClientId,
+    wizRedirectUri,
+    wizResource,
+    wizCall,
+  ]);
 
   const wizStepUserinfo = useCallback(async () => {
     const accessToken = (wizTokenResult as Record<string, unknown>)?.access_token as string;
@@ -243,7 +258,9 @@ function McpSection() {
     }
   }, [wizTokenResult, wizAsData, wizIssuer, wizCall]);
 
-  const [wizIntrospectResult, setWizIntrospectResult] = useState<Record<string, unknown> | null>(null);
+  const [wizIntrospectResult, setWizIntrospectResult] = useState<Record<string, unknown> | null>(
+    null,
+  );
 
   /**
    * Introspect the token the wizard just obtained.
@@ -263,7 +280,7 @@ function McpSection() {
       return;
     }
     if (!authId || !authSecret) {
-      toast.error('Introspection needs this deployment\'s admin credentials — fill them in above');
+      toast.error("Introspection needs this deployment's admin credentials — fill them in above");
       return;
     }
     const endpoint =
@@ -348,7 +365,8 @@ function McpSection() {
       <div className="mt-6 pt-4 border-t border-border">
         <h3 className="text-sm font-medium text-foreground mb-3">Full MCP Flow Wizard</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          Walk through the complete MCP OAuth 2.1 flow step by step: discover the AS, register a client, authorize, exchange tokens, and fetch user info.
+          Walk through the complete MCP OAuth 2.1 flow step by step: discover the AS, register a
+          client, authorize, exchange tokens, and fetch user info.
         </p>
 
         {/* ── Step 1: Discovery ─────────────────────────── */}
@@ -373,10 +391,19 @@ function McpSection() {
               </Button>
               {wizAsData && (
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {wizAsData.issuer && <Badge variant="info">Issuer: {String(wizAsData.issuer).slice(0, 40)}</Badge>}
-                  {wizAsData.registration_endpoint && <Badge variant="success">DCR Supported</Badge>}
-                  {wizAsData.resource_indicators_supported && <Badge variant="success">Resource Indicators</Badge>}
-                  {Array.isArray(wizAsData.code_challenge_methods_supported) && wizAsData.code_challenge_methods_supported.includes('S256') && <Badge variant="success">PKCE S256</Badge>}
+                  {wizAsData.issuer && (
+                    <Badge variant="info">Issuer: {String(wizAsData.issuer).slice(0, 40)}</Badge>
+                  )}
+                  {wizAsData.registration_endpoint && (
+                    <Badge variant="success">DCR Supported</Badge>
+                  )}
+                  {wizAsData.resource_indicators_supported && (
+                    <Badge variant="success">Resource Indicators</Badge>
+                  )}
+                  {Array.isArray(wizAsData.code_challenge_methods_supported) &&
+                    wizAsData.code_challenge_methods_supported.includes('S256') && (
+                      <Badge variant="success">PKCE S256</Badge>
+                    )}
                 </div>
               )}
             </div>
@@ -389,7 +416,9 @@ function McpSection() {
             <CardTitle className="text-sm flex items-center gap-2">
               Step 2: Register Client
               {wizClientId !== CLIENT_ID && <Badge variant="success">Done</Badge>}
-              {(wizLoading === 'Fetch CIMD' || wizLoading === 'DCR Register') && <Spinner size="sm" />}
+              {(wizLoading === 'Fetch CIMD' || wizLoading === 'DCR Register') && (
+                <Spinner size="sm" />
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -420,9 +449,17 @@ function McpSection() {
               />
               {wizCimdData && (
                 <div className="flex flex-wrap gap-2">
-                  {wizCimdData.client_name && <Badge variant="info">{String(wizCimdData.client_name)}</Badge>}
-                  {wizCimdData.token_endpoint_auth_method && <Badge variant="info">Auth: {String(wizCimdData.token_endpoint_auth_method)}</Badge>}
-                  {wizCimdData.scope && <Badge variant="info">Scope: {String(wizCimdData.scope)}</Badge>}
+                  {wizCimdData.client_name && (
+                    <Badge variant="info">{String(wizCimdData.client_name)}</Badge>
+                  )}
+                  {wizCimdData.token_endpoint_auth_method && (
+                    <Badge variant="info">
+                      Auth: {String(wizCimdData.token_endpoint_auth_method)}
+                    </Badge>
+                  )}
+                  {wizCimdData.scope && (
+                    <Badge variant="info">Scope: {String(wizCimdData.scope)}</Badge>
+                  )}
                 </div>
               )}
               <Input
@@ -444,7 +481,9 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {getDoc('mcp', 'authorize-url') && <OperationDescription doc={getDoc('mcp', 'authorize-url')!} className="mb-3" />}
+            {getDoc('mcp', 'authorize-url') && (
+              <OperationDescription doc={getDoc('mcp', 'authorize-url')!} className="mb-3" />
+            )}
             <div className="space-y-3">
               <Input
                 label="Redirect URI"
@@ -467,7 +506,9 @@ function McpSection() {
               </Button>
               {wizAuthUrl && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Open this URL in a browser to authorize:</p>
+                  <p className="text-xs text-muted-foreground">
+                    Open this URL in a browser to authorize:
+                  </p>
                   <a
                     href={wizAuthUrl}
                     target="_blank"
@@ -492,7 +533,9 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {getDoc('mcp', 'token-exchange') && <OperationDescription doc={getDoc('mcp', 'token-exchange')!} className="mb-3" />}
+            {getDoc('mcp', 'token-exchange') && (
+              <OperationDescription doc={getDoc('mcp', 'token-exchange')!} className="mb-3" />
+            )}
             <div className="space-y-3">
               <Input
                 label="Authorization Code (from callback)"
@@ -526,7 +569,9 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {getDoc('mcp', 'userinfo') && <OperationDescription doc={getDoc('mcp', 'userinfo')!} className="mb-3" />}
+            {getDoc('mcp', 'userinfo') && (
+              <OperationDescription doc={getDoc('mcp', 'userinfo')!} className="mb-3" />
+            )}
             <div className="space-y-3">
               <Button
                 onClick={wizStepUserinfo}

@@ -41,16 +41,23 @@ function walk(dir, out = []) {
 // ── what the registry defines ────────────────────────────────────────────────────────────────────
 const docsSource = readFileSync(DOCS_PATH, "utf8");
 
-/** Section blocks are two-space indented; entry keys inside them are four-space indented. */
+/**
+ * Section blocks are two-space indented; entry keys inside them are four-space indented.
+ *
+ * Quotes around the key are optional: Prettier removes them where they are unnecessary
+ * (`'authorization_code':` → `authorization_code:`), and a checker that depends on a formatter's
+ * choice fails for the wrong reason. Found exactly that way — the first `prettier --write` over this
+ * repo turned every one of these into a false "asked for but not defined".
+ */
 const defined = new Set();
 let currentSection = null;
 for (const line of docsSource.split("\n")) {
-  const section = line.match(/^ {2}'([a-z0-9-]+)': \{$/);
+  const section = line.match(/^ {2}'?([a-z0-9-]+)'?: \{$/);
   if (section) {
     currentSection = section[1];
     continue;
   }
-  const entry = line.match(/^ {4}'([a-zA-Z0-9_-]+)': \{$/);
+  const entry = line.match(/^ {4}'?([a-zA-Z0-9_-]+)'?: \{$/);
   if (entry && currentSection) defined.add(`${currentSection}.${entry[1]}`);
 }
 
@@ -79,7 +86,11 @@ const unreached = [...defined].filter(
 
 // ── README section coverage ──────────────────────────────────────────────────────────────────────
 const appSource = readFileSync(APP_PATH, "utf8");
-const sectionLabels = [...appSource.matchAll(/label: '([^']+)', path: '\/[a-z-]+'/g)].map((m) => m[1]);
+// Tolerates a line break between the two members, which Prettier introduces once the object grows
+// past the print width — the same brittleness as the quotes above.
+const sectionLabels = [...appSource.matchAll(/label: '([^']+)',\s*path: '\/[a-z-]+'/g)].map(
+  (m) => m[1],
+);
 const readme = readFileSync(README_PATH, "utf8");
 /**
  * A label counts as documented if its normalised form is a prefix of something in the README.

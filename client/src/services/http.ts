@@ -91,11 +91,7 @@ async function getWithBearer(url: string, token: string): Promise<unknown> {
   });
 }
 
-async function del(
-  url: string,
-  auth?: string,
-  body?: Record<string, unknown>,
-): Promise<unknown> {
+async function del(url: string, auth?: string, body?: Record<string, unknown>): Promise<unknown> {
   return sendForBody({
     method: 'DELETE',
     url,

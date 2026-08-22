@@ -53,7 +53,7 @@ export const OAUTH_ERRORS: Record<string, ErrorDoc> = {
   invalid_client: {
     cause:
       'Client authentication failed — an unknown client, no client authentication at all, or an authentication method the server does not accept for this client.',
-    fix: 'Check *where* the credentials travelled, not just whether they are correct: this server matches the channel against the client\'s registered method. See A157357 below — the correct secret in the wrong channel is a 401.',
+    fix: "Check *where* the credentials travelled, not just whether they are correct: this server matches the channel against the client's registered method. See A157357 below — the correct secret in the wrong channel is a 401.",
     spec: 'RFC 6749 §5.2 (401 permitted, 400 otherwise)',
   },
   invalid_grant: {
@@ -161,12 +161,13 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
   A157357: {
     cause:
       'The client identifier was not where Authlete expected it. The credentials may be entirely correct — this is about the *channel* they arrived on, not their value.',
-    fix: 'Match the channel to the client\'s registered `tokenAuthMethod`: a `client_secret_basic` client must use the `Authorization: Basic` header, a `client_secret_post` client must put `clientId`/`clientSecret` in the body. Getting it backwards is a 401 in both directions.',
+    fix: "Match the channel to the client's registered `tokenAuthMethod`: a `client_secret_basic` client must use the `Authorization: Basic` header, a `client_secret_post` client must put `clientId`/`clientSecret` in the body. Getting it backwards is a 401 in both directions.",
     spec: 'Verified live 2026-08-05 (PAR) and 2026-08-13 (CIBA) — see the two-channel table in AGENTS.md',
     verifiedHere: true,
   },
   A124301: {
-    cause: 'PKCE is required for this client and the authorization request carried no `code_challenge`.',
+    cause:
+      'PKCE is required for this client and the authorization request carried no `code_challenge`.',
     fix: 'Send `code_challenge` with `code_challenge_method=S256`. Two clients here enforce PKCE and two deliberately do not, so the same request succeeds or fails depending on which client you use — that difference is what Modules 02 and 03 teach.',
     spec: 'Verified live 2026-08-13 · RFC 9700 §2.1.1 (BCP 240) requires PKCE',
     verifiedHere: true,
@@ -215,7 +216,8 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
     verifiedHere: true,
   },
   A009301: {
-    cause: 'The authorization request had no `response_type`, so Authlete cannot determine a response mode.',
+    cause:
+      'The authorization request had no `response_type`, so Authlete cannot determine a response mode.',
     fix: 'This is why the error arrives as a **400 body** rather than an error redirect: without `response_type` there is nowhere to redirect to. Add it and the same class of error becomes a 302 carrying `error`, `state` and `iss`.',
     spec: 'Verified live 2026-08-04',
     verifiedHere: true,
@@ -227,7 +229,7 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
     verifiedHere: true,
   },
   A005336: {
-    cause: 'The request object\'s algorithm does not match what the client is pinned to.',
+    cause: "The request object's algorithm does not match what the client is pinned to.",
     fix: 'If the client has a *Request Object Signature Algorithm* set, `alg: none` and every other algorithm are refused. Unset it to accept any, or sign with the pinned one.',
     spec: 'Verified live · JAR',
     verifiedHere: true,
@@ -259,14 +261,14 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
   },
   A314314: {
     cause:
-      'A JWT-bearer assertion\'s `aud` names neither this service\'s issuer identifier nor its token endpoint URL.',
-    fix: 'RFC 7523 §3(3) requires the assertion\'s `aud` to identify the **authorization server** — not the API the resulting token is for. The audience you want for the token comes from the `resource` parameter instead.',
+      "A JWT-bearer assertion's `aud` names neither this service's issuer identifier nor its token endpoint URL.",
+    fix: "RFC 7523 §3(3) requires the assertion's `aud` to identify the **authorization server** — not the API the resulting token is for. The audience you want for the token comes from the `resource` parameter instead.",
     spec: 'Verified live 2026-08-14 · RFC 7523 §3',
     verifiedHere: true,
   },
   A249302: {
     cause: 'The `authorization_details` `type` is not one this service recognises.',
-    fix: 'Only the registered types are accepted; every other type is refused. Check the service\'s supported authorization details types.',
+    fix: "Only the registered types are accepted; every other type is refused. Check the service's supported authorization details types.",
     spec: 'Verified live · RFC 9396',
     verifiedHere: true,
   },
@@ -296,7 +298,7 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
   },
   A406301: {
     cause: 'The ID token signing algorithm is symmetric where an asymmetric one is required.',
-    fix: 'HS256 signs the ID token with the client secret. Set the client\'s ID token signature algorithm to RS256 or ES256.',
+    fix: "HS256 signs the ID token with the client secret. Set the client's ID token signature algorithm to RS256 or ES256.",
     spec: 'Verified live',
     verifiedHere: true,
   },

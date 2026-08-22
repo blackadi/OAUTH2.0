@@ -35,17 +35,21 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
       );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard unavailable */ }
+    } catch {
+      /* clipboard unavailable */
+    }
   }, [method, url, headers, body, reveal]);
 
   return (
     <div className={cn('rounded-lg border border-border overflow-hidden', className)}>
       <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border">
         <div className="flex items-center gap-2 overflow-hidden">
-          <span className={cn(
-            'text-[0.65rem] font-bold uppercase tracking-wider shrink-0',
-            methodColors[method] || 'text-muted-foreground',
-          )}>
+          <span
+            className={cn(
+              'text-[0.65rem] font-bold uppercase tracking-wider shrink-0',
+              methodColors[method] || 'text-muted-foreground',
+            )}
+          >
             {method}
           </span>
           <span className="text-xs font-mono text-muted-foreground truncate">{url}</span>
@@ -55,11 +59,7 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
           className="flex items-center gap-1 text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none shrink-0 ml-2"
           aria-label="Copy as cURL"
         >
-          {copied ? (
-            <Check className="h-3 w-3 text-success-text" />
-          ) : (
-            <Copy className="h-3 w-3" />
-          )}
+          {copied ? <Check className="h-3 w-3 text-success-text" /> : <Copy className="h-3 w-3" />}
           <span className={copied ? 'text-success-text' : ''}>
             {copied ? 'Copied' : reveal ? 'cURL + secrets' : 'cURL'}
           </span>
@@ -67,7 +67,11 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         <button
           onClick={() => setReveal((r) => !r)}
           className="text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none shrink-0 ml-2"
-          title={reveal ? 'Redact credentials in the copied command' : 'Include real credentials in the copied command'}
+          title={
+            reveal
+              ? 'Redact credentials in the copied command'
+              : 'Include real credentials in the copied command'
+          }
         >
           {reveal ? 'redacted?' : 'reveal'}
         </button>

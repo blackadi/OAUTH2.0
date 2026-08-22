@@ -80,7 +80,9 @@ describe('JwtInspector', () => {
     fireEvent.click(screen.getByRole('button', { name: /Verify signature/i }));
 
     await waitFor(() =>
-      expect(screen.getByText(/Could not check the signature: 502 Bad Gateway/)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/Could not check the signature: 502 Bad Gateway/),
+      ).toBeInTheDocument(),
     );
     expect(screen.queryByText(/signature INVALID/)).toBeNull();
   });

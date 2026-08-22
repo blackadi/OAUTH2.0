@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /**
  * Two complete palettes, dark-first.
@@ -44,7 +44,7 @@
 
 /** A viewer whose system prefers light, and who has not chosen otherwise. */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
+  :root:not([data-theme='dark']) {
     --background: #f8fafc;
     --foreground: #0f172a;
     --foreground-muted: #334155;
@@ -59,7 +59,7 @@
     --border: #d8dfe8;
     --input: #ffffff;
     --ring: #4f46e5;
-  --accent-text: #4338ca;
+    --accent-text: #4338ca;
     --success-text: #047857;
     --warning-text: #a16207;
     --danger-text: #b91c1c;
@@ -68,7 +68,7 @@
 }
 
 /** An explicit choice, which must win over the system in both directions. */
-:root[data-theme="light"] {
+:root[data-theme='light'] {
   --background: #f8fafc;
   --foreground: #0f172a;
   --foreground-muted: #334155;
@@ -90,7 +90,7 @@
   --info-text: #0369a1;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   --background: #020617;
   --foreground: #f1f5f9;
   --foreground-muted: #cbd5e1;
@@ -111,7 +111,6 @@
   --danger-text: #f87171;
   --info-text: #7dd3fc;
 }
-
 
 /**
  * Tailwind v4 generates utilities from `@theme`, NOT from custom properties on `:root`.
@@ -152,13 +151,21 @@
 }
 
 @layer base {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     box-sizing: border-box;
   }
 
   body {
     margin: 0;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family:
+      'Inter',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
     background-color: var(--background);
     color: var(--foreground);
     -webkit-font-smoothing: antialiased;
@@ -167,8 +174,12 @@
     line-height: 1.5;
   }
 
-  code, pre, .font-mono {
-    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  code,
+  pre,
+  .font-mono {
+    font-family:
+      'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      monospace;
   }
 
   ::selection {

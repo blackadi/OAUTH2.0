@@ -39,10 +39,12 @@ function Sidebar({ groups, header }: SidebarProps) {
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
                   )}
                 >
-                  <span className={cn(
-                    'shrink-0',
-                    activePath === section.path ? 'text-accent-text' : 'text-muted-foreground',
-                  )}>
+                  <span
+                    className={cn(
+                      'shrink-0',
+                      activePath === section.path ? 'text-accent-text' : 'text-muted-foreground',
+                    )}
+                  >
                     {section.icon}
                   </span>
                   <span>{section.label}</span>
@@ -52,11 +54,7 @@ function Sidebar({ groups, header }: SidebarProps) {
           </div>
         ))}
       </nav>
-      {header && (
-        <div className="shrink-0 border-t border-border p-3">
-          {header}
-        </div>
-      )}
+      {header && <div className="shrink-0 border-t border-border p-3">{header}</div>}
     </aside>
   );
 }

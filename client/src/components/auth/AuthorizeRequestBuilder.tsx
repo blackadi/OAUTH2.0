@@ -1,5 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { RefreshCw, Plus, Trash2, Copy, Check, Send, AlertTriangle, ExternalLink } from 'lucide-react';
+import {
+  RefreshCw,
+  Plus,
+  Trash2,
+  Copy,
+  Check,
+  Send,
+  AlertTriangle,
+  ExternalLink,
+} from 'lucide-react';
 import { AUTH_PARAMS, PARAM_GROUPS, type AuthParamSpec, type ParamGroup } from '@/data/authParams';
 import { createPkcePair, generateCodeChallenge } from '@/pkce';
 import { HelpPopover } from '@/components/ui/HelpPopover';
@@ -81,9 +90,11 @@ function AuthorizeRequestBuilder({
   );
   const [customs, setCustoms] = useState<CustomParam[]>([]);
   /** Values this component mints: shown, regenerable, and overridable by an edit like any other. */
-  const [generated, setGenerated] = useState<{ state: string; nonce: string; codeChallenge: string }>(
-    { state: '', nonce: '', codeChallenge: '' },
-  );
+  const [generated, setGenerated] = useState<{
+    state: string;
+    nonce: string;
+    codeChallenge: string;
+  }>({ state: '', nonce: '', codeChallenge: '' });
   const [codeVerifier, setCodeVerifier] = useState<string | null>(null);
   /** Set when the challenge no longer derives from the verifier we hold — see `regeneratePkce`. */
   const [challengeEdited, setChallengeEdited] = useState(false);
@@ -365,9 +376,7 @@ function AuthorizeRequestBuilder({
             <span className="text-[0.65rem] font-bold uppercase tracking-wider text-success-text">
               GET
             </span>
-            <span className="text-xs font-semibold text-foreground">
-              Authorization request
-            </span>
+            <span className="text-xs font-semibold text-foreground">Authorization request</span>
             <span className="text-[0.65rem] font-mono text-muted-foreground tabular-nums">
               {enabledCount} param{enabledCount === 1 ? '' : 's'}
             </span>
@@ -388,7 +397,11 @@ function AuthorizeRequestBuilder({
               onClick={copyUrl}
               className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer"
             >
-              {copied ? <Check className="h-3 w-3 text-success-text" /> : <Copy className="h-3 w-3" />}
+              {copied ? (
+                <Check className="h-3 w-3 text-success-text" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
               {copied ? 'Copied' : 'Copy URL'}
             </button>
           </div>
@@ -412,8 +425,8 @@ function AuthorizeRequestBuilder({
           {challengeEdited && (
             <Warning>
               <code>code_challenge</code> was edited by hand, so it no longer matches the verifier
-              this page holds. The redirect will work and the <em>token exchange</em> will fail — which
-              is exactly what PKCE is for. Regenerate to pair them again.
+              this page holds. The redirect will work and the <em>token exchange</em> will fail —
+              which is exactly what PKCE is for. Regenerate to pair them again.
             </Warning>
           )}
           {jsonProblems.length > 0 && (
@@ -425,8 +438,8 @@ function AuthorizeRequestBuilder({
           {params.request_uri?.enabled && effective('request_uri') && (
             <Warning tone="info">
               With <code>request_uri</code> the other parameters travel inside the pushed request.
-              RFC 9126 expects <code>client_id</code> alongside it and little else — turn the rest off
-              to see the canonical shape.
+              RFC 9126 expects <code>client_id</code> alongside it and little else — turn the rest
+              off to see the canonical shape.
             </Warning>
           )}
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -445,9 +458,8 @@ function AuthorizeRequestBuilder({
             </a>
           </div>
           <p className="text-[0.6rem] text-muted-foreground">
-            Sending navigates this tab to the URL above. The PKCE verifier and{' '}
-            <code>state</code> are stored first, so the callback can complete the exchange and check
-            the response.
+            Sending navigates this tab to the URL above. The PKCE verifier and <code>state</code>{' '}
+            are stored first, so the callback can complete the exchange and check the response.
           </p>
         </div>
       </div>
@@ -455,20 +467,32 @@ function AuthorizeRequestBuilder({
   );
 }
 
-function Warning({ children, tone = 'warn' }: { children: React.ReactNode; tone?: 'warn' | 'info' }) {
+function Warning({
+  children,
+  tone = 'warn',
+}: {
+  children: React.ReactNode;
+  tone?: 'warn' | 'info';
+}) {
   return (
     <div
       className={cn(
         'flex gap-2 items-start rounded px-2 py-1.5 border',
-        tone === 'warn'
-          ? 'bg-amber-500/10 border-amber-500/30'
-          : 'bg-sky-500/10 border-sky-500/30',
+        tone === 'warn' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-sky-500/10 border-sky-500/30',
       )}
     >
       <AlertTriangle
-        className={cn('h-3.5 w-3.5 mt-0.5 shrink-0', tone === 'warn' ? 'text-warning-text' : 'text-info-text')}
+        className={cn(
+          'h-3.5 w-3.5 mt-0.5 shrink-0',
+          tone === 'warn' ? 'text-warning-text' : 'text-info-text',
+        )}
       />
-      <p className={cn('text-[0.7rem] leading-relaxed', tone === 'warn' ? 'text-warning-text' : 'text-info-text')}>
+      <p
+        className={cn(
+          'text-[0.7rem] leading-relaxed',
+          tone === 'warn' ? 'text-warning-text' : 'text-info-text',
+        )}
+      >
         {children}
       </p>
     </div>
@@ -517,7 +541,9 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
             {spec.requirement}
           </span>
         )}
-        <span className="text-[0.6rem] font-mono text-muted-foreground/80 truncate">{spec.spec}</span>
+        <span className="text-[0.6rem] font-mono text-muted-foreground/80 truncate">
+          {spec.spec}
+        </span>
         <div className="ml-auto flex items-center gap-1 shrink-0">
           {onRegenerate && (
             <button

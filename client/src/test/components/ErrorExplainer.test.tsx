@@ -16,7 +16,9 @@ describe('ErrorExplainer', () => {
     expect(screen.getByText('A157357')).toBeInTheDocument();
     expect(screen.getByText(/verified here/i)).toBeInTheDocument();
     // Unique to the cause line; "channel" alone appears in the fix as well.
-    expect(screen.getByText(/not about their value|not where Authlete expected/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/not about their value|not where Authlete expected/i),
+    ).toBeInTheDocument();
   });
 
   it('explains the OAuth code and the vendor code together when both are present', () => {

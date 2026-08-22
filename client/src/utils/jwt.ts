@@ -86,7 +86,10 @@ export function decodeJwt(token: string): JwtParts {
  */
 const ALGS: Record<
   string,
-  { importParams: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams; verifyParams: AlgorithmIdentifier | RsaPssParams | EcdsaParams }
+  {
+    importParams: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams;
+    verifyParams: AlgorithmIdentifier | RsaPssParams | EcdsaParams;
+  }
 > = {
   RS256: {
     importParams: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
@@ -194,9 +197,13 @@ export async function verifyJwt(token: string, jwks: Jwk[]): Promise<VerifyOutco
 
   for (const jwk of candidates) {
     try {
-      const key = await crypto.subtle.importKey('jwk', jwk as JsonWebKey, spec.importParams, false, [
-        'verify',
-      ]);
+      const key = await crypto.subtle.importKey(
+        'jwk',
+        jwk as JsonWebKey,
+        spec.importParams,
+        false,
+        ['verify'],
+      );
       const ok = await crypto.subtle.verify(spec.verifyParams, key, signature, data);
       if (ok) return { status: 'valid', alg, kid: jwk.kid ?? kid };
     } catch {

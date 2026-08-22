@@ -1,6 +1,12 @@
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import { AUTHORIZATION_ENDPOINT, CLIENT_ID, DEFAULT_SCOPES, getRedirectUri, CLIENT_SECRET } from '@/config';
+import {
+  AUTHORIZATION_ENDPOINT,
+  CLIENT_ID,
+  DEFAULT_SCOPES,
+  getRedirectUri,
+  CLIENT_SECRET,
+} from '@/config';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { generateKeyPair } from '@/services/dpop.service';
@@ -23,7 +29,8 @@ import { KeyRound, ArrowRightLeft, LogIn, RefreshCw, FileText } from 'lucide-rea
 import type { TokenResponse } from '@/types';
 import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
 
-type GrantType = 'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
+type GrantType =
+  'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
 
 const GRANTS: { value: GrantType; label: string }[] = [
   { value: 'authorization_code', label: 'Auth Code (PKCE)' },
@@ -188,7 +195,10 @@ const AuthFlowsSection: React.FC = () => {
    * means the user edited the challenge by hand, so there is no matching verifier to store and the
    * exchange is *meant* to fail.
    */
-  const sendAuthorizeRequest = (url: string, ctx: { codeVerifier: string | null; state: string | null }) => {
+  const sendAuthorizeRequest = (
+    url: string,
+    ctx: { codeVerifier: string | null; state: string | null },
+  ) => {
     if (ctx.codeVerifier) writeKey(SESSION_KEYS.pkceVerifier, ctx.codeVerifier);
     else removeKey(SESSION_KEYS.pkceVerifier);
 
@@ -213,7 +223,7 @@ const AuthFlowsSection: React.FC = () => {
           method: 'POST' as const,
           url: '/api/token',
           headers: {
-            'Authorization': `Basic ${btoa(`${ccId}:${ccSecret}`)}`,
+            Authorization: `Basic ${btoa(`${ccId}:${ccSecret}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: `grant_type=client_credentials&scope=${encodeURIComponent(ccScope)}`,
@@ -223,7 +233,7 @@ const AuthFlowsSection: React.FC = () => {
           method: 'POST' as const,
           url: '/api/token',
           headers: {
-            'Authorization': `Basic ${btoa(`${pwId}:${pwSecret}`)}`,
+            Authorization: `Basic ${btoa(`${pwId}:${pwSecret}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: `grant_type=password&username=${encodeURIComponent(pwUser)}&password=${encodeURIComponent(pwPass)}&scope=${encodeURIComponent(pwScope)}`,
@@ -233,7 +243,7 @@ const AuthFlowsSection: React.FC = () => {
           method: 'POST' as const,
           url: '/api/token',
           headers: {
-            'Authorization': `Basic ${btoa(`${rtId}:${rtSecret}`)}`,
+            Authorization: `Basic ${btoa(`${rtId}:${rtSecret}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(rtToken)}`,
@@ -244,12 +254,31 @@ const AuthFlowsSection: React.FC = () => {
           url: '/api/token',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            ...(jwtId && jwtSecret ? { 'Authorization': `Basic ${btoa(`${jwtId}:${jwtSecret}`)}` } : {}),
+            ...(jwtId && jwtSecret
+              ? { Authorization: `Basic ${btoa(`${jwtId}:${jwtSecret}`)}` }
+              : {}),
           },
           body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwtAssertion ? '<signed_jwt>' : '<empty>'}${jwtScope ? `&scope=${encodeURIComponent(jwtScope)}` : ''}`,
         };
     }
-  }, [grantType, ccId, ccSecret, ccScope, pwUser, pwPass, pwId, pwSecret, pwScope, rtToken, rtId, rtSecret, jwtAssertion, jwtId, jwtSecret, jwtScope]);
+  }, [
+    grantType,
+    ccId,
+    ccSecret,
+    ccScope,
+    pwUser,
+    pwPass,
+    pwId,
+    pwSecret,
+    pwScope,
+    rtToken,
+    rtId,
+    rtSecret,
+    jwtAssertion,
+    jwtId,
+    jwtSecret,
+    jwtScope,
+  ]);
 
   return (
     <SectionPanel
@@ -281,12 +310,33 @@ const AuthFlowsSection: React.FC = () => {
               {grantType === 'authorization_code' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={acId} onChange={(e) => setAcId(e.target.value)} placeholder="Client identifier registered in Authlete" />
-                    <Input label="Client Secret" type="password" value={acSecret} onChange={(e) => setAcSecret(e.target.value)} placeholder="Used at the token endpoint, not here" />
+                    <Input
+                      label="Client ID"
+                      value={acId}
+                      onChange={(e) => setAcId(e.target.value)}
+                      placeholder="Client identifier registered in Authlete"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={acSecret}
+                      onChange={(e) => setAcSecret(e.target.value)}
+                      placeholder="Used at the token endpoint, not here"
+                    />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Redirect URI" value={acRedirectUri} onChange={(e) => setAcRedirectUri(e.target.value)} placeholder="Must match a registered redirect URI" />
-                    <Input label="Scope" value={acScope} onChange={(e) => setAcScope(e.target.value)} placeholder="openid profile email" />
+                    <Input
+                      label="Redirect URI"
+                      value={acRedirectUri}
+                      onChange={(e) => setAcRedirectUri(e.target.value)}
+                      placeholder="Must match a registered redirect URI"
+                    />
+                    <Input
+                      label="Scope"
+                      value={acScope}
+                      onChange={(e) => setAcScope(e.target.value)}
+                      placeholder="openid profile email"
+                    />
                   </div>
 
                   <label className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/30 cursor-pointer">
@@ -297,13 +347,15 @@ const AuthFlowsSection: React.FC = () => {
                       className="w-3.5 h-3.5 accent-indigo-500 mt-0.5 shrink-0 cursor-pointer"
                     />
                     <span className="text-xs text-muted-foreground leading-relaxed">
-                      <span className="text-foreground font-medium">Sender-constrain with DPoP</span>{' '}
+                      <span className="text-foreground font-medium">
+                        Sender-constrain with DPoP
+                      </span>{' '}
                       (RFC 9449) — generates a key, sends its thumbprint as{' '}
-                      <code className="text-accent-text">dpop_jkt</code>, and proves possession at the
-                      token endpoint. The token comes back as{' '}
+                      <code className="text-accent-text">dpop_jkt</code>, and proves possession at
+                      the token endpoint. The token comes back as{' '}
                       <code className="text-accent-text">token_type: DPoP</code> and must then be
-                      presented with the <code className="text-accent-text">DPoP</code> scheme, never{' '}
-                      <code className="text-accent-text">Bearer</code>.
+                      presented with the <code className="text-accent-text">DPoP</code> scheme,
+                      never <code className="text-accent-text">Bearer</code>.
                     </span>
                   </label>
 
@@ -319,11 +371,35 @@ const AuthFlowsSection: React.FC = () => {
               {grantType === 'client_credentials' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={ccId} onChange={(e) => setCcId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={ccSecret} onChange={(e) => setCcSecret(e.target.value)} placeholder="Keep this confidential" />
+                    <Input
+                      label="Client ID"
+                      value={ccId}
+                      onChange={(e) => setCcId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={ccSecret}
+                      onChange={(e) => setCcSecret(e.target.value)}
+                      placeholder="Keep this confidential"
+                    />
                   </div>
-                  <Input label="Scope" value={ccScope} onChange={(e) => setCcScope(e.target.value)} placeholder="e.g. openid profile email" />
-                  <Button onClick={() => handleCall(ccId, ccSecret, () => tokenService.clientCredentials(ccId, ccSecret, ccScope))} loading={loading} className="w-full sm:w-auto">
+                  <Input
+                    label="Scope"
+                    value={ccScope}
+                    onChange={(e) => setCcScope(e.target.value)}
+                    placeholder="e.g. openid profile email"
+                  />
+                  <Button
+                    onClick={() =>
+                      handleCall(ccId, ccSecret, () =>
+                        tokenService.clientCredentials(ccId, ccSecret, ccScope),
+                      )
+                    }
+                    loading={loading}
+                    className="w-full sm:w-auto"
+                  >
                     <ArrowRightLeft className="h-4 w-4 mr-2" />
                     Get Token
                   </Button>
@@ -333,15 +409,50 @@ const AuthFlowsSection: React.FC = () => {
               {grantType === 'password' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Username" value={pwUser} onChange={(e) => setPwUser(e.target.value)} placeholder="e.g. admin" />
-                    <Input label="Password" type="password" value={pwPass} onChange={(e) => setPwPass(e.target.value)} placeholder="User password" />
+                    <Input
+                      label="Username"
+                      value={pwUser}
+                      onChange={(e) => setPwUser(e.target.value)}
+                      placeholder="e.g. admin"
+                    />
+                    <Input
+                      label="Password"
+                      type="password"
+                      value={pwPass}
+                      onChange={(e) => setPwPass(e.target.value)}
+                      placeholder="User password"
+                    />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={pwId} onChange={(e) => setPwId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={pwSecret} onChange={(e) => setPwSecret(e.target.value)} placeholder="Client secret for confidential clients" />
+                    <Input
+                      label="Client ID"
+                      value={pwId}
+                      onChange={(e) => setPwId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={pwSecret}
+                      onChange={(e) => setPwSecret(e.target.value)}
+                      placeholder="Client secret for confidential clients"
+                    />
                   </div>
-                  <Input label="Scope" value={pwScope} onChange={(e) => setPwScope(e.target.value)} placeholder="e.g. openid profile email" />
-                  <Button onClick={() => handleCall(pwId, pwSecret, () => tokenService.passwordGrant(pwUser, pwPass, pwId, pwSecret, pwScope))} loading={loading} className="w-full sm:w-auto">
+                  <Input
+                    label="Scope"
+                    value={pwScope}
+                    onChange={(e) => setPwScope(e.target.value)}
+                    placeholder="e.g. openid profile email"
+                  />
+                  <Button
+                    onClick={() =>
+                      handleCall(pwId, pwSecret, () =>
+                        tokenService.passwordGrant(pwUser, pwPass, pwId, pwSecret, pwScope),
+                      )
+                    }
+                    loading={loading}
+                    className="w-full sm:w-auto"
+                  >
                     <LogIn className="h-4 w-4 mr-2" />
                     Get Token
                   </Button>
@@ -350,12 +461,36 @@ const AuthFlowsSection: React.FC = () => {
 
               {grantType === 'refresh_token' && (
                 <div className="space-y-3">
-                  <Input label="Refresh Token" value={rtToken} onChange={(e) => setRtToken(e.target.value)} placeholder="Paste a refresh token from a previous flow" />
+                  <Input
+                    label="Refresh Token"
+                    value={rtToken}
+                    onChange={(e) => setRtToken(e.target.value)}
+                    placeholder="Paste a refresh token from a previous flow"
+                  />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={rtId} onChange={(e) => setRtId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={rtSecret} onChange={(e) => setRtSecret(e.target.value)} placeholder="Client secret for confidential clients" />
+                    <Input
+                      label="Client ID"
+                      value={rtId}
+                      onChange={(e) => setRtId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={rtSecret}
+                      onChange={(e) => setRtSecret(e.target.value)}
+                      placeholder="Client secret for confidential clients"
+                    />
                   </div>
-                  <Button onClick={() => handleCall(rtId, rtSecret, () => tokenService.refreshToken(rtToken, rtId, rtSecret))} loading={loading} className="w-full sm:w-auto">
+                  <Button
+                    onClick={() =>
+                      handleCall(rtId, rtSecret, () =>
+                        tokenService.refreshToken(rtToken, rtId, rtSecret),
+                      )
+                    }
+                    loading={loading}
+                    className="w-full sm:w-auto"
+                  >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh Token
                   </Button>
@@ -377,13 +512,38 @@ const AuthFlowsSection: React.FC = () => {
                     placeholder="e.g. openid profile email (optional)"
                   />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={jwtId} onChange={(e) => setJwtId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={jwtSecret} onChange={(e) => setJwtSecret(e.target.value)} placeholder="Client secret (optional)" />
+                    <Input
+                      label="Client ID"
+                      value={jwtId}
+                      onChange={(e) => setJwtId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={jwtSecret}
+                      onChange={(e) => setJwtSecret(e.target.value)}
+                      placeholder="Client secret (optional)"
+                    />
                   </div>
                   {/* `disabled` reads `loading` directly — it was `loading !== null`, and this hook's
                       `loading` is a boolean, so the button could never enable and the RFC 7523 grant
                       was unreachable. See the note in StepUpSection: same idiom, same cause. */}
-                  <Button onClick={() => handleCall(jwtId, jwtSecret, () => tokenService.jwtBearerGrant(jwtAssertion, jwtId || undefined, jwtSecret || undefined, jwtScope || undefined))} loading={loading} disabled={!jwtAssertion || loading} className="w-full sm:w-auto">
+                  <Button
+                    onClick={() =>
+                      handleCall(jwtId, jwtSecret, () =>
+                        tokenService.jwtBearerGrant(
+                          jwtAssertion,
+                          jwtId || undefined,
+                          jwtSecret || undefined,
+                          jwtScope || undefined,
+                        ),
+                      )
+                    }
+                    loading={loading}
+                    disabled={!jwtAssertion || loading}
+                    className="w-full sm:w-auto"
+                  >
                     <FileText className="h-4 w-4 mr-2" />
                     Exchange JWT for Token
                   </Button>

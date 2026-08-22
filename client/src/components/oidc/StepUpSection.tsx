@@ -56,7 +56,12 @@ function StepUpSection() {
       const opts: { acrValues?: string; maxAge?: number } = {};
       if (requiredAcrs.trim()) opts.acrValues = requiredAcrs.trim();
       if (maxAge.trim()) opts.maxAge = Number(maxAge.trim());
-      return tokenService.introspection(at!, adminId, adminSecret, Object.keys(opts).length ? opts : undefined);
+      return tokenService.introspection(
+        at!,
+        adminId,
+        adminSecret,
+        Object.keys(opts).length ? opts : undefined,
+      );
     });
 
     if (data) {
@@ -91,11 +96,14 @@ function StepUpSection() {
     if (challenge.acr_values) {
       // Build claims request with essential ACR
       const acrList = challenge.acr_values.split(' ');
-      params.append('claims', JSON.stringify({
-        id_token: {
-          acr: { essential: true, values: acrList },
-        },
-      }));
+      params.append(
+        'claims',
+        JSON.stringify({
+          id_token: {
+            acr: { essential: true, values: acrList },
+          },
+        }),
+      );
     }
     if (challenge.max_age) {
       params.append('max_age', challenge.max_age);
@@ -115,13 +123,7 @@ function StepUpSection() {
 
         <FlowDiagram
           steps={flowSteps}
-          currentStep={
-            !challenge
-              ? loading
-                ? 'introspect'
-                : undefined
-              : 'challenge'
-          }
+          currentStep={!challenge ? (loading ? 'introspect' : undefined) : 'challenge'}
           className="py-2"
         />
 
@@ -137,15 +139,13 @@ function StepUpSection() {
         {at && (
           <>
             <div className="space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">
-                Introspection Credentials
-              </p>
+              <p className="text-xs font-medium text-muted-foreground">Introspection Credentials</p>
               <p className="text-xs text-muted-foreground">
-                RFC 7662 §2.1 requires the introspection endpoint to be protected, so this flow needs the
-                deployment&apos;s admin credentials. Without them the server answers <code>401</code>.
+                RFC 7662 §2.1 requires the introspection endpoint to be protected, so this flow
+                needs the deployment&apos;s admin credentials. Without them the server answers{' '}
+                <code>401</code>.
               </p>
-              <AdminAuth
-              />
+              <AdminAuth />
               <p className="text-xs font-medium text-muted-foreground">
                 Protected Resource Requirements
               </p>
@@ -237,16 +237,16 @@ function StepUpSection() {
                       </Button>
                     </a>
                     <p className="text-[0.6rem] text-muted-foreground">
-                      This opens the authorization endpoint with <code>claims</code> requesting the required ACR as essential, plus <code>prompt=login</code> to force re-authentication.
+                      This opens the authorization endpoint with <code>claims</code> requesting the
+                      required ACR as essential, plus <code>prompt=login</code> to force
+                      re-authentication.
                     </p>
                   </div>
                 )}
               </div>
             )}
 
-            {result && !challenge && (
-              <JsonBlock data={result} label="Introspection Result" />
-            )}
+            {result && !challenge && <JsonBlock data={result} label="Introspection Result" />}
           </>
         )}
 

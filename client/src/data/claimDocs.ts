@@ -25,20 +25,17 @@ export const CLAIM_DOCS: Record<string, ClaimDoc> = {
   iss: {
     name: 'Issuer',
     spec: 'RFC 7519 §4.1.1 · OIDC Core §2 (REQUIRED in an ID token)',
-    note:
-      'Who issued this token. A client must compare it against the issuer it expects — a signature proves who signed, never who was allowed to speak.',
+    note: 'Who issued this token. A client must compare it against the issuer it expects — a signature proves who signed, never who was allowed to speak.',
   },
   sub: {
     name: 'Subject',
     spec: 'RFC 7519 §4.1.2 · OIDC Core §2 (REQUIRED in an ID token)',
-    note:
-      'Who the token is about. In an ID token it is locally unique and never reassigned; a client-credentials token has no subject at all, because there is no user.',
+    note: 'Who the token is about. In an ID token it is locally unique and never reassigned; a client-credentials token has no subject at all, because there is no user.',
   },
   aud: {
     name: 'Audience',
     spec: 'RFC 7519 §4.1.3 · OIDC Core §2 (REQUIRED in an ID token)',
-    note:
-      'Who the token is for. Reject a token whose audience is not you. This service is configured to emit a single string rather than an array — a FAPI working-group decision from Nov 2024.',
+    note: 'Who the token is for. Reject a token whose audience is not you. This service is configured to emit a single string rather than an array — a FAPI working-group decision from Nov 2024.',
   },
   exp: {
     name: 'Expiration Time',
@@ -48,8 +45,7 @@ export const CLAIM_DOCS: Record<string, ClaimDoc> = {
   nbf: {
     name: 'Not Before',
     spec: 'RFC 7519 §4.1.5',
-    note:
-      'Before this instant the token MUST NOT be accepted. FAPI 1.0 Advanced requires it on a request object, and bounds the lifetime to 60 *minutes* — not seconds.',
+    note: 'Before this instant the token MUST NOT be accepted. FAPI 1.0 Advanced requires it on a request object, and bounds the lifetime to 60 *minutes* — not seconds.',
   },
   iat: {
     name: 'Issued At',
@@ -59,28 +55,24 @@ export const CLAIM_DOCS: Record<string, ClaimDoc> = {
   jti: {
     name: 'JWT ID',
     spec: 'RFC 7519 §4.1.7 · RFC 9068 §2.2 (REQUIRED in a JWT access token)',
-    note:
-      'A unique identifier, so a recipient can detect replay. Only useful if it is actually unique per token — never derived from the other claims.',
+    note: 'A unique identifier, so a recipient can detect replay. Only useful if it is actually unique per token — never derived from the other claims.',
   },
 
   // ── OIDC Core §2 ID token claims ────────────────────────────────────────────────────────────────
   auth_time: {
     name: 'Authentication Time',
     spec: 'OIDC Core §2',
-    note:
-      'When the End-User actually authenticated. OPTIONAL in general, but REQUIRED once `max_age` is requested or it is asked for as an Essential Claim — and it is what `max_age` is enforced against. A reissued ID token holds it at the *original* authentication time rather than advancing it.',
+    note: 'When the End-User actually authenticated. OPTIONAL in general, but REQUIRED once `max_age` is requested or it is asked for as an Essential Claim — and it is what `max_age` is enforced against. A reissued ID token holds it at the *original* authentication time rather than advancing it.',
   },
   nonce: {
     name: 'Nonce',
     spec: 'OIDC Core §2, §3.1.2.1 · RFC 9449 §8 (in a DPoP proof)',
-    note:
-      'In an ID token: the value from the authorization request, echoed back for the client to check. In a DPoP proof: the server-supplied nonce being replayed. Note this server drops `nonce` from an ID token reissued during a refresh.',
+    note: 'In an ID token: the value from the authorization request, echoed back for the client to check. In a DPoP proof: the server-supplied nonce being replayed. Note this server drops `nonce` from an ID token reissued during a refresh.',
   },
   acr: {
     name: 'Authentication Context Class Reference',
     spec: 'OIDC Core §2 · RFC 9470',
-    note:
-      'How strongly the user was authenticated. This deployment only ever satisfies `pwd`; anything else is what triggers a step-up challenge.',
+    note: 'How strongly the user was authenticated. This deployment only ever satisfies `pwd`; anything else is what triggers a step-up challenge.',
   },
   amr: {
     name: 'Authentication Methods References',
@@ -95,8 +87,7 @@ export const CLAIM_DOCS: Record<string, ClaimDoc> = {
   at_hash: {
     name: 'Access Token Hash',
     spec: 'OIDC Core §3.1.3.6, §3.2.2.10',
-    note:
-      'Half the hash of the access token, binding the two together so a mismatched pair can be detected.',
+    note: 'Half the hash of the access token, binding the two together so a mismatched pair can be detected.',
   },
   c_hash: {
     name: 'Code Hash',
@@ -106,14 +97,12 @@ export const CLAIM_DOCS: Record<string, ClaimDoc> = {
   s_hash: {
     name: 'State Hash',
     spec: 'FAPI 1.0 Advanced',
-    note:
-      'Half the hash of `state`. This server does not emit it on a reissued ID token, which is worth knowing before relying on it.',
+    note: 'Half the hash of `state`. This server does not emit it on a reissued ID token, which is worth knowing before relying on it.',
   },
   sid: {
     name: 'Session ID',
     spec: 'OIDC Back-Channel Logout 1.0',
-    note:
-      'Names an OP session so a logout token can terminate exactly that one. This deployment issues no `sid` of its own — it declines Session Management — so a logout token carrying only `sid` is accepted and acts on nothing.',
+    note: 'Names an OP session so a logout token can terminate exactly that one. This deployment issues no `sid` of its own — it declines Session Management — so a logout token carrying only `sid` is accepted and acts on nothing.',
   },
   events: {
     name: 'Events',
@@ -135,8 +124,7 @@ export const CLAIM_DOCS: Record<string, ClaimDoc> = {
   cnf: {
     name: 'Confirmation',
     spec: 'RFC 9449 §6.1 (jkt) · RFC 7800',
-    note:
-      'Proof-of-possession binding. `cnf.jkt` is the SHA-256 thumbprint of the DPoP key: this token is only usable by whoever holds that private key. **This, not the scheme the caller chose, is what makes a token sender-constrained** — a `DPoP` scheme on a token with no `cnf` is decorative.',
+    note: 'Proof-of-possession binding. `cnf.jkt` is the SHA-256 thumbprint of the DPoP key: this token is only usable by whoever holds that private key. **This, not the scheme the caller chose, is what makes a token sender-constrained** — a `DPoP` scheme on a token with no `cnf` is decorative.',
   },
 
   // ── RFC 9449 DPoP proof ─────────────────────────────────────────────────────────────────────────
@@ -148,14 +136,12 @@ export const CLAIM_DOCS: Record<string, ClaimDoc> = {
   htu: {
     name: 'HTTP URI',
     spec: 'RFC 9449 §4.2',
-    note:
-      'The target URI **without query or fragment**. Including the query string is the classic mistake: the proof then fails on any request that has one.',
+    note: 'The target URI **without query or fragment**. Including the query string is the classic mistake: the proof then fails on any request that has one.',
   },
   ath: {
     name: 'Access Token Hash',
     spec: 'RFC 9449 §7.1',
-    note:
-      'base64url SHA-256 of the access token this proof accompanies. REQUIRED when a proof is used with an access token — and it is `ath`, not `sub`.',
+    note: 'base64url SHA-256 of the access token this proof accompanies. REQUIRED when a proof is used with an access token — and it is `ath`, not `sub`.',
   },
 };
 

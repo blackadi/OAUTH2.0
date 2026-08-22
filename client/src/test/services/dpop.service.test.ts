@@ -49,7 +49,7 @@ describe('generateKeyPair', () => {
 });
 
 describe('createProof', () => {
-  it('carries RFC 9449 §4.2\'s header: typ dpop+jwt, alg ES256, and the public jwk', async () => {
+  it("carries RFC 9449 §4.2's header: typ dpop+jwt, alg ES256, and the public jwk", async () => {
     const pair = await generateKeyPair();
     const proof = await createProof(pair.privateKey, 'POST', 'https://as.example/token');
     const header = decodeSegment(proof.split('.')[0]);
@@ -94,8 +94,15 @@ describe('createProof', () => {
     expect(bare.nonce).toBeUndefined();
 
     const full = decodeSegment(
-      (await createProof(pair.privateKey, 'GET', 'https://rs.example/x', 'ath-value', 'nonce-value'))
-        .split('.')[1],
+      (
+        await createProof(
+          pair.privateKey,
+          'GET',
+          'https://rs.example/x',
+          'ath-value',
+          'nonce-value',
+        )
+      ).split('.')[1],
     );
     // RFC 9449 §7.1 requires `ath` when a proof accompanies an access token — and it is `ath`, not `sub`.
     expect(full.ath).toBe('ath-value');

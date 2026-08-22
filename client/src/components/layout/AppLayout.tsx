@@ -53,7 +53,9 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600">
               <Bug className="h-4 w-4 text-white" />
             </div>
-            <span className="text-sm font-semibold text-foreground tracking-tight">OAuth Debugger</span>
+            <span className="text-sm font-semibold text-foreground tracking-tight">
+              OAuth Debugger
+            </span>
           </button>
         </div>
         <div className="flex items-center gap-3">
@@ -108,7 +110,11 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
           </button>
           <div
             className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50"
-            title={status === 'connected' ? `Server uptime: ${Math.floor(uptime ?? 0)}s` : 'Server unreachable'}
+            title={
+              status === 'connected'
+                ? `Server uptime: ${Math.floor(uptime ?? 0)}s`
+                : 'Server unreachable'
+            }
           >
             <span
               className={cn(
@@ -124,7 +130,9 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
               {status === 'checking' && 'Checking'}
             </span>
           </div>
-          <span className="hidden sm:block text-[0.65rem] text-muted-foreground font-mono">Authlete Node Server</span>
+          <span className="hidden sm:block text-[0.65rem] text-muted-foreground font-mono">
+            Authlete Node Server
+          </span>
         </div>
       </header>
 

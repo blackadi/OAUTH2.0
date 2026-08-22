@@ -11,9 +11,7 @@ async function overallHealth(): Promise<OverallHealthResponse> {
 }
 
 async function authleteHealth(extended: boolean): Promise<AuthleteHealthResponse> {
-  const url = extended
-    ? `${HEALTH_AUTHLETE_ENDPOINT}?extended=true`
-    : HEALTH_AUTHLETE_ENDPOINT;
+  const url = extended ? `${HEALTH_AUTHLETE_ENDPOINT}?extended=true` : HEALTH_AUTHLETE_ENDPOINT;
   return http.getJson(url) as Promise<AuthleteHealthResponse>;
 }
 

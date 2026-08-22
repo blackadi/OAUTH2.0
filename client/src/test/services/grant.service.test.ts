@@ -9,7 +9,11 @@ beforeEach(() => {
 });
 
 function ok(data: unknown) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) } as Response);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as Response);
 }
 
 function err(status: number, body: string) {
@@ -30,12 +34,17 @@ describe('grantService.queryGrant', () => {
   it('encodes special characters in grant ID', async () => {
     mockFetch.mockResolvedValue(ok({}));
     await grantService.queryGrant({ accessToken: 'tok' }, 'grant/id');
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/gm/grant%2Fid', expect.anything());
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/gm/grant%2Fid',
+      expect.anything(),
+    );
   });
 
   it('throws on error response', async () => {
     mockFetch.mockResolvedValue(err(404, 'not found'));
-    await expect(grantService.queryGrant({ accessToken: 'tok' }, 'g1')).rejects.toThrow('not found');
+    await expect(grantService.queryGrant({ accessToken: 'tok' }, 'g1')).rejects.toThrow(
+      'not found',
+    );
   });
 });
 

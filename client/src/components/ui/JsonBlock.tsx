@@ -44,7 +44,9 @@ function JsonBlock({ data, className, label }: JsonBlockProps) {
           </button>
         </div>
       )}
-      <pre className="bg-code p-4 rounded-lg overflow-x-auto text-[0.8rem] font-mono whitespace-pre-wrap break-all border border-border">{formatted}</pre>
+      <pre className="bg-code p-4 rounded-lg overflow-x-auto text-[0.8rem] font-mono whitespace-pre-wrap break-all border border-border">
+        {formatted}
+      </pre>
     </div>
   );
 }

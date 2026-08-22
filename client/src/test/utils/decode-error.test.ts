@@ -12,13 +12,17 @@ describe('extracting codes from what servers actually send', () => {
   });
 
   it('reads a WWW-Authenticate challenge, where RFC 6750 §3 puts the code', () => {
-    const d = decodeError('401 Unauthorized · Bearer error="invalid_token", error_description="[A088302] The access token does not exist."');
+    const d = decodeError(
+      '401 Unauthorized · Bearer error="invalid_token", error_description="[A088302] The access token does not exist."',
+    );
     expect(d.oauthError).toBe('invalid_token');
     expect(d.authleteCode).toBe('A088302');
   });
 
   it('reads an error redirect query string', () => {
-    const d = decodeError('302 → https://app.example/cb?error=invalid_target&error_description=%5BA251307%5D');
+    const d = decodeError(
+      '302 → https://app.example/cb?error=invalid_target&error_description=%5BA251307%5D',
+    );
     expect(d.oauthError).toBe('invalid_target');
   });
 
@@ -58,7 +62,9 @@ describe('what it refuses to do', () => {
 
 describe('the repo-verified notes', () => {
   it('explains the wrong-channel 401, which is the most confusing failure on this server', () => {
-    const d = decodeError('401 · [A157357] The client identifier is not found at the expected location.');
+    const d = decodeError(
+      '401 · [A157357] The client identifier is not found at the expected location.',
+    );
     expect(d.authleteNote?.verifiedHere).toBe(true);
     expect(d.authleteNote?.cause).toMatch(/channel/);
     expect(d.authleteNote?.fix).toMatch(/client_secret_basic/);
@@ -202,7 +208,9 @@ describe('code extraction requires a standalone code (regression)', () => {
   });
 
   it('ignores a code-shaped substring inside a JWT segment', () => {
-    expect(decodeError('failed for eyJhbGciOiJIUzI1NiA123456QUJD.payload.sig').authleteCode).toBeUndefined();
+    expect(
+      decodeError('failed for eyJhbGciOiJIUzI1NiA123456QUJD.payload.sig').authleteCode,
+    ).toBeUndefined();
   });
 
   it('does not truncate a seven-digit code into a six-digit one', () => {
@@ -214,6 +222,8 @@ describe('code extraction requires a standalone code (regression)', () => {
     expect(decodeError('A157357 at the very start').authleteCode).toBe('A157357');
     expect(decodeError('{"resultCode":"A157357"}').authleteCode).toBe('A157357');
     expect(decodeError('401 · [A157357] wrong channel.').authleteCode).toBe('A157357');
-    expect(decodeError('...error_description="[A009301] no response_type"').authleteCode).toBe('A009301');
+    expect(decodeError('...error_description="[A009301] no response_type"').authleteCode).toBe(
+      'A009301',
+    );
   });
 });

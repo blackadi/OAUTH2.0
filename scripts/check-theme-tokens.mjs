@@ -103,8 +103,16 @@ const paletteBlocks = [
     label: '@media (prefers-color-scheme: light)',
     body: css.match(/@media \(prefers-color-scheme: light\)\s*\{\s*:root[^{]*\{([^}]*)\}/)?.[1] ?? "",
   },
-  { label: ':root[data-theme="light"]', body: css.match(/:root\[data-theme="light"\]\s*\{([^}]*)\}/)?.[1] ?? "" },
-  { label: ':root[data-theme="dark"]', body: css.match(/:root\[data-theme="dark"\]\s*\{([^}]*)\}/)?.[1] ?? "" },
+  {
+    // Quote-agnostic: Prettier rewrites `[data-theme="light"]` to single quotes, and a checker that
+    // depends on a formatter's choice is a checker that fails for the wrong reason.
+    label: ':root[data-theme=light]',
+    body: css.match(/:root\[data-theme=["']light["']\]\s*\{([^}]*)\}/)?.[1] ?? "",
+  },
+  {
+    label: ':root[data-theme=dark]',
+    body: css.match(/:root\[data-theme=["']dark["']\]\s*\{([^}]*)\}/)?.[1] ?? "",
+  },
 ];
 
 /** Structural tokens (radius, widths) belong to the layout, not to either palette. */

@@ -11,7 +11,7 @@ import { generateCodeVerifier, generateCodeChallenge, createPkcePair } from '@/p
  */
 
 describe('generateCodeVerifier', () => {
-  it('defaults to 64 characters, inside RFC 7636 §4.1\'s 43–128 range', async () => {
+  it("defaults to 64 characters, inside RFC 7636 §4.1's 43–128 range", async () => {
     const verifier = await generateCodeVerifier();
     expect(verifier).toHaveLength(64);
     expect(verifier.length).toBeGreaterThanOrEqual(43);
@@ -50,7 +50,7 @@ describe('generateCodeChallenge', () => {
     expect(challenge).toBe(expected);
   });
 
-  it('matches RFC 7636 Appendix B\'s worked example', async () => {
+  it("matches RFC 7636 Appendix B's worked example", async () => {
     // The one fixture worth having: the value the specification itself publishes.
     expect(await generateCodeChallenge('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe(
       'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',

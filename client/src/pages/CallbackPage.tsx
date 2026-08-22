@@ -54,7 +54,11 @@ const CallbackPage = () => {
       }
 
       if (!code) {
-        setState({ error: 'Missing authorization code in callback URL', loading: false, tokenResponse: null });
+        setState({
+          error: 'Missing authorization code in callback URL',
+          loading: false,
+          tokenResponse: null,
+        });
         return;
       }
 
@@ -81,7 +85,8 @@ const CallbackPage = () => {
       }
       if (!stateParam) {
         setState({
-          error: 'The callback carried no `state`, so it cannot be matched to the request that started it.',
+          error:
+            'The callback carried no `state`, so it cannot be matched to the request that started it.',
           loading: false,
           tokenResponse: null,
         });
@@ -115,7 +120,11 @@ const CallbackPage = () => {
 
       const codeVerifier = readKey(SESSION_KEYS.pkceVerifier);
       if (!codeVerifier) {
-        setState({ error: 'Missing PKCE code verifier in session storage', loading: false, tokenResponse: null });
+        setState({
+          error: 'Missing PKCE code verifier in session storage',
+          loading: false,
+          tokenResponse: null,
+        });
         return;
       }
 
@@ -202,7 +211,9 @@ const CallbackPage = () => {
     <Card className="max-w-2xl mx-auto">
       <CardHeader>
         <CardTitle>Callback</CardTitle>
-        {state.loading && <CardDescription>Exchanging authorization code for tokens…</CardDescription>}
+        {state.loading && (
+          <CardDescription>Exchanging authorization code for tokens…</CardDescription>
+        )}
       </CardHeader>
       <CardContent>
         {state.loading && (
@@ -213,7 +224,9 @@ const CallbackPage = () => {
         {!state.loading && state.error && <ErrorExplainer error={state.error} />}
         {!state.loading && !state.error && state.tokenResponse && (
           <div className="space-y-4">
-            <p className="text-sm text-success-text">Successfully obtained tokens from the authorization server.</p>
+            <p className="text-sm text-success-text">
+              Successfully obtained tokens from the authorization server.
+            </p>
             <JsonBlock data={state.tokenResponse} label="Token Response" />
             {state.tokenResponse.id_token && (
               <JwtInspector token={state.tokenResponse.id_token} label="ID Token" defaultOpen />

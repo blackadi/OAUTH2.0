@@ -10,7 +10,12 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-function res(ok: boolean, body: unknown, headers: Record<string, string> = {}, status = ok ? 200 : 400) {
+function res(
+  ok: boolean,
+  body: unknown,
+  headers: Record<string, string> = {},
+  status = ok ? 200 : 400,
+) {
   return Promise.resolve({
     ok,
     status,
@@ -37,7 +42,9 @@ describe('dpopRequest — the nonce dance (DR-20)', () => {
   it('retries once with a re-signed proof when the server demands a nonce', async () => {
     mockFetch
       .mockReturnValueOnce(nonceRefusal('nonce-from-server'))
-      .mockReturnValueOnce(res(true, { access_token: 'at' }, { 'dpop-nonce': 'nonce-from-server' }));
+      .mockReturnValueOnce(
+        res(true, { access_token: 'at' }, { 'dpop-nonce': 'nonce-from-server' }),
+      );
 
     // The factory records which nonce it was asked to sign with.
     const seen: (string | undefined)[] = [];
@@ -73,7 +80,14 @@ describe('dpopRequest — the nonce dance (DR-20)', () => {
     mockFetch.mockReturnValueOnce(res(true, { ok: 1 }));
 
     const seen: (string | undefined)[] = [];
-    await dpopRequest(URL_, async (nonce) => { seen.push(nonce); return 'p'; }, init);
+    await dpopRequest(
+      URL_,
+      async (nonce) => {
+        seen.push(nonce);
+        return 'p';
+      },
+      init,
+    );
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(seen).toEqual(['cached-nonce']);
@@ -95,9 +109,7 @@ describe('dpopRequest — the nonce dance (DR-20)', () => {
   });
 
   it('retries at most once, then surfaces the second failure', async () => {
-    mockFetch
-      .mockReturnValueOnce(nonceRefusal('n1'))
-      .mockReturnValueOnce(nonceRefusal('n2'));
+    mockFetch.mockReturnValueOnce(nonceRefusal('n1')).mockReturnValueOnce(nonceRefusal('n2'));
 
     await expect(dpopRequest(URL_, async () => 'p', init)).rejects.toThrow('use_dpop_nonce');
     expect(mockFetch).toHaveBeenCalledTimes(2);

@@ -1,6 +1,13 @@
 import { useState, useMemo, useCallback } from 'react';
 import { ShieldCheck, ShieldX, ShieldQuestion, Clock, AlertTriangle } from 'lucide-react';
-import { decodeJwt, verifyJwt, readTimeClaim, formatDelta, type VerifyOutcome, type Jwk } from '@/utils/jwt';
+import {
+  decodeJwt,
+  verifyJwt,
+  readTimeClaim,
+  formatDelta,
+  type VerifyOutcome,
+  type Jwk,
+} from '@/utils/jwt';
 import { CLAIM_DOCS, TIME_CLAIMS } from '@/data/claimDocs';
 import { tokenService } from '@/services';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -122,7 +129,9 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
             title={exp.iso}
           >
             <Clock className="h-2.5 w-2.5" />
-            {exp.delta <= 0 ? `expired ${formatDelta(exp.delta)}` : `expires ${formatDelta(exp.delta)}`}
+            {exp.delta <= 0
+              ? `expired ${formatDelta(exp.delta)}`
+              : `expires ${formatDelta(exp.delta)}`}
           </span>
         )}
         <VerificationBadge outcome={outcome} verifying={verifying} />
@@ -181,8 +190,16 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
           </button>
           {showRaw && (
             <div className="space-y-2">
-              <JsonBlock data={header} label="header" className="[&_pre]:text-[0.7rem] [&_pre]:p-2" />
-              <JsonBlock data={payload} label="payload" className="[&_pre]:text-[0.7rem] [&_pre]:p-2" />
+              <JsonBlock
+                data={header}
+                label="header"
+                className="[&_pre]:text-[0.7rem] [&_pre]:p-2"
+              />
+              <JsonBlock
+                data={payload}
+                label="payload"
+                className="[&_pre]:text-[0.7rem] [&_pre]:p-2"
+              />
             </div>
           )}
         </div>
@@ -231,7 +248,12 @@ function VerificationBadge({
       : outcome.status === 'invalid'
         ? 'bg-red-500/15 text-danger-text'
         : 'bg-amber-500/15 text-warning-text';
-  const Icon = outcome.status === 'valid' ? ShieldCheck : outcome.status === 'invalid' ? ShieldX : ShieldQuestion;
+  const Icon =
+    outcome.status === 'valid'
+      ? ShieldCheck
+      : outcome.status === 'invalid'
+        ? ShieldX
+        : ShieldQuestion;
   const text =
     outcome.status === 'valid'
       ? `signature valid${outcome.kid ? ` · kid ${outcome.kid}` : ''}`
@@ -241,7 +263,9 @@ function VerificationBadge({
           ? 'no matching key'
           : 'cannot verify here';
   return (
-    <span className={cn('flex items-center gap-1 text-[0.6rem] font-mono px-1.5 py-0.5 rounded', tone)}>
+    <span
+      className={cn('flex items-center gap-1 text-[0.6rem] font-mono px-1.5 py-0.5 rounded', tone)}
+    >
       <Icon className="h-2.5 w-2.5" />
       {text}
     </span>

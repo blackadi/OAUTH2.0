@@ -126,7 +126,7 @@ function CibaSection() {
           setPollError('auth_req_id expired — start a new flow');
           toast.error('auth_req_id expired');
         } else {
-          setPollError(errBody.error_description as string ?? JSON.stringify(errBody));
+          setPollError((errBody.error_description as string) ?? JSON.stringify(errBody));
           toast.error(String(errBody.error ?? 'Poll failed'));
         }
       }
@@ -138,7 +138,10 @@ function CibaSection() {
   };
 
   return (
-    <SectionPanel title="CIBA (Client-Initiated Backchannel Authentication)" description="OpenID Connect CIBA Core 1.0">
+    <SectionPanel
+      title="CIBA (Client-Initiated Backchannel Authentication)"
+      description="OpenID Connect CIBA Core 1.0"
+    >
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={CIBA_OPS} value={activeOp} onChange={setActiveOp} />
@@ -147,9 +150,26 @@ function CibaSection() {
 
       {activeOp === 'authentication' && (
         <div className="space-y-3">
-          <Textarea label="Parameters (URL-encoded)" rows={4} value={parameters} onChange={(e) => setParameters(e.target.value)} placeholder="login_hint=admin&scope=openid" />
-          <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
-          <Input label="Client Secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
+          <Textarea
+            label="Parameters (URL-encoded)"
+            rows={4}
+            value={parameters}
+            onChange={(e) => setParameters(e.target.value)}
+            placeholder="login_hint=admin&scope=openid"
+          />
+          <Input
+            label="Client ID"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder="your_client_id"
+          />
+          <Input
+            label="Client Secret"
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            placeholder="your_client_secret"
+          />
           <Select
             label="Client Auth Method"
             value={authMethod}
@@ -162,16 +182,15 @@ function CibaSection() {
           <p className="text-xs text-muted-foreground">
             This must match the client&apos;s registered method. Authlete checks <em>where</em> the
             credentials arrive, not just whether they are correct — the wrong channel returns
-            <code> 401 [A157357]</code>. Authlete&apos;s CIBA guide recommends <code>client_secret_basic</code>,
-            and the backchannel and token endpoints must use the same method.
+            <code> 401 [A157357]</code>. Authlete&apos;s CIBA guide recommends{' '}
+            <code>client_secret_basic</code>, and the backchannel and token endpoints must use the
+            same method.
           </p>
           <Button
             onClick={() =>
               handleCall(() =>
                 cibaService.backchannelAuthentication(
-                  authMethod === 'basic'
-                    ? { parameters }
-                    : { parameters, clientId, clientSecret },
+                  authMethod === 'basic' ? { parameters } : { parameters, clientId, clientSecret },
                   authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined,
                 ),
               )
@@ -185,38 +204,98 @@ function CibaSection() {
 
       {activeOp === 'issue' && (
         <div className="space-y-3">
-          <Input label="Ticket" value={issueTicket} onChange={(e) => setIssueTicket(e.target.value)} placeholder="ticket from authentication response" />
-          <Button onClick={() => handleCall(() => cibaService.issue(issueTicket))} loading={loading}>Run</Button>
+          <Input
+            label="Ticket"
+            value={issueTicket}
+            onChange={(e) => setIssueTicket(e.target.value)}
+            placeholder="ticket from authentication response"
+          />
+          <Button
+            onClick={() => handleCall(() => cibaService.issue(issueTicket))}
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'fail' && (
         <div className="space-y-3">
-          <Input label="Ticket" value={failTicket} onChange={(e) => setFailTicket(e.target.value)} placeholder="ticket from authentication response" />
-          <Select label="Reason" options={FAIL_REASONS} value={failReason} onChange={(e) => setFailReason(e.target.value)} />
-          <Button onClick={() => handleCall(() => cibaService.fail(failTicket, failReason))} loading={loading}>Run</Button>
+          <Input
+            label="Ticket"
+            value={failTicket}
+            onChange={(e) => setFailTicket(e.target.value)}
+            placeholder="ticket from authentication response"
+          />
+          <Select
+            label="Reason"
+            options={FAIL_REASONS}
+            value={failReason}
+            onChange={(e) => setFailReason(e.target.value)}
+          />
+          <Button
+            onClick={() => handleCall(() => cibaService.fail(failTicket, failReason))}
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'complete' && (
         <div className="space-y-3">
-          <Input label="Ticket" value={completeTicket} onChange={(e) => setCompleteTicket(e.target.value)} placeholder="ticket from authentication response" />
-          <Select label="Result" options={COMPLETE_RESULTS} value={completeResult} onChange={(e) => setCompleteResult(e.target.value)} />
-          <Input label="Subject" value={completeSubject} onChange={(e) => setCompleteSubject(e.target.value)} placeholder="admin" />
-          <Button onClick={() => handleCall(() => cibaService.complete(completeTicket, completeResult, completeSubject))} loading={loading}>Run</Button>
+          <Input
+            label="Ticket"
+            value={completeTicket}
+            onChange={(e) => setCompleteTicket(e.target.value)}
+            placeholder="ticket from authentication response"
+          />
+          <Select
+            label="Result"
+            options={COMPLETE_RESULTS}
+            value={completeResult}
+            onChange={(e) => setCompleteResult(e.target.value)}
+          />
+          <Input
+            label="Subject"
+            value={completeSubject}
+            onChange={(e) => setCompleteSubject(e.target.value)}
+            placeholder="admin"
+          />
+          <Button
+            onClick={() =>
+              handleCall(() =>
+                cibaService.complete(completeTicket, completeResult, completeSubject),
+              )
+            }
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'poll' && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Polls the token endpoint with the <code className="text-foreground-muted">auth_req_id</code> from the Issue step.
-            In a production CIBA POLL flow, the client polls at the <code className="text-foreground-muted">interval</code> returned by the Issue endpoint.
+            Polls the token endpoint with the{' '}
+            <code className="text-foreground-muted">auth_req_id</code> from the Issue step. In a
+            production CIBA POLL flow, the client polls at the{' '}
+            <code className="text-foreground-muted">interval</code> returned by the Issue endpoint.
           </p>
-          <Input label="auth_req_id" value={authReqId} onChange={(e) => setAuthReqId(e.target.value)} placeholder="from Issue response" />
+          <Input
+            label="auth_req_id"
+            value={authReqId}
+            onChange={(e) => setAuthReqId(e.target.value)}
+            placeholder="from Issue response"
+          />
           <div className="flex gap-2 items-center">
-            <Button onClick={handlePollToken} loading={loading}>Poll Token</Button>
-            <span className="text-xs text-muted-foreground/70">Expected interval: {pollInterval}s</span>
+            <Button onClick={handlePollToken} loading={loading}>
+              Poll Token
+            </Button>
+            <span className="text-xs text-muted-foreground/70">
+              Expected interval: {pollInterval}s
+            </span>
           </div>
           {pollResult !== null && (
             <div className="mt-2">
@@ -227,7 +306,9 @@ function CibaSection() {
         </div>
       )}
 
-      {activeOp && activeOp !== 'poll' && result ? <JsonBlock data={result} label="Response" /> : null}
+      {activeOp && activeOp !== 'poll' && result ? (
+        <JsonBlock data={result} label="Response" />
+      ) : null}
     </SectionPanel>
   );
 }

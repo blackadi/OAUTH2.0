@@ -32,7 +32,9 @@ describe('JsonBlock', () => {
     Object.assign(navigator, { clipboard: { writeText } });
     render(<JsonBlock data={{ key: 'value' }} label="Response" />);
     const copyBtn = screen.getByText('Copy');
-    await act(async () => { fireEvent.click(copyBtn); });
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"key"'));
   });
 });

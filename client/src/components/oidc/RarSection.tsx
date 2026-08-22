@@ -18,15 +18,19 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { SESSION_KEYS, readKey, writeKey } from '@/services/session-keys';
 
-const DEFAULT_RAR_JSON = JSON.stringify([
-  {
-    type: 'payment_initiation',
-    locations: ['https://bank.example.com/payments'],
-    actions: ['initiate', 'status'],
-    datatypes: ['payment', 'transaction'],
-    identifier: 'PMT-2026-001',
-  },
-], null, 2);
+const DEFAULT_RAR_JSON = JSON.stringify(
+  [
+    {
+      type: 'payment_initiation',
+      locations: ['https://bank.example.com/payments'],
+      actions: ['initiate', 'status'],
+      datatypes: ['payment', 'transaction'],
+      identifier: 'PMT-2026-001',
+    },
+  ],
+  null,
+  2,
+);
 
 function RarSection() {
   const { loading, error, call } = useAsyncCall();
@@ -165,51 +169,110 @@ function RarSection() {
     try {
       const parsed = JSON.parse(rarJson);
       if (!Array.isArray(parsed)) return false;
-      return parsed.every((item: unknown) =>
-        typeof item === 'object' && item !== null && typeof (item as Record<string, unknown>).type === 'string'
+      return parsed.every(
+        (item: unknown) =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as Record<string, unknown>).type === 'string',
       );
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   })();
 
   const parsedPreview = (() => {
-    try { return JSON.parse(rarJson); } catch { return null; }
+    try {
+      return JSON.parse(rarJson);
+    } catch {
+      return null;
+    }
   })();
 
   return (
-    <SectionPanel title="Rich Authorization Requests (RFC 9396)" description="Request granular permissions using authorization_details — structured JSON defining what the client wants to do with the user's resources">
+    <SectionPanel
+      title="Rich Authorization Requests (RFC 9396)"
+      description="Request granular permissions using authorization_details — structured JSON defining what the client wants to do with the user's resources"
+    >
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {doc && <OperationDescription doc={doc} />}
 
       <div className="space-y-3">
-        <Textarea label="authorization_details (JSON array)" rows={6} value={rarJson} onChange={(e) => setRarJson(e.target.value)}
+        <Textarea
+          label="authorization_details (JSON array)"
+          rows={6}
+          value={rarJson}
+          onChange={(e) => setRarJson(e.target.value)}
           placeholder='[{ "type": "payment_initiation", "actions": ["initiate", "status"], "locations": ["https://bank.example.com/payments"] }]'
-          className={!isRarJsonValid && rarJson.trim() ? 'border-red-500' : ''} />
+          className={!isRarJsonValid && rarJson.trim() ? 'border-red-500' : ''}
+        />
         {!isRarJsonValid && rarJson.trim() && (
-          <p className="text-xs text-danger-text">Invalid JSON — must be an array of objects each with a "type" string field</p>
+          <p className="text-xs text-danger-text">
+            Invalid JSON — must be an array of objects each with a "type" string field
+          </p>
         )}
 
-        <Input label="Redirect URI" value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} placeholder="http://localhost:3001/callback" />
+        <Input
+          label="Redirect URI"
+          value={redirectUri}
+          onChange={(e) => setRedirectUri(e.target.value)}
+          placeholder="http://localhost:3001/callback"
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
-          <Input label="Scope" value={scope} onChange={(e) => setScope(e.target.value)} placeholder="openid" />
+          <Input
+            label="Client ID"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder="your_client_id"
+          />
+          <Input
+            label="Scope"
+            value={scope}
+            onChange={(e) => setScope(e.target.value)}
+            placeholder="openid"
+          />
         </div>
 
-        <Input label="Client Secret (for confidential clients)" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
+        <Input
+          label="Client Secret (for confidential clients)"
+          type="password"
+          value={clientSecret}
+          onChange={(e) => setClientSecret(e.target.value)}
+          placeholder="your_client_secret"
+        />
 
         <div className="flex gap-2 flex-wrap">
-          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">Generate PKCE + State</Button>
-          {pkceVerifier && <span className="text-xs text-muted-foreground self-center truncate max-w-[200px]" title={pkceVerifier}>verifier: {pkceVerifier.slice(0, 20)}...</span>}
+          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">
+            Generate PKCE + State
+          </Button>
+          {pkceVerifier && (
+            <span
+              className="text-xs text-muted-foreground self-center truncate max-w-[200px]"
+              title={pkceVerifier}
+            >
+              verifier: {pkceVerifier.slice(0, 20)}...
+            </span>
+          )}
         </div>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={usePar} onChange={(e) => setUsePar(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+          <input
+            type="checkbox"
+            checked={usePar}
+            onChange={(e) => setUsePar(e.target.checked)}
+            className="accent-blue-500 w-4 h-4"
+          />
           Use PAR (recommended for large authorization_details payloads)
         </label>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={useDpop} onChange={(e) => setUseDpop(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+          <input
+            type="checkbox"
+            checked={useDpop}
+            onChange={(e) => setUseDpop(e.target.checked)}
+            className="accent-blue-500 w-4 h-4"
+          />
           Use DPoP (sender-constrained token binding)
         </label>
 
@@ -218,7 +281,12 @@ function RarSection() {
             {usePar ? 'Push PAR + Authorize' : 'Authorize with RAR'}
           </Button>
           {usePar && (
-            <Button variant="secondary" onClick={handlePushOnly} loading={loading} disabled={!isRarJsonValid}>
+            <Button
+              variant="secondary"
+              onClick={handlePushOnly}
+              loading={loading}
+              disabled={!isRarJsonValid}
+            >
               Push PAR Only
             </Button>
           )}
@@ -257,39 +325,76 @@ function RarSection() {
                   <div className="px-3 py-2 space-y-2 text-xs">
                     {!!detail.locations && Array.isArray(detail.locations) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Locations</span>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                          Locations
+                        </span>
                         <ul className="list-disc list-inside text-foreground-muted mt-1">
-                          {(detail.locations as string[]).map((loc: string, j: number) => <li key={j}><code className="text-info-text">{loc}</code></li>)}
+                          {(detail.locations as string[]).map((loc: string, j: number) => (
+                            <li key={j}>
+                              <code className="text-info-text">{loc}</code>
+                            </li>
+                          ))}
                         </ul>
                       </div>
                     )}
                     {!!detail.actions && Array.isArray(detail.actions) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Actions</span>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                          Actions
+                        </span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.actions as string[]).map((a: string, j: number) => <span key={j} className="px-2 py-0.5 bg-indigo-500/10 text-accent-text rounded text-[10px]">{a}</span>)}
+                          {(detail.actions as string[]).map((a: string, j: number) => (
+                            <span
+                              key={j}
+                              className="px-2 py-0.5 bg-indigo-500/10 text-accent-text rounded text-[10px]"
+                            >
+                              {a}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     )}
                     {!!detail.datatypes && Array.isArray(detail.datatypes) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Data Types</span>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                          Data Types
+                        </span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.datatypes as string[]).map((d: string, j: number) => <span key={j} className="px-2 py-0.5 bg-blue-500/10 text-info-text rounded text-[10px]">{d}</span>)}
+                          {(detail.datatypes as string[]).map((d: string, j: number) => (
+                            <span
+                              key={j}
+                              className="px-2 py-0.5 bg-blue-500/10 text-info-text rounded text-[10px]"
+                            >
+                              {d}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     )}
                     {!!detail.identifier && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Identifier</span>
-                        <p className="text-foreground-muted mt-1 font-mono">{detail.identifier as string}</p>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                          Identifier
+                        </span>
+                        <p className="text-foreground-muted mt-1 font-mono">
+                          {detail.identifier as string}
+                        </p>
                       </div>
                     )}
                     {!!detail.privileges && Array.isArray(detail.privileges) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Privileges</span>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                          Privileges
+                        </span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.privileges as string[]).map((p: string, j: number) => <span key={j} className="px-2 py-0.5 bg-amber-500/10 text-warning-text rounded text-[10px]">{p}</span>)}
+                          {(detail.privileges as string[]).map((p: string, j: number) => (
+                            <span
+                              key={j}
+                              className="px-2 py-0.5 bg-amber-500/10 text-warning-text rounded text-[10px]"
+                            >
+                              {p}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     )}

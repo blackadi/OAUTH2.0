@@ -1,11 +1,18 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
-  X, Trash2, Copy, Check, ChevronRight, ChevronDown, Eye, EyeOff, Download, Activity,
+  X,
+  Trash2,
+  Copy,
+  Check,
+  ChevronRight,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Download,
+  Activity,
 } from 'lucide-react';
 import { useTraces } from '@/hooks/useTraces';
-import {
-  clearTraces, redactHeaders, redactBody, type TraceEntry,
-} from '@/services/trace-store';
+import { clearTraces, redactHeaders, redactBody, type TraceEntry } from '@/services/trace-store';
 import { toCurl } from '@/utils/curl';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -156,7 +163,11 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
               onClick={copyCurl}
               className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
             >
-              {copied ? <Check className="h-3 w-3 text-success-text" /> : <Copy className="h-3 w-3" />}
+              {copied ? (
+                <Check className="h-3 w-3 text-success-text" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
               {copied ? 'Copied' : reveal ? 'cURL (with secrets)' : 'cURL (redacted)'}
             </button>
             <button
@@ -245,7 +256,8 @@ function toMarkdown(entries: TraceEntry[]): string {
     lines.push('');
     lines.push('**Request headers**');
     lines.push('```');
-    for (const [k, v] of Object.entries(redactHeaders(entry.requestHeaders))) lines.push(`${k}: ${v}`);
+    for (const [k, v] of Object.entries(redactHeaders(entry.requestHeaders)))
+      lines.push(`${k}: ${v}`);
     lines.push('```');
     const body = redactBody(entry.requestBody);
     if (body) {
@@ -374,7 +386,11 @@ function TracePanel({ open, onClose }: TracePanelProps) {
           disabled={visible.length === 0}
           className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
         >
-          {exported ? <Check className="h-3 w-3 text-success-text" /> : <Download className="h-3 w-3" />}
+          {exported ? (
+            <Check className="h-3 w-3 text-success-text" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
           {exported ? 'Copied' : 'Export'}
         </button>
         <button

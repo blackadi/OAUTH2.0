@@ -45,11 +45,7 @@ async function deleteClient(clientId: string, auth: string): Promise<void> {
   await http.del(`${CLIENT_DELETE_ENDPOINT}/${encodeURIComponent(clientId)}`, auth);
 }
 
-async function lockFlag(
-  clientIdentifier: string,
-  locked: boolean,
-  auth: string,
-): Promise<unknown> {
+async function lockFlag(clientIdentifier: string, locked: boolean, auth: string): Promise<unknown> {
   return http.patch(
     `${CLIENT_FLAG_ENDPOINT}/${encodeURIComponent(clientIdentifier)}`,
     { clientLocked: locked },
@@ -86,25 +82,21 @@ async function updateAuth(
   body: Record<string, unknown>,
   auth: string,
 ): Promise<unknown> {
-  return http.postAdmin(`${CLIENT_AUTH_UPDATE_ENDPOINT}/${encodeURIComponent(clientId)}`, body, auth);
+  return http.postAdmin(
+    `${CLIENT_AUTH_UPDATE_ENDPOINT}/${encodeURIComponent(clientId)}`,
+    body,
+    auth,
+  );
 }
 
-async function deleteAuth(
-  clientId: string,
-  subject: string,
-  auth: string,
-): Promise<unknown> {
+async function deleteAuth(clientId: string, subject: string, auth: string): Promise<unknown> {
   return http.del(
     `${CLIENT_AUTH_DELETE_ENDPOINT}/${encodeURIComponent(clientId)}/${encodeURIComponent(subject)}`,
     auth,
   );
 }
 
-async function getGrantedScopes(
-  clientId: string,
-  subject: string,
-  auth: string,
-): Promise<unknown> {
+async function getGrantedScopes(clientId: string, subject: string, auth: string): Promise<unknown> {
   return http.getJson(
     `${CLIENT_SCOPES_GRANTED_ENDPOINT}/${encodeURIComponent(clientId)}/${encodeURIComponent(subject)}`,
     auth,
@@ -123,7 +115,10 @@ async function deleteGrantedScopes(
 }
 
 async function getRequestableScopes(clientId: string, auth: string): Promise<unknown> {
-  return http.getJson(`${CLIENT_SCOPES_REQUESTABLE_ENDPOINT}/${encodeURIComponent(clientId)}`, auth);
+  return http.getJson(
+    `${CLIENT_SCOPES_REQUESTABLE_ENDPOINT}/${encodeURIComponent(clientId)}`,
+    auth,
+  );
 }
 
 async function updateRequestableScopes(

@@ -9,12 +9,18 @@ beforeEach(() => {
 });
 
 function ok(data: unknown) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) } as Response);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as Response);
 }
 
 describe('healthService.serverHealth', () => {
   it('sends GET to health endpoint', async () => {
-    mockFetch.mockResolvedValue(ok({ status: 'ok', uptime: 123, timestamp: '2026-01-01T00:00:00Z' }));
+    mockFetch.mockResolvedValue(
+      ok({ status: 'ok', uptime: 123, timestamp: '2026-01-01T00:00:00Z' }),
+    );
     const result = await healthService.serverHealth();
     expect(result).toEqual({ status: 'ok', uptime: 123, timestamp: '2026-01-01T00:00:00Z' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/health', {
@@ -39,9 +45,12 @@ describe('healthService.authleteHealth', () => {
     mockFetch.mockResolvedValue(ok({ healthy: true, statusCode: 200 }));
     const result = await healthService.authleteHealth(true);
     expect(result).toEqual({ healthy: true, statusCode: 200 });
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/health/authlete?extended=true', {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/health/authlete?extended=true',
+      {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      },
+    );
   });
 });

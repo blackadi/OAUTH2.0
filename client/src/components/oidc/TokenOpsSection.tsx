@@ -54,9 +54,7 @@ function TokenOpsSection() {
   const { loading, result, error, call } = useDiscriminatedAsyncCall();
   const [activeOp, setActiveOp] = useState<TokenOp | null>(null);
 
-  const [revClientId, setRevClientId] = useState(
-    readKey(SESSION_KEYS.activeClientId) || CLIENT_ID,
-  );
+  const [revClientId, setRevClientId] = useState(readKey(SESSION_KEYS.activeClientId) || CLIENT_ID);
   const [revClientSecret, setRevClientSecret] = useState(
     readKey(SESSION_KEYS.activeClientSecret) || '',
   );
@@ -92,10 +90,15 @@ function TokenOpsSection() {
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-warning-text">
           <p className="font-medium">No access token available</p>
           <p className="mt-1 text-xs text-warning-text/80">
-            Obtain a token first via the Grant Flows section (Authorization Code, Client Credentials, etc.), then return here.
+            Obtain a token first via the Grant Flows section (Authorization Code, Client
+            Credentials, etc.), then return here.
           </p>
           <Link to="/auth-flows">
-            <Button variant="outline" size="sm" className="mt-2 border-amber-500/50 text-warning-text hover:bg-amber-500/20">
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 border-amber-500/50 text-warning-text hover:bg-amber-500/20"
+            >
               Go to Grant Flows
             </Button>
           </Link>
@@ -134,12 +137,22 @@ function TokenOpsSection() {
                     const opts: { acrValues?: string; maxAge?: number } = {};
                     if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();
                     if (introspectMaxAge.trim()) opts.maxAge = Number(introspectMaxAge.trim());
-                    return tokenService.introspection(at!, adminId, adminSecret, Object.keys(opts).length ? opts : undefined);
+                    return tokenService.introspection(
+                      at!,
+                      adminId,
+                      adminSecret,
+                      Object.keys(opts).length ? opts : undefined,
+                    );
                   }
                   case 'introspect-std':
                     return tokenService.introspectionStandard(at!, adminId, adminSecret);
                   case 'revoke':
-                    return tokenService.revocation(at!, revClientId || undefined, revClientSecret || undefined, 'access_token');
+                    return tokenService.revocation(
+                      at!,
+                      revClientId || undefined,
+                      revClientSecret || undefined,
+                      'access_token',
+                    );
                 }
               });
             }}
@@ -153,26 +166,38 @@ function TokenOpsSection() {
 
       {activeOp === 'revoke' && (
         <div className="space-y-3">
-          <Input label="Revocation Client ID" value={revClientId} onChange={(e) => setRevClientId(e.target.value)} placeholder="The client the token belongs to" />
-          <Input label="Revocation Client Secret" type="password" value={revClientSecret} onChange={(e) => setRevClientSecret(e.target.value)} placeholder="Client secret for revocation auth" />
+          <Input
+            label="Revocation Client ID"
+            value={revClientId}
+            onChange={(e) => setRevClientId(e.target.value)}
+            placeholder="The client the token belongs to"
+          />
+          <Input
+            label="Revocation Client Secret"
+            type="password"
+            value={revClientSecret}
+            onChange={(e) => setRevClientSecret(e.target.value)}
+            placeholder="Client secret for revocation auth"
+          />
         </div>
       )}
 
       {(activeOp === 'introspect' || activeOp === 'introspect-std') && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints take this
-            deployment&apos;s admin credentials. Without them the server answers <code>401</code> and never
-            reaches Authlete.
+            RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints
+            take this deployment&apos;s admin credentials. Without them the server answers{' '}
+            <code>401</code> and never reaches Authlete.
           </p>
-          <AdminAuth
-          />
+          <AdminAuth />
         </div>
       )}
 
       {activeOp === 'introspect' && (
         <div className="space-y-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-          <p className="text-xs font-medium text-info-text">RFC 9470 Step-Up Authentication Validation</p>
+          <p className="text-xs font-medium text-info-text">
+            RFC 9470 Step-Up Authentication Validation
+          </p>
           <Input
             label="ACR Values (space-separated)"
             value={introspectAcrValues}
@@ -187,7 +212,8 @@ function TokenOpsSection() {
             placeholder="e.g. 3600"
           />
           <p className="text-[0.6rem] text-muted-foreground">
-            If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns <code>insufficient_user_authentication</code> with the required values.
+            If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns{' '}
+            <code>insufficient_user_authentication</code> with the required values.
           </p>
         </div>
       )}

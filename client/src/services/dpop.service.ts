@@ -18,10 +18,7 @@ export async function generateKeyPair(): Promise<DPoPKeyPair> {
 }
 
 export async function computeAth(accessToken: string): Promise<string> {
-  const hash = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(accessToken),
-  );
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(accessToken));
   return base64UrlEncode(hash);
 }
 

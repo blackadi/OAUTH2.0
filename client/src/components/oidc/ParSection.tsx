@@ -62,8 +62,7 @@ function ParSection() {
   const doParRequest = async () => {
     // basic -> Authorization: Basic header; post -> credentials in the JSON body, which the
     // server merges into the pushed `parameters`; none -> client_id only (public client).
-    const basicAuth =
-      authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined;
+    const basicAuth = authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined;
     // With Basic the secret travels in the header, so keep it out of the body entirely.
     const body =
       authMethod === 'basic'
@@ -139,22 +138,51 @@ function ParSection() {
   };
 
   return (
-    <SectionPanel title="Pushed Authorization Requests (RFC 9126)" description="Send authorization parameters via POST for a cleaner redirect">
+    <SectionPanel
+      title="Pushed Authorization Requests (RFC 9126)"
+      description="Send authorization parameters via POST for a cleaner redirect"
+    >
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {doc && <OperationDescription doc={doc} />}
 
       <div className="space-y-3">
-        <Textarea label="Parameters (URL-encoded)" rows={4} value={parameters} onChange={(e) => setParameters(e.target.value)} placeholder="response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3001/callback&scope=openid&state=...&code_challenge=..." />
+        <Textarea
+          label="Parameters (URL-encoded)"
+          rows={4}
+          value={parameters}
+          onChange={(e) => setParameters(e.target.value)}
+          placeholder="response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3001/callback&scope=openid&state=...&code_challenge=..."
+        />
 
         <div className="flex gap-2 flex-wrap">
-          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">Generate PKCE + State</Button>
-          {pkceVerifier && <span className="text-xs text-muted-foreground self-center truncate max-w-[200px]" title={pkceVerifier}>verifier: {pkceVerifier.slice(0, 20)}...</span>}
+          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">
+            Generate PKCE + State
+          </Button>
+          {pkceVerifier && (
+            <span
+              className="text-xs text-muted-foreground self-center truncate max-w-[200px]"
+              title={pkceVerifier}
+            >
+              verifier: {pkceVerifier.slice(0, 20)}...
+            </span>
+          )}
         </div>
 
-        <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
+        <Input
+          label="Client ID"
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          placeholder="your_client_id"
+        />
         {authMethod !== 'none' && (
-          <Input label="Client Secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
+          <Input
+            label="Client Secret"
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            placeholder="your_client_secret"
+          />
         )}
 
         <Select
@@ -173,7 +201,12 @@ function ParSection() {
         </p>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={useDpop} onChange={(e) => setUseDpop(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+          <input
+            type="checkbox"
+            checked={useDpop}
+            onChange={(e) => setUseDpop(e.target.checked)}
+            className="accent-blue-500 w-4 h-4"
+          />
           Use DPoP (sender-constrained token binding)
         </label>
 
@@ -183,9 +216,7 @@ function ParSection() {
           </Button>
           {parResult?.request_uri && (
             <>
-              <Button onClick={handleRedirectToAuthorize}>
-                Authorize (redirect)
-              </Button>
+              <Button onClick={handleRedirectToAuthorize}>Authorize (redirect)</Button>
               <Button variant="secondary" onClick={handlePushAndRedirect} loading={loading}>
                 Push + Authorize
               </Button>
@@ -204,8 +235,15 @@ function ParSection() {
             {parResult.request_uri}
           </p>
           <p className="text-xs text-muted-foreground">
-            Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp;
-            Auth URL: <a href={authUrl} className="text-info-text hover:underline" target="_blank" rel="noopener noreferrer">{authUrl}</a>
+            Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp; Auth URL:{' '}
+            <a
+              href={authUrl}
+              className="text-info-text hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {authUrl}
+            </a>
           </p>
         </div>
       )}

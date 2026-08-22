@@ -9,13 +9,23 @@ beforeEach(() => {
 });
 
 function ok(data: unknown) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) } as Response);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as Response);
 }
 
 describe('tokenService.exchangeCodeForToken', () => {
   it('sends POST form to TOKEN_ENDPOINT', async () => {
     mockFetch.mockResolvedValue(ok({ access_token: 'at1', refresh_token: 'rt1' }));
-    const result = await tokenService.exchangeCodeForToken({ grant_type: 'authorization_code', code: 'c1', redirect_uri: 'http://localhost:3001/callback', client_id: 'cid', code_verifier: 'v1' });
+    const result = await tokenService.exchangeCodeForToken({
+      grant_type: 'authorization_code',
+      code: 'c1',
+      redirect_uri: 'http://localhost:3001/callback',
+      client_id: 'cid',
+      code_verifier: 'v1',
+    });
     expect(result).toEqual({ access_token: 'at1', refresh_token: 'rt1' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/token', {
       method: 'POST',
@@ -161,10 +171,13 @@ describe('tokenService.discovery', () => {
     mockFetch.mockResolvedValue(ok({ issuer: 'https://example.com' }));
     const result = await tokenService.discovery();
     expect(result).toEqual({ issuer: 'https://example.com' });
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/.well-known/openid-configuration', {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/.well-known/openid-configuration',
+      {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      },
+    );
   });
 });
 

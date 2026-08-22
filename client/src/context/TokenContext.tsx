@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { SESSION_KEYS, readKey, writeKey, resetSession } from "@/services/session-keys";
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { SESSION_KEYS, readKey, writeKey, resetSession } from '@/services/session-keys';
 
 export interface TokenSet {
   access_token?: string;
@@ -77,6 +77,6 @@ export function TokenProvider({ children }: { children: ReactNode }) {
 
 export function useToken(): TokenContextValue {
   const ctx = useContext(TokenContext);
-  if (!ctx) throw new Error("useToken must be used within TokenProvider");
+  if (!ctx) throw new Error('useToken must be used within TokenProvider');
   return ctx;
 }

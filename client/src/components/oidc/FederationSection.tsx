@@ -44,7 +44,10 @@ function FederationSection() {
   };
 
   return (
-    <SectionPanel title="OpenID Federation 1.0" description="Entity configuration and registration endpoints for OIDC Federation">
+    <SectionPanel
+      title="OpenID Federation 1.0"
+      description="Entity configuration and registration endpoints for OIDC Federation"
+    >
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={FEDERATION_OPS} value={activeOp} onChange={setActiveOp} />
@@ -54,9 +57,15 @@ function FederationSection() {
       {activeOp === 'configuration' && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Fetch the entity configuration JWT for this authorization server. This endpoint is public (no auth required).
+            Fetch the entity configuration JWT for this authorization server. This endpoint is
+            public (no auth required).
           </p>
-          <Button onClick={() => handleCall(() => federationService.getConfiguration())} loading={loading}>Fetch Configuration</Button>
+          <Button
+            onClick={() => handleCall(() => federationService.getConfiguration())}
+            loading={loading}
+          >
+            Fetch Configuration
+          </Button>
         </div>
       )}
 
@@ -82,9 +91,7 @@ function FederationSection() {
             onClick={() =>
               handleCall(() =>
                 federationService.register(
-                  entityConfiguration
-                    ? { entityConfiguration }
-                    : { trustChain },
+                  entityConfiguration ? { entityConfiguration } : { trustChain },
                   auth,
                 ),
               )

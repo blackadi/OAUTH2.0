@@ -54,7 +54,9 @@ function DiscoverySection() {
 
       {activeOp && doc && <OperationDescription doc={doc} />}
 
-      {result ? <JsonBlock data={result} label={activeOp === 'jwks' ? 'JWKS' : 'Discovery Document'} /> : null}
+      {result ? (
+        <JsonBlock data={result} label={activeOp === 'jwks' ? 'JWKS' : 'Discovery Document'} />
+      ) : null}
     </SectionPanel>
   );
 }

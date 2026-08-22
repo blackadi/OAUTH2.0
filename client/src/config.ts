@@ -1,18 +1,9 @@
-export const API_BASE_URL = getEnvVar(
-  "VITE_API_BASE_URL",
-  "http://localhost:3000"
-);
+export const API_BASE_URL = getEnvVar('VITE_API_BASE_URL', 'http://localhost:3000');
 
-export const CLIENT_ID = getEnvVar("VITE_CLIENT_ID", "your_client_id");
-export const CLIENT_SECRET = getEnvVar(
-  "VITE_CLIENT_SECRET",
-  "your_client_secret"
-);
-export const REDIRECT_URI = getEnvVar(
-  "VITE_REDIRECT_URI",
-  "http://localhost:3001/callback"
-);
-export const DEFAULT_SCOPES = getEnvVar("VITE_SCOPES", "openid profile email");
+export const CLIENT_ID = getEnvVar('VITE_CLIENT_ID', 'your_client_id');
+export const CLIENT_SECRET = getEnvVar('VITE_CLIENT_SECRET', 'your_client_secret');
+export const REDIRECT_URI = getEnvVar('VITE_REDIRECT_URI', 'http://localhost:3001/callback');
+export const DEFAULT_SCOPES = getEnvVar('VITE_SCOPES', 'openid profile email');
 
 export const AUTHORIZATION_ENDPOINT = `${API_BASE_URL}/api/authorization`;
 export const TOKEN_ENDPOINT = `${API_BASE_URL}/api/token`;
@@ -101,13 +92,13 @@ export const HEALTH_ALL_ENDPOINT = `${API_BASE_URL}/api/health/all`;
 export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;
 
 export const DEV_SERVER = {
-  port: parseInt(getEnvVar("VITE_DEV_CLIENT_PORT", "3001")),
-  host: getEnvVar("VITE_DEV_CLIENT_HOST", "localhost"),
+  port: parseInt(getEnvVar('VITE_DEV_CLIENT_PORT', '3001')),
+  host: getEnvVar('VITE_DEV_CLIENT_HOST', 'localhost'),
 };
 
 export const PROD_CONFIG = {
-  apiBaseUrl: getEnvVar("VITE_PROD_API_BASE_URL", API_BASE_URL),
-  redirectUri: getEnvVar("VITE_PROD_REDIRECT_URI", REDIRECT_URI),
+  apiBaseUrl: getEnvVar('VITE_PROD_API_BASE_URL', API_BASE_URL),
+  redirectUri: getEnvVar('VITE_PROD_REDIRECT_URI', REDIRECT_URI),
 };
 
 /**

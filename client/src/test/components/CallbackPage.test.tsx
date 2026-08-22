@@ -90,7 +90,9 @@ describe('RFC 9207 iss', () => {
     sessionStorage.setItem('oauth_state', 'same');
     sessionStorage.setItem('pkce_code_verifier', 'v1');
     at('?code=abc&state=same&iss=https%3A%2F%2Fevil.example');
-    expect(await screen.findByText(/not the server this app is configured for/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/not the server this app is configured for/i),
+    ).toBeInTheDocument();
     expect(exchange).not.toHaveBeenCalled();
   });
 
@@ -118,7 +120,9 @@ describe('authorization errors', () => {
   it('explains the error code rather than only printing it', async () => {
     at('?error=invalid_scope');
     // ErrorExplainer decodes it from the same string.
-    expect(await screen.findByText(/registered on the service and requestable/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/registered on the service and requestable/i),
+    ).toBeInTheDocument();
   });
 });
 
@@ -139,7 +143,10 @@ describe('a successful exchange', () => {
   it('stores the tokens and inspects the ID token', async () => {
     // A structurally valid JWT — the inspector decodes it; verification is a separate, explicit step.
     const header = btoa(JSON.stringify({ alg: 'ES256', typ: 'JWT' })).replace(/=+$/, '');
-    const payload = btoa(JSON.stringify({ sub: 'alice', iss: 'http://localhost:3000' })).replace(/=+$/, '');
+    const payload = btoa(JSON.stringify({ sub: 'alice', iss: 'http://localhost:3000' })).replace(
+      /=+$/,
+      '',
+    );
     vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({
       access_token: 'at-1',
       id_token: `${header}.${payload}.sig`,

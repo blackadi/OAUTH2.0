@@ -50,7 +50,10 @@ describe('hydration', () => {
 
 describe('isDpopBound', () => {
   it('is false for a bearer token', () => {
-    writeKey(SESSION_KEYS.tokenResponse, JSON.stringify({ access_token: 'a', token_type: 'Bearer' }));
+    writeKey(
+      SESSION_KEYS.tokenResponse,
+      JSON.stringify({ access_token: 'a', token_type: 'Bearer' }),
+    );
     mount();
     expect(screen.getByTestId('bound')).toHaveTextContent('false');
   });

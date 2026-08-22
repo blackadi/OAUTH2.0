@@ -1,7 +1,4 @@
-import {
-  FEDERATION_CONFIGURATION_ENDPOINT,
-  FEDERATION_REGISTRATION_ENDPOINT,
-} from '@/config';
+import { FEDERATION_CONFIGURATION_ENDPOINT, FEDERATION_REGISTRATION_ENDPOINT } from '@/config';
 import { http } from './http';
 
 async function getConfiguration(): Promise<unknown> {

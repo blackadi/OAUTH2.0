@@ -22,7 +22,14 @@ interface TabBarProps<T extends string> {
  * `role="tablist"` plus `aria-selected` gives that for free, and arrow-key navigation is what a tab list
  * is expected to do.
  */
-function TabBar<T extends string>({ options, value, onChange, disabled, className, label }: TabBarProps<T>) {
+function TabBar<T extends string>({
+  options,
+  value,
+  onChange,
+  disabled,
+  className,
+  label,
+}: TabBarProps<T>) {
   const move = (event: React.KeyboardEvent, index: number) => {
     const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
     if (!delta) return;

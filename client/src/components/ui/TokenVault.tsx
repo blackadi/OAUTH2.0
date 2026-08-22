@@ -17,12 +17,23 @@ function TokenVault() {
   const [inspecting, setInspecting] = useState<string | null>(null);
   const { copy } = useClipboard();
 
-  const hasTokens = tokenSet && (tokenSet.access_token || tokenSet.refresh_token || tokenSet.id_token);
+  const hasTokens =
+    tokenSet && (tokenSet.access_token || tokenSet.refresh_token || tokenSet.id_token);
 
   const tokenEntries = [
     // A refresh token is opaque by design, so it gets no inspector.
-    { label: 'Access Token', value: tokenSet?.access_token, badge: 'success' as const, inspectable: true },
-    { label: 'Refresh Token', value: tokenSet?.refresh_token, badge: 'info' as const, inspectable: false },
+    {
+      label: 'Access Token',
+      value: tokenSet?.access_token,
+      badge: 'success' as const,
+      inspectable: true,
+    },
+    {
+      label: 'Refresh Token',
+      value: tokenSet?.refresh_token,
+      badge: 'info' as const,
+      inspectable: false,
+    },
     { label: 'ID Token', value: tokenSet?.id_token, badge: 'default' as const, inspectable: true },
   ];
 
@@ -37,14 +48,15 @@ function TokenVault() {
             <Key className="h-3 w-3" />
           </div>
           <span className="text-xs font-semibold text-foreground">Token Vault</span>
-          {hasTokens && (
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-          )}
+          {hasTokens && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
         </div>
         <div className="flex items-center gap-1">
           {hasTokens && (
             <button
-              onClick={(e) => { e.stopPropagation(); clearTokens(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                clearTokens();
+              }}
               className="p-1 rounded text-muted-foreground hover:text-danger-text hover:bg-red-500/10 transition-colors cursor-pointer bg-transparent border-none"
               aria-label="Clear tokens"
             >
@@ -82,19 +94,21 @@ function TokenVault() {
                         Copy
                       </button>
                     </div>
-                    <div className={cn(
-                      'font-mono text-[0.65rem] leading-relaxed text-muted-foreground break-all',
-                      'bg-code/50 rounded-md p-2 border border-border/30',
-                    )}>
-                      {entry.value.length > 100
-                        ? `${entry.value.slice(0, 100)}…`
-                        : entry.value}
+                    <div
+                      className={cn(
+                        'font-mono text-[0.65rem] leading-relaxed text-muted-foreground break-all',
+                        'bg-code/50 rounded-md p-2 border border-border/30',
+                      )}
+                    >
+                      {entry.value.length > 100 ? `${entry.value.slice(0, 100)}…` : entry.value}
                     </div>
                     {entry.inspectable && (
                       <div className="flex gap-1">
                         <button
                           onClick={() =>
-                            setInspecting((current) => (current === entry.label ? null : entry.label))
+                            setInspecting((current) =>
+                              current === entry.label ? null : entry.label,
+                            )
                           }
                           className="flex items-center gap-1 text-[0.6rem] text-accent-text hover:text-accent-text transition-colors cursor-pointer bg-transparent border-none"
                         >

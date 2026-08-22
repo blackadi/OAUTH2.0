@@ -46,7 +46,12 @@ async function clientCredentials(
   scope: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'client_credentials', scope });
-  return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+  return http.postBasicAuth(
+    TOKEN_ENDPOINT,
+    params,
+    clientId,
+    clientSecret,
+  ) as Promise<TokenResponse>;
 }
 
 async function passwordGrant(
@@ -57,7 +62,12 @@ async function passwordGrant(
   scope: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'password', username, password, scope });
-  return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+  return http.postBasicAuth(
+    TOKEN_ENDPOINT,
+    params,
+    clientId,
+    clientSecret,
+  ) as Promise<TokenResponse>;
 }
 
 async function refreshToken(
@@ -66,7 +76,12 @@ async function refreshToken(
   clientSecret: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken });
-  return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+  return http.postBasicAuth(
+    TOKEN_ENDPOINT,
+    params,
+    clientId,
+    clientSecret,
+  ) as Promise<TokenResponse>;
 }
 
 async function jwtBearerGrant(
@@ -81,7 +96,12 @@ async function jwtBearerGrant(
   });
   if (scope) params.append('scope', scope);
   if (clientId && clientSecret) {
-    return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+    return http.postBasicAuth(
+      TOKEN_ENDPOINT,
+      params,
+      clientId,
+      clientSecret,
+    ) as Promise<TokenResponse>;
   }
   if (clientId) params.append('client_id', clientId);
   return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;

@@ -9,13 +9,20 @@ beforeEach(() => {
 });
 
 function ok(data: unknown) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) } as Response);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as Response);
 }
 
 describe('deviceService.authorization', () => {
   it('sends POST to device authorization endpoint', async () => {
     mockFetch.mockResolvedValue(ok({ deviceCode: 'dc1', userCode: 'uc1' }));
-    const result = await deviceService.authorization({ parameters: 'client_id=123&scope=openid', clientId: 'cid' });
+    const result = await deviceService.authorization({
+      parameters: 'client_id=123&scope=openid',
+      clientId: 'cid',
+    });
     expect(result).toEqual({ deviceCode: 'dc1', userCode: 'uc1' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/device/authorization', {
       method: 'POST',

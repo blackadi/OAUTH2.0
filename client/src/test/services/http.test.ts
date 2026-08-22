@@ -39,7 +39,9 @@ describe('http.postForm', () => {
 
   it('throws on error response', async () => {
     mockFetch.mockResolvedValue(errorResponse(400, 'bad request'));
-    await expect(http.postForm('https://example.com/token', new URLSearchParams())).rejects.toThrow('bad request');
+    await expect(http.postForm('https://example.com/token', new URLSearchParams())).rejects.toThrow(
+      'bad request',
+    );
   });
 });
 
@@ -47,7 +49,12 @@ describe('http.postBasicAuth', () => {
   it('sends POST with Basic auth header', async () => {
     mockFetch.mockResolvedValue(okResponse({ access_token: 'abc' }));
     const params = new URLSearchParams({ grant_type: 'client_credentials' });
-    const result = await http.postBasicAuth('https://example.com/token', params, 'client1', 'secret1');
+    const result = await http.postBasicAuth(
+      'https://example.com/token',
+      params,
+      'client1',
+      'secret1',
+    );
     expect(result).toEqual({ access_token: 'abc' });
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/token', {
       method: 'POST',

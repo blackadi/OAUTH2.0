@@ -12,7 +12,15 @@ interface SectionPanelProps {
   loading?: boolean;
 }
 
-function SectionPanel({ title, description, icon, children, className, actions, loading }: SectionPanelProps) {
+function SectionPanel({
+  title,
+  description,
+  icon,
+  children,
+  className,
+  actions,
+  loading,
+}: SectionPanelProps) {
   return (
     <div className={cn('rounded-xl border border-border bg-card overflow-hidden', className)}>
       <div className="px-5 pt-5 pb-3 space-y-1.5">
@@ -33,9 +41,7 @@ function SectionPanel({ title, description, icon, children, className, actions, 
           {actions && <div className="shrink-0">{actions}</div>}
         </div>
       </div>
-      <div className="px-5 pb-5">
-        {loading ? <SkeletonCard /> : children}
-      </div>
+      <div className="px-5 pb-5">{loading ? <SkeletonCard /> : children}</div>
     </div>
   );
 }
