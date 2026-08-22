@@ -22,6 +22,12 @@ A comprehensive interactive debugging dashboard for learning, testing, and debug
   - [11. Discovery](#11-discovery)
   - [12. Health Checks](#12-health-checks)
   - [13. Token Vault](#13-token-vault)
+  - [14. Step-Up Authentication (RFC 9470)](#14-step-up-authentication-rfc-9470)
+  - [15. JAR — JWT-Secured Authorization Requests (RFC 9101)](#15-jar--jwt-secured-authorization-requests-rfc-9101)
+  - [16. OIDC Federation](#16-oidc-federation)
+  - [17. FAPI 2.0 / DPoP](#17-fapi-20--dpop)
+  - [18. MCP — Model Context Protocol](#18-mcp--model-context-protocol)
+  - [19. Verifiable Credentials (OID4VCI)](#19-verifiable-credentials-oid4vci)
 - [Server Status Indicator](#server-status-indicator)
 - [Key Distinctions](#key-distinctions)
 - [Troubleshooting](#troubleshooting)
@@ -164,7 +170,140 @@ Each section prominently displays:
 3. **Request preview** — HTTP method, URL, headers, body with one-click cURL copy
 4. **Response panel** — formatted JSON with copy button
 
-### Server Status Indicator
+#### 14. Step-Up Authentication (RFC 9470)
+
+Some operations need stronger proof than others. Reading your balance is not the same as moving money,
+and a token that was good enough for the first should not automatically be good enough for the second.
+
+RFC 9470 gives the resource server a way to say so. When the token's authentication is too weak or too
+old, it answers `insufficient_user_authentication` and names what it needs — `acr_values`, or a
+`max_age`. The client then re-authorizes asking for exactly that.
+
+This section drives the exchange through token introspection. Enter an ACR the deployment cannot
+satisfy — it only ever authenticates with `pwd` — and you get the challenge back with the token's
+current `acr` and `auth_time` beside what was demanded, plus a ready-made re-authorization URL.
+
+> **`max_age` only fails on a non-interactive path.** Straight after a login the user has *just*
+> authenticated, so any maximum age is satisfied by construction. To see it fail, combine it with
+> `prompt=none`.
+
+To make an ACR *essential* rather than merely preferred, request it through the `claims` parameter —
+`{"id_token":{"acr":{"essential":true,"values":["…"]}}}`. A voluntary request that cannot be met is
+quietly ignored; an essential one fails the authorization.
+
+---
+
+### 15. JAR — JWT-Secured Authorization Requests (RFC 9101)
+
+An ordinary authorization request travels as query parameters through the user's browser, where anything
+in the chain can read or alter it. JAR puts the whole request inside a **signed JWT** instead, so the
+authorization server can verify it arrived as the client sent it.
+
+Paste a signed request object and this section shows you how Authlete parsed it: the action, the result
+code, the scopes it asked for, and the response content.
+
+> **This endpoint is a debugging surface, not part of any flow.** No RFC defines
+> `POST /api/jar/process` — it exists so you can see the parse result. It requires admin credentials and
+> returns an allowlist of five fields, because the full upstream response carries a **ticket**, which is
+> a credential.
+
+Common failures worth recognising: `[A005328]` means a key was found and the signature did not verify —
+the bytes changed. `[A005336]` means the algorithm does not match what the client is pinned to.
+`[A008311]` means the service requires signed request objects and this one was not signed.
+
+---
+
+### 16. OIDC Federation
+
+Normally a client is registered with an authorization server in advance — someone creates it, and a
+`client_id` and secret come back. Federation replaces that with a **trust chain**: the client presents
+signed statements leading up to an authority the server already trusts, and the server derives the
+client's metadata from them.
+
+Two operations here:
+
+- **Entity Configuration** — this deployment's own signed Entity Statement, the self-issued JWT
+  declaring who it is, which keys it signs with, and what roles it plays. Its `iss` and `sub` are the
+  same value: an entity describing itself. Decode it in the JWT inspector to read the metadata a trust
+  anchor would see.
+- **Registration** — register by presenting a chain rather than by pre-agreed credentials.
+
+---
+
+### 17. FAPI 2.0 / DPoP
+
+FAPI is the profile banks and other high-value APIs use. It does not invent new protocol so much as
+close the options: PAR instead of a front-channel request, sender-constrained tokens instead of bearer
+tokens, and no refresh-token rotation.
+
+This section does two jobs.
+
+**Report the posture.** `GET /api/fapi/config` reads the *live* Authlete service configuration —
+`fapiModes`, the supported client-authentication methods, whether PAR is required, whether PKCE is
+required, whether refresh tokens rotate. It reports what the service actually says, not what anyone
+hoped it says.
+
+**Exercise DPoP.** Generate a P-256 key, build a proof by hand, and inspect it. Then run the four-step
+test flow: key generation → PAR with `private_key_jwt` → authorize → token exchange with a proof.
+
+> **Three DPoP details that account for most failures.** The proof's `htu` excludes the query string
+> (RFC 9449 §4.2) — include it and every request with a query fails. When a proof accompanies an access
+> token it needs `ath`, the base64url SHA-256 of that token, and **not** `sub`. And for ES256 the JWS
+> signature is raw R‖S, not DER — `crypto.subtle.sign()` already returns the right shape.
+
+A token issued this way comes back as `token_type: DPoP`, and from then on it must be presented with the
+`DPoP` scheme and a proof. Presenting it as `Bearer` is refused — RFC 9449 §7.2 requires that, and you
+will see `[A089311]` at UserInfo or `[A281305]` at Grant Management. The Token Operations and Grant
+Management sections now detect a bound token and switch scheme for you.
+
+---
+
+### 18. MCP — Model Context Protocol
+
+MCP is how AI tools get delegated access to a service, and its authorization is OAuth 2.1 — the same
+authorization-code-plus-PKCE flow, with two additions that matter.
+
+**Resource indicators (RFC 8707).** The `resource` parameter names which API the token is for, and it
+must be sent on **both** the authorization request and the token request. Sending it only on the first
+is the easy half and the useless half on its own: the token request is what narrows the audience of the
+token actually issued, and nothing in the response tells you it was skipped. Verify with introspection.
+
+**CIMD — Client ID Metadata Documents.** Instead of registering, a client can use an **HTTPS URL** as
+its `client_id`; the authorization server fetches that URL and reads the metadata from it. Authlete does
+this entirely server-side when `clientIdMetadataDocumentSupported` is on, so there is no client code —
+the URL is simply the `client_id`.
+
+The six-step wizard walks the whole thing: discover the AS, register a client, authorize with PKCE and a
+resource indicator, exchange the code, fetch UserInfo, and introspect the result.
+
+---
+
+### 19. Verifiable Credentials (OID4VCI)
+
+An access token says *what you may do*. A verifiable credential says *who you are*, in a form you can
+carry to somebody who was not involved in issuing it — a digital driving licence, a diploma, a
+membership card.
+
+This section covers the issuance side across three groups, and the split is by authentication:
+
+| Group | Endpoints | Auth |
+|---|---|---|
+| Discovery | metadata, JWT issuer, JWKS, well-known | public |
+| Offers | offer/create, offer/info | admin credentials |
+| Credential | credential/issue, batch, deferred/issue | an access token |
+
+> **The deferred path is the interesting one.** Authlete splits authentication away from the operation
+> there: `/vci/deferred/issue` takes an `order` and no access token, so the token is validated by a
+> *separate* `/vci/deferred/parse` call. This server therefore makes two calls and issues only if the
+> parse succeeds — and takes the credential identifier from the parse result rather than from the
+> request body, so a valid token cannot name somebody else's pending request.
+
+Issuance itself needs a wallet, which this repo does not contain. What you can exercise here is
+everything up to that point.
+
+---
+
+## Server Status Indicator
 
 The header badge shows the live connection status to the Authlete server:
 

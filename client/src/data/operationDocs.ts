@@ -53,6 +53,70 @@ const docs: Record<string, Record<string, OpDoc>> = {
       returns: 'JSON with a new access_token, optionally a new refresh_token, expires_in, and scope.',
       tips: 'Use this to maintain long-lived sessions. Authlete can be configured to keep or rotate refresh tokens on each use.',
     },
+    'jwt_bearer': {
+      title: 'JWT Bearer Grant (RFC 7523)',
+      description: 'Exchanges a signed JWT assertion for an access token, with no user interaction and no client secret in the request. The assertion proves the caller holds a key the authorization server already trusts, which makes it the usual choice for service-to-service access where a shared secret would be awkward to rotate.',
+      params: [
+        { name: 'Signed JWT Assertion', desc: 'A JWT signed with a key registered to the client. Must carry `iss`, `sub`, `aud` and `exp`.' },
+        { name: 'Scope', desc: 'Optional. Space-separated scopes for the issued token.' },
+        { name: 'Client ID / Secret', desc: 'Optional. Supplying both authenticates the client via HTTP Basic in addition to the assertion.' },
+      ],
+      returns: 'JSON with access_token, token_type and expires_in.',
+      tips: 'Two mistakes account for most failures here. The assertion\'s `aud` must identify the **authorization server** — its issuer identifier or its token endpoint — and not the API you intend to call; naming the API earns `[A314314]`. And `exp` is required: without it Authlete refuses the assertion with `[A314305]` before any verification step runs. The audience you want for the *token* comes from the `resource` parameter instead.',
+    },
+  },
+  'federation': {
+    'configuration': {
+      title: 'Federation Entity Configuration',
+      description: 'Serves this entity\'s signed Entity Statement — the self-issued JWT that declares who it is, which keys it signs with, and which roles it plays in a federation. A trust chain is assembled from statements like this one.',
+      params: [],
+      returns: 'A signed JWT with media type `application/entity-statement+jwt`, whose claims include `iss`, `sub`, `jwks` and `metadata`.',
+      tips: 'The `iss` and `sub` of an Entity Configuration are the same value — an entity describing itself. Decode it in the JWT inspector to see the metadata a trust anchor would read.',
+    },
+    'registration': {
+      title: 'Federation Registration',
+      description: 'Registers a client by presenting a trust chain rather than by pre-agreed credentials. The authorization server validates the chain up to a trust anchor it already trusts, and derives the client metadata from it.',
+      params: [
+        { name: 'Entity Statement / Trust Chain', desc: 'The signed statement chain to validate.' },
+      ],
+      returns: 'The resulting client registration, or an error describing where chain validation stopped.',
+      tips: 'This is automatic client registration without a registration secret: trust comes from the chain, not from something the client was told in advance.',
+    },
+  },
+  'grant-mgmt': {
+    'query': {
+      title: 'Query a Grant',
+      description: 'Reads what a grant currently covers — its scopes, claims and authorization details — using an access token issued under that grant.',
+      params: [
+        { name: 'Access Token', desc: 'A token issued under the grant being queried. It must be the grant\'s own token: this server introspects it and refuses if the grant it was issued under is not the one named.' },
+        { name: 'Grant ID', desc: 'The `grant_id` returned in a token response after a `grant_management_action`.' },
+      ],
+      returns: 'JSON describing the grant: scopes, claims, and authorization details.',
+      tips: 'Present the token with the scheme it requires — a sender-constrained token must use `DPoP` and carry a proof, or Authlete refuses it with `[A281305]`. The ownership check runs *before* the vendor call, so a 403 means "not your grant" while a 401 means the token itself was not accepted.',
+    },
+    'revoke': {
+      title: 'Revoke a Grant',
+      description: 'Deletes a grant and everything issued under it. Broader than revoking one token: the whole standing permission goes.',
+      params: [
+        { name: 'Access Token', desc: 'A token issued under the grant being revoked.' },
+        { name: 'Grant ID', desc: 'The grant to delete.' },
+      ],
+      returns: '204 with no body on success.',
+      tips: 'Irreversible. After this the subject cannot find its own grant, and every refresh token under it is dead.',
+    },
+  },
+  'step-up': {
+    'introspect': {
+      title: 'Step-Up Authentication Challenge (RFC 9470)',
+      description: 'Asks whether a token\'s authentication is strong enough and recent enough for a given requirement. When it is not, the resource answers `insufficient_user_authentication` with the ACR values or maximum age it needs, and the client re-authorizes to satisfy them.',
+      params: [
+        { name: 'Required ACR Values', desc: 'Space-separated Authentication Context Class References the resource insists on.' },
+        { name: 'Max Authentication Age', desc: 'Maximum seconds since the End-User actively authenticated.' },
+        { name: 'Admin Client ID / Secret', desc: 'The introspection endpoint is protected (RFC 7662 §2.1), so this deployment\'s management credentials are required.' },
+      ],
+      returns: 'On success, the token\'s introspection result. On a challenge, 403 with `insufficient_user_authentication` plus `acr_values` or `max_age`, and the token\'s current `acr` and `auth_time`.',
+      tips: 'This deployment only ever satisfies ACR `pwd`, so asking for anything else triggers a challenge. `max_age` can only genuinely fail on a non-interactive path — after an interactive login the user has just authenticated, so any maximum age is satisfied by construction. To make an ACR *essential* rather than merely preferred, request it through the `claims` parameter.',
+    },
   },
   'token-ops': {
     'userinfo': {

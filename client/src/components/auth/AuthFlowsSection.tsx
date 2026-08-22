@@ -19,6 +19,7 @@ import { AuthorizeRequestBuilder } from './AuthorizeRequestBuilder';
 import { getDoc } from '@/data/operationDocs';
 import { KeyRound, ArrowRightLeft, LogIn, RefreshCw, FileText } from 'lucide-react';
 import type { TokenResponse } from '@/types';
+import { SESSION_KEYS, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
 
 type GrantType = 'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
 
@@ -108,8 +109,8 @@ const AuthFlowsSection: React.FC = () => {
   const doc = getDoc('auth-flows', grantType);
 
   const saveClientCredentials = (clientId: string, clientSecret: string) => {
-    sessionStorage.setItem('active_client_id', clientId);
-    if (clientSecret) sessionStorage.setItem('active_client_secret', clientSecret);
+    writeKey(SESSION_KEYS.activeClientId, clientId);
+    if (clientSecret) writeKey(SESSION_KEYS.activeClientSecret, clientSecret);
   };
 
   const handleCall = async (
@@ -138,16 +139,16 @@ const AuthFlowsSection: React.FC = () => {
     setAcUseDpop(enabled);
     if (!enabled) {
       setAcDpopThumbprint(undefined);
-      sessionStorage.removeItem('dpop_private_key');
-      sessionStorage.removeItem('dpop_public_key');
-      sessionStorage.removeItem('dpop_kid');
+      // Also drops the cached `DPoP-Nonce`: a nonce is bound to the key that was proving possession,
+      // so keeping it past the key it belonged to can only mislead the next request.
+      clearDpopKeys();
       return;
     }
     try {
       const pair = await generateKeyPair();
-      sessionStorage.setItem('dpop_private_key', JSON.stringify(pair.privateKey));
-      sessionStorage.setItem('dpop_public_key', JSON.stringify(pair.publicKey));
-      sessionStorage.setItem('dpop_kid', pair.kid);
+      writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
+      writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
+      writeKey(SESSION_KEYS.dpopKid, pair.kid);
       setAcDpopThumbprint(pair.kid);
     } catch (e: unknown) {
       setAcUseDpop(false);
@@ -164,14 +165,14 @@ const AuthFlowsSection: React.FC = () => {
    * exchange is *meant* to fail.
    */
   const sendAuthorizeRequest = (url: string, ctx: { codeVerifier: string | null; state: string | null }) => {
-    if (ctx.codeVerifier) sessionStorage.setItem('pkce_code_verifier', ctx.codeVerifier);
-    else sessionStorage.removeItem('pkce_code_verifier');
+    if (ctx.codeVerifier) writeKey(SESSION_KEYS.pkceVerifier, ctx.codeVerifier);
+    else removeKey(SESSION_KEYS.pkceVerifier);
 
-    if (ctx.state) sessionStorage.setItem('oauth_state', ctx.state);
-    else sessionStorage.removeItem('oauth_state');
+    if (ctx.state) writeKey(SESSION_KEYS.oauthState, ctx.state);
+    else removeKey(SESSION_KEYS.oauthState);
 
-    sessionStorage.setItem('authz_client_id', acId);
-    if (acSecret) sessionStorage.setItem('authz_client_secret', acSecret);
+    writeKey(SESSION_KEYS.authzClientId, acId);
+    if (acSecret) writeKey(SESSION_KEYS.authzClientSecret, acSecret);
 
     window.location.href = url;
   };

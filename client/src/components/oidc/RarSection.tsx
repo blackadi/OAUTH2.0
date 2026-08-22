@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { SESSION_KEYS, readKey, writeKey } from '@/services/session-keys';
 
 const DEFAULT_RAR_JSON = JSON.stringify([
   {
@@ -37,17 +38,17 @@ function RarSection() {
   const [usePar, setUsePar] = useState(false);
   const [useDpop, setUseDpop] = useState(false);
   const [parResult, setParResult] = useState<ParSuccessResponse | null>(null);
-  const [pkceVerifier, setPkceVerifier] = useState(() => sessionStorage.getItem('pkce_code_verifier') || '');
+  const [pkceVerifier, setPkceVerifier] = useState(() => readKey(SESSION_KEYS.pkceVerifier) || '');
 
   const doc = getDoc('rar', 'push');
 
   const handleGeneratePkce = useCallback(async () => {
     try {
       const pair = await createPkcePair();
-      sessionStorage.setItem('pkce_code_verifier', pair.codeVerifier);
+      writeKey(SESSION_KEYS.pkceVerifier, pair.codeVerifier);
       setPkceVerifier(pair.codeVerifier);
       const state = crypto.randomUUID();
-      sessionStorage.setItem('oauth_state', state);
+      writeKey(SESSION_KEYS.oauthState, state);
       toast.success('PKCE + state generated and stored');
     } catch {
       toast.error('Failed to generate PKCE');
@@ -60,10 +61,10 @@ function RarSection() {
     params.set('redirect_uri', redirectUri);
     params.set('scope', scope);
 
-    const state = sessionStorage.getItem('oauth_state');
+    const state = readKey(SESSION_KEYS.oauthState);
     if (state) params.set('state', state);
 
-    const verifier = sessionStorage.getItem('pkce_code_verifier');
+    const verifier = readKey(SESSION_KEYS.pkceVerifier);
     if (verifier) {
       params.set('code_challenge_method', 'S256');
     }
@@ -83,12 +84,12 @@ function RarSection() {
     const body = { parameters, clientId, clientSecret };
 
     if (useDpop) {
-      let dpopKeyRaw = sessionStorage.getItem('dpop_private_key');
+      let dpopKeyRaw = readKey(SESSION_KEYS.dpopPrivateKey);
       if (!dpopKeyRaw) {
         const pair = await generateKeyPair();
-        sessionStorage.setItem('dpop_private_key', JSON.stringify(pair.privateKey));
-        sessionStorage.setItem('dpop_public_key', JSON.stringify(pair.publicKey));
-        sessionStorage.setItem('dpop_kid', pair.kid);
+        writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
+        writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
+        writeKey(SESSION_KEYS.dpopKid, pair.kid);
         dpopKeyRaw = JSON.stringify(pair.privateKey);
       }
       const dpopPrivateKey = JSON.parse(dpopKeyRaw);
@@ -143,7 +144,7 @@ function RarSection() {
       const storedParams = new URLSearchParams(params);
       if (!storedParams.has('code_challenge') && pkceVerifier) {
         const pair = await createPkcePair();
-        sessionStorage.setItem('pkce_code_verifier', pair.codeVerifier);
+        writeKey(SESSION_KEYS.pkceVerifier, pair.codeVerifier);
         storedParams.set('code_challenge', pair.codeChallenge);
         storedParams.set('code_challenge_method', 'S256');
       }

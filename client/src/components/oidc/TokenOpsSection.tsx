@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
-import { CLIENT_ID } from '@/config';
+import { createProof, computeAth } from '@/services/dpop.service';
+import type { JWK } from '@/services/crypto-utils';
+import { CLIENT_ID, USERINFO_ENDPOINT } from '@/config';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +15,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { AdminAuth } from '@/components/layout/AdminAuth';
+import { SESSION_KEYS, readKey, readJsonKey } from '@/services/session-keys';
 
 type TokenOp = 'userinfo' | 'introspect' | 'introspect-std' | 'revoke';
 
@@ -24,16 +27,37 @@ const OPS: { key: TokenOp; label: string }[] = [
 ];
 
 function TokenOpsSection() {
-  const { tokenSet } = useToken();
+  const { tokenSet, isDpopBound } = useToken();
   const at = tokenSet?.access_token;
+  const dpopKey = readJsonKey<JWK>(SESSION_KEYS.dpopPrivateKey);
+
+  /**
+   * UserInfo is a protected resource, so the scheme is decided by the token, not by preference.
+   *
+   * This called `tokenService.userInfo()` unconditionally, which sends `Authorization: Bearer`. RFC
+   * 9449 §7.1 gives a sender-constrained token no bearer option and §7.2 requires the refusal;
+   * Authlete enforces it with `[A089311]`. Since the Grant Flows section used to mint a DPoP-bound
+   * token whether you asked or not, the app's own headline flow produced a token this button could not
+   * use — failing with a vendor code and no explanation.
+   *
+   * `ath` is REQUIRED when a proof accompanies an access token (§7.1) — and it is `ath`, not `sub`.
+   */
+  const fetchUserinfo = async () => {
+    if (!isDpopBound || !dpopKey) return tokenService.userInfo(at!);
+    const ath = await computeAth(at!);
+    const { data } = await tokenService.userInfoWithDpop(at!, (nonce) =>
+      createProof(dpopKey, 'POST', USERINFO_ENDPOINT, ath, nonce),
+    );
+    return data;
+  };
   const { loading, result, error, call } = useDiscriminatedAsyncCall();
   const [activeOp, setActiveOp] = useState<TokenOp | null>(null);
 
   const [revClientId, setRevClientId] = useState(
-    sessionStorage.getItem('active_client_id') || CLIENT_ID,
+    readKey(SESSION_KEYS.activeClientId) || CLIENT_ID,
   );
   const [revClientSecret, setRevClientSecret] = useState(
-    sessionStorage.getItem('active_client_secret') || '',
+    readKey(SESSION_KEYS.activeClientSecret) || '',
   );
 
   // RFC 9470: Step-up auth validation inputs for Authlete introspection
@@ -78,6 +102,15 @@ function TokenOpsSection() {
       {at && (
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-emerald-300">
           Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
+          {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
+              so it is stated rather than left to be discovered. */}
+          <span className="ml-2 text-emerald-200/80">
+            {isDpopBound
+              ? dpopKey
+                ? '· sender-constrained, so UserInfo is called with the DPoP scheme and a proof'
+                : '· sender-constrained, but no DPoP key is in this session — UserInfo will be refused'
+              : '· bearer token, presented with the Bearer scheme'}
+          </span>
         </div>
       )}
 
@@ -93,7 +126,7 @@ function TokenOpsSection() {
               handleCall(op.key, () => {
                 switch (op.key) {
                   case 'userinfo':
-                    return tokenService.userInfo(at!);
+                    return fetchUserinfo();
                   case 'introspect': {
                     const opts: { acrValues?: string; maxAge?: number } = {};
                     if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();

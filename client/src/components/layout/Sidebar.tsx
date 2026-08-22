@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import type { SectionGroup } from '@/App';
 
@@ -7,8 +7,14 @@ interface SidebarProps {
   header?: React.ReactNode;
 }
 
+/**
+ * Navigation uses links, not buttons.
+ *
+ * These were `<button onClick={navigate}>`, which works with a mouse and loses everything else a link
+ * gives you: no middle-click, no open-in-new-tab, no copy-link, no `aria-current` for the page you are
+ * on, and a screen reader announcing twenty "buttons" where a list of links was meant.
+ */
 function Sidebar({ groups, header }: SidebarProps) {
-  const navigate = useNavigate();
   const location = useLocation();
   const activePath = location.pathname;
 
@@ -22,11 +28,12 @@ function Sidebar({ groups, header }: SidebarProps) {
             </div>
             <div className="space-y-0.5">
               {group.sections.map((section) => (
-                <button
+                <Link
                   key={section.id}
-                  onClick={() => navigate(section.path)}
+                  to={section.path}
+                  aria-current={activePath === section.path ? 'page' : undefined}
                   className={cn(
-                    'w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-left cursor-pointer border-none',
+                    'w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-left cursor-pointer border-none no-underline',
                     activePath === section.path
                       ? 'bg-indigo-500/10 text-indigo-300 font-medium shadow-sm shadow-indigo-500/5'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
@@ -39,7 +46,7 @@ function Sidebar({ groups, header }: SidebarProps) {
                     {section.icon}
                   </span>
                   <span>{section.label}</span>
-                </button>
+                </Link>
               ))}
             </div>
           </div>

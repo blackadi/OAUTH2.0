@@ -14,6 +14,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Spinner } from '@/components/ui/Spinner';
 import type { TokenResponse } from '@/types';
+import { SESSION_KEYS, readKey, writeKey } from '@/services/session-keys';
 
 interface CallbackState {
   error: string | null;
@@ -68,7 +69,7 @@ const CallbackPage = () => {
        * Absence is now answered as "no", the same rule the server applies to an unknown `acr` and to
        * unset management credentials: an absent value selects the safest behaviour.
        */
-      const expectedState = sessionStorage.getItem('oauth_state');
+      const expectedState = readKey(SESSION_KEYS.oauthState);
       if (!expectedState) {
         setState({
           error:
@@ -112,18 +113,18 @@ const CallbackPage = () => {
         return;
       }
 
-      const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+      const codeVerifier = readKey(SESSION_KEYS.pkceVerifier);
       if (!codeVerifier) {
         setState({ error: 'Missing PKCE code verifier in session storage', loading: false, tokenResponse: null });
         return;
       }
 
       try {
-        const storedClientId = sessionStorage.getItem('authz_client_id') || CLIENT_ID;
+        const storedClientId = readKey(SESSION_KEYS.authzClientId) || CLIENT_ID;
         const redirectUri = getRedirectUri();
 
-        const dpopPrivateKeyRaw = sessionStorage.getItem('dpop_private_key');
-        const signingPrivateKeyRaw = sessionStorage.getItem('fapi_signing_private_key');
+        const dpopPrivateKeyRaw = readKey(SESSION_KEYS.dpopPrivateKey);
+        const signingPrivateKeyRaw = readKey(SESSION_KEYS.fapiSigningKey);
         let body: TokenResponse;
 
         if (dpopPrivateKeyRaw && signingPrivateKeyRaw) {
@@ -157,7 +158,7 @@ const CallbackPage = () => {
           // A factory, not a proof — see the note in the branch above.
           const dpopProof = (nonce?: string) =>
             createProof(privateKeyJwk, 'POST', TOKEN_ENDPOINT, undefined, nonce);
-          const storedSecret = sessionStorage.getItem('authz_client_secret') || CLIENT_SECRET;
+          const storedSecret = readKey(SESSION_KEYS.authzClientSecret) || CLIENT_SECRET;
           const result: TokenResponseWithNonce = await tokenService.exchangeCodeForTokenWithDpop(
             {
               grant_type: 'authorization_code',
@@ -171,7 +172,7 @@ const CallbackPage = () => {
           );
           body = result.tokenResponse;
         } else {
-          const storedSecret = sessionStorage.getItem('authz_client_secret') || CLIENT_SECRET;
+          const storedSecret = readKey(SESSION_KEYS.authzClientSecret) || CLIENT_SECRET;
           body = await tokenService.exchangeCodeForToken({
             grant_type: 'authorization_code',
             code,
@@ -183,7 +184,7 @@ const CallbackPage = () => {
         }
 
         setTokenSet(body);
-        sessionStorage.setItem('active_client_id', storedClientId);
+        writeKey(SESSION_KEYS.activeClientId, storedClientId);
 
         setState({ error: null, loading: false, tokenResponse: body });
         toast.success('Tokens obtained successfully');

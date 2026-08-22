@@ -16,6 +16,7 @@ import { generateSigningKeyPair, createClientAssertion, getJwkSetDisplay, type S
 import { useToken } from '@/context/TokenContext';
 import { CLIENT_ID, DEFAULT_SCOPES, PAR_ENDPOINT, AUTHORIZATION_ENDPOINT, USERINFO_ENDPOINT, TOKEN_ENDPOINT, getRedirectUri } from '@/config';
 import { createPkcePair } from '@/pkce';
+import { SESSION_KEYS, writeKey } from '@/services/session-keys';
 
 // Mirrors GET /api/fapi/config. Every field is read from the live Authlete service — six of these used
 // to be hardcoded server-side, and all six were the opposite of the real configuration.
@@ -57,7 +58,10 @@ function FapiSection() {
 
   const [keyPair, setKeyPair] = useState<DPoPKeyPair | null>(null);
   const [proofHtm, setProofHtm] = useState('POST');
-  const [proofHtu, setProofHtu] = useState('http://localhost:3000/api/token');
+  // Derived from configuration rather than hardcoded: the previous default was
+  // `http://localhost:3000/api/token`, which is wrong in every deployed environment and produces a
+  // proof whose `htu` cannot match the request.
+  const [proofHtu, setProofHtu] = useState(TOKEN_ENDPOINT);
   const [proofAt, setProofAt] = useState('');
   const [proofNonce, setProofNonce] = useState('');
   const [proofJwt, setProofJwt] = useState('');
@@ -125,10 +129,10 @@ function FapiSection() {
   const handleWizGenerateDpopKey = async () => {
     const { error } = await wizCall('setup', async () => {
       const kp = await generateKeyPair();
-      sessionStorage.setItem('dpop_private_key', JSON.stringify(kp.privateKey));
-      sessionStorage.setItem('dpop_public_key', JSON.stringify(kp.publicKey));
-      sessionStorage.setItem('dpop_kid', kp.kid);
-      sessionStorage.setItem('authz_client_id', wizClientId);
+      writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(kp.privateKey));
+      writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(kp.publicKey));
+      writeKey(SESSION_KEYS.dpopKid, kp.kid);
+      writeKey(SESSION_KEYS.authzClientId, wizClientId);
       setWizDpopKeyPair(kp);
     });
     if (error) { toast.error(error); return; }
@@ -138,8 +142,8 @@ function FapiSection() {
   const handleWizGenerateSigningKey = async () => {
     const { error } = await wizCall('setup', async () => {
       const sk = await generateSigningKeyPair();
-      sessionStorage.setItem('fapi_signing_private_key', JSON.stringify(sk.privateKey));
-      sessionStorage.setItem('fapi_signing_pub_jwk', JSON.stringify(sk.publicKey));
+      writeKey(SESSION_KEYS.fapiSigningKey, JSON.stringify(sk.privateKey));
+      writeKey(SESSION_KEYS.fapiSigningPublicKey, JSON.stringify(sk.publicKey));
       setWizSigningKey(sk);
     });
     if (error) { toast.error(error); return; }
@@ -150,9 +154,9 @@ function FapiSection() {
     if (!wizDpopKeyPair || !wizSigningKey) return;
     const { error } = await wizCall('par', async () => {
       const pkce = await createPkcePair();
-      sessionStorage.setItem('pkce_code_verifier', pkce.codeVerifier);
+      writeKey(SESSION_KEYS.pkceVerifier, pkce.codeVerifier);
       const state = crypto.randomUUID();
-      sessionStorage.setItem('oauth_state', state);
+      writeKey(SESSION_KEYS.oauthState, state);
 
       const clientAssertion = await createClientAssertion(
         wizSigningKey.privateKey,

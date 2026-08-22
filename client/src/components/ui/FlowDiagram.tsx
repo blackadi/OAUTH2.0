@@ -16,14 +16,24 @@ interface FlowDiagramProps {
 
 function FlowDiagram({ steps, currentStep, completedSteps = [], className }: FlowDiagramProps) {
   return (
-    <div className={cn('flex items-center gap-0', className)}>
+    <div className={cn('flex items-center gap-0', className)} role="list" aria-label="Flow progress">
       {steps.map((step, i) => {
         const isCompleted = completedSteps.includes(step.id);
         const isCurrent = currentStep === step.id;
         const isPending = !isCompleted && !isCurrent;
 
+        // Colour alone carried the state, which is invisible to anyone who cannot distinguish these
+        // hues and to anyone using a screen reader. The icon already differs for "done"; this adds the
+        // text equivalent.
+        const state = isCompleted ? 'completed' : isCurrent ? 'current' : 'not started';
+
         return (
-          <div key={step.id} className="flex items-center flex-1 min-w-0">
+          <div
+            key={step.id}
+            className="flex items-center flex-1 min-w-0"
+            aria-label={`Step ${i + 1}, ${step.label}: ${state}`}
+            aria-current={isCurrent ? 'step' : undefined}
+          >
             <div className="flex flex-col items-center gap-1.5 flex-1">
               <div
                 className={cn(

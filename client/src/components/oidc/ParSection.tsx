@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { SESSION_KEYS, readKey, writeKey } from '@/services/session-keys';
 
 function ParSection() {
   const { loading, result, error, call } = useAsyncCall();
@@ -33,17 +34,17 @@ function ParSection() {
   // Read once, lazily, at first render. This used to be an empty `useState` plus a mount effect that called
   // `setPkceVerifier` synchronously — which is a cascading render for a value that is known before the first
   // paint, and which `react-hooks` flags. Lazy initialisation is the same read with no second render.
-  const [pkceVerifier, setPkceVerifier] = useState(() => sessionStorage.getItem('pkce_code_verifier') ?? '');
+  const [pkceVerifier, setPkceVerifier] = useState(() => readKey(SESSION_KEYS.pkceVerifier) ?? '');
 
   const doc = getDoc('par', 'create');
 
   const handleGeneratePkce = useCallback(async () => {
     try {
       const pair = await createPkcePair();
-      sessionStorage.setItem('pkce_code_verifier', pair.codeVerifier);
+      writeKey(SESSION_KEYS.pkceVerifier, pair.codeVerifier);
       setPkceVerifier(pair.codeVerifier);
       const state = crypto.randomUUID();
-      sessionStorage.setItem('oauth_state', state);
+      writeKey(SESSION_KEYS.oauthState, state);
       const params = new URLSearchParams();
       params.set('response_type', 'code');
       params.set('redirect_uri', 'http://localhost:3001/callback');
@@ -72,12 +73,12 @@ function ParSection() {
           : { parameters, clientId, clientSecret };
 
     if (useDpop) {
-      let dpopKeyRaw = sessionStorage.getItem('dpop_private_key');
+      let dpopKeyRaw = readKey(SESSION_KEYS.dpopPrivateKey);
       if (!dpopKeyRaw) {
         const pair = await generateKeyPair();
-        sessionStorage.setItem('dpop_private_key', JSON.stringify(pair.privateKey));
-        sessionStorage.setItem('dpop_public_key', JSON.stringify(pair.publicKey));
-        sessionStorage.setItem('dpop_kid', pair.kid);
+        writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
+        writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
+        writeKey(SESSION_KEYS.dpopKid, pair.kid);
         dpopKeyRaw = JSON.stringify(pair.privateKey);
       }
       const dpopPrivateKey = JSON.parse(dpopKeyRaw);

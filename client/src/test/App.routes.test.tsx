@@ -46,8 +46,10 @@ describe('every route resolves to a section', () => {
         },
         { timeout: 5000 },
       );
-      // A rendered section always offers at least one control.
-      expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
+      // A rendered section always offers at least one control — a button or a tab.
+      expect(
+        screen.queryAllByRole('button').length + screen.queryAllByRole('tab').length,
+      ).toBeGreaterThan(0);
       expect(label).toBeTruthy();
     },
   );
@@ -70,8 +72,9 @@ describe('the shell', () => {
     renderAt('/auth-flows');
     await waitFor(() => expect(screen.getByText(/Authorization Flows/i)).toBeInTheDocument());
 
-    // Two nav lists exist (desktop sidebar + mobile menu); either is fine to drive.
-    fireEvent.click(screen.getAllByRole('button', { name: /Discovery/i })[0]);
+    // Navigation is links, not buttons — that is the point of the a11y change: middle-click,
+    // open-in-new-tab and `aria-current` all come from using the right element.
+    fireEvent.click(screen.getAllByRole('link', { name: /Discovery/i })[0]);
     // Assert on the panel heading, not on the text: the nav item matches too, and "found multiple"
     // would pass for the wrong reason.
     await waitFor(() =>
@@ -128,7 +131,51 @@ describe('the shell', () => {
     renderAt('/auth-flows');
     expect(await screen.findByText(/Token Vault/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Health Check/i })[0]);
+    fireEvent.click(screen.getAllByRole('link', { name: /Health Check/i })[0]);
     await waitFor(() => expect(screen.getByText(/Token Vault/i)).toBeInTheDocument());
+  });
+});
+
+describe('accessibility of the shell (F-22)', () => {
+  it('offers a skip link, since 20 nav items sit before the content', async () => {
+    renderAt('/auth-flows');
+    const skip = await screen.findByRole('link', { name: /Skip to content/i });
+    expect(skip).toHaveAttribute('href', '#main');
+    expect(document.querySelector('#main')).toBeTruthy();
+  });
+
+  it('navigates with links, not buttons, so middle-click and open-in-new-tab work', async () => {
+    renderAt('/auth-flows');
+    const nav = await screen.findAllByRole('link', { name: /Discovery/i });
+    expect(nav.length).toBeGreaterThan(0);
+    expect(nav[0]).toHaveAttribute('href', '/discovery');
+  });
+
+  it('marks the current page with aria-current', async () => {
+    renderAt('/discovery');
+    const links = await screen.findAllByRole('link', { name: /Discovery/i });
+    expect(links.some((l) => l.getAttribute('aria-current') === 'page')).toBe(true);
+  });
+
+  it('exposes grant selectors as a tab list with a selected tab', async () => {
+    renderAt('/auth-flows');
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.length).toBeGreaterThan(1);
+    expect(tabs.filter((t) => t.getAttribute('aria-selected') === 'true')).toHaveLength(1);
+  });
+
+  it('moves between tabs with the arrow keys', async () => {
+    renderAt('/auth-flows');
+    const tabs = await screen.findAllByRole('tab');
+    const selected = tabs.find((t) => t.getAttribute('aria-selected') === 'true')!;
+    fireEvent.keyDown(selected, { key: 'ArrowRight' });
+    const after = await screen.findAllByRole('tab');
+    expect(after[1].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('describes flow-diagram steps in text, not by colour alone', async () => {
+    renderAt('/auth-flows');
+    // "Step 1, Authorize: not started" — readable without distinguishing green from indigo.
+    expect(await screen.findByLabelText(/Step 1, Authorize:/i)).toBeInTheDocument();
   });
 });

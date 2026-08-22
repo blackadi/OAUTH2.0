@@ -1,5 +1,5 @@
 import { useState, Suspense } from 'react';
-import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from './ErrorBoundary';
 import { Menu, X, Bug, Activity } from 'lucide-react';
@@ -27,6 +27,14 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      {/* Twenty nav items sit between the top of the document and the content. Without this, reaching
+          the page by keyboard means tabbing through all of them on every navigation. */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-3 focus:py-2 focus:rounded-lg focus:bg-card focus:text-foreground focus:ring-2 focus:ring-ring"
+      >
+        Skip to content
+      </a>
       <header className="h-12 border-b border-border flex items-center justify-between px-4 shrink-0 bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <button
@@ -101,14 +109,13 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
                   {group.label}
                 </div>
                 {group.sections.map((section) => (
-                  <button
+                  <Link
                     key={section.id}
-                    onClick={() => {
-                      navigate(section.path);
-                      setMobileMenuOpen(false);
-                    }}
+                    to={section.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    aria-current={activePath === section.path ? 'page' : undefined}
                     className={cn(
-                      'w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-left cursor-pointer border-none transition-colors',
+                      'w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-left cursor-pointer border-none no-underline transition-colors',
                       activePath === section.path
                         ? 'bg-indigo-500/10 text-indigo-300 font-medium'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
@@ -116,7 +123,7 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
                   >
                     <span className="shrink-0 text-current">{section.icon}</span>
                     <span>{section.label}</span>
-                  </button>
+                  </Link>
                 ))}
               </div>
             ))}
@@ -126,7 +133,7 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar groups={groups} header={sidebarHeader} />
-        <main className="flex-1 overflow-y-auto">
+        <main id="main" className="flex-1 overflow-y-auto">
           <div
             className="max-w-5xl mx-auto p-4 lg:p-6 xl:p-8"
             /* Reserve the drawer's height while it is open, so the last control on a page stays

@@ -241,6 +241,43 @@ function McpSection() {
     }
   }, [wizTokenResult, wizAsData, wizIssuer, wizCall]);
 
+  const [wizIntrospectResult, setWizIntrospectResult] = useState<Record<string, unknown> | null>(null);
+
+  /**
+   * Introspect the token the wizard just obtained.
+   *
+   * `mcpService.introspectToken` existed and was called from nowhere, so the `mcp.introspect` entry in
+   * the documentation registry had no surface to render on — and had it been wired as written it would
+   * have failed, because it sent no credentials to an endpoint that requires them. Both halves are
+   * closed here: the endpoint comes from the AS metadata the wizard already fetched rather than from
+   * string surgery on the token endpoint, and the admin credentials come from the field at the top of
+   * this section. RFC 7662 §2.1 requires the endpoint to be protected; this deployment protects it with
+   * management credentials, so without them the answer is 401 and nothing else.
+   */
+  const wizStepIntrospect = useCallback(async () => {
+    const accessToken = (wizTokenResult as Record<string, unknown>)?.access_token as string;
+    if (!accessToken) {
+      toast.error('No access token available — complete token exchange first');
+      return;
+    }
+    if (!authId || !authSecret) {
+      toast.error('Introspection needs this deployment\'s admin credentials — fill them in above');
+      return;
+    }
+    const endpoint =
+      (wizAsData?.introspection_endpoint as string | undefined) ||
+      `${wizIssuer}/api/introspection/standard`;
+    const { data, error: err } = await wizCall('Introspect', () =>
+      mcpService.introspectToken(endpoint, accessToken, authId, authSecret),
+    );
+    if (data) {
+      setWizIntrospectResult(data as Record<string, unknown>);
+      toast.success('Token introspected');
+    } else {
+      toast.error(err);
+    }
+  }, [wizTokenResult, wizAsData, wizIssuer, authId, authSecret, wizCall]);
+
   return (
     <SectionPanel
       title="MCP (Model Context Protocol) OAuth 2.1"
@@ -411,6 +448,7 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {getDoc('mcp', 'authorize-url') && <OperationDescription doc={getDoc('mcp', 'authorize-url')!} className="mb-3" />}
             <div className="space-y-3">
               <Input
                 label="Redirect URI"
@@ -458,6 +496,7 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {getDoc('mcp', 'token-exchange') && <OperationDescription doc={getDoc('mcp', 'token-exchange')!} className="mb-3" />}
             <div className="space-y-3">
               <Input
                 label="Authorization Code (from callback)"
@@ -491,6 +530,7 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {getDoc('mcp', 'userinfo') && <OperationDescription doc={getDoc('mcp', 'userinfo')!} className="mb-3" />}
             <div className="space-y-3">
               <Button
                 onClick={wizStepUserinfo}
@@ -498,6 +538,31 @@ function McpSection() {
                 disabled={!wizTokenResult}
               >
                 Fetch UserInfo
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Step 6: Introspect ─────────────────────────── */}
+        <Card className={`mb-3 ${!wizTokenResult ? 'opacity-50 pointer-events-none' : ''}`}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Step 6: Introspect the token
+              {wizIntrospectResult && <Badge variant="success">Done</Badge>}
+              {wizLoading === 'Introspect' && <Spinner size="sm" />}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {getDoc('mcp', 'introspect') && (
+                <OperationDescription doc={getDoc('mcp', 'introspect')!} />
+              )}
+              <Button
+                onClick={wizStepIntrospect}
+                loading={wizLoading === 'Introspect'}
+                disabled={!wizTokenResult}
+              >
+                Introspect
               </Button>
             </div>
           </CardContent>
@@ -512,6 +577,11 @@ function McpSection() {
         {wizUserinfoResult && (
           <div className="mt-3">
             <JsonBlock data={wizUserinfoResult} label="UserInfo Response" />
+          </div>
+        )}
+        {wizIntrospectResult && (
+          <div className="mt-3">
+            <JsonBlock data={wizIntrospectResult} label="Introspection Response" />
           </div>
         )}
       </div>

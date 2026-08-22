@@ -13,6 +13,7 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ShieldAlert, ArrowUpCircle } from 'lucide-react';
+import { getDoc } from '@/data/operationDocs';
 
 interface StepUpChallenge {
   error: string;
@@ -30,18 +31,9 @@ const flowSteps = [
   { id: 'newtoken', label: 'New Token' },
 ];
 
-const stepUpDoc = {
-  title: 'RFC 9470 — Step-Up Authentication Challenge Protocol',
-  description: 'When a protected resource requires a higher authentication level than what the access token provides, it returns an `insufficient_user_authentication` error with the required ACR values or max_age. The client then re-authorizes with the stronger authentication requirements.',
-  params: [
-    { name: 'ACR Values', desc: 'Space-separated Authentication Context Class References the resource requires (e.g. "pwd", "urn:mace:incommon:iap:silver").' },
-    { name: 'Max Auth Age', desc: 'Maximum allowed seconds since last authentication. If exceeded, the client must re-authenticate the user.' },
-  ],
-  returns: 'If the token\'s ACR doesn\'t match or auth_time is too old, returns 403 with `insufficient_user_authentication` error, `acr_values` (or `max_age`), and the current token\'s `acr` and `auth_time`.',
-  tips: 'This demo server authenticates with ACR "pwd". Requesting any other ACR (e.g. "urn:mace:incommon:iap:silver") will trigger a step-up challenge. For max_age, request a value smaller than the token\'s age to trigger.',
-};
-
 function StepUpSection() {
+  // Was an inline literal, which kept it out of the one registry every other section reads from.
+  const doc = getDoc('step-up', 'introspect');
   const { tokenSet } = useToken();
   const at = tokenSet?.access_token;
   const { loading, result, error, call } = useAsyncCall();
@@ -116,7 +108,7 @@ function StepUpSection() {
       icon={<ShieldAlert className="h-4 w-4" />}
     >
       <div className="space-y-4">
-        <OperationDescription doc={stepUpDoc} />
+        {doc && <OperationDescription doc={doc} />}
 
         <FlowDiagram
           steps={flowSteps}

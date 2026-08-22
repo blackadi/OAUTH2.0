@@ -107,11 +107,14 @@ const SECTIONS: [name: string, node: React.ReactElement, gate: Gate][] = [
 describe('every section mounts and offers a control', () => {
   it.each(SECTIONS)('%s', (_name, node, gate) => {
     mount(node);
-    const buttons = screen.getAllByRole('button');
-    expect(buttons.length).toBeGreaterThan(0);
+    // Tabs count. `role="tab"` replaces the implicit button role, so several sections whose only
+    // first-paint controls are tabs would otherwise look like they offer nothing — which is how this
+    // assertion started failing the moment TabBar gained proper tab-list semantics.
+    const controls = [...screen.queryAllByRole('button'), ...screen.queryAllByRole('tab')];
+    expect(controls.length).toBeGreaterThan(0);
 
     if (gate === 'open') {
-      expect(buttons.some((b) => !(b as HTMLButtonElement).disabled)).toBe(true);
+      expect(controls.some((c) => !(c as HTMLButtonElement).disabled)).toBe(true);
       return;
     }
 
@@ -142,7 +145,7 @@ describe('Step-Up: the primary control is reachable (F-02)', () => {
 describe('Grant Flows: the JWT Bearer grant is submittable (F-03)', () => {
   it('enables once an assertion is supplied, and gates on it being present', async () => {
     mount(<AuthFlowsSection />);
-    fireEvent.click(screen.getByRole('button', { name: /JWT Bearer/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /JWT Bearer/i }));
 
     const submit = await screen.findByRole('button', { name: /Exchange JWT for Token/i });
     expect(submit).toBeDisabled(); // no assertion yet — the real precondition

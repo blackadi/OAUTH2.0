@@ -96,6 +96,14 @@ jobs:
       - name: Check Authlete code table matches the vendored spec
         run: node scripts/extract-authlete-codes.mjs --check
 
+      # Added 2026-08-22. The client's explanation registry had eight holes nothing could see: a section
+      # the code asked for and that did not exist, three entries written and never rendered, a missing
+      # grant tab, four MCP orphans, one doc defined inline outside the registry, and a README covering
+      # 13 of 20 sections. All mechanically detectable — the same argument check-route-coverage makes
+      # about endpoints, asked of documentation instead.
+      - name: Check client docs (every key exists, every entry is reachable, README covers every section)
+        run: node scripts/check-client-docs.mjs
+
   client:
     runs-on: ubuntu-latest
 
@@ -128,5 +136,20 @@ jobs:
       - run: npm run lint
 
       - run: npm run test
+
+      # Added 2026-08-22. Ratcheting thresholds, set just under what the suite achieves, so coverage can
+      # only go up — the same shape as the server's route-coverage baseline. The logic layer is held far
+      # higher than the components (utils 90%, services 75%) because that is where the decisions live;
+      # a section component is mostly markup and its smoke test asserts that it mounts and offers a
+      # control rather than driving every branch.
+      - run: npm run test:coverage
+
+      # Added 2026-08-21/22. Three offline checks nothing else can perform: that every semantic colour
+      # utility is mapped in @theme (~160 usages once compiled to nothing), that the generated Authlete
+      # result-code table still matches the vendored spec it came from, and that every documentation key
+      # exists, every entry is reachable and the README covers every section.
+      - run: npm run check:theme
+      - run: npm run check:codes
+      - run: npm run check:docs
 
       - run: npm run build
