@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { deviceService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -178,7 +179,7 @@ function DeviceSection() {
 
   return (
     <SectionPanel title="Device Flow (RFC 8628)" description="OAuth 2.0 Device Authorization Grant">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={DEVICE_OPS} value={activeOp} onChange={setActiveOp} />
 
@@ -187,39 +188,118 @@ function DeviceSection() {
       {activeOp === 'authorization' && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Device Flow (RFC 8628) is designed for <strong>public clients</strong> (smart TVs, CLI tools, IoT) that cannot securely store a client secret. If your client is public, leave Client Secret empty. Confidential clients can optionally provide it.
+            Device Flow (RFC 8628) is designed for <strong>public clients</strong> (smart TVs, CLI
+            tools, IoT) that cannot securely store a client secret. If your client is public, leave
+            Client Secret empty. Confidential clients can optionally provide it.
           </p>
-          <Textarea label="Parameters (URL-encoded)" rows={4} value={parameters} onChange={(e) => setParameters(e.target.value)} placeholder="client_id=xxx&scope=openid+profile" />
-          <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
-          <Input label="Client Secret (optional — public clients leave empty)" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="leave empty for public clients" />
-          <Button onClick={() => handleCall(() => deviceService.authorization({ parameters, clientId, clientSecret }))} loading={loading}>Run</Button>
+          <Textarea
+            label="Parameters (URL-encoded)"
+            rows={4}
+            value={parameters}
+            onChange={(e) => setParameters(e.target.value)}
+            placeholder="client_id=xxx&scope=openid+profile"
+          />
+          <Input
+            label="Client ID"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder="your_client_id"
+          />
+          <Input
+            label="Client Secret (optional — public clients leave empty)"
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            placeholder="leave empty for public clients"
+          />
+          <Button
+            onClick={() =>
+              handleCall(() => deviceService.authorization({ parameters, clientId, clientSecret }))
+            }
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'verification' && (
         <div className="space-y-3">
-          <Input label="User Code" value={verifyUserCode} onChange={(e) => setVerifyUserCode(e.target.value)} placeholder="user_code from authorization response" />
-          <Button onClick={() => handleCall(() => deviceService.verification(verifyUserCode))} loading={loading}>Run</Button>
+          <Input
+            label="User Code"
+            value={verifyUserCode}
+            onChange={(e) => setVerifyUserCode(e.target.value)}
+            placeholder="user_code from authorization response"
+          />
+          <Button
+            onClick={() => handleCall(() => deviceService.verification(verifyUserCode))}
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'complete' && (
         <div className="space-y-3">
-          <Input label="User Code" value={completeUserCode} onChange={(e) => setCompleteUserCode(e.target.value)} placeholder="user_code from authorization response" />
-          <Select label="Result" options={COMPLETE_RESULTS} value={completeResult} onChange={(e) => setCompleteResult(e.target.value)} />
-          <Input label="Subject" value={completeSubject} onChange={(e) => setCompleteSubject(e.target.value)} placeholder="admin" />
-          <Button onClick={() => handleCall(() => deviceService.complete(completeUserCode, completeResult, completeSubject))} loading={loading}>Run</Button>
+          <Input
+            label="User Code"
+            value={completeUserCode}
+            onChange={(e) => setCompleteUserCode(e.target.value)}
+            placeholder="user_code from authorization response"
+          />
+          <Select
+            label="Result"
+            options={COMPLETE_RESULTS}
+            value={completeResult}
+            onChange={(e) => setCompleteResult(e.target.value)}
+          />
+          <Input
+            label="Subject"
+            value={completeSubject}
+            onChange={(e) => setCompleteSubject(e.target.value)}
+            placeholder="admin"
+          />
+          <Button
+            onClick={() =>
+              handleCall(() =>
+                deviceService.complete(completeUserCode, completeResult, completeSubject),
+              )
+            }
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'poll' && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Poll the token endpoint with the device_code to obtain an access token. RFC 8628 §3.5 says to poll no faster than the <code>interval</code> returned in Step 1 (default 5s per §3.2). Auto-stops on <code>expired_token</code>, <code>access_denied</code>, or <code>invalid_grant</code>.
+            Poll the token endpoint with the device_code to obtain an access token. RFC 8628 §3.5
+            says to poll no faster than the <code>interval</code> returned in Step 1 (default 5s per
+            §3.2). Auto-stops on <code>expired_token</code>, <code>access_denied</code>, or{' '}
+            <code>invalid_grant</code>.
           </p>
-          <Input label="Device Code" value={deviceCode} onChange={(e) => setDeviceCode(e.target.value)} placeholder="device_code from Step 1 (Authorization)" />
-          <Input label="Client ID" value={pollClientId} onChange={(e) => setPollClientId(e.target.value)} placeholder="your_client_id" />
-          <Input label="Client Secret (optional — public clients leave empty)" type="password" value={pollClientSecret} onChange={(e) => setPollClientSecret(e.target.value)} placeholder="leave empty for public clients" />
+          <Input
+            label="Device Code"
+            value={deviceCode}
+            onChange={(e) => setDeviceCode(e.target.value)}
+            placeholder="device_code from Step 1 (Authorization)"
+          />
+          <Input
+            label="Client ID"
+            value={pollClientId}
+            onChange={(e) => setPollClientId(e.target.value)}
+            placeholder="your_client_id"
+          />
+          <Input
+            label="Client Secret (optional — public clients leave empty)"
+            type="password"
+            value={pollClientSecret}
+            onChange={(e) => setPollClientSecret(e.target.value)}
+            placeholder="leave empty for public clients"
+          />
           {pollClientSecret && (
             <Select
               label="Client Auth Method"
@@ -231,20 +311,25 @@ function DeviceSection() {
               onChange={(e) => setPollAuthMethod(e.target.value as 'basic' | 'post')}
             />
           )}
-          <Select label="Poll Interval" options={POLL_INTERVALS} value={pollInterval} onChange={(e) => setPollInterval(e.target.value)} />
+          <Select
+            label="Poll Interval"
+            options={POLL_INTERVALS}
+            value={pollInterval}
+            onChange={(e) => setPollInterval(e.target.value)}
+          />
 
           <div className="flex items-center gap-2">
             {polling ? (
-              <Button onClick={stopPolling} variant="danger">Stop Polling</Button>
+              <Button onClick={stopPolling} variant="danger">
+                Stop Polling
+              </Button>
             ) : (
               <Button onClick={startPolling} loading={pollAttempts > 0 && polling}>
                 {pollAttempts > 0 ? 'Restart' : 'Start Polling'}
               </Button>
             )}
             {polling && (
-              <span className="text-xs text-muted-foreground animate-pulse">
-                Polling...
-              </span>
+              <span className="text-xs text-muted-foreground animate-pulse">Polling...</span>
             )}
           </div>
 
@@ -274,7 +359,7 @@ function DeviceSection() {
       ) : null}
 
       {activeOp === 'poll' && pollError && !polling && (
-        <div className="mt-3 rounded-md bg-red-500/10 p-3 text-xs text-red-400">
+        <div className="mt-3 rounded-md bg-red-500/10 p-3 text-xs text-danger-text">
           {pollError}
         </div>
       )}

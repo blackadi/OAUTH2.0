@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { dcrService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -11,6 +12,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 type DcrOp = 'register' | 'get' | 'update' | 'delete';
 
@@ -33,8 +35,10 @@ const DCR_OPS: { value: DcrOp; label: string }[] = [
 ];
 
 function DcrSection() {
-  const [authId, setAuthId] = useState('');
-  const [authSecret, setAuthSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
   const [activeOp, setActiveOp] = useState<DcrOp | null>(null);
   const { loading, result, error, call } = useAsyncCall();
 
@@ -79,10 +83,13 @@ function DcrSection() {
   };
 
   return (
-    <SectionPanel title="Dynamic Client Registration (RFC 7591)" description="Register and manage clients dynamically">
-      <AdminAuth clientId={authId} clientSecret={authSecret} onClientIdChange={setAuthId} onClientSecretChange={setAuthSecret} label="Admin" />
+    <SectionPanel
+      title="Dynamic Client Registration (RFC 7591)"
+      description="Register and manage clients dynamically"
+    >
+      <AdminAuth label="Admin" />
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={DCR_OPS} value={activeOp} onChange={setActiveOp} />
 
@@ -90,33 +97,97 @@ function DcrSection() {
 
       {activeOp === 'register' && (
         <div className="space-y-3">
-          <Textarea label="Client Metadata (JSON)" rows={10} value={regJson} onChange={(e) => setRegJson(e.target.value)} placeholder='{"client_name":"My App","redirect_uris":["http://localhost:3001/callback"],"grant_types":["AUTHORIZATION_CODE"]}' />
-          <Button onClick={() => handleCall(() => dcrService.dcrRegister({ json: regJson }, auth))} loading={loading}>Run</Button>
+          <Textarea
+            label="Client Metadata (JSON)"
+            rows={10}
+            value={regJson}
+            onChange={(e) => setRegJson(e.target.value)}
+            placeholder='{"client_name":"My App","redirect_uris":["http://localhost:3001/callback"],"grant_types":["AUTHORIZATION_CODE"]}'
+          />
+          <Button
+            onClick={() => handleCall(() => dcrService.dcrRegister({ json: regJson }, auth))}
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'get' && (
         <div className="space-y-3">
-          <Input label="Client ID" value={getClientId} onChange={(e) => setGetClientId(e.target.value)} placeholder="client_id from registration" />
-          <Input label="Registration Access Token" value={getToken} onChange={(e) => setGetToken(e.target.value)} placeholder="registration_access_token from registration" />
-          <Button onClick={() => handleCall(() => dcrService.dcrGet(getToken, getClientId))} loading={loading}>Run</Button>
+          <Input
+            label="Client ID"
+            value={getClientId}
+            onChange={(e) => setGetClientId(e.target.value)}
+            placeholder="client_id from registration"
+          />
+          <Input
+            label="Registration Access Token"
+            value={getToken}
+            onChange={(e) => setGetToken(e.target.value)}
+            placeholder="registration_access_token from registration"
+          />
+          <Button
+            onClick={() => handleCall(() => dcrService.dcrGet(getToken, getClientId))}
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'update' && (
         <div className="space-y-3">
-          <Input label="Client ID" value={updateClientId} onChange={(e) => setUpdateClientId(e.target.value)} placeholder="client_id from registration" />
-          <Input label="Registration Access Token" value={updateToken} onChange={(e) => setUpdateToken(e.target.value)} placeholder="registration_access_token from registration" />
-          <Textarea label="Updated Client Metadata (JSON)" rows={10} value={updateJson} onChange={(e) => setUpdateJson(e.target.value)} placeholder='{"client_name":"Updated Name","redirect_uris":["http://localhost:3001/callback"]}' />
-          <Button onClick={() => handleCall(() => dcrService.dcrUpdate(updateJson, updateToken, updateClientId))} loading={loading}>Run</Button>
+          <Input
+            label="Client ID"
+            value={updateClientId}
+            onChange={(e) => setUpdateClientId(e.target.value)}
+            placeholder="client_id from registration"
+          />
+          <Input
+            label="Registration Access Token"
+            value={updateToken}
+            onChange={(e) => setUpdateToken(e.target.value)}
+            placeholder="registration_access_token from registration"
+          />
+          <Textarea
+            label="Updated Client Metadata (JSON)"
+            rows={10}
+            value={updateJson}
+            onChange={(e) => setUpdateJson(e.target.value)}
+            placeholder='{"client_name":"Updated Name","redirect_uris":["http://localhost:3001/callback"]}'
+          />
+          <Button
+            onClick={() =>
+              handleCall(() => dcrService.dcrUpdate(updateJson, updateToken, updateClientId))
+            }
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 
       {activeOp === 'delete' && (
         <div className="space-y-3">
-          <Input label="Client ID" value={deleteClientId} onChange={(e) => setDeleteClientId(e.target.value)} placeholder="client_id from registration" />
-          <Input label="Registration Access Token" value={deleteToken} onChange={(e) => setDeleteToken(e.target.value)} placeholder="registration_access_token from registration" />
-          <Button onClick={() => handleCall(() => dcrService.dcrDelete(deleteToken, deleteClientId))} loading={loading}>Run</Button>
+          <Input
+            label="Client ID"
+            value={deleteClientId}
+            onChange={(e) => setDeleteClientId(e.target.value)}
+            placeholder="client_id from registration"
+          />
+          <Input
+            label="Registration Access Token"
+            value={deleteToken}
+            onChange={(e) => setDeleteToken(e.target.value)}
+            placeholder="registration_access_token from registration"
+          />
+          <Button
+            onClick={() => handleCall(() => dcrService.dcrDelete(deleteToken, deleteClientId))}
+            loading={loading}
+          >
+            Run
+          </Button>
         </div>
       )}
 

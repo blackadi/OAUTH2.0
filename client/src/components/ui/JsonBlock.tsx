@@ -33,18 +33,20 @@ function JsonBlock({ data, className, label }: JsonBlockProps) {
           >
             <span className="relative inline-flex items-center gap-1">
               {copied ? (
-                <Check className="h-3 w-3 text-green-400 transition-all duration-200 scale-110" />
+                <Check className="h-3 w-3 text-success-text transition-all duration-200 scale-110" />
               ) : (
                 <Copy className="h-3 w-3 transition-all duration-200" />
               )}
-              <span className={copied ? 'text-green-400' : ''}>
+              <span className={copied ? 'text-success-text' : ''}>
                 {copied ? 'Copied' : 'Copy'}
               </span>
             </span>
           </button>
         </div>
       )}
-      <pre className="bg-slate-900 p-4 rounded-lg overflow-x-auto text-[0.8rem] font-mono whitespace-pre-wrap break-all border border-slate-800">{formatted}</pre>
+      <pre className="bg-code p-4 rounded-lg overflow-x-auto text-[0.8rem] font-mono whitespace-pre-wrap break-all border border-border">
+        {formatted}
+      </pre>
     </div>
   );
 }

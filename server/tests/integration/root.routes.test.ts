@@ -113,14 +113,46 @@ describe("Integration: root-mounted routes", () => {
       expect(res.text).toContain("&lt;script&gt;")
     })
 
-    // Worth pinning because it is surprising: the catch-all is mounted at `/` after every API router, so an
-    // unmatched path — including one under `/api` — answers **200 with an HTML page**, not 404 JSON. A
-    // client that typos an endpoint gets a success status and a document it cannot parse.
-    it("answers 200 HTML for an unmatched path, including under /api", async () => {
-      for (const path of ["/no-such-page", "/api/no-such-endpoint"]) {
-        const res = await request(app).get(path).expect(200)
-        expect(res.headers["content-type"]).toMatch(/text\/html/)
-      }
+    // The catch-all is mounted at `/` after every API router, so an unmatched path outside `/api`
+    // answers 200 with the SPA — which is correct for a single-page app, whose client-side routes must
+    // survive a reload.
+    //
+    // **Module 04's lab depends on exactly this**, and pins it here as a result: the exercise probes
+    // `/.well-known/totally-made-up` to teach that a 200 proves nothing about whether an endpoint
+    // exists, and that the content type is what tells you. Changing the root behaviour would silently
+    // break that lab, and nothing in the build would say so.
+    it("answers 200 HTML for an unmatched path outside /api — Module 04's lab depends on this", async () => {
+      const res = await request(app).get("/no-such-page").expect(200)
+      expect(res.headers["content-type"]).toMatch(/text\/html/)
+    })
+
+    // Under `/api` it is a 404 with JSON, since 2026-08-22. It used to fall through to the catch-all
+    // too: `GET /api/does-not-exist` answered 200 with 9,837 bytes of `index.html`, so a client wired to
+    // a wrong or retired path saw success and a parse failure somewhere downstream instead of the 404
+    // that names the problem. That is the same failure AGENTS.md records for RFC 9728's path-suffixed
+    // well-known URL, which was closed there with a second route while the general case was left open.
+    it("answers 404 JSON for an unmatched path under /api", async () => {
+      const res = await request(app).get("/api/no-such-endpoint").expect(404)
+
+      expect(res.headers["content-type"]).toMatch(/application\/json/)
+      expect(res.body.error).toBe("not_found")
+      expect(res.body.error_description).toContain("/api/no-such-endpoint")
+    })
+
+    // The well-known documents are mounted at true root rather than under `/api`, so the terminator
+    // above must not shadow them. RFC 9728's is served at two URLs, one of which carries a path.
+    it("does not shadow the root-mounted well-known documents", async () => {
+      // This suite mocks Authlete as unreachable, so the document itself cannot be built and the route
+      // answers 500. That is the point: reaching its own error handler proves the route was *reached*,
+      // which is what the `/api` terminator must not prevent. A 404 `not_found` here would mean the
+      // terminator had swallowed a root-mounted path.
+      const res = await request(app).get("/.well-known/oauth-protected-resource")
+
+      // Only the reachability claim is asserted. The content type of the *failure* is the error
+      // handler's business and differs from the document's, so checking it here would be testing
+      // something else.
+      expect(res.status).not.toBe(404)
+      expect(res.body?.error).not.toBe("not_found")
     })
 
     // It is GET-only, so a POST to an unmatched path is not swallowed by it.

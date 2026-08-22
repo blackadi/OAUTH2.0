@@ -1,31 +1,171 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-@custom-variant dark (&:is(.dark *));
-
+/**
+ * Two complete palettes, dark-first.
+ *
+ * `:root` carries **dark**, because that is what this tool ships as and what a developer tool is
+ * usually wanted in. A viewer who prefers light gets it from the media query; an explicit choice from
+ * the header toggle wins over both, in either direction. Every colour is defined at token level and
+ * nothing is defined *only* inside a media query — a colour that exists in one branch and not the
+ * other is how a page ends up rendering one theme's text on the other theme's ground.
+ *
+ * The three surface tokens beyond the original set exist because 87 literal `slate-*` classes were
+ * scattered across 15 files, and a literal that assumes a dark ground cannot be re-themed. They are
+ * named for their role rather than their shade:
+ *
+ * - `--code` — sunken surfaces: JSON blocks, request bodies, raw token text.
+ * - `--surface-2` — a raised panel above the card, e.g. the help popover.
+ * - `--foreground-muted` — between `foreground` and `muted-foreground`; it preserves the exact
+ *   appearance of the `text-slate-300` this replaced rather than flattening it into either neighbour.
+ */
 :root {
   --background: #020617;
   --foreground: #f1f5f9;
+  --foreground-muted: #cbd5e1;
   --card: #0f172a;
   --card-foreground: #e2e8f0;
   --muted: #1e293b;
   --muted-foreground: #94a3b8;
+  --surface-2: #1e293b;
+  --code: #020617;
   --accent: #6366f1;
   --accent-foreground: #ffffff;
   --border: #1e293b;
   --input: #0f172a;
+  --accent-text: #a5b4fc;
+  --success-text: #6ee7b7;
+  --warning-text: #fcd34d;
+  --danger-text: #f87171;
+  --info-text: #7dd3fc;
   --ring: #6366f1;
   --radius: 0.75rem;
   --sidebar-width: 14rem;
 }
 
+/** A viewer whose system prefers light, and who has not chosen otherwise. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --foreground-muted: #334155;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --muted: #e9eef4;
+    --muted-foreground: #55637a;
+    --surface-2: #f1f5f9;
+    --code: #f1f5f9;
+    --accent: #4f46e5;
+    --accent-foreground: #ffffff;
+    --border: #d8dfe8;
+    --input: #ffffff;
+    --ring: #4f46e5;
+    --accent-text: #4338ca;
+    --success-text: #047857;
+    --warning-text: #a16207;
+    --danger-text: #b91c1c;
+    --info-text: #0369a1;
+  }
+}
+
+/** An explicit choice, which must win over the system in both directions. */
+:root[data-theme='light'] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --foreground-muted: #334155;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --muted: #e9eef4;
+  --muted-foreground: #55637a;
+  --surface-2: #f1f5f9;
+  --code: #f1f5f9;
+  --accent: #4f46e5;
+  --accent-foreground: #ffffff;
+  --border: #d8dfe8;
+  --input: #ffffff;
+  --ring: #4f46e5;
+  --accent-text: #4338ca;
+  --success-text: #047857;
+  --warning-text: #a16207;
+  --danger-text: #b91c1c;
+  --info-text: #0369a1;
+}
+
+:root[data-theme='dark'] {
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --foreground-muted: #cbd5e1;
+  --card: #0f172a;
+  --card-foreground: #e2e8f0;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --surface-2: #1e293b;
+  --code: #020617;
+  --accent: #6366f1;
+  --accent-foreground: #ffffff;
+  --border: #1e293b;
+  --input: #0f172a;
+  --ring: #6366f1;
+  --accent-text: #a5b4fc;
+  --success-text: #6ee7b7;
+  --warning-text: #fcd34d;
+  --danger-text: #f87171;
+  --info-text: #7dd3fc;
+}
+
+/**
+ * Tailwind v4 generates utilities from `@theme`, NOT from custom properties on `:root`.
+ *
+ * Without this block the `:root` values above are declared and never consumed: `bg-card`,
+ * `border-border`, `text-muted-foreground`, `bg-muted`, `bg-input`, `ring-ring`, `bg-background`
+ * and `text-foreground` are classes that do not exist, and every one of their ~160 usages across
+ * 28 files emits nothing. Verified against the built stylesheet — 0 of 8 selectors present, while
+ * the `:root` block survived intact. The visible symptoms were transparent cards, invisible
+ * hairline borders, secondary text rendering at full foreground contrast, and — because the form
+ * primitives pair `ring-ring` with `focus:outline-none` — no visible keyboard focus anywhere in
+ * the app.
+ *
+ * `inline` matters: it makes the generated utility resolve to `var(--card)` at use time, so `:root`
+ * stays the single source of these values and a light theme is a `:root` override rather than a
+ * second set of utilities.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-surface-2: var(--surface-2);
+  --color-code: var(--code);
+  --color-accent-text: var(--accent-text);
+  --color-success-text: var(--success-text);
+  --color-warning-text: var(--warning-text);
+  --color-danger-text: var(--danger-text);
+  --color-info-text: var(--info-text);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
 @layer base {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     box-sizing: border-box;
   }
 
   body {
     margin: 0;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family:
+      'Inter',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
     background-color: var(--background);
     color: var(--foreground);
     -webkit-font-smoothing: antialiased;
@@ -34,8 +174,12 @@
     line-height: 1.5;
   }
 
-  code, pre, .font-mono {
-    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  code,
+  pre,
+  .font-mono {
+    font-family:
+      'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      monospace;
   }
 
   ::selection {
@@ -53,12 +197,13 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #334155;
+    background: var(--muted-foreground);
+    opacity: 0.4;
     border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #475569;
+    background: var(--foreground-muted);
   }
 }
 

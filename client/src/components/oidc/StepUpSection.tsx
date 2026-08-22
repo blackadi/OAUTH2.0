@@ -8,10 +8,13 @@ import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ShieldAlert, ArrowUpCircle } from 'lucide-react';
+import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 interface StepUpChallenge {
   error: string;
@@ -29,18 +32,9 @@ const flowSteps = [
   { id: 'newtoken', label: 'New Token' },
 ];
 
-const stepUpDoc = {
-  title: 'RFC 9470 — Step-Up Authentication Challenge Protocol',
-  description: 'When a protected resource requires a higher authentication level than what the access token provides, it returns an `insufficient_user_authentication` error with the required ACR values or max_age. The client then re-authorizes with the stronger authentication requirements.',
-  params: [
-    { name: 'ACR Values', desc: 'Space-separated Authentication Context Class References the resource requires (e.g. "pwd", "urn:mace:incommon:iap:silver").' },
-    { name: 'Max Auth Age', desc: 'Maximum allowed seconds since last authentication. If exceeded, the client must re-authenticate the user.' },
-  ],
-  returns: 'If the token\'s ACR doesn\'t match or auth_time is too old, returns 403 with `insufficient_user_authentication` error, `acr_values` (or `max_age`), and the current token\'s `acr` and `auth_time`.',
-  tips: 'This demo server authenticates with ACR "pwd". Requesting any other ACR (e.g. "urn:mace:incommon:iap:silver") will trigger a step-up challenge. For max_age, request a value smaller than the token\'s age to trigger.',
-};
-
 function StepUpSection() {
+  // Was an inline literal, which kept it out of the one registry every other section reads from.
+  const doc = getDoc('step-up', 'introspect');
   const { tokenSet } = useToken();
   const at = tokenSet?.access_token;
   const { loading, result, error, call } = useAsyncCall();
@@ -51,8 +45,10 @@ function StepUpSection() {
 
   // The introspection endpoint is protected (RFC 7662 §2.1) — this flow drives it, so it needs the
   // deployment's admin credentials.
-  const [adminId, setAdminId] = useState('');
-  const [adminSecret, setAdminSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: adminId, clientSecret: adminSecret } = useCredentials();
 
   const handleIntrospect = async () => {
     setChallenge(null);
@@ -60,7 +56,12 @@ function StepUpSection() {
       const opts: { acrValues?: string; maxAge?: number } = {};
       if (requiredAcrs.trim()) opts.acrValues = requiredAcrs.trim();
       if (maxAge.trim()) opts.maxAge = Number(maxAge.trim());
-      return tokenService.introspection(at!, adminId, adminSecret, Object.keys(opts).length ? opts : undefined);
+      return tokenService.introspection(
+        at!,
+        adminId,
+        adminSecret,
+        Object.keys(opts).length ? opts : undefined,
+      );
     });
 
     if (data) {
@@ -95,11 +96,14 @@ function StepUpSection() {
     if (challenge.acr_values) {
       // Build claims request with essential ACR
       const acrList = challenge.acr_values.split(' ');
-      params.append('claims', JSON.stringify({
-        id_token: {
-          acr: { essential: true, values: acrList },
-        },
-      }));
+      params.append(
+        'claims',
+        JSON.stringify({
+          id_token: {
+            acr: { essential: true, values: acrList },
+          },
+        }),
+      );
     }
     if (challenge.max_age) {
       params.append('max_age', challenge.max_age);
@@ -115,24 +119,18 @@ function StepUpSection() {
       icon={<ShieldAlert className="h-4 w-4" />}
     >
       <div className="space-y-4">
-        <OperationDescription doc={stepUpDoc} />
+        {doc && <OperationDescription doc={doc} />}
 
         <FlowDiagram
           steps={flowSteps}
-          currentStep={
-            !challenge
-              ? loading
-                ? 'introspect'
-                : undefined
-              : 'challenge'
-          }
+          currentStep={!challenge ? (loading ? 'introspect' : undefined) : 'challenge'}
           className="py-2"
         />
 
         {!at && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-warning-text">
             <p className="font-medium">No access token available</p>
-            <p className="mt-1 text-xs text-amber-300/80">
+            <p className="mt-1 text-xs text-warning-text/80">
               Obtain a token first via Grant Flows, then return here to test step-up challenges.
             </p>
           </div>
@@ -141,19 +139,13 @@ function StepUpSection() {
         {at && (
           <>
             <div className="space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">
-                Introspection Credentials
-              </p>
+              <p className="text-xs font-medium text-muted-foreground">Introspection Credentials</p>
               <p className="text-xs text-muted-foreground">
-                RFC 7662 §2.1 requires the introspection endpoint to be protected, so this flow needs the
-                deployment&apos;s admin credentials. Without them the server answers <code>401</code>.
+                RFC 7662 §2.1 requires the introspection endpoint to be protected, so this flow
+                needs the deployment&apos;s admin credentials. Without them the server answers{' '}
+                <code>401</code>.
               </p>
-              <AdminAuth
-                clientId={adminId}
-                clientSecret={adminSecret}
-                onClientIdChange={setAdminId}
-                onClientSecretChange={setAdminSecret}
-              />
+              <AdminAuth />
               <p className="text-xs font-medium text-muted-foreground">
                 Protected Resource Requirements
               </p>
@@ -170,10 +162,16 @@ function StepUpSection() {
                 onChange={(e) => setMaxAge(e.target.value)}
                 placeholder="e.g. 300"
               />
+              {/* `disabled` reads `loading` directly. It used to be `loading !== null`, and
+                  `useAsyncCall` reports `loading` as a *boolean* — so the comparison was always true
+                  and this button, the only control in the section, was permanently disabled. The
+                  `!== null` idiom belongs to `useDiscriminatedAsyncCall`, whose `loading` is
+                  `T | null`; TypeScript permits a null comparison against any type, so nothing
+                  flagged the copy. Locked by tests/sections.smoke.test.tsx. */}
               <Button
                 onClick={handleIntrospect}
                 loading={loading}
-                disabled={!at || loading !== null}
+                disabled={!at || loading}
                 className="w-full sm:w-auto"
               >
                 <ShieldAlert className="h-4 w-4 mr-2" />
@@ -184,8 +182,8 @@ function StepUpSection() {
             {challenge && (
               <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4">
                 <div className="flex items-center gap-2">
-                  <ShieldAlert className="h-5 w-5 text-red-400" />
-                  <p className="text-sm font-medium text-red-300">
+                  <ShieldAlert className="h-5 w-5 text-danger-text" />
+                  <p className="text-sm font-medium text-danger-text">
                     Step-Up Authentication Required
                   </p>
                 </div>
@@ -193,18 +191,18 @@ function StepUpSection() {
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-muted-foreground">Error:</span>{' '}
-                    <code className="text-red-300">{challenge.error}</code>
+                    <code className="text-danger-text">{challenge.error}</code>
                   </div>
                   {challenge.acr && (
                     <div>
                       <span className="text-muted-foreground">Current ACR:</span>{' '}
-                      <code className="text-amber-300">{challenge.acr}</code>
+                      <code className="text-warning-text">{challenge.acr}</code>
                     </div>
                   )}
                   {challenge.auth_time && (
                     <div>
                       <span className="text-muted-foreground">Auth Time:</span>{' '}
-                      <code className="text-amber-300">
+                      <code className="text-warning-text">
                         {new Date(challenge.auth_time * 1000).toLocaleString()}
                       </code>
                     </div>
@@ -212,19 +210,19 @@ function StepUpSection() {
                   {challenge.acr_values && (
                     <div>
                       <span className="text-muted-foreground">Required ACRs:</span>{' '}
-                      <code className="text-emerald-300">{challenge.acr_values}</code>
+                      <code className="text-success-text">{challenge.acr_values}</code>
                     </div>
                   )}
                   {challenge.max_age && (
                     <div>
                       <span className="text-muted-foreground">Max Age:</span>{' '}
-                      <code className="text-emerald-300">{challenge.max_age}s</code>
+                      <code className="text-success-text">{challenge.max_age}s</code>
                     </div>
                   )}
                 </div>
 
                 {challenge.error_description && (
-                  <p className="text-xs text-red-300/80">{challenge.error_description}</p>
+                  <p className="text-xs text-danger-text/80">{challenge.error_description}</p>
                 )}
 
                 {reAuthUrl && (
@@ -239,22 +237,22 @@ function StepUpSection() {
                       </Button>
                     </a>
                     <p className="text-[0.6rem] text-muted-foreground">
-                      This opens the authorization endpoint with <code>claims</code> requesting the required ACR as essential, plus <code>prompt=login</code> to force re-authentication.
+                      This opens the authorization endpoint with <code>claims</code> requesting the
+                      required ACR as essential, plus <code>prompt=login</code> to force
+                      re-authentication.
                     </p>
                   </div>
                 )}
               </div>
             )}
 
-            {result && !challenge && (
-              <JsonBlock data={result} label="Introspection Result" />
-            )}
+            {result && !challenge && <JsonBlock data={result} label="Introspection Result" />}
           </>
         )}
 
         {error && !challenge && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-            <p className="text-xs text-red-400">{error}</p>
+            <ErrorExplainer error={error} />
           </div>
         )}
       </div>

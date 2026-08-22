@@ -14,11 +14,7 @@ async function verification(userCode: string): Promise<unknown> {
   return http.postJson(DEVICE_VERIFICATION_ENDPOINT, { userCode });
 }
 
-async function complete(
-  userCode: string,
-  result: string,
-  subject: string,
-): Promise<unknown> {
+async function complete(userCode: string, result: string, subject: string): Promise<unknown> {
   return http.postJson(DEVICE_COMPLETE_ENDPOINT, { userCode, result, subject });
 }
 

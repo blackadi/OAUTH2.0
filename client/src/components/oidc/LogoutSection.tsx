@@ -30,21 +30,37 @@ function LogoutSection() {
       {doc && <OperationDescription doc={doc} />}
 
       <div className="space-y-3">
-        <Input label="ID Token Hint" value={idTokenHint} onChange={(e) => setIdTokenHint(e.target.value)} placeholder="ID token identifying the session to end" />
-        <Input label="Post-Logout Redirect URI" value={postLogoutUri} onChange={(e) => setPostLogoutUri(e.target.value)} placeholder="Must exactly match a URI registered for this client" />
-        <Input label="State" value={state} onChange={(e) => setState(e.target.value)} placeholder="CSRF protection value" />
+        <Input
+          label="ID Token Hint"
+          value={idTokenHint}
+          onChange={(e) => setIdTokenHint(e.target.value)}
+          placeholder="ID token identifying the session to end"
+        />
+        <Input
+          label="Post-Logout Redirect URI"
+          value={postLogoutUri}
+          onChange={(e) => setPostLogoutUri(e.target.value)}
+          placeholder="Must exactly match a URI registered for this client"
+        />
+        <Input
+          label="State"
+          value={state}
+          onChange={(e) => setState(e.target.value)}
+          placeholder="CSRF protection value"
+        />
         <Button variant="danger" onClick={startLogout}>
           RP-Initiated Logout
         </Button>
         <p className="text-xs text-muted-foreground">
-          This navigates away from the app and lands on the server's confirmation page — RP-Initiated Logout
-          1.0 §2 requires the OP to ask before ending the session. Nothing is signed out until you confirm
-          there. Tokens are cleared here immediately.
+          This navigates away from the app and lands on the server's confirmation page —
+          RP-Initiated Logout 1.0 §2 requires the OP to ask before ending the session. Nothing is
+          signed out until you confirm there. Tokens are cleared here immediately.
         </p>
         <p className="text-xs text-muted-foreground">
-          You are only redirected back if the URI above exactly matches one registered for this client (§3).
-          The client comes from the Client ID, or from the ID token hint's <code>aud</code> when no Client ID
-          is set — with neither, logout still succeeds but ends on the server's signed-out page.
+          You are only redirected back if the URI above exactly matches one registered for this
+          client (§3). The client comes from the Client ID, or from the ID token hint's{' '}
+          <code>aud</code> when no Client ID is set — with neither, logout still succeeds but ends
+          on the server's signed-out page.
         </p>
       </div>
     </SectionPanel>

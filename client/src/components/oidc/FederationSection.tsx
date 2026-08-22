@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { federationService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
@@ -10,6 +11,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 type FederationOp = 'configuration' | 'registration';
 
@@ -19,8 +21,10 @@ const FEDERATION_OPS: { value: FederationOp; label: string }[] = [
 ];
 
 function FederationSection() {
-  const [authId, setAuthId] = useState('');
-  const [authSecret, setAuthSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
   const [activeOp, setActiveOp] = useState<FederationOp | null>(null);
   const { loading, result, error, call } = useAsyncCall();
 
@@ -40,8 +44,11 @@ function FederationSection() {
   };
 
   return (
-    <SectionPanel title="OpenID Federation 1.0" description="Entity configuration and registration endpoints for OIDC Federation">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+    <SectionPanel
+      title="OpenID Federation 1.0"
+      description="Entity configuration and registration endpoints for OIDC Federation"
+    >
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={FEDERATION_OPS} value={activeOp} onChange={setActiveOp} />
 
@@ -49,16 +56,22 @@ function FederationSection() {
 
       {activeOp === 'configuration' && (
         <div className="space-y-3">
-          <p className="text-sm text-slate-400">
-            Fetch the entity configuration JWT for this authorization server. This endpoint is public (no auth required).
+          <p className="text-sm text-muted-foreground">
+            Fetch the entity configuration JWT for this authorization server. This endpoint is
+            public (no auth required).
           </p>
-          <Button onClick={() => handleCall(() => federationService.getConfiguration())} loading={loading}>Fetch Configuration</Button>
+          <Button
+            onClick={() => handleCall(() => federationService.getConfiguration())}
+            loading={loading}
+          >
+            Fetch Configuration
+          </Button>
         </div>
       )}
 
       {activeOp === 'registration' && (
         <div className="space-y-3">
-          <AdminAuth clientId={authId} clientSecret={authSecret} onClientIdChange={setAuthId} onClientSecretChange={setAuthSecret} label="Admin" />
+          <AdminAuth label="Admin" />
           <Textarea
             label="Entity Configuration (JWT)"
             rows={6}
@@ -66,7 +79,7 @@ function FederationSection() {
             onChange={(e) => setEntityConfiguration(e.target.value)}
             placeholder="Paste the entity configuration JWT of the RP to register"
           />
-          <p className="text-xs text-slate-500">— or —</p>
+          <p className="text-xs text-muted-foreground/70">— or —</p>
           <Textarea
             label="Trust Chain (JSON)"
             rows={6}
@@ -78,9 +91,7 @@ function FederationSection() {
             onClick={() =>
               handleCall(() =>
                 federationService.register(
-                  entityConfiguration
-                    ? { entityConfiguration }
-                    : { trustChain },
+                  entityConfiguration ? { entityConfiguration } : { trustChain },
                   auth,
                 ),
               )

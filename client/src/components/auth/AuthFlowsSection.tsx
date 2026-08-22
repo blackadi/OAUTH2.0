@@ -1,11 +1,18 @@
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-import { AUTHORIZATION_ENDPOINT, CLIENT_ID, DEFAULT_SCOPES, getRedirectUri, CLIENT_SECRET } from '@/config';
-import { createPkcePair } from '@/pkce';
+import {
+  AUTHORIZATION_ENDPOINT,
+  CLIENT_ID,
+  DEFAULT_SCOPES,
+  getRedirectUri,
+  CLIENT_SECRET,
+} from '@/config';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { generateKeyPair } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
+import { useTraces } from '@/hooks/useTraces';
+import { authorizationCodeProgress, twoStepProgress } from '@/utils/flow-progress';
 import { TabBar } from '@/components/ui/TabBar';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -15,11 +22,15 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { RequestBuilder } from '@/components/ui/RequestBuilder';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
+import { AuthorizeRequestBuilder } from './AuthorizeRequestBuilder';
 import { getDoc } from '@/data/operationDocs';
 import { KeyRound, ArrowRightLeft, LogIn, RefreshCw, FileText } from 'lucide-react';
 import type { TokenResponse } from '@/types';
+import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
 
-type GrantType = 'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
+type GrantType =
+  'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
 
 const GRANTS: { value: GrantType; label: string }[] = [
   { value: 'authorization_code', label: 'Auth Code (PKCE)' },
@@ -72,6 +83,18 @@ const AuthFlowsSection: React.FC = () => {
   const [acId, setAcId] = useState(CLIENT_ID);
   const [acSecret, setAcSecret] = useState(CLIENT_SECRET);
   const [acRedirectUri, setAcRedirectUri] = useState(getRedirectUri());
+  // `scope` used to come straight from the build-time constant with no input at all, which made the
+  // single most-edited parameter in OAuth the one parameter this panel could not change.
+  const [acScope, setAcScope] = useState(DEFAULT_SCOPES);
+  /**
+   * DPoP is now a choice. It used to be unconditional: `startAuthCode` always minted a key and the
+   * callback always sent a proof, so every token from this panel came back sender-constrained
+   * (`token_type: DPoP`) with nothing saying so — and the UserInfo and Grant Management sections then
+   * presented it as `Bearer`, which RFC 9449 §7.2 requires the resource server to refuse. The default
+   * flow produced a token half the app could not use.
+   */
+  const [acUseDpop, setAcUseDpop] = useState(false);
+  const [acDpopThumbprint, setAcDpopThumbprint] = useState<string | undefined>(undefined);
 
   const [ccId, setCcId] = useState(CLIENT_ID);
   const [ccSecret, setCcSecret] = useState(CLIENT_SECRET);
@@ -94,9 +117,31 @@ const AuthFlowsSection: React.FC = () => {
 
   const doc = getDoc('auth-flows', grantType);
 
+  /**
+   * Progress read out of the request trace rather than tracked in state.
+   *
+   * `FlowDiagram` has always supported `completedSteps` and no call site ever passed one, so every step
+   * was drawn pending and the diagram jumped straight to the last once a token existed. Deriving it from
+   * the traffic means the diagram cannot claim a step that produced no request, and it survives the
+   * authorization redirect — which takes the user out of this page entirely and brings them back.
+   */
+  const traces = useTraces();
+  const progress = useMemo(() => {
+    const hasToken = Boolean(displayResult);
+    if (grantType === 'authorization_code') {
+      return authorizationCodeProgress({
+        traces,
+        hasToken,
+        codeReceived: Boolean(readKey(SESSION_KEYS.pkceVerifier)) && hasToken,
+        authorizeSent: Boolean(readKey(SESSION_KEYS.oauthState)),
+      });
+    }
+    return twoStepProgress({ traces, hasToken }, flowSteps[grantType][0].id);
+  }, [traces, displayResult, grantType]);
+
   const saveClientCredentials = (clientId: string, clientSecret: string) => {
-    sessionStorage.setItem('active_client_id', clientId);
-    if (clientSecret) sessionStorage.setItem('active_client_secret', clientSecret);
+    writeKey(SESSION_KEYS.activeClientId, clientId);
+    if (clientSecret) writeKey(SESSION_KEYS.activeClientSecret, clientSecret);
   };
 
   const handleCall = async (
@@ -114,52 +159,71 @@ const AuthFlowsSection: React.FC = () => {
     }
   };
 
-  const startAuthCode = async () => {
-    try {
-      const { codeVerifier, codeChallenge } = await createPkcePair();
-      const state = crypto.randomUUID();
-      const nonce = crypto.randomUUID();
-      sessionStorage.setItem('pkce_code_verifier', codeVerifier);
-      sessionStorage.setItem('oauth_state', state);
-      sessionStorage.setItem('authz_client_id', acId);
-      if (acSecret) sessionStorage.setItem('authz_client_secret', acSecret);
-
-      // Generate DPoP key pair for sender-constrained token binding
-      const dpopKeyPair = await generateKeyPair();
-      sessionStorage.setItem('dpop_private_key', JSON.stringify(dpopKeyPair.privateKey));
-      sessionStorage.setItem('dpop_public_key', JSON.stringify(dpopKeyPair.publicKey));
-      sessionStorage.setItem('dpop_kid', dpopKeyPair.kid);
-      const params = new URLSearchParams({
-        response_type: 'code',
-        client_id: acId,
-        redirect_uri: acRedirectUri,
-        scope: DEFAULT_SCOPES,
-        state,
-        nonce,
-        code_challenge: codeChallenge,
-        code_challenge_method: 'S256',
-      });
-      window.location.href = `${AUTHORIZATION_ENDPOINT}?${params.toString()}`;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to initiate auth code flow';
-      toast.error(msg);
+  /**
+   * Generate the DPoP key when the box is ticked, so `dpop_jkt` can be offered to the builder.
+   *
+   * RFC 9449 §10 binds the *authorization code* to the key, which closes the window in which a stolen
+   * code could be redeemed by somebody else — so the thumbprint belongs in the authorization request,
+   * not just at the token endpoint.
+   */
+  const toggleDpop = async (enabled: boolean) => {
+    setAcUseDpop(enabled);
+    if (!enabled) {
+      setAcDpopThumbprint(undefined);
+      // Also drops the cached `DPoP-Nonce`: a nonce is bound to the key that was proving possession,
+      // so keeping it past the key it belonged to can only mislead the next request.
+      clearDpopKeys();
+      return;
     }
+    try {
+      const pair = await generateKeyPair();
+      writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
+      writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
+      writeKey(SESSION_KEYS.dpopKid, pair.kid);
+      setAcDpopThumbprint(pair.kid);
+    } catch (e: unknown) {
+      setAcUseDpop(false);
+      toast.error(e instanceof Error ? e.message : 'Failed to generate a DPoP key');
+    }
+  };
+
+  /**
+   * Persist what the callback will need, then navigate to the URL the builder actually shows.
+   *
+   * The verifier arrives from the builder rather than being generated here, because the challenge in
+   * the URL is the builder's — regenerating one here would guarantee a mismatch. A `null` verifier
+   * means the user edited the challenge by hand, so there is no matching verifier to store and the
+   * exchange is *meant* to fail.
+   */
+  const sendAuthorizeRequest = (
+    url: string,
+    ctx: { codeVerifier: string | null; state: string | null },
+  ) => {
+    if (ctx.codeVerifier) writeKey(SESSION_KEYS.pkceVerifier, ctx.codeVerifier);
+    else removeKey(SESSION_KEYS.pkceVerifier);
+
+    if (ctx.state) writeKey(SESSION_KEYS.oauthState, ctx.state);
+    else removeKey(SESSION_KEYS.oauthState);
+
+    writeKey(SESSION_KEYS.authzClientId, acId);
+    if (acSecret) writeKey(SESSION_KEYS.authzClientSecret, acSecret);
+
+    window.location.href = url;
   };
 
   const requestPreview = useMemo(() => {
     switch (grantType) {
       case 'authorization_code':
-        return {
-          method: 'GET' as const,
-          url: `${AUTHORIZATION_ENDPOINT}?response_type=code&client_id=${acId}&redirect_uri=${encodeURIComponent(acRedirectUri)}&scope=${DEFAULT_SCOPES}&code_challenge_method=S256`,
-          headers: {} as Record<string, string>,
-        };
+        // No preview here. `AuthorizeRequestBuilder` renders the real URL, built from the same object
+        // it navigates to — the hand-assembled string that used to sit here omitted `state`, `nonce`
+        // and `code_challenge`, so it showed an approximation of the request and never the request.
+        return null;
       case 'client_credentials':
         return {
           method: 'POST' as const,
           url: '/api/token',
           headers: {
-            'Authorization': `Basic ${btoa(`${ccId}:${ccSecret}`)}`,
+            Authorization: `Basic ${btoa(`${ccId}:${ccSecret}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: `grant_type=client_credentials&scope=${encodeURIComponent(ccScope)}`,
@@ -169,7 +233,7 @@ const AuthFlowsSection: React.FC = () => {
           method: 'POST' as const,
           url: '/api/token',
           headers: {
-            'Authorization': `Basic ${btoa(`${pwId}:${pwSecret}`)}`,
+            Authorization: `Basic ${btoa(`${pwId}:${pwSecret}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: `grant_type=password&username=${encodeURIComponent(pwUser)}&password=${encodeURIComponent(pwPass)}&scope=${encodeURIComponent(pwScope)}`,
@@ -179,7 +243,7 @@ const AuthFlowsSection: React.FC = () => {
           method: 'POST' as const,
           url: '/api/token',
           headers: {
-            'Authorization': `Basic ${btoa(`${rtId}:${rtSecret}`)}`,
+            Authorization: `Basic ${btoa(`${rtId}:${rtSecret}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(rtToken)}`,
@@ -190,12 +254,31 @@ const AuthFlowsSection: React.FC = () => {
           url: '/api/token',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            ...(jwtId && jwtSecret ? { 'Authorization': `Basic ${btoa(`${jwtId}:${jwtSecret}`)}` } : {}),
+            ...(jwtId && jwtSecret
+              ? { Authorization: `Basic ${btoa(`${jwtId}:${jwtSecret}`)}` }
+              : {}),
           },
           body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwtAssertion ? '<signed_jwt>' : '<empty>'}${jwtScope ? `&scope=${encodeURIComponent(jwtScope)}` : ''}`,
         };
     }
-  }, [grantType, acId, acRedirectUri, ccId, ccSecret, ccScope, pwUser, pwPass, pwId, pwSecret, pwScope, rtToken, rtId, rtSecret, jwtAssertion, jwtId, jwtSecret, jwtScope]);
+  }, [
+    grantType,
+    ccId,
+    ccSecret,
+    ccScope,
+    pwUser,
+    pwPass,
+    pwId,
+    pwSecret,
+    pwScope,
+    rtToken,
+    rtId,
+    rtSecret,
+    jwtAssertion,
+    jwtId,
+    jwtSecret,
+    jwtScope,
+  ]);
 
   return (
     <SectionPanel
@@ -210,15 +293,12 @@ const AuthFlowsSection: React.FC = () => {
 
         <FlowDiagram
           steps={flowSteps[grantType]}
-          currentStep={displayResult ? 'token' : undefined}
+          currentStep={progress.currentStep}
+          completedSteps={progress.completedSteps}
           className="py-2"
         />
 
-        {error && (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-            <p className="text-xs text-red-400">{error}</p>
-          </div>
-        )}
+        {error && <ErrorExplainer error={error} />}
 
         {doc && <OperationDescription doc={doc} />}
 
@@ -229,29 +309,97 @@ const AuthFlowsSection: React.FC = () => {
             <div className="space-y-4">
               {grantType === 'authorization_code' && (
                 <div className="space-y-3">
-                  <Input label="Client ID" value={acId} onChange={(e) => setAcId(e.target.value)} placeholder="Client identifier registered in Authlete" />
-                  <Input label="Client Secret" type="password" value={acSecret} onChange={(e) => setAcSecret(e.target.value)} placeholder="Client secret for auth code exchange" />
-                  <Input label="Redirect URI" value={acRedirectUri} onChange={(e) => setAcRedirectUri(e.target.value)} placeholder="Must match a registered redirect URI" />
-                  <div className="pt-1">
-                    <Button onClick={startAuthCode} loading={loading} className="w-full sm:w-auto">
-                      <KeyRound className="h-4 w-4 mr-2" />
-                      Start Authorization Code Flow
-                    </Button>
-                    <p className="text-[0.6rem] text-muted-foreground mt-1.5">
-                      You'll be redirected to the login page to authenticate
-                    </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label="Client ID"
+                      value={acId}
+                      onChange={(e) => setAcId(e.target.value)}
+                      placeholder="Client identifier registered in Authlete"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={acSecret}
+                      onChange={(e) => setAcSecret(e.target.value)}
+                      placeholder="Used at the token endpoint, not here"
+                    />
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label="Redirect URI"
+                      value={acRedirectUri}
+                      onChange={(e) => setAcRedirectUri(e.target.value)}
+                      placeholder="Must match a registered redirect URI"
+                    />
+                    <Input
+                      label="Scope"
+                      value={acScope}
+                      onChange={(e) => setAcScope(e.target.value)}
+                      placeholder="openid profile email"
+                    />
+                  </div>
+
+                  <label className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/30 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={acUseDpop}
+                      onChange={(e) => void toggleDpop(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-indigo-500 mt-0.5 shrink-0 cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground leading-relaxed">
+                      <span className="text-foreground font-medium">
+                        Sender-constrain with DPoP
+                      </span>{' '}
+                      (RFC 9449) — generates a key, sends its thumbprint as{' '}
+                      <code className="text-accent-text">dpop_jkt</code>, and proves possession at
+                      the token endpoint. The token comes back as{' '}
+                      <code className="text-accent-text">token_type: DPoP</code> and must then be
+                      presented with the <code className="text-accent-text">DPoP</code> scheme,
+                      never <code className="text-accent-text">Bearer</code>.
+                    </span>
+                  </label>
+
+                  <AuthorizeRequestBuilder
+                    endpoint={AUTHORIZATION_ENDPOINT}
+                    seed={{ clientId: acId, redirectUri: acRedirectUri, scope: acScope }}
+                    dpopThumbprint={acUseDpop ? acDpopThumbprint : undefined}
+                    onSend={sendAuthorizeRequest}
+                  />
                 </div>
               )}
 
               {grantType === 'client_credentials' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={ccId} onChange={(e) => setCcId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={ccSecret} onChange={(e) => setCcSecret(e.target.value)} placeholder="Keep this confidential" />
+                    <Input
+                      label="Client ID"
+                      value={ccId}
+                      onChange={(e) => setCcId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={ccSecret}
+                      onChange={(e) => setCcSecret(e.target.value)}
+                      placeholder="Keep this confidential"
+                    />
                   </div>
-                  <Input label="Scope" value={ccScope} onChange={(e) => setCcScope(e.target.value)} placeholder="e.g. openid profile email" />
-                  <Button onClick={() => handleCall(ccId, ccSecret, () => tokenService.clientCredentials(ccId, ccSecret, ccScope))} loading={loading} className="w-full sm:w-auto">
+                  <Input
+                    label="Scope"
+                    value={ccScope}
+                    onChange={(e) => setCcScope(e.target.value)}
+                    placeholder="e.g. openid profile email"
+                  />
+                  <Button
+                    onClick={() =>
+                      handleCall(ccId, ccSecret, () =>
+                        tokenService.clientCredentials(ccId, ccSecret, ccScope),
+                      )
+                    }
+                    loading={loading}
+                    className="w-full sm:w-auto"
+                  >
                     <ArrowRightLeft className="h-4 w-4 mr-2" />
                     Get Token
                   </Button>
@@ -261,15 +409,50 @@ const AuthFlowsSection: React.FC = () => {
               {grantType === 'password' && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Username" value={pwUser} onChange={(e) => setPwUser(e.target.value)} placeholder="e.g. admin" />
-                    <Input label="Password" type="password" value={pwPass} onChange={(e) => setPwPass(e.target.value)} placeholder="User password" />
+                    <Input
+                      label="Username"
+                      value={pwUser}
+                      onChange={(e) => setPwUser(e.target.value)}
+                      placeholder="e.g. admin"
+                    />
+                    <Input
+                      label="Password"
+                      type="password"
+                      value={pwPass}
+                      onChange={(e) => setPwPass(e.target.value)}
+                      placeholder="User password"
+                    />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={pwId} onChange={(e) => setPwId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={pwSecret} onChange={(e) => setPwSecret(e.target.value)} placeholder="Client secret for confidential clients" />
+                    <Input
+                      label="Client ID"
+                      value={pwId}
+                      onChange={(e) => setPwId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={pwSecret}
+                      onChange={(e) => setPwSecret(e.target.value)}
+                      placeholder="Client secret for confidential clients"
+                    />
                   </div>
-                  <Input label="Scope" value={pwScope} onChange={(e) => setPwScope(e.target.value)} placeholder="e.g. openid profile email" />
-                  <Button onClick={() => handleCall(pwId, pwSecret, () => tokenService.passwordGrant(pwUser, pwPass, pwId, pwSecret, pwScope))} loading={loading} className="w-full sm:w-auto">
+                  <Input
+                    label="Scope"
+                    value={pwScope}
+                    onChange={(e) => setPwScope(e.target.value)}
+                    placeholder="e.g. openid profile email"
+                  />
+                  <Button
+                    onClick={() =>
+                      handleCall(pwId, pwSecret, () =>
+                        tokenService.passwordGrant(pwUser, pwPass, pwId, pwSecret, pwScope),
+                      )
+                    }
+                    loading={loading}
+                    className="w-full sm:w-auto"
+                  >
                     <LogIn className="h-4 w-4 mr-2" />
                     Get Token
                   </Button>
@@ -278,12 +461,36 @@ const AuthFlowsSection: React.FC = () => {
 
               {grantType === 'refresh_token' && (
                 <div className="space-y-3">
-                  <Input label="Refresh Token" value={rtToken} onChange={(e) => setRtToken(e.target.value)} placeholder="Paste a refresh token from a previous flow" />
+                  <Input
+                    label="Refresh Token"
+                    value={rtToken}
+                    onChange={(e) => setRtToken(e.target.value)}
+                    placeholder="Paste a refresh token from a previous flow"
+                  />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={rtId} onChange={(e) => setRtId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={rtSecret} onChange={(e) => setRtSecret(e.target.value)} placeholder="Client secret for confidential clients" />
+                    <Input
+                      label="Client ID"
+                      value={rtId}
+                      onChange={(e) => setRtId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={rtSecret}
+                      onChange={(e) => setRtSecret(e.target.value)}
+                      placeholder="Client secret for confidential clients"
+                    />
                   </div>
-                  <Button onClick={() => handleCall(rtId, rtSecret, () => tokenService.refreshToken(rtToken, rtId, rtSecret))} loading={loading} className="w-full sm:w-auto">
+                  <Button
+                    onClick={() =>
+                      handleCall(rtId, rtSecret, () =>
+                        tokenService.refreshToken(rtToken, rtId, rtSecret),
+                      )
+                    }
+                    loading={loading}
+                    className="w-full sm:w-auto"
+                  >
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh Token
                   </Button>
@@ -305,10 +512,38 @@ const AuthFlowsSection: React.FC = () => {
                     placeholder="e.g. openid profile email (optional)"
                   />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Input label="Client ID" value={jwtId} onChange={(e) => setJwtId(e.target.value)} placeholder="Your registered client ID" />
-                    <Input label="Client Secret" type="password" value={jwtSecret} onChange={(e) => setJwtSecret(e.target.value)} placeholder="Client secret (optional)" />
+                    <Input
+                      label="Client ID"
+                      value={jwtId}
+                      onChange={(e) => setJwtId(e.target.value)}
+                      placeholder="Your registered client ID"
+                    />
+                    <Input
+                      label="Client Secret"
+                      type="password"
+                      value={jwtSecret}
+                      onChange={(e) => setJwtSecret(e.target.value)}
+                      placeholder="Client secret (optional)"
+                    />
                   </div>
-                  <Button onClick={() => handleCall(jwtId, jwtSecret, () => tokenService.jwtBearerGrant(jwtAssertion, jwtId || undefined, jwtSecret || undefined, jwtScope || undefined))} loading={loading} disabled={!jwtAssertion || loading !== null} className="w-full sm:w-auto">
+                  {/* `disabled` reads `loading` directly — it was `loading !== null`, and this hook's
+                      `loading` is a boolean, so the button could never enable and the RFC 7523 grant
+                      was unreachable. See the note in StepUpSection: same idiom, same cause. */}
+                  <Button
+                    onClick={() =>
+                      handleCall(jwtId, jwtSecret, () =>
+                        tokenService.jwtBearerGrant(
+                          jwtAssertion,
+                          jwtId || undefined,
+                          jwtSecret || undefined,
+                          jwtScope || undefined,
+                        ),
+                      )
+                    }
+                    loading={loading}
+                    disabled={!jwtAssertion || loading}
+                    className="w-full sm:w-auto"
+                  >
                     <FileText className="h-4 w-4 mr-2" />
                     Exchange JWT for Token
                   </Button>
@@ -318,12 +553,14 @@ const AuthFlowsSection: React.FC = () => {
                 </div>
               )}
 
-              <RequestBuilder
-                method={requestPreview.method}
-                url={requestPreview.url}
-                headers={requestPreview.headers}
-                body={'body' in requestPreview ? requestPreview.body : undefined}
-              />
+              {requestPreview && (
+                <RequestBuilder
+                  method={requestPreview.method}
+                  url={requestPreview.url}
+                  headers={requestPreview.headers}
+                  body={'body' in requestPreview ? requestPreview.body : undefined}
+                />
+              )}
             </div>
           }
           right={

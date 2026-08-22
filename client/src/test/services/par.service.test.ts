@@ -34,7 +34,10 @@ function fail(status: number, body: string, headers?: Record<string, string>) {
 describe('parService.pushedAuthorization', () => {
   it('sends POST to PAR endpoint', async () => {
     mockFetch.mockResolvedValue(ok({ requestUri: 'urn:ietf:params:oauth:request_uri:abc' }));
-    const result = await parService.pushedAuthorization({ parameters: 'response_type=code&client_id=cid', clientId: 'cid' });
+    const result = await parService.pushedAuthorization({
+      parameters: 'response_type=code&client_id=cid',
+      clientId: 'cid',
+    });
     expect(result).toEqual({ requestUri: 'urn:ietf:params:oauth:request_uri:abc' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/par', {
       method: 'POST',
@@ -45,15 +48,20 @@ describe('parService.pushedAuthorization', () => {
 
   it('rejects with error on non-ok response', async () => {
     mockFetch.mockResolvedValue(fail(400, 'Bad request'));
-    await expect(parService.pushedAuthorization({ parameters: 'bad' })).rejects.toThrow('Bad request');
+    await expect(parService.pushedAuthorization({ parameters: 'bad' })).rejects.toThrow(
+      'Bad request',
+    );
   });
 
   it('sends an Authorization: Basic header when basic credentials are supplied', async () => {
     mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
-    await parService.pushedAuthorization({ parameters: 'response_type=code' }, {
-      clientId: 'cid',
-      clientSecret: 'sec',
-    });
+    await parService.pushedAuthorization(
+      { parameters: 'response_type=code' },
+      {
+        clientId: 'cid',
+        clientSecret: 'sec',
+      },
+    );
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/par', {
       method: 'POST',
       headers: {
@@ -99,9 +107,7 @@ describe('parService.pushedAuthorizationWithDpop', () => {
   });
 
   it('returns undefined dpopNonce when no nonce header present', async () => {
-    mockFetch.mockResolvedValue(
-      ok({ requestUri: 'urn:ietf:params:oauth:request_uri:test' }),
-    );
+    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:ietf:params:oauth:request_uri:test' }));
     const result = await parService.pushedAuthorizationWithDpop(
       { parameters: 'response_type=code&client_id=cid' },
       dpopProof,
@@ -119,11 +125,10 @@ describe('parService.pushedAuthorizationWithDpop', () => {
 
   it('sends both DPoP and Authorization: Basic when basic credentials are supplied', async () => {
     mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
-    await parService.pushedAuthorizationWithDpop(
-      { parameters: 'response_type=code' },
-      dpopProof,
-      { clientId: 'cid', clientSecret: 'sec' },
-    );
+    await parService.pushedAuthorizationWithDpop({ parameters: 'response_type=code' }, dpopProof, {
+      clientId: 'cid',
+      clientSecret: 'sec',
+    });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/par', {
       method: 'POST',
       headers: {

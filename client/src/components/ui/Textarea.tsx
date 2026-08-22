@@ -31,7 +31,11 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           {...props}
         />
-        {error && <span id={errorId} className="text-xs text-red-400" role="alert">{error}</span>}
+        {error && (
+          <span id={errorId} className="text-xs text-danger-text" role="alert">
+            {error}
+          </span>
+        )}
       </div>
     );
   },

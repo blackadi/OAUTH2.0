@@ -1,33 +1,24 @@
-import { JWK, CryptoKeyPair, base64UrlEncode } from './crypto-utils';
+import { JWK, CryptoKeyPair, base64UrlEncode, generateP256KeyPair } from './crypto-utils';
 
 export type DPoPKeyPair = CryptoKeyPair;
 
+/**
+ * A DPoP key: P-256, untagged.
+ *
+ * No `alg` or `use` on the JWK, deliberately — RFC 9449 §4.2 puts `alg` in the proof's JOSE header,
+ * which `createProof` sets, and the `jwk` member carries the key itself. Tagging it here would be
+ * harmless but redundant, and the difference from the signing key is the whole reason the shared
+ * generator takes an `extras` argument rather than assuming one shape.
+ *
+ * Kept as a named wrapper rather than re-exporting `generateP256KeyPair`, so every existing importer
+ * and every test keeps working unchanged.
+ */
 export async function generateKeyPair(): Promise<DPoPKeyPair> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
-  );
-
-  const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey) as JWK;
-  const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey) as JWK;
-
-  const kid = base64UrlEncode(
-    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(publicJwk))),
-  );
-
-  return {
-    publicKey: { ...publicJwk, kid },
-    privateKey: { ...privateJwk, kid },
-    kid,
-  };
+  return generateP256KeyPair();
 }
 
 export async function computeAth(accessToken: string): Promise<string> {
-  const hash = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(accessToken),
-  );
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(accessToken));
   return base64UrlEncode(hash);
 }
 

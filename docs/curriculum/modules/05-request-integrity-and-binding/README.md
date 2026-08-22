@@ -259,10 +259,15 @@ compares DPoP with mTLS as a design decision. That is what is here.
 ## Where this lives in the code
 
 - **`client/src/services/dpop.service.ts`** — the reference implementation, and the best file in the repo for
-  reading a JWS being built by hand. Line ~70 sets the `jwk` header member; ~59–60 attaches `ath` (computed
-  by `computeAth` at ~26); ~76–84 handles the raw P1363 signature. Every one of the three bugs above is a
+  reading a JWS being built by hand. Line ~64 sets the `jwk` header member; ~53–54 attaches `ath` (computed
+  by `computeAth` at ~20); ~76–78 handles the raw P1363 signature. Every one of the three bugs above is a
   comment away.
 
+  > **They drifted again on 2026-08-22**, and this time nothing had to notice by hand: de-duplicating the
+  > P-256 key generator shortened the file by six lines, `check-docs.mjs` reported the P1363 pointer as
+  > past end-of-file, and all four were re-measured. That is the check earning its place — the same drift,
+  > caught in seconds rather than surviving for weeks.
+  >
   > **Those three pointers were wrong until 2026-08-14**, and how they were found is the point. They read
   > `~89`, `~81–83` and `~95–101` against an **87-line** file — two of them past end-of-file entirely. The
   > form carries no colon, so `check-docs.mjs`'s `path.ts:NNN` check never looked at it; it was **CUR-3b-W5**,

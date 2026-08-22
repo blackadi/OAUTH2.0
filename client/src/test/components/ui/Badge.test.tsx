@@ -17,7 +17,9 @@ describe('Badge', () => {
   it('applies variant class', () => {
     render(<Badge variant="success">Success</Badge>);
     const badge = screen.getByText('Success');
-    expect(badge.className).toContain('text-green-300');
+    // Semantic token rather than a shade: the literal was chosen against a near-black ground and
+    // could not carry to a white one. See scripts/check-contrast.mjs.
+    expect(badge.className).toContain('text-success-text');
   });
 
   it('applies custom className', () => {

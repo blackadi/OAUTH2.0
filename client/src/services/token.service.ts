@@ -46,7 +46,12 @@ async function clientCredentials(
   scope: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'client_credentials', scope });
-  return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+  return http.postBasicAuth(
+    TOKEN_ENDPOINT,
+    params,
+    clientId,
+    clientSecret,
+  ) as Promise<TokenResponse>;
 }
 
 async function passwordGrant(
@@ -57,7 +62,12 @@ async function passwordGrant(
   scope: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'password', username, password, scope });
-  return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+  return http.postBasicAuth(
+    TOKEN_ENDPOINT,
+    params,
+    clientId,
+    clientSecret,
+  ) as Promise<TokenResponse>;
 }
 
 async function refreshToken(
@@ -66,7 +76,12 @@ async function refreshToken(
   clientSecret: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken });
-  return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+  return http.postBasicAuth(
+    TOKEN_ENDPOINT,
+    params,
+    clientId,
+    clientSecret,
+  ) as Promise<TokenResponse>;
 }
 
 async function jwtBearerGrant(
@@ -81,7 +96,12 @@ async function jwtBearerGrant(
   });
   if (scope) params.append('scope', scope);
   if (clientId && clientSecret) {
-    return http.postBasicAuth(TOKEN_ENDPOINT, params, clientId, clientSecret) as Promise<TokenResponse>;
+    return http.postBasicAuth(
+      TOKEN_ENDPOINT,
+      params,
+      clientId,
+      clientSecret,
+    ) as Promise<TokenResponse>;
   }
   if (clientId) params.append('client_id', clientId);
   return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;
@@ -162,15 +182,7 @@ async function revocation(
   const params = new URLSearchParams({ token });
   if (tokenTypeHint) params.append('token_type_hint', tokenTypeHint);
   if (clientId && clientSecret) {
-    const response = await fetch(REVOCATION_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-      },
-      body: params.toString(),
-    });
-    if (!response.ok) throw new Error(await response.text());
+    await http.postBasicAuth(REVOCATION_ENDPOINT, params, clientId, clientSecret);
   } else {
     await http.postForm(REVOCATION_ENDPOINT, params);
   }
@@ -181,11 +193,10 @@ async function discovery(): Promise<unknown> {
 }
 
 async function getJwks(): Promise<JwksResponse> {
-  const response = await fetch(JWKS_ENDPOINT, {
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) throw new Error(`JWKS request failed with status ${response.status}`);
-  const data = (await response.json()) as unknown;
+  // The one response in this file that is *validated* rather than passed through, because the JWT
+  // inspector will verify signatures against it: a document with no `keys` array is not a key set, and
+  // failing here beats failing later inside a verification routine.
+  const data = await http.getJson(JWKS_ENDPOINT);
   if (!data || typeof data !== 'object' || !('keys' in data) || !Array.isArray(data.keys)) {
     throw new Error('Invalid JWKS response format');
   }

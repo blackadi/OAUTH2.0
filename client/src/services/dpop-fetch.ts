@@ -18,6 +18,8 @@
  * `DpopProofSource` accepts a factory and not just a string — see below.
  */
 
+import { sendRaw } from './transport';
+
 const NONCE_KEY = 'dpop_nonce';
 
 /**
@@ -28,6 +30,20 @@ const NONCE_KEY = 'dpop_nonce';
  * `FapiSection` is a real caller of that form: the user pastes a proof and supplies their own nonce.
  */
 export type DpopProofSource = string | ((nonce?: string) => Promise<string>);
+
+/**
+ * What a caller supplies for the request itself.
+ *
+ * Narrower than `RequestInit` deliberately: the transport needs a string body and a plain header record,
+ * and `RequestInit` permits `Headers`, `FormData` and streams that would need runtime narrowing. All
+ * four call sites already pass exactly this shape, so tightening the type costs nothing and removes a
+ * cast at the boundary.
+ */
+export interface DpopRequestInit {
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+}
 
 export interface DpopResult {
   data: unknown;
@@ -79,35 +95,32 @@ async function mint(proof: DpopProofSource, nonce?: string): Promise<string> {
 export async function dpopRequest(
   url: string,
   proof: DpopProofSource,
-  buildInit: (proof: string) => RequestInit,
+  buildInit: (proof: string) => DpopRequestInit,
 ): Promise<DpopResult> {
   let nonce = getStoredNonce();
-  let response = await fetch(url, buildInit(await mint(proof, nonce)));
-  let fresh = response.headers.get('dpop-nonce') || undefined;
+  // Both attempts go through `sendRaw`, so a DPoP call appears in the request trace like any other —
+  // and a nonce dance appears as *two* entries, the `400 use_dpop_nonce` and then the success. That
+  // pairing is the clearest illustration of RFC 9449 §8 this app can show, and it used to be invisible.
+  let result = await sendRaw({ ...buildInit(await mint(proof, nonce)), url, label: 'dpop' });
+  let fresh = result.headers['dpop-nonce'] || undefined;
   if (fresh) {
     storeNonce(fresh);
     nonce = fresh;
   }
 
-  if (!response.ok) {
-    const bodyText = await response.text();
-    const retryable = isNonceError(bodyText) && !!fresh && typeof proof !== 'string';
-    if (!retryable) throw new Error(bodyText);
+  if (!result.ok) {
+    const retryable = isNonceError(result.raw) && !!fresh && typeof proof !== 'string';
+    if (!retryable) throw new Error(result.raw);
 
-    response = await fetch(url, buildInit(await mint(proof, nonce)));
-    fresh = response.headers.get('dpop-nonce') || undefined;
+    result = await sendRaw({
+      ...buildInit(await mint(proof, nonce)),
+      url,
+      label: 'dpop (nonce retry)',
+    });
+    fresh = result.headers['dpop-nonce'] || undefined;
     if (fresh) storeNonce(fresh);
-    if (!response.ok) throw new Error(await response.text());
+    if (!result.ok) throw new Error(result.raw);
   }
 
-  const text = await response.text();
-  let data: unknown = {};
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-  }
-  return { data, dpopNonce: fresh };
+  return { data: result.body, dpopNonce: fresh };
 }

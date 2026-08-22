@@ -1,0 +1,10 @@
+# Generated files. `authlete-codes.generated.ts` is produced by
+# `scripts/extract-authlete-codes.mjs` from the vendored Authlete OpenAPI document, and
+# `--check` asserts the file on disk is byte-identical to what the generator emits. Letting
+# Prettier reformat it would break that check on the next run, for no benefit — nobody reads
+# it, and the generator owns its shape.
+src/data/*.generated.ts
+
+# Build output and coverage reports.
+dist/
+coverage/

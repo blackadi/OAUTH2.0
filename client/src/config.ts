@@ -1,18 +1,9 @@
-export const API_BASE_URL = getEnvVar(
-  "VITE_API_BASE_URL",
-  "http://localhost:3000"
-);
+export const API_BASE_URL = getEnvVar('VITE_API_BASE_URL', 'http://localhost:3000');
 
-export const CLIENT_ID = getEnvVar("VITE_CLIENT_ID", "your_client_id");
-export const CLIENT_SECRET = getEnvVar(
-  "VITE_CLIENT_SECRET",
-  "your_client_secret"
-);
-export const REDIRECT_URI = getEnvVar(
-  "VITE_REDIRECT_URI",
-  "http://localhost:3001/callback"
-);
-export const DEFAULT_SCOPES = getEnvVar("VITE_SCOPES", "openid profile email");
+export const CLIENT_ID = getEnvVar('VITE_CLIENT_ID', 'your_client_id');
+export const CLIENT_SECRET = getEnvVar('VITE_CLIENT_SECRET', 'your_client_secret');
+export const REDIRECT_URI = getEnvVar('VITE_REDIRECT_URI', 'http://localhost:3001/callback');
+export const DEFAULT_SCOPES = getEnvVar('VITE_SCOPES', 'openid profile email');
 
 export const AUTHORIZATION_ENDPOINT = `${API_BASE_URL}/api/authorization`;
 export const TOKEN_ENDPOINT = `${API_BASE_URL}/api/token`;
@@ -85,25 +76,42 @@ export const FAPI_CONFIG_ENDPOINT = `${API_BASE_URL}/api/fapi/config`;
 export const FAPI_STATUS_ENDPOINT = `${API_BASE_URL}/api/fapi/status`;
 
 export const MCP_AS_METADATA_ENDPOINT = `${API_BASE_URL}/api/.well-known/oauth-authorization-server`;
-export const MCP_CIMD_ENDPOINT = `${API_BASE_URL}/api/authorization`; // CIMD uses standard auth endpoint
+/**
+ * There is no CIMD endpoint, and there never was.
+ *
+ * This used to be `${API_BASE_URL}/api/authorization` with a comment conceding it — a constant whose
+ * name promised something the value did not provide. CIMD (Client ID Metadata Document) is handled
+ * entirely inside Authlete: with `clientIdMetadataDocumentSupported` on, an HTTPS URL used as a
+ * `client_id` makes the authorization server fetch that URL itself. The document lives on the
+ * *client's* host, so the address is whatever the user types — which is why `McpSection` asks for it
+ * and passes it to `fetchCimdMetadata`, and why no constant here can supply it.
+ */
 
 export const HEALTH_ENDPOINT = `${API_BASE_URL}/api/health`;
 export const HEALTH_ALL_ENDPOINT = `${API_BASE_URL}/api/health/all`;
 export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;
 
 export const DEV_SERVER = {
-  port: parseInt(getEnvVar("VITE_DEV_CLIENT_PORT", "3001")),
-  host: getEnvVar("VITE_DEV_CLIENT_HOST", "localhost"),
+  port: parseInt(getEnvVar('VITE_DEV_CLIENT_PORT', '3001')),
+  host: getEnvVar('VITE_DEV_CLIENT_HOST', 'localhost'),
 };
 
 export const PROD_CONFIG = {
-  apiBaseUrl: getEnvVar("VITE_PROD_API_BASE_URL", API_BASE_URL),
-  redirectUri: getEnvVar("VITE_PROD_REDIRECT_URI", REDIRECT_URI),
+  apiBaseUrl: getEnvVar('VITE_PROD_API_BASE_URL', API_BASE_URL),
+  redirectUri: getEnvVar('VITE_PROD_REDIRECT_URI', REDIRECT_URI),
 };
 
+/**
+ * Read a build-time variable, distinguishing "unset" from "deliberately empty".
+ *
+ * `value || defaultValue` treated an empty string as absent, so `VITE_CLIENT_SECRET=` — the correct way
+ * to say *this is a public client with no secret* — silently became the literal placeholder
+ * `your_client_secret`, which the app then sent as a real credential. An explicit empty value is now
+ * honoured, and only a genuinely missing variable falls back.
+ */
 function getEnvVar(key: string, defaultValue: string): string {
   const value = import.meta.env[key];
-  return value || defaultValue;
+  return value === undefined || value === null ? defaultValue : String(value);
 }
 
 export const isDevelopment = import.meta.env.DEV;

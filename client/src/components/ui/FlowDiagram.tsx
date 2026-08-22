@@ -16,34 +16,45 @@ interface FlowDiagramProps {
 
 function FlowDiagram({ steps, currentStep, completedSteps = [], className }: FlowDiagramProps) {
   return (
-    <div className={cn('flex items-center gap-0', className)}>
+    <div
+      className={cn('flex items-center gap-0', className)}
+      role="list"
+      aria-label="Flow progress"
+    >
       {steps.map((step, i) => {
         const isCompleted = completedSteps.includes(step.id);
         const isCurrent = currentStep === step.id;
         const isPending = !isCompleted && !isCurrent;
 
+        // Colour alone carried the state, which is invisible to anyone who cannot distinguish these
+        // hues and to anyone using a screen reader. The icon already differs for "done"; this adds the
+        // text equivalent.
+        const state = isCompleted ? 'completed' : isCurrent ? 'current' : 'not started';
+
         return (
-          <div key={step.id} className="flex items-center flex-1 min-w-0">
+          <div
+            key={step.id}
+            className="flex items-center flex-1 min-w-0"
+            aria-label={`Step ${i + 1}, ${step.label}: ${state}`}
+            aria-current={isCurrent ? 'step' : undefined}
+          >
             <div className="flex flex-col items-center gap-1.5 flex-1">
               <div
                 className={cn(
                   'flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all duration-300',
-                  isCompleted && 'bg-green-500/20 text-green-400 border-2 border-green-500/50',
-                  isCurrent && 'bg-indigo-500/20 text-indigo-300 border-2 border-indigo-500 ring-2 ring-indigo-500/20',
+                  isCompleted && 'bg-green-500/20 text-success-text border-2 border-green-500/50',
+                  isCurrent &&
+                    'bg-indigo-500/20 text-accent-text border-2 border-indigo-500 ring-2 ring-indigo-500/20',
                   isPending && 'bg-muted/30 text-muted-foreground border-2 border-border',
                 )}
               >
-                {isCompleted ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <span>{i + 1}</span>
-                )}
+                {isCompleted ? <Check className="h-3.5 w-3.5" /> : <span>{i + 1}</span>}
               </div>
               <span
                 className={cn(
                   'text-[0.6rem] font-medium text-center leading-tight px-1',
-                  isCompleted && 'text-green-400',
-                  isCurrent && 'text-indigo-300',
+                  isCompleted && 'text-success-text',
+                  isCurrent && 'text-accent-text',
                   isPending && 'text-muted-foreground/60',
                 )}
               >
@@ -53,10 +64,7 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
             {i < steps.length - 1 && (
               <div className="shrink-0 mx-1">
                 <ArrowRight
-                  className={cn(
-                    'h-3 w-3',
-                    isCompleted ? 'text-green-500/50' : 'text-border',
-                  )}
+                  className={cn('h-3 w-3', isCompleted ? 'text-success-text/50' : 'text-border')}
                 />
               </div>
             )}

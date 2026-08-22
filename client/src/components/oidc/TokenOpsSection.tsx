@@ -3,15 +3,20 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
-import { CLIENT_ID } from '@/config';
+import { createProof, computeAth } from '@/services/dpop.service';
+import type { JWK } from '@/services/crypto-utils';
+import { CLIENT_ID, USERINFO_ENDPOINT } from '@/config';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { AdminAuth } from '@/components/layout/AdminAuth';
+import { SESSION_KEYS, readKey, readJsonKey } from '@/services/session-keys';
+import { useCredentials } from '@/context/CredentialContext';
 
 type TokenOp = 'userinfo' | 'introspect' | 'introspect-std' | 'revoke';
 
@@ -23,16 +28,35 @@ const OPS: { key: TokenOp; label: string }[] = [
 ];
 
 function TokenOpsSection() {
-  const { tokenSet } = useToken();
+  const { tokenSet, isDpopBound } = useToken();
   const at = tokenSet?.access_token;
+  const dpopKey = readJsonKey<JWK>(SESSION_KEYS.dpopPrivateKey);
+
+  /**
+   * UserInfo is a protected resource, so the scheme is decided by the token, not by preference.
+   *
+   * This called `tokenService.userInfo()` unconditionally, which sends `Authorization: Bearer`. RFC
+   * 9449 §7.1 gives a sender-constrained token no bearer option and §7.2 requires the refusal;
+   * Authlete enforces it with `[A089311]`. Since the Grant Flows section used to mint a DPoP-bound
+   * token whether you asked or not, the app's own headline flow produced a token this button could not
+   * use — failing with a vendor code and no explanation.
+   *
+   * `ath` is REQUIRED when a proof accompanies an access token (§7.1) — and it is `ath`, not `sub`.
+   */
+  const fetchUserinfo = async () => {
+    if (!isDpopBound || !dpopKey) return tokenService.userInfo(at!);
+    const ath = await computeAth(at!);
+    const { data } = await tokenService.userInfoWithDpop(at!, (nonce) =>
+      createProof(dpopKey, 'POST', USERINFO_ENDPOINT, ath, nonce),
+    );
+    return data;
+  };
   const { loading, result, error, call } = useDiscriminatedAsyncCall();
   const [activeOp, setActiveOp] = useState<TokenOp | null>(null);
 
-  const [revClientId, setRevClientId] = useState(
-    sessionStorage.getItem('active_client_id') || CLIENT_ID,
-  );
+  const [revClientId, setRevClientId] = useState(readKey(SESSION_KEYS.activeClientId) || CLIENT_ID);
   const [revClientSecret, setRevClientSecret] = useState(
-    sessionStorage.getItem('active_client_secret') || '',
+    readKey(SESSION_KEYS.activeClientSecret) || '',
   );
 
   // RFC 9470: Step-up auth validation inputs for Authlete introspection
@@ -41,8 +65,10 @@ function TokenOpsSection() {
 
   // RFC 7662 §2.1 requires the introspection endpoint to be protected. Both endpoints take this
   // deployment's admin credentials — see the note in services/token.service.ts.
-  const [adminId, setAdminId] = useState('');
-  const [adminSecret, setAdminSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: adminId, clientSecret: adminSecret } = useCredentials();
 
   const doc = activeOp ? getDoc('token-ops', activeOp) : undefined;
 
@@ -58,16 +84,21 @@ function TokenOpsSection() {
 
   return (
     <SectionPanel title="Token Operations" description="Inspect, introspect, and manage tokens">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {!at && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-warning-text">
           <p className="font-medium">No access token available</p>
-          <p className="mt-1 text-xs text-amber-300/80">
-            Obtain a token first via the Grant Flows section (Authorization Code, Client Credentials, etc.), then return here.
+          <p className="mt-1 text-xs text-warning-text/80">
+            Obtain a token first via the Grant Flows section (Authorization Code, Client
+            Credentials, etc.), then return here.
           </p>
           <Link to="/auth-flows">
-            <Button variant="outline" size="sm" className="mt-2 border-amber-500/50 text-amber-200 hover:bg-amber-500/20">
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 border-amber-500/50 text-warning-text hover:bg-amber-500/20"
+            >
               Go to Grant Flows
             </Button>
           </Link>
@@ -75,8 +106,17 @@ function TokenOpsSection() {
       )}
 
       {at && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-emerald-300">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-success-text">
           Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
+          {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
+              so it is stated rather than left to be discovered. */}
+          <span className="ml-2 text-success-text/80">
+            {isDpopBound
+              ? dpopKey
+                ? '· sender-constrained, so UserInfo is called with the DPoP scheme and a proof'
+                : '· sender-constrained, but no DPoP key is in this session — UserInfo will be refused'
+              : '· bearer token, presented with the Bearer scheme'}
+          </span>
         </div>
       )}
 
@@ -92,17 +132,27 @@ function TokenOpsSection() {
               handleCall(op.key, () => {
                 switch (op.key) {
                   case 'userinfo':
-                    return tokenService.userInfo(at!);
+                    return fetchUserinfo();
                   case 'introspect': {
                     const opts: { acrValues?: string; maxAge?: number } = {};
                     if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();
                     if (introspectMaxAge.trim()) opts.maxAge = Number(introspectMaxAge.trim());
-                    return tokenService.introspection(at!, adminId, adminSecret, Object.keys(opts).length ? opts : undefined);
+                    return tokenService.introspection(
+                      at!,
+                      adminId,
+                      adminSecret,
+                      Object.keys(opts).length ? opts : undefined,
+                    );
                   }
                   case 'introspect-std':
                     return tokenService.introspectionStandard(at!, adminId, adminSecret);
                   case 'revoke':
-                    return tokenService.revocation(at!, revClientId || undefined, revClientSecret || undefined, 'access_token');
+                    return tokenService.revocation(
+                      at!,
+                      revClientId || undefined,
+                      revClientSecret || undefined,
+                      'access_token',
+                    );
                 }
               });
             }}
@@ -116,30 +166,38 @@ function TokenOpsSection() {
 
       {activeOp === 'revoke' && (
         <div className="space-y-3">
-          <Input label="Revocation Client ID" value={revClientId} onChange={(e) => setRevClientId(e.target.value)} placeholder="The client the token belongs to" />
-          <Input label="Revocation Client Secret" type="password" value={revClientSecret} onChange={(e) => setRevClientSecret(e.target.value)} placeholder="Client secret for revocation auth" />
+          <Input
+            label="Revocation Client ID"
+            value={revClientId}
+            onChange={(e) => setRevClientId(e.target.value)}
+            placeholder="The client the token belongs to"
+          />
+          <Input
+            label="Revocation Client Secret"
+            type="password"
+            value={revClientSecret}
+            onChange={(e) => setRevClientSecret(e.target.value)}
+            placeholder="Client secret for revocation auth"
+          />
         </div>
       )}
 
       {(activeOp === 'introspect' || activeOp === 'introspect-std') && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints take this
-            deployment&apos;s admin credentials. Without them the server answers <code>401</code> and never
-            reaches Authlete.
+            RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints
+            take this deployment&apos;s admin credentials. Without them the server answers{' '}
+            <code>401</code> and never reaches Authlete.
           </p>
-          <AdminAuth
-            clientId={adminId}
-            clientSecret={adminSecret}
-            onClientIdChange={setAdminId}
-            onClientSecretChange={setAdminSecret}
-          />
+          <AdminAuth />
         </div>
       )}
 
       {activeOp === 'introspect' && (
         <div className="space-y-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-          <p className="text-xs font-medium text-blue-300">RFC 9470 Step-Up Authentication Validation</p>
+          <p className="text-xs font-medium text-info-text">
+            RFC 9470 Step-Up Authentication Validation
+          </p>
           <Input
             label="ACR Values (space-separated)"
             value={introspectAcrValues}
@@ -154,7 +212,8 @@ function TokenOpsSection() {
             placeholder="e.g. 3600"
           />
           <p className="text-[0.6rem] text-muted-foreground">
-            If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns <code>insufficient_user_authentication</code> with the required values.
+            If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns{' '}
+            <code>insufficient_user_authentication</code> with the required values.
           </p>
         </div>
       )}

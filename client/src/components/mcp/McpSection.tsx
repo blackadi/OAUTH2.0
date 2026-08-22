@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { mcpService, dcrService } from '@/services';
 import { useAsyncCall, useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -13,13 +14,9 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { Spinner } from '@/components/ui/Spinner';
 import { getDoc } from '@/data/operationDocs';
-import {
-  API_BASE_URL,
-  CLIENT_ID,
-  REDIRECT_URI,
-  DEFAULT_SCOPES,
-} from '@/config';
+import { API_BASE_URL, CLIENT_ID, REDIRECT_URI, DEFAULT_SCOPES } from '@/config';
 import { createPkcePair } from '@/pkce';
+import { useCredentials } from '@/context/CredentialContext';
 
 type McpOp = 'discovery' | 'resource-metadata' | 'cimd';
 
@@ -58,9 +55,10 @@ function McpSection() {
   const { loading, result, error, call } = useAsyncCall();
   const wizAsync = useDiscriminatedAsyncCall<string>();
   const { loading: wizLoading, error: wizError, call: wizCall } = wizAsync;
-
-  const [authId, setAuthId] = useState('');
-  const [authSecret, setAuthSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
 
   // Discovery state
   const [issuerUrl, setIssuerUrl] = useState(API_BASE_URL);
@@ -101,7 +99,9 @@ function McpSection() {
   };
 
   const handleResourceMetadata = async () => {
-    const { data, error: err } = await call(() => mcpService.fetchProtectedResourceMetadata(resourceUrl));
+    const { data, error: err } = await call(() =>
+      mcpService.fetchProtectedResourceMetadata(resourceUrl),
+    );
     if (data) {
       toast.success('Protected resource metadata loaded');
     } else {
@@ -120,7 +120,9 @@ function McpSection() {
 
   // Wizard step handlers
   const wizStepDiscover = useCallback(async () => {
-    const { data, error: err } = await wizCall('Discover AS', () => mcpService.fetchAsMetadata(wizIssuer));
+    const { data, error: err } = await wizCall('Discover AS', () =>
+      mcpService.fetchAsMetadata(wizIssuer),
+    );
     if (data) {
       const asData = data as AsMetadata;
       setWizAsData(asData);
@@ -135,7 +137,9 @@ function McpSection() {
       toast.error('Enter a CIMD URL first');
       return;
     }
-    const { data, error: err } = await wizCall('Fetch CIMD', () => mcpService.fetchCimdMetadata(wizCimdUrl));
+    const { data, error: err } = await wizCall('Fetch CIMD', () =>
+      mcpService.fetchCimdMetadata(wizCimdUrl),
+    );
     if (data) {
       const cimdData = data as CimdMetadata;
       setWizCimdData(cimdData);
@@ -168,12 +172,17 @@ function McpSection() {
     );
     if (data) {
       const raw = data as Record<string, unknown>;
-      const responseContent = typeof raw.responseContent === 'string' ? JSON.parse(raw.responseContent as string) : raw;
+      const responseContent =
+        typeof raw.responseContent === 'string' ? JSON.parse(raw.responseContent as string) : raw;
       const clientId = (responseContent.client_id || responseContent.clientId || '') as string;
-      const clientSecret = (responseContent.client_secret || responseContent.clientSecret || '') as string;
+      const clientSecret = (responseContent.client_secret ||
+        responseContent.clientSecret ||
+        '') as string;
       if (clientId) {
         setWizClientId(clientId);
-        toast.success(`DCR registered: client_id=${clientId}${clientSecret ? ' (confidential)' : ' (public)'}`);
+        toast.success(
+          `DCR registered: client_id=${clientId}${clientSecret ? ' (confidential)' : ' (public)'}`,
+        );
       }
     } else {
       toast.error(err);
@@ -220,7 +229,16 @@ function McpSection() {
     } else {
       toast.error(err);
     }
-  }, [wizCode, wizCodeVerifier, wizAsData, wizIssuer, wizClientId, wizRedirectUri, wizResource, wizCall]);
+  }, [
+    wizCode,
+    wizCodeVerifier,
+    wizAsData,
+    wizIssuer,
+    wizClientId,
+    wizRedirectUri,
+    wizResource,
+    wizCall,
+  ]);
 
   const wizStepUserinfo = useCallback(async () => {
     const accessToken = (wizTokenResult as Record<string, unknown>)?.access_token as string;
@@ -240,21 +258,54 @@ function McpSection() {
     }
   }, [wizTokenResult, wizAsData, wizIssuer, wizCall]);
 
+  const [wizIntrospectResult, setWizIntrospectResult] = useState<Record<string, unknown> | null>(
+    null,
+  );
+
+  /**
+   * Introspect the token the wizard just obtained.
+   *
+   * `mcpService.introspectToken` existed and was called from nowhere, so the `mcp.introspect` entry in
+   * the documentation registry had no surface to render on — and had it been wired as written it would
+   * have failed, because it sent no credentials to an endpoint that requires them. Both halves are
+   * closed here: the endpoint comes from the AS metadata the wizard already fetched rather than from
+   * string surgery on the token endpoint, and the admin credentials come from the field at the top of
+   * this section. RFC 7662 §2.1 requires the endpoint to be protected; this deployment protects it with
+   * management credentials, so without them the answer is 401 and nothing else.
+   */
+  const wizStepIntrospect = useCallback(async () => {
+    const accessToken = (wizTokenResult as Record<string, unknown>)?.access_token as string;
+    if (!accessToken) {
+      toast.error('No access token available — complete token exchange first');
+      return;
+    }
+    if (!authId || !authSecret) {
+      toast.error("Introspection needs this deployment's admin credentials — fill them in above");
+      return;
+    }
+    const endpoint =
+      (wizAsData?.introspection_endpoint as string | undefined) ||
+      `${wizIssuer}/api/introspection/standard`;
+    const { data, error: err } = await wizCall('Introspect', () =>
+      mcpService.introspectToken(endpoint, accessToken, authId, authSecret),
+    );
+    if (data) {
+      setWizIntrospectResult(data as Record<string, unknown>);
+      toast.success('Token introspected');
+    } else {
+      toast.error(err);
+    }
+  }, [wizTokenResult, wizAsData, wizIssuer, authId, authSecret, wizCall]);
+
   return (
     <SectionPanel
       title="MCP (Model Context Protocol) OAuth 2.1"
       description="Test MCP authorization flows — discovery, CIMD registration, and full PKCE + resource indicator flow"
     >
-      <AdminAuth
-        clientId={authId}
-        clientSecret={authSecret}
-        onClientIdChange={setAuthId}
-        onClientSecretChange={setAuthSecret}
-        label="Admin (for DCR)"
-      />
+      <AdminAuth label="Admin (for DCR)" />
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      {wizError && <p className="text-xs text-red-400">{wizError}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
+      {wizError && <p className="text-xs text-danger-text">{wizError}</p>}
 
       <TabBar options={MCP_OPS} value={activeOp} onChange={setActiveOp} />
 
@@ -314,7 +365,8 @@ function McpSection() {
       <div className="mt-6 pt-4 border-t border-border">
         <h3 className="text-sm font-medium text-foreground mb-3">Full MCP Flow Wizard</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          Walk through the complete MCP OAuth 2.1 flow step by step: discover the AS, register a client, authorize, exchange tokens, and fetch user info.
+          Walk through the complete MCP OAuth 2.1 flow step by step: discover the AS, register a
+          client, authorize, exchange tokens, and fetch user info.
         </p>
 
         {/* ── Step 1: Discovery ─────────────────────────── */}
@@ -339,10 +391,19 @@ function McpSection() {
               </Button>
               {wizAsData && (
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {wizAsData.issuer && <Badge variant="info">Issuer: {String(wizAsData.issuer).slice(0, 40)}</Badge>}
-                  {wizAsData.registration_endpoint && <Badge variant="success">DCR Supported</Badge>}
-                  {wizAsData.resource_indicators_supported && <Badge variant="success">Resource Indicators</Badge>}
-                  {Array.isArray(wizAsData.code_challenge_methods_supported) && wizAsData.code_challenge_methods_supported.includes('S256') && <Badge variant="success">PKCE S256</Badge>}
+                  {wizAsData.issuer && (
+                    <Badge variant="info">Issuer: {String(wizAsData.issuer).slice(0, 40)}</Badge>
+                  )}
+                  {wizAsData.registration_endpoint && (
+                    <Badge variant="success">DCR Supported</Badge>
+                  )}
+                  {wizAsData.resource_indicators_supported && (
+                    <Badge variant="success">Resource Indicators</Badge>
+                  )}
+                  {Array.isArray(wizAsData.code_challenge_methods_supported) &&
+                    wizAsData.code_challenge_methods_supported.includes('S256') && (
+                      <Badge variant="success">PKCE S256</Badge>
+                    )}
                 </div>
               )}
             </div>
@@ -355,7 +416,9 @@ function McpSection() {
             <CardTitle className="text-sm flex items-center gap-2">
               Step 2: Register Client
               {wizClientId !== CLIENT_ID && <Badge variant="success">Done</Badge>}
-              {(wizLoading === 'Fetch CIMD' || wizLoading === 'DCR Register') && <Spinner size="sm" />}
+              {(wizLoading === 'Fetch CIMD' || wizLoading === 'DCR Register') && (
+                <Spinner size="sm" />
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -386,9 +449,17 @@ function McpSection() {
               />
               {wizCimdData && (
                 <div className="flex flex-wrap gap-2">
-                  {wizCimdData.client_name && <Badge variant="info">{String(wizCimdData.client_name)}</Badge>}
-                  {wizCimdData.token_endpoint_auth_method && <Badge variant="info">Auth: {String(wizCimdData.token_endpoint_auth_method)}</Badge>}
-                  {wizCimdData.scope && <Badge variant="info">Scope: {String(wizCimdData.scope)}</Badge>}
+                  {wizCimdData.client_name && (
+                    <Badge variant="info">{String(wizCimdData.client_name)}</Badge>
+                  )}
+                  {wizCimdData.token_endpoint_auth_method && (
+                    <Badge variant="info">
+                      Auth: {String(wizCimdData.token_endpoint_auth_method)}
+                    </Badge>
+                  )}
+                  {wizCimdData.scope && (
+                    <Badge variant="info">Scope: {String(wizCimdData.scope)}</Badge>
+                  )}
                 </div>
               )}
               <Input
@@ -410,6 +481,9 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {getDoc('mcp', 'authorize-url') && (
+              <OperationDescription doc={getDoc('mcp', 'authorize-url')!} className="mb-3" />
+            )}
             <div className="space-y-3">
               <Input
                 label="Redirect URI"
@@ -432,12 +506,14 @@ function McpSection() {
               </Button>
               {wizAuthUrl && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Open this URL in a browser to authorize:</p>
+                  <p className="text-xs text-muted-foreground">
+                    Open this URL in a browser to authorize:
+                  </p>
                   <a
                     href={wizAuthUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-indigo-400 break-all hover:underline"
+                    className="text-xs text-accent-text break-all hover:underline"
                   >
                     {wizAuthUrl}
                   </a>
@@ -457,6 +533,9 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {getDoc('mcp', 'token-exchange') && (
+              <OperationDescription doc={getDoc('mcp', 'token-exchange')!} className="mb-3" />
+            )}
             <div className="space-y-3">
               <Input
                 label="Authorization Code (from callback)"
@@ -490,6 +569,9 @@ function McpSection() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {getDoc('mcp', 'userinfo') && (
+              <OperationDescription doc={getDoc('mcp', 'userinfo')!} className="mb-3" />
+            )}
             <div className="space-y-3">
               <Button
                 onClick={wizStepUserinfo}
@@ -497,6 +579,31 @@ function McpSection() {
                 disabled={!wizTokenResult}
               >
                 Fetch UserInfo
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Step 6: Introspect ─────────────────────────── */}
+        <Card className={`mb-3 ${!wizTokenResult ? 'opacity-50 pointer-events-none' : ''}`}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Step 6: Introspect the token
+              {wizIntrospectResult && <Badge variant="success">Done</Badge>}
+              {wizLoading === 'Introspect' && <Spinner size="sm" />}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {getDoc('mcp', 'introspect') && (
+                <OperationDescription doc={getDoc('mcp', 'introspect')!} />
+              )}
+              <Button
+                onClick={wizStepIntrospect}
+                loading={wizLoading === 'Introspect'}
+                disabled={!wizTokenResult}
+              >
+                Introspect
               </Button>
             </div>
           </CardContent>
@@ -511,6 +618,11 @@ function McpSection() {
         {wizUserinfoResult && (
           <div className="mt-3">
             <JsonBlock data={wizUserinfoResult} label="UserInfo Response" />
+          </div>
+        )}
+        {wizIntrospectResult && (
+          <div className="mt-3">
+            <JsonBlock data={wizIntrospectResult} label="Introspection Response" />
           </div>
         )}
       </div>

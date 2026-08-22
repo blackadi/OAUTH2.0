@@ -78,6 +78,32 @@ jobs:
         if: github.event_name == 'schedule'
         run: node scripts/check-discovery.mjs --live
 
+      # Added 2026-08-21. The client's entire semantic palette was dead: Tailwind v4 generates utilities
+      # from `@theme`, `globals.css` declared the values on `:root` only, and ~160 usages of `bg-card`,
+      # `border-border`, `text-muted-foreground`, `bg-muted`, `bg-input`, `ring-ring`, `bg-background` and
+      # `text-foreground` across 28 files compiled to nothing. Every other gate stayed green because the
+      # symptoms were purely visual — transparent cards, invisible borders, and no visible keyboard focus
+      # anywhere, since the form primitives pair `ring-ring` with `focus:outline-none`. Neither `tsc`,
+      # ESLint, vitest nor `vite build` can see a class that does not exist. This can, offline.
+      - name: Check theme tokens (every semantic utility is mapped in @theme)
+        run: node scripts/check-theme-tokens.mjs
+
+      # Added 2026-08-21. The client's error decoder turns `[Annnnnn]` into an explanation, and the
+      # vendor half of that table is generated from docs/openapi-spec.json rather than written, so no
+      # entry can be an invented explanation of a vendor code. This asserts the generated file still
+      # matches the spec it was generated from — an SDK or spec bump that moves a result message shows
+      # up here instead of silently leaving a stale explanation on screen.
+      - name: Check Authlete code table matches the vendored spec
+        run: node scripts/extract-authlete-codes.mjs --check
+
+      # Added 2026-08-22. The client's explanation registry had eight holes nothing could see: a section
+      # the code asked for and that did not exist, three entries written and never rendered, a missing
+      # grant tab, four MCP orphans, one doc defined inline outside the registry, and a README covering
+      # 13 of 20 sections. All mechanically detectable — the same argument check-route-coverage makes
+      # about endpoints, asked of documentation instead.
+      - name: Check client docs (every key exists, every entry is reachable, README covers every section)
+        run: node scripts/check-client-docs.mjs
+
   client:
     runs-on: ubuntu-latest
 
@@ -109,6 +135,38 @@ jobs:
       # existed, the mechanism did not.
       - run: npm run lint
 
+      # Added 2026-08-22, and the third instance of the same shape: `format` sat in package.json from
+      # the start and CI never invoked it, exactly as `typecheck` and `lint` had. It was failing on 64
+      # files before anyone looked, and a further 23 were added on top without a word from any gate.
+      # A script with no mechanism behind it is a preference.
+      #
+      # `.prettierignore` excludes `src/data/*.generated.ts`: `extract-authlete-codes.mjs --check`
+      # asserts that file is byte-identical to what the generator emits, so reformatting it would break
+      # that check on the next run for no benefit.
+      - run: npm run format
+
       - run: npm run test
+
+      # Added 2026-08-22. Ratcheting thresholds, set just under what the suite achieves, so coverage can
+      # only go up — the same shape as the server's route-coverage baseline. The logic layer is held far
+      # higher than the components (utils 90%, services 75%) because that is where the decisions live;
+      # a section component is mostly markup and its smoke test asserts that it mounts and offers a
+      # control rather than driving every branch.
+      - run: npm run test:coverage
+
+      # Added 2026-08-21/22. Three offline checks nothing else can perform: that every semantic colour
+      # utility is mapped in @theme (~160 usages once compiled to nothing), that the generated Authlete
+      # result-code table still matches the vendored spec it came from, and that every documentation key
+      # exists, every entry is reachable and the README covers every section.
+      - run: npm run check:theme
+      - run: npm run check:codes
+      - run: npm run check:docs
+
+      # Added 2026-08-22. The light theme shipped compiling but unusable: 25 of 26 accent colours
+      # failed WCAG AA against every light surface — `text-amber-200` at 1.25:1 — because they were
+      # chosen against a near-black ground and inherited unchanged when the second palette arrived.
+      # Nothing could see it, because a colour that fails contrast is still a valid colour. This reads
+      # the real oklch values out of the built stylesheet and scores both themes.
+      - run: npm run check:contrast
 
       - run: npm run build

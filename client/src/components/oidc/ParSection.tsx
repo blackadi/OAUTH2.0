@@ -1,18 +1,21 @@
 import { useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { parService } from '@/services';
+import type { ParSuccessResponse } from '@/services/par.service';
 import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { generateKeyPair, createProof } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { SESSION_KEYS, readKey, writeKey } from '@/services/session-keys';
 
 function ParSection() {
   const { loading, result, error, call } = useAsyncCall();
@@ -27,21 +30,21 @@ function ParSection() {
   const [authMethod, setAuthMethod] = useState<'post' | 'basic' | 'none'>('post');
   const [useDpop, setUseDpop] = useState(false);
   // Mirrors RFC 9126 §2.2's response body. The server returned Authlete's camelCase envelope until T1-11.
-  const [parResult, setParResult] = useState<{ request_uri?: string; expires_in?: number } | null>(null);
+  const [parResult, setParResult] = useState<ParSuccessResponse | null>(null);
   // Read once, lazily, at first render. This used to be an empty `useState` plus a mount effect that called
   // `setPkceVerifier` synchronously — which is a cascading render for a value that is known before the first
   // paint, and which `react-hooks` flags. Lazy initialisation is the same read with no second render.
-  const [pkceVerifier, setPkceVerifier] = useState(() => sessionStorage.getItem('pkce_code_verifier') ?? '');
+  const [pkceVerifier, setPkceVerifier] = useState(() => readKey(SESSION_KEYS.pkceVerifier) ?? '');
 
   const doc = getDoc('par', 'create');
 
   const handleGeneratePkce = useCallback(async () => {
     try {
       const pair = await createPkcePair();
-      sessionStorage.setItem('pkce_code_verifier', pair.codeVerifier);
+      writeKey(SESSION_KEYS.pkceVerifier, pair.codeVerifier);
       setPkceVerifier(pair.codeVerifier);
       const state = crypto.randomUUID();
-      sessionStorage.setItem('oauth_state', state);
+      writeKey(SESSION_KEYS.oauthState, state);
       const params = new URLSearchParams();
       params.set('response_type', 'code');
       params.set('redirect_uri', 'http://localhost:3001/callback');
@@ -59,8 +62,7 @@ function ParSection() {
   const doParRequest = async () => {
     // basic -> Authorization: Basic header; post -> credentials in the JSON body, which the
     // server merges into the pushed `parameters`; none -> client_id only (public client).
-    const basicAuth =
-      authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined;
+    const basicAuth = authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined;
     // With Basic the secret travels in the header, so keep it out of the body entirely.
     const body =
       authMethod === 'basic'
@@ -70,12 +72,12 @@ function ParSection() {
           : { parameters, clientId, clientSecret };
 
     if (useDpop) {
-      let dpopKeyRaw = sessionStorage.getItem('dpop_private_key');
+      let dpopKeyRaw = readKey(SESSION_KEYS.dpopPrivateKey);
       if (!dpopKeyRaw) {
         const pair = await generateKeyPair();
-        sessionStorage.setItem('dpop_private_key', JSON.stringify(pair.privateKey));
-        sessionStorage.setItem('dpop_public_key', JSON.stringify(pair.publicKey));
-        sessionStorage.setItem('dpop_kid', pair.kid);
+        writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
+        writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
+        writeKey(SESSION_KEYS.dpopKid, pair.kid);
         dpopKeyRaw = JSON.stringify(pair.privateKey);
       }
       const dpopPrivateKey = JSON.parse(dpopKeyRaw);
@@ -94,7 +96,7 @@ function ParSection() {
   const handlePush = async () => {
     const { data, error: err } = await call(doParRequest);
     if (data) {
-      const d = data as { request_uri?: string; expires_in?: number };
+      const d = data as ParSuccessResponse;
       setParResult(d);
       toast.success('PAR request completed');
     } else {
@@ -107,7 +109,7 @@ function ParSection() {
     if (data) {
       // RFC 9126 §2.2 names this `request_uri`. The server used to hand back Authlete's camelCase
       // `requestUri` inside its envelope; T1-11 made the response the specification's body.
-      const d = data as { request_uri?: string };
+      const d = data as ParSuccessResponse;
       if (d?.request_uri) {
         const cid = clientId || parameters.match(/client_id=([^&]+)/)?.[1] || '';
         window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`;
@@ -136,22 +138,51 @@ function ParSection() {
   };
 
   return (
-    <SectionPanel title="Pushed Authorization Requests (RFC 9126)" description="Send authorization parameters via POST for a cleaner redirect">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+    <SectionPanel
+      title="Pushed Authorization Requests (RFC 9126)"
+      description="Send authorization parameters via POST for a cleaner redirect"
+    >
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {doc && <OperationDescription doc={doc} />}
 
       <div className="space-y-3">
-        <Textarea label="Parameters (URL-encoded)" rows={4} value={parameters} onChange={(e) => setParameters(e.target.value)} placeholder="response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3001/callback&scope=openid&state=...&code_challenge=..." />
+        <Textarea
+          label="Parameters (URL-encoded)"
+          rows={4}
+          value={parameters}
+          onChange={(e) => setParameters(e.target.value)}
+          placeholder="response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3001/callback&scope=openid&state=...&code_challenge=..."
+        />
 
         <div className="flex gap-2 flex-wrap">
-          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">Generate PKCE + State</Button>
-          {pkceVerifier && <span className="text-xs text-slate-400 self-center truncate max-w-[200px]" title={pkceVerifier}>verifier: {pkceVerifier.slice(0, 20)}...</span>}
+          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">
+            Generate PKCE + State
+          </Button>
+          {pkceVerifier && (
+            <span
+              className="text-xs text-muted-foreground self-center truncate max-w-[200px]"
+              title={pkceVerifier}
+            >
+              verifier: {pkceVerifier.slice(0, 20)}...
+            </span>
+          )}
         </div>
 
-        <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
+        <Input
+          label="Client ID"
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          placeholder="your_client_id"
+        />
         {authMethod !== 'none' && (
-          <Input label="Client Secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="your_client_secret" />
+          <Input
+            label="Client Secret"
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            placeholder="your_client_secret"
+          />
         )}
 
         <Select
@@ -164,13 +195,18 @@ function ParSection() {
             { value: 'none', label: 'none — public client (PKCE required)' },
           ]}
         />
-        <p className="text-xs text-slate-400 -mt-1">
+        <p className="text-xs text-muted-foreground -mt-1">
           Must match the client&apos;s registered method. Authlete checks which channel the
           credentials arrive on and returns 401 on a mismatch.
         </p>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={useDpop} onChange={(e) => setUseDpop(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+          <input
+            type="checkbox"
+            checked={useDpop}
+            onChange={(e) => setUseDpop(e.target.checked)}
+            className="accent-blue-500 w-4 h-4"
+          />
           Use DPoP (sender-constrained token binding)
         </label>
 
@@ -180,9 +216,7 @@ function ParSection() {
           </Button>
           {parResult?.request_uri && (
             <>
-              <Button onClick={handleRedirectToAuthorize}>
-                Authorize (redirect)
-              </Button>
+              <Button onClick={handleRedirectToAuthorize}>Authorize (redirect)</Button>
               <Button variant="secondary" onClick={handlePushAndRedirect} loading={loading}>
                 Push + Authorize
               </Button>
@@ -195,14 +229,21 @@ function ParSection() {
       </div>
 
       {parResult?.request_uri && (
-        <div className="mt-4 p-3 bg-slate-800 rounded-lg border border-slate-700 space-y-2">
-          <p className="text-xs text-slate-300 font-mono break-all">
-            <span className="text-slate-500">request_uri: </span>
+        <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
+          <p className="text-xs text-foreground-muted font-mono break-all">
+            <span className="text-muted-foreground/70">request_uri: </span>
             {parResult.request_uri}
           </p>
-          <p className="text-xs text-slate-400">
-            Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp;
-            Auth URL: <a href={authUrl} className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">{authUrl}</a>
+          <p className="text-xs text-muted-foreground">
+            Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp; Auth URL:{' '}
+            <a
+              href={authUrl}
+              className="text-info-text hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {authUrl}
+            </a>
           </p>
         </div>
       )}

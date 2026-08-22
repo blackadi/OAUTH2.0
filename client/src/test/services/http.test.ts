@@ -39,7 +39,9 @@ describe('http.postForm', () => {
 
   it('throws on error response', async () => {
     mockFetch.mockResolvedValue(errorResponse(400, 'bad request'));
-    await expect(http.postForm('https://example.com/token', new URLSearchParams())).rejects.toThrow('bad request');
+    await expect(http.postForm('https://example.com/token', new URLSearchParams())).rejects.toThrow(
+      'bad request',
+    );
   });
 });
 
@@ -47,7 +49,12 @@ describe('http.postBasicAuth', () => {
   it('sends POST with Basic auth header', async () => {
     mockFetch.mockResolvedValue(okResponse({ access_token: 'abc' }));
     const params = new URLSearchParams({ grant_type: 'client_credentials' });
-    const result = await http.postBasicAuth('https://example.com/token', params, 'client1', 'secret1');
+    const result = await http.postBasicAuth(
+      'https://example.com/token',
+      params,
+      'client1',
+      'secret1',
+    );
     expect(result).toEqual({ access_token: 'abc' });
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/token', {
       method: 'POST',
@@ -107,6 +114,7 @@ describe('http.getJson', () => {
     const result = await http.getJson('https://example.com/health');
     expect(result).toEqual({ status: 'ok' });
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/health', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });
@@ -115,6 +123,7 @@ describe('http.getJson', () => {
     mockFetch.mockResolvedValue(okResponse({ items: [] }));
     await http.getJson('https://example.com/list', 'auth123');
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/list', {
+      method: 'GET',
       headers: { Accept: 'application/json', Authorization: 'Basic auth123' },
     });
   });
@@ -126,6 +135,7 @@ describe('http.getWithBearer', () => {
     const result = await http.getWithBearer('https://example.com/userinfo', 'tok123');
     expect(result).toEqual({ sub: 'user1' });
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/userinfo', {
+      method: 'GET',
       headers: { Authorization: 'Bearer tok123', Accept: 'application/json' },
     });
   });

@@ -22,7 +22,11 @@ function formatUptime(seconds: number): string {
 }
 
 function HealthSection() {
-  const [serverStatus, setServerStatus] = useState<{ status: string; uptime: number; timestamp: string } | null>(null);
+  const [serverStatus, setServerStatus] = useState<{
+    status: string;
+    uptime: number;
+    timestamp: string;
+  } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [overallResult, setOverallResult] = useState<OverallHealthResponse | null>(null);
   const [authleteResult, setAuthleteResult] = useState<unknown>(null);
@@ -51,7 +55,7 @@ function HealthSection() {
     } finally {
       setLoading((s) => ({ ...s, server: false }));
     }
-  };
+  }
 
   async function checkOverall() {
     try {
@@ -60,7 +64,7 @@ function HealthSection() {
     } catch {
       // Silently fail — Redis status is supplementary
     }
-  };
+  }
 
   const checkAuthlete = async () => {
     setAuthleteError(null);
@@ -97,7 +101,16 @@ function HealthSection() {
                   ? `Server OK — up ${formatUptime(serverStatus!.uptime)}`
                   : serverError || 'Unknown'}
             </span>
-            <Button size="sm" variant="ghost" onClick={() => { checkServer(); checkOverall(); }} disabled={loading.server} loading={loading.server}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                checkServer();
+                checkOverall();
+              }}
+              disabled={loading.server}
+              loading={loading.server}
+            >
               Refresh
             </Button>
           </div>
@@ -110,8 +123,14 @@ function HealthSection() {
           <div className="flex items-center gap-2 mb-1">
             <span className="text-sm font-medium">Redis Session Store</span>
             {redis ? (
-              <Badge variant={redis.connected ? 'success' : redis.configured ? 'danger' : 'default'}>
-                {redis.connected ? 'Connected' : redis.configured ? 'Disconnected' : 'Not Configured'}
+              <Badge
+                variant={redis.connected ? 'success' : redis.configured ? 'danger' : 'default'}
+              >
+                {redis.connected
+                  ? 'Connected'
+                  : redis.configured
+                    ? 'Disconnected'
+                    : 'Not Configured'}
               </Badge>
             ) : (
               <Badge variant="default">Loading...</Badge>
@@ -124,9 +143,7 @@ function HealthSection() {
                 : 'Redis is configured but unreachable. Sessions fall back to in-memory storage and are lost on restart.'
               : 'Redis is not configured (REDIS_URL unset). Sessions use in-memory storage — they are lost when the server restarts.'}
           </p>
-          {redis?.error && (
-            <p className="text-xs text-red-400">{redis.error}</p>
-          )}
+          {redis?.error && <p className="text-xs text-danger-text">{redis.error}</p>}
         </div>
 
         <hr className="border-border" />
@@ -135,20 +152,32 @@ function HealthSection() {
         <div>
           {docAuthlete && <OperationDescription doc={docAuthlete} />}
           <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2 cursor-pointer">
-            <input type="checkbox" checked={extended} onChange={(e) => setExtended(e.target.checked)} className="rounded" />
+            <input
+              type="checkbox"
+              checked={extended}
+              onChange={(e) => setExtended(e.target.checked)}
+              className="rounded"
+            />
             Extended check (test DB connectivity)
           </label>
-          <Button size="sm" onClick={checkAuthlete} disabled={loading.authlete} loading={loading.authlete}>
+          <Button
+            size="sm"
+            onClick={checkAuthlete}
+            disabled={loading.authlete}
+            loading={loading.authlete}
+          >
             Check Authlete Health
           </Button>
         </div>
 
-        {authleteError && <p className="text-xs text-red-400">{authleteError}</p>}
+        {authleteError && <p className="text-xs text-danger-text">{authleteError}</p>}
 
         {authleteResult ? (
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Badge variant={(authleteResult as { healthy: boolean }).healthy ? 'success' : 'danger'}>
+              <Badge
+                variant={(authleteResult as { healthy: boolean }).healthy ? 'success' : 'danger'}
+              >
                 {(authleteResult as { healthy: boolean }).healthy ? 'Healthy' : 'Unhealthy'}
               </Badge>
               {(authleteResult as { statusCode?: number }).statusCode ? (

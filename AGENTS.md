@@ -125,7 +125,7 @@ docker compose up -d prometheus grafana
   > It also hid a genuine test bug for far longer: the DCR update had **never** sent a conformant RFC 7592
   > §2.2 request — the metadata document must contain `client_id`, and sending only the changed field earns
   > `[A214301]`.
-- Run with `npm --prefix server run test` — **1104 tests across 75 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — 118 tests / 17 files
+- Run with `npm --prefix server run test` — **1126 tests across 76 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — 38 files, plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -206,14 +206,48 @@ docker compose up -d prometheus grafana
 - **Routing**: React Router v6 with lazy-loaded sections, map-based route resolution via `sectionComponents` record in `App.tsx`. Typed `Section` and `SectionGroup` interfaces.
 - **Sections**: 20 sections organized in 3 sidebar groups — OAuth 2.0 (Grant Flows, Token Operations, Step-Up Auth, Logout), OIDC & Extensions (DCR, CIBA, PAR, RAR, JAR, Device Flow, Backchannel Logout, Discovery, OIDC Federation, FAPI 2.0/DPoP, MCP, Verifiable Credentials), Admin (Token Management, Client Management, Grant Management, Health Check).
 - **Layout**: Sticky 48px header with AppLayout, collapsible mobile nav, 56px sidebar (desktop only). Backdrop blur on header. Grouped sidebar with lucide icons and active-state shadows.
-- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` (AuthFlowsSection), `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components), `components/fapi/` (FapiSection — FAPI config/status + DPoP key tools + 4-step Test Flow wizard), `components/mcp/` (McpSection — MCP discovery + CIMD + 5-step Full Flow wizard), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription).
+- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` (AuthFlowsSection, AuthorizeRequestBuilder), `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components), `components/fapi/` (FapiSection — FAPI config/status + DPoP key tools + 4-step Test Flow wizard), `components/mcp/` (McpSection — MCP discovery + CIMD + 6-step Full Flow wizard, the sixth being introspection), `components/trace/` (TracePanel, SequenceView), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription, **JwtInspector**, **ErrorExplainer**).
+
+  **Four of these carry the debugging capability added 2026-08-21/22 and are worth knowing before adding a fifth surface.** `AuthorizeRequestBuilder` builds an authorization request from `data/authParams.ts` — 24 parameters, each with its conformance word and a spec reference verified against the primary source — and **the URL it displays is the string it navigates to**, because a separately-assembled preview drifted from the real request. `JwtInspector` decodes *and verifies* against the JWKS (`utils/jwt.ts`, `crypto.subtle`, RS/PS/ES); it starts **unverified** deliberately, since a legible payload is not an authenticated one. `ErrorExplainer` turns an OAuth error code or an Authlete `[Annnnnn]` into cause and fix via `data/errorDocs.ts` — and **never invents one**: the vendor half is generated from `docs/openapi-spec.json` and CI-gated, an unknown code is reported as unknown. `TracePanel`/`SequenceView` render the request trace as a timeline and as a message flow whose every arrow is a captured request.
 - **Server status indicator**: `useServerStatus` hook (in `hooks/`) polls `GET /api/health` every 30s (10s retry on failure, 5s timeout). Color-coded badge in header: green=connected, red=offline, yellow pulse=checking. Hover shows uptime.
-- **Hooks**: `useApi`, `useAsyncCall`, `useClipboard`, `useLocalStorage`, `useServerStatus` in `hooks/`.
-- **Services**: Organized by domain in `services/` — `token.service.ts`, `admin.service.ts`, `client.service.ts`, `dcr.service.ts`, `ciba.service.ts`, `par.service.ts`, `device.service.ts`, `grant.service.ts`, `backchannel-logout.service.ts`, `health.service.ts`, `mcp.service.ts`. Shared HTTP utilities in `http.ts`. All exported from `services/index.ts`.
+- **Hooks**: `useAsyncCall`, `useClipboard`, `useServerStatus`, `useTraces`, `useTheme` in `hooks/`. `useServerStatus` re-runs its effect when connectivity flips — deliberately, since a connected server is polled every 30s and an unreachable one every 10s — so two requests on first connect is expected, not a duplicate.
+- **Services**: Organized by domain in `services/` — `token.service.ts`, `admin.service.ts`, `client.service.ts`, `dcr.service.ts`, `ciba.service.ts`, `par.service.ts`, `device.service.ts`, `grant.service.ts`, `backchannel-logout.service.ts`, `health.service.ts`, `mcp.service.ts`. All exported from `services/index.ts`.
+
+  **`services/transport.ts` is the only place a request leaves the app, and nothing should bypass it.** `http.ts` is now request *shapes* over it. Every service ended with `throw new Error(await response.text())` until 2026-08-21 — nine times in `http.ts` and again in six other files — which discarded the status, the status text and every response header at the boundary, so nothing downstream could tell 400 from 401 from 429 from 500. `WWW-Authenticate` carries the whole step-up and DPoP challenge mechanism, `DPoP-Nonce` carries the value a client must replay, and `Retry-After` distinguishes a rate limit from a rejection; all three were invisible. `sendRaw` deliberately does **not** throw on a non-2xx — at a debugger's transport layer a 401 is data — and `send` wraps it for callers that want the throw. `HttpError.message` is the raw body, which is what let ~20 `toast.error(err)` call sites keep working. Every call is recorded to `services/trace-store.ts`, which the trace panel and the flow diagram both read.
+
+  **`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them.
+
+  **`crypto-utils.ts` holds the one P-256 generator.** `kid` is derived from the exported JWK *before* `alg`/`use` are attached — folding the tags in first would silently change every signing key's `kid`. Pinned in `keygen-characterization.test.ts`, which was written against the duplicated version first.
 - **Config**: `config.ts` reads `VITE_*` env vars at build time, provides per-environment overrides via `PROD_CONFIG` + `getApiBaseUrl()`/`getRedirectUri()`. Separate `HEALTH_ENDPOINT` for the live status polling.
-- **Token storage**: `TokenContext` (React Context API) persists tokens in `sessionStorage`. TokenVault in sidebar displays/copies/decodes stored tokens. Cleared on explicit action or tab close.
-- **Test framework**: Vitest with 17 test files across `test/components/ui/`, `test/hooks/`, `test/services/`, `test/utils/`. Runs with `npm --prefix client run test`.
-- **Styling**: Tailwind CSS v4 via `styles/globals.css`. Dark palette (slate-900/950), Inter + JetBrains Mono fonts, custom scrollbar, grid background utility.
+- **Token storage**: `TokenContext` (React Context API) persists tokens in `sessionStorage`. TokenVault in sidebar displays/copies/inspects stored tokens. Cleared on explicit action or tab close. **It also exposes `isDpopBound`** (from `token_type`, compared case-insensitively per RFC 9110 §11.1), and every protected-resource call reads it: a sender-constrained token must be presented with the `DPoP` scheme and a proof, and Authlete refuses the bearer downgrade with `[A089311]` at UserInfo and `[A281305]` at `/gm`. Presenting `Bearer` unconditionally is what made the headline flow produce a token half the app could not use.
+- **Management credentials**: `CredentialContext` holds one profile for the page. Eight sections used to hold their own `useState` pair, and a route change unmounts a section, so the same two values had to be retyped on every navigation. In memory only, deliberately — a React context lives exactly as long as the page, which is the right lifetime for something typed by hand.
+- **Test framework**: Vitest, 38 files. **Re-measure rather than carry these numbers forward.** Coverage thresholds are enforced as a *ratchet* set just under what the suite achieves (utils 90%, services 75%, global ~57%), so it can only rise; `npm --prefix client run test:coverage` is the gate. Note what the suite is and is not: `sections.smoke.test.tsx` renders all 20 sections and `App.routes.test.tsx` drives the real router at all 20 routes, but both measure *reachability* — a section that mounts and offers an enabled control. Anything stronger belongs in a per-section test.
+- **Styling**: Tailwind CSS v4 via `styles/globals.css`. **Utilities come from `@theme`, not from `:root`** — declaring the values on `:root` alone generates nothing, which is how ~160 usages of `bg-card`, `border-border`, `text-muted-foreground` and friends compiled to nothing across 28 files while every gate stayed green. Two complete palettes, dark-first: `:root` is dark, a media query serves a system light preference, and `[data-theme]` lets the header toggle win in both directions. Inter + JetBrains Mono, custom scrollbar, grid background utility.
+
+  **Accent colours are semantic tokens, not shades, and that is not cosmetic.** `text-accent-text`,
+  `text-success-text`, `text-warning-text`, `text-danger-text` and `text-info-text` each carry a
+  per-theme value. The literals they replaced — `text-indigo-300`, `text-amber-300` and 149 others —
+  were chosen against a near-black ground and inherited unchanged when the light palette arrived, so
+  **25 of 26 failed WCAG AA against every light surface**, `text-amber-200` at 1.25:1. Nothing could
+  see that: a colour which fails contrast is still a perfectly valid colour, and every other gate was
+  green. `scripts/check-contrast.mjs` now scores both themes from the real oklch values in the built
+  stylesheet, and runs on every push. Shade nuance was deliberately collapsed into one token per role —
+  no single shade can encode emphasis on both a `#020617` and a `#ffffff` ground.
+
+  ⚠️ **Still not looked at.** Contrast is measured and passing in both themes; nobody has opened the
+  light theme in a browser. Layout, borders, translucent fills (`bg-indigo-500/10` on white) and focus
+  rings are outside what a contrast check can see. Treat those as unverified.
+
+### Three client checks, and what each cannot see
+
+```bash
+node scripts/check-theme-tokens.mjs    # every semantic utility is mapped; both palettes define the same tokens
+node scripts/extract-authlete-codes.mjs --check   # the generated vendor code table still matches docs/openapi-spec.json
+node scripts/check-client-docs.mjs     # every getDoc key exists, every entry is reachable, README covers every section
+node scripts/check-contrast.mjs        # WCAG AA in BOTH themes, from the built stylesheet's real values
+```
+
+All three run on every push. They exist because **every defect found in the 2026-08-21 client review was invisible to typecheck, lint, tests and build** — those four cannot see a class that does not exist, a screen that never renders, a doc entry nobody asks for, or a vendor table drifting from its source. The Authlete one is worth one further note: of the 38 result codes the vendor documents and the 25 this repo established by probing, **the overlap is zero** — a decoder built from the vendor document alone would explain nothing a developer actually hits.
 
 ## Documentation style guide
 

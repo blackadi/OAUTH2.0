@@ -1,28 +1,19 @@
-import { JWK, CryptoKeyPair, base64UrlEncode } from './crypto-utils';
+import { JWK, CryptoKeyPair, base64UrlEncode, generateP256KeyPair } from './crypto-utils';
 
 export type { JWK };
 
 export type SigningKeyPair = CryptoKeyPair;
 
+/**
+ * A `private_key_jwt` signing key: P-256, tagged `alg: ES256, use: sig`.
+ *
+ * The tags matter here and not for DPoP, because this key is *published* — `getJwkSetDisplay` renders
+ * it as a JWK Set for registration against the client, and a consumer of that set reads `use` to know
+ * it is a signature key and `alg` to know how to verify. They are attached after the `kid` is derived,
+ * which the shared generator preserves and `keygen-characterization.test.ts` asserts explicitly.
+ */
 export async function generateSigningKeyPair(): Promise<SigningKeyPair> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
-  );
-
-  const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey) as JWK;
-  const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey) as JWK;
-
-  const kid = base64UrlEncode(
-    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(publicJwk))),
-  );
-
-  return {
-    publicKey: { ...publicJwk, kid, alg: 'ES256', use: 'sig' },
-    privateKey: { ...privateJwk, kid, alg: 'ES256', use: 'sig' },
-    kid,
-  };
+  return generateP256KeyPair({ alg: 'ES256', use: 'sig' });
 }
 
 export async function createClientAssertion(

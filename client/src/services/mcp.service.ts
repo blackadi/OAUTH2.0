@@ -92,9 +92,34 @@ async function exchangeCode(params: {
   return http.postForm(params.tokenEndpoint, body);
 }
 
-async function introspectToken(tokenEndpoint: string, token: string): Promise<unknown> {
-  const body = new URLSearchParams({ token });
-  return http.postForm(tokenEndpoint.replace('/token', '/introspection/standard'), body);
+/**
+ * Introspect an MCP access token (RFC 7662).
+ *
+ * **Not currently called from anywhere** — the wizard's five steps stop at UserInfo, and the
+ * `mcp.introspect` entry in `operationDocs.ts` has no surface to render on. It is kept rather than
+ * deleted because that doc entry advertises the capability, and fixed rather than left alone because
+ * dead code that is *wrong* costs whoever wires it up an hour of debugging. Two things were wrong:
+ *
+ * 1. **It sent no credentials.** `/api/introspection/standard` requires this deployment's admin Basic
+ *    auth — RFC 7662 §2.1 requires the endpoint be protected, and until 2026-08-12 neither
+ *    introspection endpoint here was, which made both token-scanning oracles. Unauthenticated, this
+ *    could only ever have returned 401.
+ * 2. **It derived the URL with `tokenEndpoint.replace('/token', …)`** — first-match substring surgery
+ *    on a URL that may legitimately contain `/token` more than once. The endpoint is a member of the
+ *    AS metadata document the wizard has already fetched, so pass it in rather than guessing.
+ */
+async function introspectToken(
+  introspectionEndpoint: string,
+  token: string,
+  adminClientId: string,
+  adminClientSecret: string,
+): Promise<unknown> {
+  return http.postBasicAuth(
+    introspectionEndpoint,
+    new URLSearchParams({ token }),
+    adminClientId,
+    adminClientSecret,
+  );
 }
 
 async function fetchUserInfo(userInfoEndpoint: string, accessToken: string): Promise<unknown> {

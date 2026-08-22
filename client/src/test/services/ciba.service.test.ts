@@ -9,13 +9,20 @@ beforeEach(() => {
 });
 
 function ok(data: unknown) {
-  return Promise.resolve({ ok: true, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) } as Response);
+  return Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  } as Response);
 }
 
 describe('cibaService.backchannelAuthentication', () => {
   it('sends POST to authentication endpoint', async () => {
     mockFetch.mockResolvedValue(ok({ ticket: 't1' }));
-    const result = await cibaService.backchannelAuthentication({ parameters: 'login_hint=admin', clientId: 'cid' });
+    const result = await cibaService.backchannelAuthentication({
+      parameters: 'login_hint=admin',
+      clientId: 'cid',
+    });
     expect(result).toEqual({ ticket: 't1' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/ciba/authentication', {
       method: 'POST',

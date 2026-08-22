@@ -1,13 +1,38 @@
-async function postForm(url: string, params: URLSearchParams, extraHeaders?: Record<string, string>): Promise<unknown> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
-  if (extraHeaders) Object.assign(headers, extraHeaders);
-  const response = await fetch(url, {
+/**
+ * Thin request shapes over `transport.ts`.
+ *
+ * Each function here is one *kind* of request this app makes — form-encoded, Basic-authenticated,
+ * admin JSON, and so on. They used to call `fetch` directly and end with
+ * `if (!response.ok) throw new Error(await response.text())`, which discarded the status and every
+ * response header nine times over. They now delegate to `send`, so every call is captured once and
+ * appears in the request trace.
+ *
+ * **The signatures and behaviour are unchanged.** Each still resolves to the parsed body and still
+ * rejects with an error whose `message` is the response body verbatim — `HttpError` sets it from the
+ * raw text for exactly that reason. Callers that want the status can now read `err.status`; callers
+ * that only ever did `toast.error(err)` are unaffected.
+ */
+
+import { sendForBody } from './transport';
+
+const FORM = 'application/x-www-form-urlencoded';
+const JSON_TYPE = 'application/json';
+
+function basic(clientId: string, clientSecret: string): string {
+  return `Basic ${btoa(`${clientId}:${clientSecret}`)}`;
+}
+
+async function postForm(
+  url: string,
+  params: URLSearchParams,
+  extraHeaders?: Record<string, string>,
+): Promise<unknown> {
+  return sendForBody({
     method: 'POST',
-    headers,
+    url,
+    headers: { 'Content-Type': FORM, ...extraHeaders },
     body: params.toString(),
   });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
 }
 
 async function postBasicAuth(
@@ -16,26 +41,25 @@ async function postBasicAuth(
   clientId: string,
   clientSecret: string,
 ): Promise<unknown> {
-  const response = await fetch(url, {
+  return sendForBody({
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-    },
+    url,
+    headers: { 'Content-Type': FORM, Authorization: basic(clientId, clientSecret) },
     body: params.toString(),
   });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
 }
 
-async function postAdmin(url: string, body: Record<string, unknown>, auth: string): Promise<unknown> {
-  const response = await fetch(url, {
+async function postAdmin(
+  url: string,
+  body: Record<string, unknown>,
+  auth: string,
+): Promise<unknown> {
+  return sendForBody({
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+    url,
+    headers: { 'Content-Type': JSON_TYPE, Authorization: `Basic ${auth}` },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
 }
 
 async function postJson(
@@ -43,76 +67,69 @@ async function postJson(
   body: Record<string, unknown>,
   headers?: Record<string, string>,
 ): Promise<unknown> {
-  const response = await fetch(url, {
+  return sendForBody({
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
+    url,
+    headers: { 'Content-Type': JSON_TYPE, ...headers },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(await response.text());
-  const text = await response.text();
-  if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
 }
 
 async function getJson(url: string, auth?: string): Promise<unknown> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (auth) headers['Authorization'] = `Basic ${auth}`;
-  const response = await fetch(url, { headers });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
+  return sendForBody({
+    method: 'GET',
+    url,
+    headers: { Accept: JSON_TYPE, ...(auth ? { Authorization: `Basic ${auth}` } : {}) },
+  });
 }
 
 async function getWithBearer(url: string, token: string): Promise<unknown> {
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  return sendForBody({
+    method: 'GET',
+    url,
+    headers: { Authorization: `Bearer ${token}`, Accept: JSON_TYPE },
   });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
 }
 
 async function del(url: string, auth?: string, body?: Record<string, unknown>): Promise<unknown> {
-  const headers: Record<string, string> = {};
-  if (auth) headers['Authorization'] = `Basic ${auth}`;
-  if (body) headers['Content-Type'] = 'application/json';
-
-  const response = await fetch(url, {
+  return sendForBody({
     method: 'DELETE',
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
+    url,
+    headers: {
+      ...(auth ? { Authorization: `Basic ${auth}` } : {}),
+      ...(body ? { 'Content-Type': JSON_TYPE } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  if (!response.ok) throw new Error(await response.text());
-  const text = await response.text();
-  if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
 }
 
 async function patch(url: string, body: Record<string, unknown>, auth: string): Promise<unknown> {
-  const response = await fetch(url, {
+  return sendForBody({
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+    url,
+    headers: { 'Content-Type': JSON_TYPE, Authorization: `Basic ${auth}` },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
 }
 
 async function put(url: string, body: Record<string, unknown>, auth: string): Promise<unknown> {
-  const response = await fetch(url, {
+  return sendForBody({
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+    url,
+    headers: { 'Content-Type': JSON_TYPE, Authorization: `Basic ${auth}` },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
 }
+
+/**
+ * The full result — status, headers, timing — rather than just the body.
+ *
+ * Exposed so a section can render "401 · WWW-Authenticate: DPoP …" instead of a bare red string. The
+ * body-only helpers above stay the default because most call sites genuinely only want the body.
+ */
+export { send as sendRequest } from './transport';
+export { HttpError, NetworkError } from './transport';
+export type { HttpResult, SendInit } from './transport';
 
 export const http = {
   postForm,
