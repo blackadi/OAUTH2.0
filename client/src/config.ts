@@ -1,7 +1,33 @@
 export const API_BASE_URL = getEnvVar('VITE_API_BASE_URL', 'http://localhost:3000');
 
 export const CLIENT_ID = getEnvVar('VITE_CLIENT_ID', 'your_client_id');
-export const CLIENT_SECRET = getEnvVar('VITE_CLIENT_SECRET', 'your_client_secret');
+
+/**
+ * `your_client_secret` is the value `.env.example` ships to show the *shape* of the setting. It is not a
+ * credential, and treating it as one is not a cosmetic error.
+ *
+ * For a public client, sending a **non-empty** `client_secret` switches the request from "no client
+ * authentication" to "client authentication attempted", and Authlete refuses that with
+ * `[A157303] The request contains data for client authentication although the client type is 'public'
+ * and the client authentication method is 'none'.` The SPA's own client is public, so the placeholder
+ * broke the headline authorization-code + PKCE flow outright — and the failure named the credential
+ * rather than its presence, which sends the reader looking for a wrong secret.
+ *
+ * Recognised here rather than at the call sites, because `.env.example`, any `.env` copied from it and
+ * any deployment configured from either all carry the literal. An unset variable and the placeholder
+ * therefore converge on the same answer: no secret.
+ *
+ * `CLIENT_ID`'s placeholder is deliberately left as-is. A placeholder client id fails loudly and says
+ * exactly what is wrong — no such client — whereas a placeholder secret silently changes which
+ * authentication method the request uses. Different failure, different treatment.
+ */
+export const PLACEHOLDER_CLIENT_SECRET = 'your_client_secret';
+
+export function secretOrEmpty(value: string): string {
+  return value.trim() === PLACEHOLDER_CLIENT_SECRET ? '' : value;
+}
+
+export const CLIENT_SECRET = secretOrEmpty(getEnvVar('VITE_CLIENT_SECRET', ''));
 export const REDIRECT_URI = getEnvVar('VITE_REDIRECT_URI', 'http://localhost:3001/callback');
 export const DEFAULT_SCOPES = getEnvVar('VITE_SCOPES', 'openid profile email');
 
