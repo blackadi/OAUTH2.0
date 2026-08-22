@@ -34,11 +34,11 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (1104 tests, 75 files)
+npm --prefix server run test              # unit + integration (1130 tests, 77 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (806 tests, 68 files)
-npm --prefix server run test:integration  # integration tests only (298 tests, 7 files)
+npm --prefix server run test:unit         # unit tests only (828 tests, 70 files)
+npm --prefix server run test:integration  # integration tests only (302 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (101 tests, requires real Authlete creds)
@@ -97,15 +97,15 @@ docker compose up -d prometheus grafana
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 68 files across 7 categories (806 tests). **Counts are re-measured, not carried** — they read 62/662 until 2026-08-18, four months of growth behind the actual tree:
+- **Unit tests**: 70 files across 7 categories (828 tests). **Counts are re-measured, not carried** — they read 62/662 until 2026-08-18, four months of growth behind the actual tree:
   - `tests/unit/services/` — 27 files, each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo). One file is a cross-service invariant rather than a service: `credential-logging.test.ts` asserts no request body reaches a log line (see **Quirks & gotchas**)
   - `tests/unit/controllers/` — 14 files, token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci/native-sso-response and others
   - `tests/unit/middleware/` — 6 files, error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership (plus `development-only.ts`, covered via `tests/unit/routes/device.routes.test.ts`)
   - `tests/unit/utils/` — 12 files, basic-auth/createLocalJWT/jwksClient/properties/validate/validation/dpop/verify-id-token-hint/step-up/session-store and others
   - `tests/unit/routes/` — 7 files, fapi + metrics + openapi + protected-resource-metadata + device + introspection + logout routes
   - `tests/unit/config/` — 1 file, `app.config.test.ts`, which asserts **the default itself** (`NODE_ENV` absent ⇒ `production`) — the `development-only` tests mock the config module and so can never see it
-  - `tests/unit/views/` — 1 file
-- **Integration tests**: 7 files (298 tests) — full Express stack with mocked SDK, via `createApp()`. `routes.test.ts` is the general one; the other six were written to drain the route-coverage backlog and each drives one module's routes **through its middleware chain**, asserting the auth posture first: `client.routes.test.ts` (16 routes), `admin-surfaces.routes.test.ts` (token/HSK/federation/JAR/device-consent/health/route-index, 16), `vci.routes.test.ts` (10), `backchannel-logout.routes.test.ts` (4), `native-sso.routes.test.ts` (2), `root.routes.test.ts` (2). **Prefer adding to these over a new controller test** when the thing under test is a gate, a status mapping or a route parameter — a controller test calls the handler directly and cannot see any of it
+  - `tests/unit/views/` — 2 files, `consent-rar.test.ts` and `login.test.ts`. Both render the **real** `.ejs` file, which is the only kind of test here that can see a template throw or silently drop what a controller passed it
+- **Integration tests**: 7 files (302 tests) — full Express stack with mocked SDK, via `createApp()`. `routes.test.ts` is the general one; the other six were written to drain the route-coverage backlog and each drives one module's routes **through its middleware chain**, asserting the auth posture first: `client.routes.test.ts` (16 routes), `admin-surfaces.routes.test.ts` (token/HSK/federation/JAR/device-consent/health/route-index, 16), `vci.routes.test.ts` (10), `backchannel-logout.routes.test.ts` (4), `native-sso.routes.test.ts` (2), `root.routes.test.ts` (2). **Prefer adding to these over a new controller test** when the thing under test is a gate, a status mapping or a route parameter — a controller test calls the handler directly and cannot see any of it
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (**101 tests: 99 pass, 2 skipped outside development**) —
   real Authlete API, 26 section headers fixed for sequential numbering. The two skips are the device-flow
   approval chain, which drives the development-only `POST /api/device/complete`.
@@ -125,7 +125,7 @@ docker compose up -d prometheus grafana
   > It also hid a genuine test bug for far longer: the DCR update had **never** sent a conformant RFC 7592
   > §2.2 request — the metadata document must contain `client_id`, and sending only the changed field earns
   > `[A214301]`.
-- Run with `npm --prefix server run test` — **1126 tests across 76 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — 38 files, plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
+- Run with `npm --prefix server run test` — **1130 tests across 77 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — 38 files, plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -760,6 +760,7 @@ it. When this script reports something, check whether the surrounding claim is s
 - **`server/coverage/`** is gitignored — generated report dir
 - **`crypto.ts`** (`server/src/utils/crypto.ts`) was deleted — unused. The client-side `pkce.ts` handles PKCE
 - **CSRF force-save**: `req.session.save()` is called explicitly in `csrf.ts` because express-session with `resave:false` + `saveUninitialized:false` does not autosave new sessions even when modified. Without this, the CSRF token generated on GET is lost before POST, causing a 403 mismatch.
+- **A server-rendered view has as many render sites as it has outcomes, and they must not drift** (2026-08-22). `login.ejs` read `clientName` as a bare reference; `showLogin` passed it and the credentials-rejected branch of `handleLogin` did not, so **every wrong password answered 500 with an EJS stack trace** instead of the "Invalid username or password" page — in every environment, found on the deployment. Both sites now build their locals from one function, `loginViewLocals` in `controllers/session.controller.ts`, and the template reads its *presentational* locals through EJS's `locals` object so the next omission is a missing sentence rather than a broken sign-in page. **`csrfToken` stays a bare reference deliberately**: it comes from `csrfProtection` via `res.locals` and must be present, and a form quietly rendered without it 403s on submit with nothing on the page to explain why. Do not pass `csrfToken` from a controller — the middleware rotates it on POST and the re-rendered form must carry the *new* value. `controllers/device-session.controller.ts` was checked for the same shape: all six `device-verification` sites pass the full set. **What caught it: nothing.** A controller test asserts the locals handed to `res.render` and renders nothing, so it cannot see a template throw, and `check-route-coverage.mjs` only asks whether a route is *named*. Locked from both ends now — `tests/unit/views/login.test.ts` renders the real file with the locals absent, and a block in `tests/integration/routes.test.ts` drives `GET /api/authorization` → login page → wrong password through the real middleware chain.
 - **Controller tests** (under `tests/unit/controllers/`) use `vi.hoisted()` to set up mutable mocks for config-dependent behavior
 - **Supertest 7.2.2 bug**: `_attachCookies` throws `Invalid URL` on relative URL redirects with JSON chars. Workaround: avoid browser-flow tests or use `request` (non-agent)
 - **Request object E2E test** creates ephemeral DCR client (deleted in `afterAll`). Guarded by `hasManagement`
