@@ -39,6 +39,25 @@ function clearAttempts(ip: string): void {
   loginAttempts.delete(ip)
 }
 
+// `login.ejs` reads `clientName` as a bare reference, so a render site that omits it throws a
+// ReferenceError and the sign-in page becomes a 500 — which is exactly what happened to the
+// credentials-rejected branch below. One builder, used by both render sites, is what keeps them in step.
+// `csrfToken` is deliberately absent: `middleware/csrf.ts` rotates it on POST and puts the new value on
+// `res.locals`, so the re-rendered form already carries a token that will validate.
+function loginViewLocals(
+  authz: session.SessionData["authorization"],
+  overrides: { username?: string; password?: string; error?: string } = {}
+) {
+  return {
+    username: "",
+    password: "",
+    error: "",
+    clientName: authz?.clientName || "",
+    clientId: authz?.clientId || "",
+    ...overrides,
+  };
+}
+
 export function createSessionController(
   loginServiceInstance = new LoginService(),
   authorizationServiceInstance = new AuthorizationService(),
@@ -49,13 +68,7 @@ export function createSessionController(
     res: Response
   ) => {
     const authz = req.session.authorization;
-    res.render("login", {
-      username: "",
-      password: "",
-      error: "",
-      clientName: authz?.clientName || "",
-      clientId: authz?.clientId || "",
-    });
+    res.render("login", loginViewLocals(authz));
   },
 
   handleLogin: async (
@@ -94,11 +107,10 @@ export function createSessionController(
       const user = await loginServiceInstance.validateUser(username, password);
       if (!user) {
         recordFailedAttempt(ip)
-        return res.render("login", {
+        return res.render("login", loginViewLocals(authz, {
           username,
-          password: "",
           error: "Invalid username or password",
-        });
+        }));
       }
 
       clearAttempts(ip)

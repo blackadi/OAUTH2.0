@@ -105,6 +105,61 @@ describe("Integration: all API routes", () => {
     })
   })
 
+  // The login page is EJS, and `login.ejs` used to read `clientName` as a bare reference. `showLogin` passed
+  // it; the credentials-rejected branch of `handleLogin` did not — so every wrong password threw a
+  // ReferenceError inside the template and the sign-in page answered **500 with an EJS stack trace** instead
+  // of "Invalid username or password". Observed on the deployed server, in every environment.
+  //
+  // Why this is an integration test rather than a controller one. A controller test asserts the locals handed
+  // to `res.render` and never renders anything, so it cannot see a template throw; no test rendered this view
+  // at all. This drives the real route through express-session and `csrfProtection`, and seeds the session the
+  // way a browser does — by GETting /api/authorization first, since `handleLogin` refuses without a ticket.
+  // Redirects are never followed (the Supertest `_attachCookies` caveat in AGENTS.md).
+  describe("POST /api/session/login", () => {
+    const interaction = {
+      action: "INTERACTION", ticket: "t-1",
+      client: { clientId: 123, clientName: "Test App" }, scopes: [],
+      idTokenClaims: undefined, authorizationDetails: undefined, resultMessage: "",
+    }
+    const AUTHZ_QUERY = "response_type=code&client_id=123&redirect_uri=http://localhost:3000/callback&scope=openid"
+
+    // Returns an agent whose session carries the authorization context, plus the CSRF token minted on the
+    // login page. `login=submit` and a valid `_csrf` are both required to reach the branch under test.
+    const reachLoginPage = async () => {
+      mockApi.authorization.processRequest.mockResolvedValue(interaction)
+      const agent = request.agent(app)
+      await agent.get(`/api/authorization?${AUTHZ_QUERY}`).expect(302)
+      const page = await agent.get(`/api/session/login?${AUTHZ_QUERY}`).expect(200)
+      const csrf = page.text.match(/name="_csrf" value="([a-f0-9]{64})"/)?.[1]
+      expect(csrf).toBeDefined()
+      return { agent, csrf: csrf as string, page }
+    }
+
+    it("names the client on the first render", async () => {
+      const { page } = await reachLoginPage()
+      expect(page.text).toContain("Test App")
+    })
+
+    it("re-renders the form with an error when the credentials are wrong", async () => {
+      const { agent, csrf } = await reachLoginPage()
+
+      const res = await agent
+        .post("/api/session/login")
+        .type("form")
+        .send({ _csrf: csrf, username: "admin", password: "not-the-password", login: "submit" })
+
+      expect(res.status).toBe(200)
+      expect(res.text).toContain("Invalid username or password")
+      // The retry page must still name the client it is asking about. This is the local whose absence was the
+      // defect, so asserting the message alone would not have caught it.
+      expect(res.text).toContain("Test App")
+      // The form has to remain submittable: `csrfProtection` rotates the token on POST, and a retry page
+      // carrying the spent one would 403 on the next attempt for reasons the user cannot see.
+      expect(res.text).toMatch(/name="_csrf" value="[a-f0-9]{64}"/)
+      expect(res.text).not.toContain(csrf)
+    })
+  })
+
   describe("POST /api/token", () => {
     it("returns 200 with access token", async () => {
       mockApi.token.process.mockResolvedValue({ action: "OK", responseContent: JSON.stringify({ access_token: "at-1", token_type: "Bearer", expires_in: 3600 }) })
