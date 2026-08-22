@@ -7,6 +7,7 @@ import { CLIENT_ID } from '@/config';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
@@ -58,7 +59,7 @@ function TokenOpsSection() {
 
   return (
     <SectionPanel title="Token Operations" description="Inspect, introspect, and manage tokens">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {!at && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">

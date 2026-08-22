@@ -88,6 +88,14 @@ jobs:
       - name: Check theme tokens (every semantic utility is mapped in @theme)
         run: node scripts/check-theme-tokens.mjs
 
+      # Added 2026-08-21. The client's error decoder turns `[Annnnnn]` into an explanation, and the
+      # vendor half of that table is generated from docs/openapi-spec.json rather than written, so no
+      # entry can be an invented explanation of a vendor code. This asserts the generated file still
+      # matches the spec it was generated from — an SDK or spec bump that moves a result message shows
+      # up here instead of silently leaving a stale explanation on screen.
+      - name: Check Authlete code table matches the vendored spec
+        run: node scripts/extract-authlete-codes.mjs --check
+
   client:
     runs-on: ubuntu-latest
 

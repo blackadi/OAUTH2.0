@@ -107,6 +107,7 @@ describe('http.getJson', () => {
     const result = await http.getJson('https://example.com/health');
     expect(result).toEqual({ status: 'ok' });
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/health', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });
@@ -115,6 +116,7 @@ describe('http.getJson', () => {
     mockFetch.mockResolvedValue(okResponse({ items: [] }));
     await http.getJson('https://example.com/list', 'auth123');
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/list', {
+      method: 'GET',
       headers: { Accept: 'application/json', Authorization: 'Basic auth123' },
     });
   });
@@ -126,6 +128,7 @@ describe('http.getWithBearer', () => {
     const result = await http.getWithBearer('https://example.com/userinfo', 'tok123');
     expect(result).toEqual({ sub: 'user1' });
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/userinfo', {
+      method: 'GET',
       headers: { Authorization: 'Bearer tok123', Accept: 'application/json' },
     });
   });

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { jwtDecode, type JwtPayload } from 'jwt-decode';
 import { useToken } from '@/context/TokenContext';
 import { Badge } from '@/components/ui/Badge';
-import { JsonBlock } from '@/components/ui/JsonBlock';
+import { JwtInspector } from '@/components/ui/JwtInspector';
 import { Copy, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Key } from 'lucide-react';
 import { useClipboard } from '@/hooks/useClipboard';
 import { cn } from '@/utils/cn';
@@ -10,26 +9,21 @@ import { cn } from '@/utils/cn';
 function TokenVault() {
   const { tokenSet, clearTokens } = useToken();
   const [expanded, setExpanded] = useState(false);
-  const [decodedIdToken, setDecodedIdToken] = useState<JwtPayload | null>(null);
+  /**
+   * Which token is open in the inspector. It used to be an ID-token-only payload decode via
+   * `jwt-decode` — no header, no signature check, and no way to look at an access token at all, though
+   * this server can issue JWT access tokens and `createLocalToken` exists to hand you one.
+   */
+  const [inspecting, setInspecting] = useState<string | null>(null);
   const { copy } = useClipboard();
 
   const hasTokens = tokenSet && (tokenSet.access_token || tokenSet.refresh_token || tokenSet.id_token);
 
-  const toggleDecodeIdToken = () => {
-    if (!tokenSet?.id_token) return;
-    if (decodedIdToken) {
-      setDecodedIdToken(null);
-      return;
-    }
-    try {
-      setDecodedIdToken(jwtDecode(tokenSet.id_token));
-    } catch { /* ignore */ }
-  };
-
   const tokenEntries = [
-    { label: 'Access Token', value: tokenSet?.access_token, badge: 'success' as const },
-    { label: 'Refresh Token', value: tokenSet?.refresh_token, badge: 'info' as const },
-    { label: 'ID Token', value: tokenSet?.id_token, badge: 'default' as const },
+    // A refresh token is opaque by design, so it gets no inspector.
+    { label: 'Access Token', value: tokenSet?.access_token, badge: 'success' as const, inspectable: true },
+    { label: 'Refresh Token', value: tokenSet?.refresh_token, badge: 'info' as const, inspectable: false },
+    { label: 'ID Token', value: tokenSet?.id_token, badge: 'default' as const, inspectable: true },
   ];
 
   return (
@@ -96,25 +90,29 @@ function TokenVault() {
                         ? `${entry.value.slice(0, 100)}…`
                         : entry.value}
                     </div>
-                    {entry.label === 'ID Token' && (
+                    {entry.inspectable && (
                       <div className="flex gap-1">
                         <button
-                          onClick={toggleDecodeIdToken}
+                          onClick={() =>
+                            setInspecting((current) => (current === entry.label ? null : entry.label))
+                          }
                           className="flex items-center gap-1 text-[0.6rem] text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer bg-transparent border-none"
                         >
-                          {decodedIdToken ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                          {decodedIdToken ? 'Hide decoded' : 'Decode'}
+                          {inspecting === entry.label ? (
+                            <EyeOff className="h-3 w-3" />
+                          ) : (
+                            <Eye className="h-3 w-3" />
+                          )}
+                          {inspecting === entry.label ? 'Hide' : 'Inspect'}
                         </button>
                       </div>
+                    )}
+                    {inspecting === entry.label && (
+                      <JwtInspector token={entry.value!} defaultOpen className="mt-1" />
                     )}
                   </div>
                 );
               })}
-              {decodedIdToken && (
-                <div className="pt-1">
-                  <JsonBlock data={decodedIdToken} className="[&_pre]:text-[0.6rem] [&_pre]:p-2" />
-                </div>
-              )}
             </>
           )}
         </div>

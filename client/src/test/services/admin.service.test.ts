@@ -35,6 +35,7 @@ describe('adminService.listTokens', () => {
     const result = await adminService.listTokens('auth123');
     expect(result).toEqual([{ id: 'tok1' }]);
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/token/list', {
+      method: 'GET',
       headers: { Accept: 'application/json', Authorization: 'Basic auth123' },
     });
   });
@@ -100,6 +101,7 @@ describe('adminService.localToken', () => {
     const result = await adminService.localToken({ iss: 'me', sub: 'user', aud: 'you' });
     expect(result).toEqual({ token: 'jwt' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/token/createLocalToken?iss=me&sub=user&aud=you', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });

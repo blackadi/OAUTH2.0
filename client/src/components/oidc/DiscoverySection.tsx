@@ -4,6 +4,7 @@ import { tokenService } from '@/services';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
@@ -28,7 +29,7 @@ function DiscoverySection() {
 
   return (
     <SectionPanel title="Discovery" description="OpenID Connect Discovery and JWKS endpoints">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <div className="flex flex-wrap gap-2">
         <Button

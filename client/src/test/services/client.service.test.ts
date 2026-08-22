@@ -24,6 +24,7 @@ describe('clientService.listClients', () => {
     const result = await clientService.listClients(AUTH, 0, 20);
     expect(result).toEqual([{ clientId: '1' }]);
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/client/list?start=0&end=20', {
+      method: 'GET',
       headers: { Accept: 'application/json', Authorization: 'Basic basic123' },
     });
   });
@@ -32,6 +33,7 @@ describe('clientService.listClients', () => {
     mockFetch.mockResolvedValue(ok([]));
     await clientService.listClients(AUTH);
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/client/list', {
+      method: 'GET',
       headers: { Accept: 'application/json', Authorization: 'Basic basic123' },
     });
   });

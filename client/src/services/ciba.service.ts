@@ -6,6 +6,7 @@ import {
   TOKEN_ENDPOINT,
 } from '@/config';
 import { http } from './http';
+import { sendRaw } from './transport';
 
 const CIBA_GRANT_TYPE = 'urn:openid:params:grant-type:ciba';
 
@@ -62,13 +63,18 @@ async function pollToken(
     params.append('client_id', clientId);
     params.append('client_secret', clientSecret);
   }
-  const response = await fetch(TOKEN_ENDPOINT, {
+  // `sendRaw`, not `send`: a CIBA poll *expects* non-2xx answers — `authorization_pending` and
+  // `slow_down` are the normal states of a poll loop (CIBA Core §11), so a throw would turn the
+  // expected case into an exception. The status is returned to the caller as data, which is what the
+  // polling UI switches on.
+  const { status, body } = await sendRaw({
     method: 'POST',
+    url: TOKEN_ENDPOINT,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
+    label: 'ciba: poll token',
   });
-  const body = await response.json();
-  return { status: response.status, body };
+  return { status, body };
 }
 
 export const cibaService = { backchannelAuthentication, issue, fail, complete, pollToken };

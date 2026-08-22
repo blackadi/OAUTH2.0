@@ -8,6 +8,7 @@ import { generateKeyPair, createProof } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
@@ -138,7 +139,7 @@ function ParSection() {
 
   return (
     <SectionPanel title="Pushed Authorization Requests (RFC 9126)" description="Send authorization parameters via POST for a cleaner redirect">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {doc && <OperationDescription doc={doc} />}
 

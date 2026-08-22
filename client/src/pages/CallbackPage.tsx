@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, getRedirectUri } from '@/config';
+import { API_BASE_URL, CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, getRedirectUri } from '@/config';
 import { tokenService } from '@/services';
 import type { TokenResponseWithNonce } from '@/services/token.service';
 import { createProof } from '@/services/dpop.service';
 import { createClientAssertion } from '@/services/client-assertion.service';
-import { jwtDecode, type JwtPayload } from 'jwt-decode';
+import { JwtInspector } from '@/components/ui/JwtInspector';
 import { useToken } from '@/context/TokenContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { JsonBlock } from '@/components/ui/JsonBlock';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Spinner } from '@/components/ui/Spinner';
 import type { TokenResponse } from '@/types';
 
@@ -18,7 +19,6 @@ interface CallbackState {
   error: string | null;
   loading: boolean;
   tokenResponse: TokenResponse | null;
-  decodedIDToken: JwtPayload;
 }
 
 const CallbackPage = () => {
@@ -29,7 +29,6 @@ const CallbackPage = () => {
     error: null,
     loading: true,
     tokenResponse: null,
-    decodedIDToken: {},
   });
 
   useEffect(() => {
@@ -40,24 +39,82 @@ const CallbackPage = () => {
       const errorParam = url.searchParams.get('error');
 
       if (errorParam) {
-        setState({ error: `Authorization error: ${errorParam}`, loading: false, tokenResponse: null, decodedIDToken: {} });
+        // `error_description` and `error_uri` were being discarded, which threw away the useful half of
+        // a failed authorization: RFC 6749 §4.1.2.1 defines all three, and the description is where the
+        // server says *what* was wrong. The full string is handed to `ErrorExplainer` below, which
+        // decodes the code and any `[Annnnnn]` inside the description.
+        const parts = [`error=${errorParam}`];
+        const description = url.searchParams.get('error_description');
+        const errorUri = url.searchParams.get('error_uri');
+        if (description) parts.push(`error_description="${description}"`);
+        if (errorUri) parts.push(`error_uri="${errorUri}"`);
+        setState({ error: parts.join(', '), loading: false, tokenResponse: null });
         return;
       }
 
       if (!code) {
-        setState({ error: 'Missing authorization code in callback URL', loading: false, tokenResponse: null, decodedIDToken: {} });
+        setState({ error: 'Missing authorization code in callback URL', loading: false, tokenResponse: null });
         return;
       }
 
+      /**
+       * `state` is checked fail-closed.
+       *
+       * This was `if (expectedState && stateParam && expectedState !== stateParam)`, which skipped the
+       * check entirely when *either* side was absent — a callback arriving with no `state`, or after
+       * session storage was cleared, went straight on to redeem the code. In a tool whose job is
+       * teaching, the one place a learner looks to see how CSRF protection is done modelled the mistake.
+       *
+       * Absence is now answered as "no", the same rule the server applies to an unknown `acr` and to
+       * unset management credentials: an absent value selects the safest behaviour.
+       */
       const expectedState = sessionStorage.getItem('oauth_state');
-      if (expectedState && stateParam && expectedState !== stateParam) {
-        setState({ error: 'State parameter mismatch; possible CSRF issue', loading: false, tokenResponse: null, decodedIDToken: {} });
+      if (!expectedState) {
+        setState({
+          error:
+            'No stored `state` to compare against, so the response cannot be bound to a request this app started. Begin the flow from the Grant Flows section.',
+          loading: false,
+          tokenResponse: null,
+        });
+        return;
+      }
+      if (!stateParam) {
+        setState({
+          error: 'The callback carried no `state`, so it cannot be matched to the request that started it.',
+          loading: false,
+          tokenResponse: null,
+        });
+        return;
+      }
+      if (expectedState !== stateParam) {
+        setState({
+          error: `State mismatch — sent "${expectedState}", received "${stateParam}". This is what a CSRF attempt looks like, and the flow stops here.`,
+          loading: false,
+          tokenResponse: null,
+        });
+        return;
+      }
+
+      /**
+       * RFC 9207: `iss` identifies the authorization server that answered, and comparing it defends
+       * against a mix-up attack where a response from one AS is replayed to a client expecting another.
+       * This service deliberately does not suppress it (`issSuppressed: false`), so it is present — and
+       * a *missing* `iss` is reported rather than ignored, since silence would make the check
+       * indistinguishable from not having one.
+       */
+      const issParam = url.searchParams.get('iss');
+      if (issParam && !API_BASE_URL.startsWith(new URL(issParam).origin)) {
+        setState({
+          error: `The response reports iss="${issParam}", which is not the server this app is configured for (${API_BASE_URL}). RFC 9207 exists to catch exactly this.`,
+          loading: false,
+          tokenResponse: null,
+        });
         return;
       }
 
       const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
       if (!codeVerifier) {
-        setState({ error: 'Missing PKCE code verifier in session storage', loading: false, tokenResponse: null, decodedIDToken: {} });
+        setState({ error: 'Missing PKCE code verifier in session storage', loading: false, tokenResponse: null });
         return;
       }
 
@@ -128,17 +185,11 @@ const CallbackPage = () => {
         setTokenSet(body);
         sessionStorage.setItem('active_client_id', storedClientId);
 
-        const decodedIdToken = body.id_token ? jwtDecode<JwtPayload>(body.id_token) : {};
-        setState({
-          error: null,
-          loading: false,
-          tokenResponse: body,
-          decodedIDToken: decodedIdToken,
-        });
+        setState({ error: null, loading: false, tokenResponse: body });
         toast.success('Tokens obtained successfully');
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Failed to exchange code for token';
-        setState({ error: msg, loading: false, tokenResponse: null, decodedIDToken: {} });
+        setState({ error: msg, loading: false, tokenResponse: null });
         toast.error(msg);
       }
     };
@@ -158,12 +209,17 @@ const CallbackPage = () => {
             <Spinner size="lg" />
           </div>
         )}
-        {!state.loading && state.error && <p className="text-sm text-red-400">{state.error}</p>}
+        {!state.loading && state.error && <ErrorExplainer error={state.error} />}
         {!state.loading && !state.error && state.tokenResponse && (
           <div className="space-y-4">
             <p className="text-sm text-green-400">Successfully obtained tokens from the authorization server.</p>
             <JsonBlock data={state.tokenResponse} label="Token Response" />
-            <JsonBlock data={state.decodedIDToken} label="Decoded ID Token" />
+            {state.tokenResponse.id_token && (
+              <JwtInspector token={state.tokenResponse.id_token} label="ID Token" defaultOpen />
+            )}
+            {state.tokenResponse.access_token && (
+              <JwtInspector token={state.tokenResponse.access_token} label="Access Token" />
+            )}
           </div>
         )}
         {!state.loading && (

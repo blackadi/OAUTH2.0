@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { adminService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -86,7 +87,7 @@ function AdminSection() {
     <SectionPanel title="Admin Token Management" description="Create and manage tokens via the admin API">
       <AdminAuth clientId={authId} clientSecret={authSecret} onClientIdChange={setAuthId} onClientSecretChange={setAuthSecret} />
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={ADMIN_OPS} value={activeOp} onChange={setActiveOp} disabled={!auth} />
 

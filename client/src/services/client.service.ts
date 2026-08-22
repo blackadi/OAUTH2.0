@@ -42,11 +42,7 @@ async function updateClient(
 }
 
 async function deleteClient(clientId: string, auth: string): Promise<void> {
-  const response = await fetch(`${CLIENT_DELETE_ENDPOINT}/${encodeURIComponent(clientId)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Basic ${auth}` },
-  });
-  if (!response.ok) throw new Error(await response.text());
+  await http.del(`${CLIENT_DELETE_ENDPOINT}/${encodeURIComponent(clientId)}`, auth);
 }
 
 async function lockFlag(
@@ -143,14 +139,7 @@ async function updateRequestableScopes(
 }
 
 async function deleteRequestableScopes(clientId: string, auth: string): Promise<void> {
-  const response = await fetch(
-    `${CLIENT_SCOPES_REQUESTABLE_ENDPOINT}/${encodeURIComponent(clientId)}`,
-    {
-      method: 'DELETE',
-      headers: { Authorization: `Basic ${auth}` },
-    },
-  );
-  if (!response.ok) throw new Error(await response.text());
+  await http.del(`${CLIENT_SCOPES_REQUESTABLE_ENDPOINT}/${encodeURIComponent(clientId)}`, auth);
 }
 
 export const clientService = {

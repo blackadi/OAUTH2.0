@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { dpopRequest, getStoredNonce } from '@/services/dpop-fetch';
+import { dpopRequest, getStoredNonce, type DpopRequestInit } from '@/services/dpop-fetch';
 
 const mockFetch = vi.fn();
 const URL_ = 'http://localhost:3000/api/token';
@@ -31,7 +31,7 @@ const nonceRefusal = (nonce: string) =>
     { 'dpop-nonce': nonce },
   );
 
-const init = (proof: string): RequestInit => ({ method: 'POST', headers: { DPoP: proof } });
+const init = (proof: string): DpopRequestInit => ({ method: 'POST', headers: { DPoP: proof } });
 
 describe('dpopRequest — the nonce dance (DR-20)', () => {
   it('retries once with a re-signed proof when the server demands a nonce', async () => {

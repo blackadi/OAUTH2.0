@@ -79,6 +79,7 @@ describe('tokenService.userInfo', () => {
     const result = await tokenService.userInfo('at1');
     expect(result).toEqual({ sub: 'user1' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/userinfo', {
+      method: 'GET',
       headers: { Authorization: 'Bearer at1', Accept: 'application/json' },
     });
   });
@@ -161,6 +162,7 @@ describe('tokenService.discovery', () => {
     const result = await tokenService.discovery();
     expect(result).toEqual({ issuer: 'https://example.com' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/.well-known/openid-configuration', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });
@@ -172,6 +174,7 @@ describe('tokenService.getJwks', () => {
     const result = await tokenService.getJwks();
     expect(result.keys).toHaveLength(1);
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/.well-known/jwks.json', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });

@@ -18,6 +18,7 @@ describe('healthService.serverHealth', () => {
     const result = await healthService.serverHealth();
     expect(result).toEqual({ status: 'ok', uptime: 123, timestamp: '2026-01-01T00:00:00Z' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/health', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });
@@ -29,6 +30,7 @@ describe('healthService.authleteHealth', () => {
     const result = await healthService.authleteHealth(false);
     expect(result).toEqual({ healthy: true });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/health/authlete', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });
@@ -38,6 +40,7 @@ describe('healthService.authleteHealth', () => {
     const result = await healthService.authleteHealth(true);
     expect(result).toEqual({ healthy: true, statusCode: 200 });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/health/authlete?extended=true', {
+      method: 'GET',
       headers: { Accept: 'application/json' },
     });
   });

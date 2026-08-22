@@ -22,6 +22,7 @@ describe('grantService.queryGrant', () => {
     const result = await grantService.queryGrant('bearertok', 'g1');
     expect(result).toEqual({ grantId: 'g1', status: 'ACTIVE' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/gm/g1', {
+      method: 'GET',
       headers: { Authorization: 'Bearer bearertok', Accept: 'application/json' },
     });
   });

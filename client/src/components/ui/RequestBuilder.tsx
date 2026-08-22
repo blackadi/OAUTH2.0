@@ -1,6 +1,7 @@
 import { cn } from '@/utils/cn';
 import { Copy, Check } from 'lucide-react';
 import { useState, useCallback } from 'react';
+import { toCurl } from '@/utils/curl';
 
 interface RequestBuilderProps {
   method: string;
@@ -20,24 +21,22 @@ const methodColors: Record<string, string> = {
 
 function RequestBuilder({ method, url, headers, body, className }: RequestBuilderProps) {
   const [copied, setCopied] = useState(false);
+  const [reveal, setReveal] = useState(false);
 
+  // Shared with the request trace's copy button, so the two cannot disagree about quoting or about
+  // what counts as a secret. This used to build the command inline: it embedded the real
+  // `Authorization: Basic` header — leaking the client secret into anything the command was pasted
+  // into — and wrapped the body in single quotes with no escaping, so any apostrophe in a value
+  // produced a broken command. Redacted by default now; `Reveal` opts in.
   const copyAsCurl = useCallback(async () => {
-    const parts = [`curl -X ${method}`];
-    if (headers) {
-      for (const [k, v] of Object.entries(headers)) {
-        parts.push(`  -H "${k}: ${v}"`);
-      }
-    }
-    if (body) {
-      parts.push(`  -d '${body}'`);
-    }
-    parts.push(`  '${url}'`);
     try {
-      await navigator.clipboard.writeText(parts.join(' \\\n'));
+      await navigator.clipboard.writeText(
+        toCurl({ method, url, headers, body }, { revealSecrets: reveal }),
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { /* ignore */ }
-  }, [method, url, headers, body]);
+    } catch { /* clipboard unavailable */ }
+  }, [method, url, headers, body, reveal]);
 
   return (
     <div className={cn('rounded-lg border border-border overflow-hidden', className)}>
@@ -62,8 +61,15 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
             <Copy className="h-3 w-3" />
           )}
           <span className={copied ? 'text-green-400' : ''}>
-            {copied ? 'Copied' : 'cURL'}
+            {copied ? 'Copied' : reveal ? 'cURL + secrets' : 'cURL'}
           </span>
+        </button>
+        <button
+          onClick={() => setReveal((r) => !r)}
+          className="text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none shrink-0 ml-2"
+          title={reveal ? 'Redact credentials in the copied command' : 'Include real credentials in the copied command'}
+        >
+          {reveal ? 'redacted?' : 'reveal'}
         </button>
       </div>
       {headers && Object.keys(headers).length > 0 && (

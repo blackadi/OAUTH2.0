@@ -8,6 +8,7 @@ import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
@@ -260,7 +261,7 @@ function StepUpSection() {
 
         {error && !challenge && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-            <p className="text-xs text-red-400">{error}</p>
+            <ErrorExplainer error={error} />
           </div>
         )}
       </div>

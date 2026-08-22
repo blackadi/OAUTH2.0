@@ -4,6 +4,7 @@ import { grantService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 
@@ -50,7 +51,7 @@ function GrantManagementSection() {
         />
       </div>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <div className="flex gap-2">
         <Button

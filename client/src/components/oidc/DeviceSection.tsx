@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { deviceService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -178,7 +179,7 @@ function DeviceSection() {
 
   return (
     <SectionPanel title="Device Flow (RFC 8628)" description="OAuth 2.0 Device Authorization Grant">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={DEVICE_OPS} value={activeOp} onChange={setActiveOp} />
 

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { clientService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -121,7 +122,7 @@ function ClientManagementSection() {
     <SectionPanel title="Client Management" description="Register and manage OAuth clients">
       <AdminAuth clientId={authId} clientSecret={authSecret} onClientIdChange={setAuthId} onClientSecretChange={setAuthSecret} />
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={BASIC_OPS} value={activeOp} onChange={setActiveOp} disabled={!auth} />
 

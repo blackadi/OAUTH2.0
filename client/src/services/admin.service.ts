@@ -26,14 +26,7 @@ async function revokeToken(body: Record<string, string>, auth: string): Promise<
 }
 
 async function deleteToken(accessTokenIdentifier: string, auth: string): Promise<void> {
-  const response = await fetch(
-    `${TOKEN_DELETE_ENDPOINT}/${encodeURIComponent(accessTokenIdentifier)}`,
-    {
-      method: 'DELETE',
-      headers: { Authorization: `Basic ${auth}` },
-    },
-  );
-  if (!response.ok) throw new Error(await response.text());
+  await http.del(`${TOKEN_DELETE_ENDPOINT}/${encodeURIComponent(accessTokenIdentifier)}`, auth);
 }
 
 async function reissueToken(body: Record<string, string>, auth: string): Promise<unknown> {

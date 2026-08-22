@@ -2,10 +2,12 @@ import { useState, Suspense } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from './ErrorBoundary';
-import { Menu, X, Bug } from 'lucide-react';
+import { Menu, X, Bug, Activity } from 'lucide-react';
 import { SpinnerPage } from '@/components/ui/Spinner';
 import { cn } from '@/utils/cn';
 import { useServerStatus } from '@/hooks/useServerStatus';
+import { useTraces } from '@/hooks/useTraces';
+import { TracePanel } from '@/components/trace/TracePanel';
 import type { SectionGroup } from '@/App';
 
 interface AppLayoutProps {
@@ -15,6 +17,9 @@ interface AppLayoutProps {
 
 function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const traces = useTraces();
+  const failures = traces.filter((t) => !t.ok).length;
   const navigate = useNavigate();
   const location = useLocation();
   const activePath = location.pathname;
@@ -42,6 +47,29 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
           </button>
         </div>
         <div className="flex items-center gap-3">
+          {/* Every HTTP call the app makes is recorded by `transport.ts`; this opens the history. The
+              failure count is surfaced on the button itself because the whole reason the panel exists is
+              that a non-2xx used to vanish into a red toast with no status attached. */}
+          <button
+            onClick={() => setTraceOpen((o) => !o)}
+            aria-expanded={traceOpen}
+            title="Request trace — every HTTP call, with status, headers and timing"
+            className={cn(
+              'flex items-center gap-1.5 px-2 py-1 rounded-md border cursor-pointer transition-colors',
+              traceOpen
+                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40'
+                : 'bg-muted/50 text-muted-foreground border-transparent hover:text-foreground',
+            )}
+          >
+            <Activity className="h-3 w-3" />
+            <span className="text-[0.65rem] font-medium uppercase tracking-wider">Trace</span>
+            {traces.length > 0 && (
+              <span className="text-[0.65rem] font-mono tabular-nums">
+                {traces.length}
+                {failures > 0 && <span className="text-amber-400"> ·{failures}</span>}
+              </span>
+            )}
+          </button>
           <div
             className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50"
             title={status === 'connected' ? `Server uptime: ${Math.floor(uptime ?? 0)}s` : 'Server unreachable'}
@@ -99,7 +127,12 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar groups={groups} header={sidebarHeader} />
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto p-4 lg:p-6 xl:p-8">
+          <div
+            className="max-w-5xl mx-auto p-4 lg:p-6 xl:p-8"
+            /* Reserve the drawer's height while it is open, so the last control on a page stays
+               reachable instead of sitting underneath it. */
+            style={traceOpen ? { paddingBottom: 'min(52vh, 30rem)' } : undefined}
+          >
             <ErrorBoundary>
               <Suspense fallback={<SpinnerPage />}>
                 <Outlet />
@@ -108,6 +141,8 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
           </div>
         </main>
       </div>
+
+      <TracePanel open={traceOpen} onClose={() => setTraceOpen(false)} />
     </div>
   );
 }

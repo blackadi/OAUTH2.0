@@ -4,6 +4,7 @@ import { vciService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { useToken } from '@/context/TokenContext';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -298,7 +299,7 @@ function VciSection() {
       ))}
 
       {/* Error banner */}
-      {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {/* Operation docs */}
       {activeOp && doc && <OperationDescription doc={doc} />}

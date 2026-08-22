@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { federationService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
@@ -41,7 +42,7 @@ function FederationSection() {
 
   return (
     <SectionPanel title="OpenID Federation 1.0" description="Entity configuration and registration endpoints for OIDC Federation">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={FEDERATION_OPS} value={activeOp} onChange={setActiveOp} />
 

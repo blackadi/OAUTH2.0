@@ -8,6 +8,7 @@ import { generateKeyPair, createProof } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -175,7 +176,7 @@ function RarSection() {
 
   return (
     <SectionPanel title="Rich Authorization Requests (RFC 9396)" description="Request granular permissions using authorization_details — structured JSON defining what the client wants to do with the user's resources">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {doc && <OperationDescription doc={doc} />}
 

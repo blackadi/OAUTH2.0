@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { cibaService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -138,7 +139,7 @@ function CibaSection() {
 
   return (
     <SectionPanel title="CIBA (Client-Initiated Backchannel Authentication)" description="OpenID Connect CIBA Core 1.0">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <TabBar options={CIBA_OPS} value={activeOp} onChange={setActiveOp} />
 

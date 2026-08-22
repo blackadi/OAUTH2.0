@@ -4,6 +4,7 @@ import { backchannelLogoutService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 
@@ -58,7 +59,7 @@ function BackchannelLogoutSection() {
         <Input label="Session ID" value={sessionId} onChange={(e) => setSessionId(e.target.value)} placeholder="Session identifier — alternative to subject" />
       </div>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <ErrorExplainer error={error} className="mb-3" />}
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={!mgmtAuth || !clientIdentifier || loading} loading={loading} onClick={() => handleCall(() => backchannelLogoutService.issue({ clientIdentifier, subject, sessionId }, mgmtAuth))}>
