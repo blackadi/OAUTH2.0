@@ -144,7 +144,7 @@ function StepUpSection() {
         {!at && (
           <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
             <p className="font-medium">No access token available</p>
-            <p className="mt-1 text-xs text-warning-text/80">
+            <p className="mt-1 text-xs text-warning-text">
               Obtain a token first via Grant Flows, then return here to test step-up challenges.
             </p>
           </div>
@@ -236,7 +236,7 @@ function StepUpSection() {
                 </div>
 
                 {challenge.error_description && (
-                  <p className="text-xs text-danger-text/80">{challenge.error_description}</p>
+                  <p className="text-xs text-danger-text">{challenge.error_description}</p>
                 )}
 
                 {reAuthUrl && (

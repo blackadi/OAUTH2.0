@@ -9,7 +9,7 @@ export default [
   js.configs.recommended,
   prettier,
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {

@@ -23,7 +23,7 @@ function Sidebar({ groups, header }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto p-2 space-y-3">
         {groups.map((group) => (
           <div key={group.label}>
-            <div className="px-3 py-1.5 text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+            <div className="px-3 py-1.5 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
               {group.label}
             </div>
             <div className="space-y-0.5">

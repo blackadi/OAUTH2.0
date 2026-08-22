@@ -371,7 +371,7 @@ function CibaSection() {
             <Button onClick={handlePollToken} loading={loading}>
               Poll Token
             </Button>
-            <span className="text-xs text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground">
               Expected interval: {pollInterval}s
             </span>
           </div>

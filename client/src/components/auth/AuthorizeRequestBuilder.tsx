@@ -15,6 +15,7 @@ import { createPkcePair, generateCodeChallenge } from '@/pkce';
 import { HelpPopover } from '@/components/ui/HelpPopover';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/cn';
+import { Prose } from '@/components/ui/Prose';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 
 /**
@@ -418,7 +419,16 @@ function AuthorizeRequestBuilder({
             className="w-full bg-code/60 px-3 py-2 text-xs font-mono text-foreground border-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring resize-y"
           />
         ) : (
-          <pre className="px-3 py-2 text-xs font-mono text-accent-text whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-code/40">
+          // `tabIndex={0}` and a name, because this block scrolls. A scrollable region that cannot
+          // receive focus cannot be scrolled by keyboard at all — content below the fold is simply
+          // unreachable without a pointer. Found by axe (`scrollable-region-focusable`); the
+          // `role="region"` plus `aria-label` is what keeps it from being an unnamed focus stop.
+          <pre
+            tabIndex={0}
+            role="region"
+            aria-label="Authorization request URL"
+            className="px-3 py-2 text-xs font-mono text-accent-text whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-code/40 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+          >
             {builtUrl}
           </pre>
         )}
@@ -515,7 +525,19 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
   const [threatOpen, setThreatOpen] = useState(false);
 
   return (
-    <div className={cn('px-3 py-2', !enabled && 'opacity-55')}>
+    /**
+     * A disabled row is marked by its **surface**, not by dimming its text.
+     *
+     * This was `opacity-55`, which axe flagged as a serious contrast failure — and no opacity value
+     * works, because the row also contains `text-muted-foreground`, a token already at its AA limit:
+     * dimming it *at all* breaks it. Measured worst-case in this row was 2.36:1 at 55% and still 3.88:1
+     * at 80%.
+     *
+     * A faint tint keeps every glyph at its full token colour (4.5:1+ in both palettes) while preserving
+     * the visual distinction across a 24-row table — and the *semantic* signal was never the opacity
+     * anyway, it is the unchecked checkbox.
+     */
+    <div className={cn('px-3 py-2', !enabled && 'bg-muted/30')}>
       <div className="flex items-center gap-2 flex-wrap">
         <input
           type="checkbox"
@@ -544,7 +566,7 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
             {spec.requirement}
           </span>
         )}
-        <span className="text-2xs font-mono text-muted-foreground/80 truncate">{spec.spec}</span>
+        <span className="text-2xs font-mono text-muted-foreground truncate">{spec.spec}</span>
         {spec.threat && (
           /* The attack this parameter prevents, one click away. It is a toggle rather than always-on
              prose because the row is dense and a novice meets 24 of them — but it is *present* on every
@@ -583,7 +605,9 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
       {spec.threat && threatOpen && (
         <div className="flex gap-2 items-start mt-1.5 mb-0.5 rounded-md border-l-2 border-edge-warning bg-tint-warning pl-2 py-1.5 pr-2">
           <ShieldAlert className="h-3 w-3 text-warning-text mt-0.5 shrink-0" />
-          <p className="text-xs text-foreground-muted leading-relaxed m-0">{spec.threat}</p>
+          <Prose as="p" className="text-xs text-foreground-muted leading-relaxed m-0">
+            {spec.threat}
+          </Prose>
         </div>
       )}
 

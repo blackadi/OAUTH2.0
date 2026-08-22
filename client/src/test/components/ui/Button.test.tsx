@@ -36,10 +36,24 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('applies variant classes', () => {
+  /**
+   * Asserted on the **token names**, not on Tailwind shades.
+   *
+   * This checked for `red-600`, which pinned the literal gradient — and that gradient failed WCAG AA:
+   * white text measured 3.76:1 at its light end and **2.77:1 on hover**, against the 4.5:1 body-text
+   * threshold. The stops are tokens now (`--danger-grad-*`, all clearing 4.5:1), and
+   * `check-contrast.mjs` scores them against `accent-foreground` on every stop, taking the worst. A test
+   * naming a shade would have to be edited every time the palette moved, and would go on passing while
+   * the contrast was wrong — which is exactly what happened.
+   */
+  it('applies variant classes from the palette tokens', () => {
     const { rerender } = render(<Button variant="danger">Danger</Button>);
-    const btn = screen.getByRole('button');
-    expect(btn.className).toContain('red-600');
+    expect(screen.getByRole('button').className).toContain('from-danger-grad-from');
+    expect(screen.getByRole('button').className).toContain('hover:to-danger-grad-to-hover');
+
+    rerender(<Button variant="default">Primary</Button>);
+    expect(screen.getByRole('button').className).toContain('from-accent-grad-from');
+
     rerender(<Button variant="ghost">Ghost</Button>);
     expect(screen.getByRole('button').className).toContain('bg-transparent');
   });

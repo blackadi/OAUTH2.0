@@ -3,6 +3,7 @@ import { AlertTriangle, BookOpen, ChevronDown, ChevronRight, Wrench } from 'luci
 import { TOKEN_PARAMS, tokenParamsFor, type TokenParamSpec } from '@/data/tokenParams';
 import { RequestBuilder } from '@/components/ui/RequestBuilder';
 import { cn } from '@/utils/cn';
+import { Prose } from '@/components/ui/Prose';
 
 /**
  * The token request, parameter by parameter — the step the tool did not teach.
@@ -139,14 +140,16 @@ function ParamRow({ spec, value }: { spec: TokenParamSpec; value: string | undef
         </span>
       </div>
 
-      <p className="text-xs text-foreground-muted leading-relaxed m-0">{spec.note}</p>
+      <Prose as="p" className="text-xs text-foreground-muted leading-relaxed m-0">
+        {spec.note}
+      </Prose>
 
       <p className="flex gap-1.5 text-xs text-muted-foreground leading-relaxed m-0">
-        <Wrench className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/70" />
-        <span>{spec.failure}</span>
+        <Wrench className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
+        <Prose>{spec.failure}</Prose>
       </p>
 
-      <p className="flex gap-1.5 text-2xs text-muted-foreground/70 font-mono m-0">
+      <p className="flex gap-1.5 text-2xs text-muted-foreground font-mono m-0">
         <BookOpen className="h-2.5 w-2.5 mt-0.5 shrink-0" />
         <span>{spec.spec}</span>
       </p>

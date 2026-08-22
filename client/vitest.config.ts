@@ -10,6 +10,19 @@ export default defineConfig({
     },
   },
   test: {
+    /**
+     * The Playwright specs are **not** unit tests and must not be collected here.
+     *
+     * Vitest's default `include` sweeps up every `.test.` and `.spec.` file in the project, which would
+     * catch `e2e/*.spec.ts` — and those import `@playwright/test`, which has no jsdom equivalent, so the
+     * whole unit run would fail during collection. Narrowing `include` to `src/` is the fix rather than
+     * adding an exclude, because it states the rule positively: unit tests live in `src/`, rendering
+     * tests live in `e2e/`, and there is no third place.
+     *
+     * (The glob is written on the `include` line below rather than quoted in this comment: a `*` followed
+     * by a `/` inside a block comment closes it, which is how this file first failed to parse.)
+     */
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: true,

@@ -242,7 +242,7 @@ function ParSection() {
       {parResult?.request_uri && (
         <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
           <p className="text-xs text-foreground-muted font-mono break-all">
-            <span className="text-muted-foreground/70">request_uri: </span>
+            <span className="text-muted-foreground">request_uri: </span>
             {parResult.request_uri}
           </p>
           <p className="text-xs text-muted-foreground">

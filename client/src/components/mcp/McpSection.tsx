@@ -14,6 +14,7 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { Spinner } from '@/components/ui/Spinner';
 import { getDoc } from '@/data/operationDocs';
+import { stepState } from '@/utils/step-state';
 import { parseJsonObject, stringMember } from '@/utils/parse-json';
 import { API_BASE_URL, CLIENT_ID, REDIRECT_URI, DEFAULT_SCOPES } from '@/config';
 import { createPkcePair } from '@/pkce';
@@ -433,7 +434,7 @@ function McpSection() {
         </Card>
 
         {/* ── Step 2: Register Client ────────────────────── */}
-        <Card className={`mb-3 ${!wizAsData ? 'opacity-50 pointer-events-none' : ''}`}>
+        <Card {...stepState(Boolean(wizAsData), 'mb-3')}>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               Step 2: Register Client
@@ -495,7 +496,7 @@ function McpSection() {
         </Card>
 
         {/* ── Step 3: Authorize ──────────────────────────── */}
-        <Card className={`mb-3 ${!wizAsData ? 'opacity-50 pointer-events-none' : ''}`}>
+        <Card {...stepState(Boolean(wizAsData), 'mb-3')}>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               Step 3: Authorize (PKCE + Resource)
@@ -546,7 +547,7 @@ function McpSection() {
         </Card>
 
         {/* ── Step 4: Token Exchange ─────────────────────── */}
-        <Card className={`mb-3 ${!wizAuthUrl ? 'opacity-50 pointer-events-none' : ''}`}>
+        <Card {...stepState(Boolean(wizAuthUrl), 'mb-3')}>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               Step 4: Token Exchange
@@ -582,7 +583,7 @@ function McpSection() {
         </Card>
 
         {/* ── Step 5: UserInfo ───────────────────────────── */}
-        <Card className={`mb-3 ${!wizTokenResult ? 'opacity-50 pointer-events-none' : ''}`}>
+        <Card {...stepState(Boolean(wizTokenResult), 'mb-3')}>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               Step 5: Fetch UserInfo
@@ -607,7 +608,7 @@ function McpSection() {
         </Card>
 
         {/* ── Step 6: Introspect ─────────────────────────── */}
-        <Card className={`mb-3 ${!wizTokenResult ? 'opacity-50 pointer-events-none' : ''}`}>
+        <Card {...stepState(Boolean(wizTokenResult), 'mb-3')}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Step 6: Introspect the token

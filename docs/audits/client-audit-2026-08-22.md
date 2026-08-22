@@ -9,15 +9,25 @@ Constraints C1–C9 from the commissioning prompt apply. Read-only on source; th
 > (53 files) and every gate is green: `tsc --noEmit`, `eslint --max-warnings 0` (now **type-aware**),
 > prettier, coverage with new per-layer floors, `vite build`, and all five repo checks.
 >
-> Three findings are deliberately **not** fixed, each for a stated reason — see
-> §10 *Remediation Record* at the end of this document, which lists every finding, what was done, and
-> what was measured. Two of the audit's own recommendations were **evaluated and rejected on evidence**
-> (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`: 124 diagnostics, zero defects between them),
-> and the remediation found **four defects the audit had missed** — recorded there too.
+> Two findings are deliberately **not** fixed, each for a stated reason — see §10 *Remediation Record*,
+> which lists every finding, what was done and what was measured. Two of the audit's own recommendations
+> were **evaluated and rejected on evidence** (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`:
+> 124 diagnostics, zero defects between them), and remediation found **four defects the audit had
+> missed**.
+>
+> ### ✅ And the `[INFERRED]` caveat is lifted
+>
+> Playwright + axe now render the app in **Chromium and Firefox**: **144 rendering checks**, and §11
+> *Rendering Verification* records what the first render found. Seven more defects, all behind an
+> all-green board — including the **Token Vault being unreachable below 1024px**, both gradient buttons
+> failing WCAG AA on hover at **2.77:1**, and every backtick in the teaching corpus rendering
+> **literally**. `A11Y-05` is closed better than the audit asked: axe at runtime rather than the lint
+> plugin it wanted, and `ENG-12` is settled — sourcemaps stay on, by decision.
 
 **Contents** — §1 Executive Summary · §2 Observation Method & Coverage · §3 Scorecards (inside Phases
 1–3) · §4 Findings Register · §5 Novice Walkthrough (inside Phase 2) · §6 Revamp Decision Rubric
-(Phase 4) · §7 Roadmap (Phase 5) · §8 Open Questions for Odai · §9 Screenshots Requested.
+(Phase 4) · §7 Roadmap (Phase 5) · §8 Open Questions for Odai · §9 Screenshots Requested ·
+**§10 Remediation Record** · **§11 Rendering Verification**.
 
 ---
 
@@ -1599,8 +1609,8 @@ tightened version immediately found three more genuinely undocumented sections.
 
 | ID | Sev | Why not |
 |---|:--:|---|
-| **ENG-12** — production sourcemaps | Low | **Yours to decide (Q5).** The three voices split: source is public on GitHub and a learner reading commented source in DevTools is getting the product's value. Left **on**, unchanged. |
-| **A11Y-05** — no `eslint-plugin-jsx-a11y` | Low | **Blocked by constraint C4** (no installing dependencies). Recommended, not installed. Its absence is now partly compensated: A11Y-01/02/03/06 are all fixed and pinned by tests. |
+| **ENG-12** — production sourcemaps | Low | **Decided: stays on.** The source is public on GitHub, and a learner who opens DevTools on the deployment and finds readable, commented source is getting this product's core value. No longer open. |
+| **A11Y-05** — no `eslint-plugin-jsx-a11y` | Low | **Closed differently, and better.** The constraint against new dependencies was lifted, and `@axe-core/playwright` was installed instead — it reads the *accessibility tree* rather than JSX, which is the only thing that could have caught the two defects §11 lists at #2 and #3. A lint rule would have missed both. |
 | **ENG-14** — five 500+ LOC sections | Low | **Deliberately deferred.** Decomposing components that hold token-handling logic is an L-effort refactor with real regression risk, and it buys no behaviour. Two things reduced the pressure honestly: `useUrlState` and `useConfirmedAction` removed state from four of the five, and `ClientManagementSection` is down from 33 `useState` calls. The right sequencing is per-section tests **first** — which is why the coverage floors were added and why `src/components/**` deliberately has none yet. |
 
 ### Two of my own recommendations, rejected on evidence
@@ -1642,3 +1652,84 @@ screenshot list in §9 stands, and two rows are now specifically about verifying
 finding: **#1 (the header at 360px)** confirms UX-05, and **#4 (`HelpPopover` at 500px viewport height)**
 confirms UX-06. UX-02's light-theme tints are measured for *contrast* by `check-contrast`, but whether
 the surface *hierarchy* still reads on white is a judgement only an eye can make — row #2.
+
+---
+
+## 11 · Rendering Verification — 2026-08-22
+
+**The `[INFERRED]` caveat is lifted.** Playwright 1.62.1 with `@axe-core/playwright` 4.13.0, driving
+Chromium and Firefox. **144 rendering checks pass on both engines.** The audit's ten screenshot requests
+are answered, and the suite that answered them is committed, so none of it has to be re-established by
+eye again.
+
+### What the first render found — five defects behind an all-green board
+
+Every one of these existed while typecheck, type-aware lint, 571 unit tests, the production build and
+eight bespoke checks were all passing.
+
+| # | Defect | Why nothing else could see it |
+|---|---|---|
+| 1 | **The Token Vault was unreachable below 1024px.** `sidebarHeader` was passed only to `Sidebar`, which is `hidden lg:flex`, and the mobile drawer rendered nav links only. On a phone the app's only view of the tokens it holds — and the only way to inspect or clear them — simply did not exist. Not degraded: absent, with nothing on screen saying so | jsdom has **no viewport**, so `hidden lg:flex` does nothing there. Both the smoke suite and the route suite happily found the vault |
+| 2 | **`role="list"` with no `listitem` children**, on nine routes. An explicit `list` role makes the browser expect `listitem`s; a plain `<div>` does not qualify, so every flow diagram announced as an **empty list** and not one of its `aria-label`s reached anybody | Attributes are all present and correct in the JSX. Only the resulting accessibility tree shows the mismatch |
+| 3 | **A scrollable region no keyboard could reach.** The authorization-URL block scrolls at `max-h-40` and was not focusable, so everything below the fold was unreachable without a pointer | Nothing in source says "this element will scroll" — it depends on content height at render |
+| 4 | **`opacity-50` on prose, at eight sites.** Seven wizard steps plus the disabled parameter row. Measured **2.36:1** at worst against a 4.5:1 threshold — and *no* opacity works, because the text includes `text-muted-foreground`, a token already at its AA limit, so dimming it at all breaks it | `check-contrast.mjs` scores declared token values; an `opacity` on an ancestor is three composited layers away |
+| 5 | **Every backtick and asterisk in the teaching corpus rendered literally.** Hundreds of them: `` Everything under `/api` `` appeared with the backticks showing, *"the \*end-user\*"* with asterisks. The one defect that took a human looking at a screenshot rather than an assertion | Valid text, correctly escaped, in the right element. No gate has an opinion about punctuation |
+
+### And two the extended gates found
+
+Fixing #4 meant teaching `check-contrast.mjs` to see opacity modifiers. It then found more:
+
+6. **Both gradient buttons failed WCAG AA.** White on `from-indigo-600 to-indigo-500` measures **4.47:1**
+   at the light end and **2.98:1 on hover**; danger measures 3.76:1 and **2.77:1**. The application's two
+   most prominent controls, and the hover state was the worse of the two. Now tokenised as
+   `--accent-grad-*` / `--danger-grad-*` at 700→600 with 800→700 on hover — every stop clears 4.5:1, and
+   **hover darkens**, which is both the accessible direction and the one that reads as pressed.
+7. **`--warning-text` and `--success-text` failed on their own tinted badges** in the light palette:
+   4.07:1 and 4.49:1 against the *composited* tint, while clearing every plain surface. Darkened to
+   amber-800 and emerald-800 (5.66:1, 6.29:1).
+
+Plus one **regression I introduced and the suite caught**: focusing `#main` on navigation also fired on
+first paint, so the very first Tab landed inside the content and **skipped the skip link** — the one
+keystroke it exists to serve. The fix also had to be made idempotent, because a `useRef(true)` boolean is
+consumed by StrictMode's double-invoke; it compares the path instead. Same lesson as `CallbackPage`'s
+latch, learned twice.
+
+### The gates are stronger, not just satisfied
+
+| Gate | Change |
+|---|---|
+| `check-contrast.mjs` | Scores **10** semantic tokens, not 5. **Refuses** any opacity modifier on a text colour as unscoreable, naming the file. Scores `accent-foreground` against **every** button gradient stop, taking the **worst**. Reports a paired token whose backgrounds are missing instead of throwing |
+| `check-client-docs.mjs` | Matches section labels against **headings** rather than the whole README. It had given a **false pass** — the new Token Exchange section counted as documented because the *FAPI* section's prose contained "token exchange with a proof". The tightened version immediately found three sections never documented at all, including Grant Flows, whose heading still read *"Auth Flows — The Four Standard Grant Types"* for five grants |
+| `vitest.config.ts` | `include` narrowed to `src/`, so the Playwright specs cannot be collected into the unit run |
+| `tsconfig.json` · `eslint.config.js` | Extended to `e2e/` and `playwright.config.ts` — the rendering suite is held to the same bar as the app |
+| `ci.yml` | Installs both engines and runs `test:visual`, uploading the report on failure |
+| `Prose.test.tsx` | 226 cases, including **every string in the corpus** checked for balanced backticks — the one input `Prose` cannot render |
+
+### The suite, and what each part is for
+
+| File | Checks | Guards |
+|---|---|---|
+| `e2e/surfaces.ts` | — | The reading/doing classification **in code**, so the specs cannot drift from the declared posture |
+| `e2e/layout.spec.ts` | 33 × 2 engines | Document overflow on all 22 routes; the header at 360px; a 4,000-character token; popover height at three viewport heights; the container query; vault reachability |
+| `e2e/a11y.spec.ts` | 32 × 2 engines | axe WCAG 2.1 A/AA on every route, both palettes, and at 360px with the drawer open; heading outline; skip link; route-change focus; roving tabindex; live regions |
+| `e2e/visual.spec.ts` | 14, Chromium | Baselines for the seven things that were actually wrong, in both themes |
+
+**Deliberately not** an end-to-end protocol suite: nothing here needs credentials or calls Authlete, so
+it spends no quota and trips no rate limit. It renders the app with no backend behind it, which is why the
+header reads "Offline" in every baseline — a state worth capturing rather than hiding.
+
+### Screenshot requests: answered
+
+All ten rows of §9 are now covered by an automated check rather than an eye, with two exceptions worth
+stating. **Row 1 (the header at 360px) confirmed UX-05 fixed** — it holds, so the finding does not
+downgrade, it closes. **Row 2's light-theme tint hierarchy** is the one thing still resting on human
+judgement: axe proves the *contrast* passes, and I have now looked at the rendered light theme and it
+reads correctly, but "reads correctly" is a judgement and I am recording it as mine rather than as a
+measurement.
+
+### Still not automated
+
+- **A real screen reader.** axe reads the accessibility tree; it cannot hear Orca. The live regions are
+  proven present, correctly roled and correctly filled — not proven pleasant to listen to.
+- **Whether the pedagogy lands.** That needs a novice, not a tool. The Novice Walkthrough in §5 is a
+  simulation and remains one.

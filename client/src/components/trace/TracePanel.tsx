@@ -154,7 +154,7 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
           </span>
         )}
         {notable.length > 0 && (
-          <span className="hidden lg:inline text-2xs font-mono text-warning-text/90 shrink-0">
+          <span className="hidden lg:inline text-2xs font-mono text-warning-text shrink-0">
             {notable[0]}
           </span>
         )}
@@ -222,7 +222,7 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <div className="space-y-2 min-w-0">
-              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Request
               </p>
               <HeaderTable headers={requestHeaders} />
@@ -233,7 +233,7 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
               )}
             </div>
             <div className="space-y-2 min-w-0">
-              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Response
               </p>
               <HeaderTable headers={entry.responseHeaders} />

@@ -88,7 +88,7 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
           <AlertTriangle className="h-4 w-4 text-warning-text mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="text-xs font-medium text-warning-text">Not a decodable JWT</p>
-            <p className="text-xs text-warning-text/80 mt-0.5">{decoded.error}</p>
+            <p className="text-xs text-warning-text mt-0.5">{decoded.error}</p>
             <p className="text-2xs text-muted-foreground mt-1.5">
               An opaque access token is normal and not a defect — only some deployments issue JWTs
               here.
@@ -202,7 +202,7 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/70 mb-1.5">
+    <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
       {children}
     </p>
   );
@@ -292,7 +292,7 @@ function ClaimRow({ name, value }: { name: string; value: unknown }) {
             {time.iso} ({formatDelta(time.delta)})
           </span>
         )}
-        {doc && <p className="text-muted-foreground/80 mt-0.5 leading-snug">{doc.note}</p>}
+        {doc && <p className="text-muted-foreground mt-0.5 leading-snug">{doc.note}</p>}
       </div>
       {doc && (
         <div className="shrink-0">

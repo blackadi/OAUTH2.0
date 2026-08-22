@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { stepState } from '@/utils/step-state';
 import {
   generateKeyPair,
   createProof,
@@ -440,7 +441,7 @@ function FapiSection() {
                 placeholder="fapi_scope openid"
               />
             </div>
-            <p className="text-xs text-muted-foreground/70 mb-3">
+            <p className="text-xs text-muted-foreground mb-3">
               Make sure your Authlete service has a scope with the{' '}
               <code className="text-muted-foreground">fapi2=sp</code> attribute and your client uses{' '}
               <code className="text-muted-foreground">PRIVATE_KEY_JWT</code> auth method.
@@ -485,7 +486,7 @@ function FapiSection() {
           </div>
 
           <div
-            className={`border-t border-border pt-4 ${!wizDpopKeyPair || !wizSigningKey ? 'opacity-50 pointer-events-none' : ''}`}
+            {...stepState(Boolean(wizDpopKeyPair && wizSigningKey), 'border-t border-border pt-4')}
           >
             <h2 className="text-sm font-medium mb-2">Step 1: Push Authorization Request (PAR)</h2>
             <p className="text-xs text-muted-foreground mb-2">
@@ -508,9 +509,7 @@ function FapiSection() {
             )}
           </div>
 
-          <div
-            className={`border-t border-border pt-4 ${!wizParResult?.request_uri ? 'opacity-50 pointer-events-none' : ''}`}
-          >
+          <div {...stepState(Boolean(wizParResult?.request_uri), 'border-t border-border pt-4')}>
             <h2 className="text-sm font-medium mb-2">Step 2: Authorize</h2>
             <p className="text-xs text-muted-foreground mb-2">
               Opens the authorization page. After login + consent, you are redirected to the

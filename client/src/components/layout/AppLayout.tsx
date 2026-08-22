@@ -30,18 +30,35 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
 
   /**
-   * Move focus to the content region on navigation.
+   * Move focus to the content region **on navigation**, and not on first paint.
    *
    * A client-side route change replaces the whole page without moving focus, so a keyboard or
-   * screen-reader user stayed wherever they were — usually on the sidebar link they just activated —
-   * and had no indication that the content had changed. `tabIndex={-1}` makes the region programmatically
-   * focusable without adding it to the tab order, and `outline-none` keeps the focus ring off a region
-   * the user never reaches by tabbing. The skip link above still works because it targets `#main`.
+   * screen-reader user stayed wherever they were — usually on the sidebar link they just activated — and
+   * had no indication that the content had changed. `tabIndex={-1}` makes the region programmatically
+   * focusable without adding it to the tab order.
    *
-   * Deliberately keyed on `activePath` only: focus must move when the *route* changes, not when a
-   * section re-renders.
+   * **The guard is not an optimisation.** Without it this effect fires on mount, so a fresh page load
+   * begins with focus already *inside* `#main` — and the very first Tab then lands on whatever control is
+   * first in the content, skipping past the skip link entirely. That makes the skip link unreachable by
+   * the one keystroke it exists to serve. Caught by a Playwright keyboard test, and by nothing else:
+   * jsdom does not model a document's initial focus position.
+   *
+   * **And it compares the path rather than counting renders**, which is the second half of the same
+   * lesson `CallbackPage`'s latch teaches. A `useRef(true)` boolean is *consumed by StrictMode's
+   * double-invoke*: the first run flips it, the cleanup runs, and the second run sails through and steals
+   * focus anyway. Remembering which path was last focused for is idempotent, so running twice is
+   * indistinguishable from running once.
    */
+  const focusedPathRef = useRef<string | null>(null);
   useEffect(() => {
+    // First mount: remember where we are and move nothing.
+    if (focusedPathRef.current === null) {
+      focusedPathRef.current = activePath;
+      return;
+    }
+    // Same route, re-run: nothing navigated, so nothing should move.
+    if (focusedPathRef.current === activePath) return;
+    focusedPathRef.current = activePath;
     mainRef.current?.focus();
   }, [activePath]);
 
@@ -192,6 +209,20 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
               </div>
             ))}
           </nav>
+          {/*
+            The vault belongs in the mobile drawer too.
+
+            **Found by rendering** (2026-08-22): `sidebarHeader` was passed only to `Sidebar`, which is
+            `hidden lg:flex` — so below 1024px the Token Vault was **unreachable**. That is the app's only
+            view of the tokens it holds and the only way to inspect or clear them, and nothing on screen
+            hinted that it existed. A doing surface collapsing to one column is intended; a control
+            disappearing with no trace is a silent break, which is the one thing the responsive posture
+            does not permit.
+
+            No unit test could see this: `sections.smoke.test.tsx` and `App.routes.test.tsx` both render
+            in jsdom, where `hidden lg:flex` has no effect because there is no viewport.
+          */}
+          {sidebarHeader && <div className="border-t border-border p-3">{sidebarHeader}</div>}
         </div>
       )}
 

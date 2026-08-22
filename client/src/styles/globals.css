@@ -81,6 +81,32 @@
   --tint-info: rgb(14 165 233 / 0.12);
   --tint-info-strong: rgb(14 165 233 / 0.2);
   --edge-info: rgb(14 165 233 / 0.3);
+  /**
+   * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+   *
+   * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+   * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+   * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+   * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+   * hover state failed badly.
+   *
+   * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+   * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+   * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+   * took computing the stops by hand.
+   *
+   * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+   * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+   * is both the accessible direction and the one that reads as "pressed".
+   */
+  --accent-grad-from: #4338ca;
+  --accent-grad-to: #4f46e5;
+  --accent-grad-from-hover: #3730a3;
+  --accent-grad-to-hover: #4338ca;
+  --danger-grad-from: #b91c1c;
+  --danger-grad-to: #dc2626;
+  --danger-grad-from-hover: #991b1b;
+  --danger-grad-to-hover: #b91c1c;
   --shadow-card: 0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8);
   --shadow-card-elevated: 0 25px 50px -12px rgb(2 6 23 / 0.85);
 }
@@ -103,8 +129,21 @@
     --input: #ffffff;
     --ring: var(--accent);
     --accent-text: #4338ca;
-    --success-text: #047857;
-    --warning-text: #a16207;
+    --success-text: #065f46;
+    /**
+     * Darkened after axe measured them against the **composited** tint.
+     *
+     * `--warning-text: #a16207` (amber-700) and `--success-text: #047857` (emerald-700) both cleared AA on
+     * every plain surface, which is what `check-contrast.mjs` measures — and both failed on their own
+     * tinted badge, where the real background is `tint-warning` composited over the card. Measured: 4.07:1
+     * for warning on `tint-warning-strong`, 4.49:1 for success. Amber-800 and emerald-800 clear it at
+     * 5.66:1 and 6.29:1 while staying the same hue.
+     *
+     * The pair of gates working as intended rather than either being wrong: the static check reads declared
+     * values and cannot composite three layers of translucency; axe reads the rendered page and cannot tell
+     * you which token to change. Neither alone would have found this.
+     */
+    --warning-text: #854d0e;
     --danger-text: #b91c1c;
     --info-text: #0369a1;
     --tint-accent: rgb(79 70 229 / 0.07);
@@ -124,6 +163,58 @@
     --edge-info: rgb(3 105 161 / 0.28);
     /* Slate at 12% rather than 80%: on a white ground the shadow's job is to lift the card a
        millimetre, not to draw a border. */
+    /**
+     * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+     *
+     * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+     * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+     * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+     * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+     * hover state failed badly.
+     *
+     * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+     * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+     * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+     * took computing the stops by hand.
+     *
+     * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+     * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+     * is both the accessible direction and the one that reads as "pressed".
+     */
+    --accent-grad-from: #4338ca;
+    --accent-grad-to: #4f46e5;
+    --accent-grad-from-hover: #3730a3;
+    --accent-grad-to-hover: #4338ca;
+    --danger-grad-from: #b91c1c;
+    --danger-grad-to: #dc2626;
+    --danger-grad-from-hover: #991b1b;
+    --danger-grad-to-hover: #b91c1c;
+    /**
+   * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+   *
+   * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+   * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+   * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+   * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+   * hover state failed badly.
+   *
+   * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+   * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+   * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+   * took computing the stops by hand.
+   *
+   * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+   * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+   * is both the accessible direction and the one that reads as "pressed".
+   */
+    --accent-grad-from: #4338ca;
+    --accent-grad-to: #4f46e5;
+    --accent-grad-from-hover: #3730a3;
+    --accent-grad-to-hover: #4338ca;
+    --danger-grad-from: #b91c1c;
+    --danger-grad-to: #dc2626;
+    --danger-grad-from-hover: #991b1b;
+    --danger-grad-to-hover: #b91c1c;
     --shadow-card: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
     --shadow-card-elevated:
       0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
@@ -147,8 +238,8 @@
   --input: #ffffff;
   --ring: var(--accent);
   --accent-text: #4338ca;
-  --success-text: #047857;
-  --warning-text: #a16207;
+  --success-text: #065f46;
+  --warning-text: #854d0e;
   --danger-text: #b91c1c;
   --info-text: #0369a1;
   --tint-accent: rgb(79 70 229 / 0.07);
@@ -169,6 +260,16 @@
   --shadow-card: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
   --shadow-card-elevated:
     0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
+  /* Same values in both palettes: the pairing is white-on-saturated, which does not depend on the page
+     behind the button. See the note in `:root` for the measurements. */
+  --accent-grad-from: #4338ca;
+  --accent-grad-to: #4f46e5;
+  --accent-grad-from-hover: #3730a3;
+  --accent-grad-to-hover: #4338ca;
+  --danger-grad-from: #b91c1c;
+  --danger-grad-to: #dc2626;
+  --danger-grad-from-hover: #991b1b;
+  --danger-grad-to-hover: #b91c1c;
 }
 
 :root[data-theme='dark'] {
@@ -224,6 +325,32 @@
   --tint-info: rgb(14 165 233 / 0.12);
   --tint-info-strong: rgb(14 165 233 / 0.2);
   --edge-info: rgb(14 165 233 / 0.3);
+  /**
+   * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+   *
+   * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+   * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+   * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+   * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+   * hover state failed badly.
+   *
+   * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+   * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+   * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+   * took computing the stops by hand.
+   *
+   * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+   * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+   * is both the accessible direction and the one that reads as "pressed".
+   */
+  --accent-grad-from: #4338ca;
+  --accent-grad-to: #4f46e5;
+  --accent-grad-from-hover: #3730a3;
+  --accent-grad-to-hover: #4338ca;
+  --danger-grad-from: #b91c1c;
+  --danger-grad-to: #dc2626;
+  --danger-grad-from-hover: #991b1b;
+  --danger-grad-to-hover: #b91c1c;
   --shadow-card: 0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8);
   --shadow-card-elevated: 0 25px 50px -12px rgb(2 6 23 / 0.85);
 }
@@ -292,6 +419,14 @@
   --color-tint-info: var(--tint-info);
   --color-tint-info-strong: var(--tint-info-strong);
   --color-edge-info: var(--edge-info);
+  --color-accent-grad-from: var(--accent-grad-from);
+  --color-accent-grad-to: var(--accent-grad-to);
+  --color-accent-grad-from-hover: var(--accent-grad-from-hover);
+  --color-accent-grad-to-hover: var(--accent-grad-to-hover);
+  --color-danger-grad-from: var(--danger-grad-from);
+  --color-danger-grad-to: var(--danger-grad-to);
+  --color-danger-grad-from-hover: var(--danger-grad-from-hover);
+  --color-danger-grad-to-hover: var(--danger-grad-to-hover);
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1.45;
   --shadow-card: var(--shadow-card);

@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { Prose } from './Prose';
 
 interface HelpPopoverProps {
   title: string;
@@ -201,7 +202,9 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
               /* Header is 44px; the scroller gets whatever the measured panel height leaves. */
               style={{ maxHeight: height - 44 }}
             >
-              <p className="m-0 leading-relaxed">{description}</p>
+              <Prose as="p" className="m-0 leading-relaxed">
+                {description}
+              </Prose>
               {params && params.length > 0 && (
                 <div className="flex flex-col gap-1">
                   <strong className="text-xs text-muted-foreground uppercase tracking-wider">
@@ -213,7 +216,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
                         <code className="text-xs text-accent-text bg-tint-accent px-1 py-0.5 rounded">
                           {p.name}
                         </code>
-                        <span className="text-xs text-foreground-muted">{p.desc}</span>
+                        <Prose className="text-xs text-foreground-muted">{p.desc}</Prose>
                       </div>
                     ))}
                   </div>
@@ -224,7 +227,9 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
                   <strong className="text-xs text-muted-foreground uppercase tracking-wider">
                     Returns
                   </strong>
-                  <p className="m-0 text-xs text-foreground-muted">{returns}</p>
+                  <Prose as="p" className="m-0 text-xs text-foreground-muted">
+                    {returns}
+                  </Prose>
                 </div>
               )}
               {tips && (
@@ -232,7 +237,9 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
                   <strong className="text-xs text-muted-foreground uppercase tracking-wider">
                     Tips
                   </strong>
-                  <p className="m-0 text-xs text-foreground-muted">{tips}</p>
+                  <Prose as="p" className="m-0 text-xs text-foreground-muted">
+                    {tips}
+                  </Prose>
                 </div>
               )}
             </div>

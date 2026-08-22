@@ -34,7 +34,7 @@ function SectionPanel({
                   with no root. Sub-headings inside a section start at `h2` from here. */}
               <h1 className="text-base font-semibold text-foreground tracking-tight">{title}</h1>
               {description && (
-                <p className="text-xs text-muted-foreground/80 mt-0.5 max-w-prose">{description}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 max-w-prose">{description}</p>
               )}
             </div>
           </div>

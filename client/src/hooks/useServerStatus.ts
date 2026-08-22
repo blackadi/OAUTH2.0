@@ -76,7 +76,13 @@ export function useServerStatus(options?: UseServerStatusOptions): UseServerStat
     void check();
 
     const pollMs = isConnected ? interval : retryInterval;
-    const intervalId = setInterval(check, pollMs);
+    /**
+     * `void check()`, not `check` — an async function passed straight to `setInterval` returns a promise
+     * the timer discards, so any rejection inside it becomes unhandled. `check` catches its own failures
+     * today, which is why this never misbehaved; marking the discard makes that a stated decision rather
+     * than a property nobody is watching.
+     */
+    const intervalId = setInterval(() => void check(), pollMs);
 
     return () => {
       mountedRef.current = false;

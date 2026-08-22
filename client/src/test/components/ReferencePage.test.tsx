@@ -9,6 +9,11 @@ import { TOKEN_PARAMS } from '@/data/tokenParams';
 /**
  * The only reading surface in the application, and the reason it exists.
  *
+ * Entries are `h4`, not `h3`: the outline is h1 (page) → h2 (the selected section) → h3 (a group, on the
+ * two tabs that have them) → h4 (an entry). The section-level `h2` was added after a Playwright outline
+ * check found `/reference` jumping h1 → h3 — the one route in the app whose headings skipped a level, and
+ * invisible to a test that counts tags rather than walking the rendered document.
+ *
  * All 20 pre-existing routes were *doing* surfaces — a parameter editor with a response pane. The
  * explanatory corpus was already written and shipped and reachable **only by clicking a 20px icon inside
  * a form**: 24 authorization parameters, 8 token parameters, 26 claims, 46 error codes. A learner sent a
@@ -82,9 +87,10 @@ describe('ReferencePage', () => {
   it('reads the authorization parameters from the same module the builder uses', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: /Authorization request/i }));
-    // Not a copy: if these drift, the interactive panel and the reference would disagree.
+    // `level: 4` here and `level: 3` elsewhere is the point: this tab groups its entries under an `h3`
+    // per parameter group, so an entry sits one level deeper. Three of the five tabs have no grouping.
     for (const name of ['state', 'code_challenge', 'redirect_uri', 'dpop_jkt']) {
-      expect(screen.getByRole('heading', { level: 3, name })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 4, name })).toBeInTheDocument();
     }
     expect(screen.getAllByText(/RFC 7636/).length).toBeGreaterThan(0);
   });
@@ -110,8 +116,9 @@ describe('ReferencePage', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: /^Errors$/i }));
     expect(screen.getByText(/reproduced against this deployment/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'A157303' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 3, name: 'invalid_grant' })).toBeInTheDocument();
+    // Grouped under "Specification error codes" / "…reproduced against this deployment", hence level 4.
+    expect(screen.getByRole('heading', { level: 4, name: 'A157303' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: 'invalid_grant' })).toBeInTheDocument();
   });
 
   it('filters across every section rather than only the visible one', () => {

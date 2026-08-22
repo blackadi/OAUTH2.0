@@ -203,10 +203,14 @@ function DeviceSection() {
     // First poll immediately
     await doPoll();
 
-    // Subsequent polls on interval
-    pollTimerRef.current = setInterval(async () => {
-      await doPoll();
-    }, intervalMs);
+    /**
+     * Subsequent polls on interval.
+     *
+     * `void doPoll()` rather than an `async` callback: `setInterval` discards the promise, so a rejection
+     * inside an async callback is unhandled — and this is the device-flow poll, which runs unattended
+     * every few seconds until the user approves or the code expires. `doPoll` handles its own failures.
+     */
+    pollTimerRef.current = setInterval(() => void doPoll(), intervalMs);
   }, [deviceCode, pollClientId, pollClientSecret, pollAuthMethod, pollInterval, stopPolling]);
 
   const handleCall = async (fn: () => Promise<unknown>) => {

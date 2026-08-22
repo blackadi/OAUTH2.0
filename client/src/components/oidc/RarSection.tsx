@@ -313,7 +313,7 @@ function RarSection() {
       {parResult?.request_uri && (
         <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
           <p className="text-xs text-foreground-muted font-mono break-all">
-            <span className="text-muted-foreground/70">request_uri: </span>
+            <span className="text-muted-foreground">request_uri: </span>
             {parResult.request_uri}
           </p>
         </div>
@@ -336,7 +336,7 @@ function RarSection() {
                   <div className="px-3 py-2 space-y-2 text-xs">
                     {!!detail.locations && Array.isArray(detail.locations) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Locations
                         </span>
                         <ul className="list-disc list-inside text-foreground-muted mt-1">
@@ -350,7 +350,7 @@ function RarSection() {
                     )}
                     {!!detail.actions && Array.isArray(detail.actions) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Actions
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
@@ -367,7 +367,7 @@ function RarSection() {
                     )}
                     {!!detail.datatypes && Array.isArray(detail.datatypes) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Data Types
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
@@ -384,7 +384,7 @@ function RarSection() {
                     )}
                     {!!detail.identifier && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Identifier
                         </span>
                         <p className="text-foreground-muted mt-1 font-mono">
@@ -394,7 +394,7 @@ function RarSection() {
                     )}
                     {!!detail.privileges && Array.isArray(detail.privileges) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Privileges
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">

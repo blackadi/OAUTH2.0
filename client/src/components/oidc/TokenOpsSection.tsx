@@ -116,7 +116,7 @@ function TokenOpsSection() {
       {!at && (
         <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
           <p className="font-medium">No access token available</p>
-          <p className="mt-1 text-xs text-warning-text/80">
+          <p className="mt-1 text-xs text-warning-text">
             Obtain a token first via the Grant Flows section (Authorization Code, Client
             Credentials, etc.), then return here.
           </p>
@@ -137,7 +137,7 @@ function TokenOpsSection() {
           Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
           {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
               so it is stated rather than left to be discovered. */}
-          <span className="ml-2 text-success-text/80">
+          <span className="ml-2 text-success-text">
             {isDpopBound
               ? dpopKey
                 ? '· sender-constrained, so UserInfo is called with the DPoP scheme and a proof'

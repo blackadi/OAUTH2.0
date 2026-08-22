@@ -280,7 +280,7 @@ function TokenExchangeSection() {
                       <ShieldAlert className="h-3 w-3 mt-0.5 shrink-0 text-warning-text" />
                       <span>
                         <strong className="text-foreground">{o.title}</strong> — {o.detail}{' '}
-                        <span className="text-muted-foreground/70 font-mono">({o.spec})</span>
+                        <span className="text-muted-foreground font-mono">({o.spec})</span>
                       </span>
                     </p>
                   ))}

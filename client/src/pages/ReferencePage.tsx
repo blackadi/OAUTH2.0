@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { BookOpen, Search, ShieldAlert } from 'lucide-react';
+import { BookOpen, ShieldAlert } from 'lucide-react';
 import { AUTH_PARAMS, PARAM_GROUPS } from '@/data/authParams';
 import { TOKEN_PARAMS } from '@/data/tokenParams';
 import { CLAIM_DOCS } from '@/data/claimDocs';
 import { OAUTH_ERRORS, AUTHLETE_NOTES } from '@/data/errorDocs';
 import { GLOSSARY, glossarySlug } from '@/data/glossary';
 import { Input } from '@/components/ui/Input';
+import { Prose } from '@/components/ui/Prose';
 import { cn } from '@/utils/cn';
 
 /**
@@ -97,9 +98,20 @@ function ReferencePage() {
         ))}
       </nav>
 
-      <p className="text-xs text-muted-foreground/80 max-w-prose m-0">
-        {TABS.find((t) => t.id === tab)?.blurb}
-      </p>
+      {/*
+        An `h2` for the selected section, so the outline is h1 → h2 → h3 rather than jumping.
+        Two of the five tabs render their own `h2` group headings and three did not, which made
+        `/reference` the one route whose headings skipped a level — caught by the Playwright outline check,
+        which walks the real document rather than counting tags in JSX.
+      */}
+      <div className="space-y-1">
+        <h2 className="text-sm font-semibold text-foreground m-0">
+          {TABS.find((t) => t.id === tab)?.label}
+        </h2>
+        <p className="text-xs text-muted-foreground max-w-prose m-0">
+          {TABS.find((t) => t.id === tab)?.blurb}
+        </p>
+      </div>
 
       {tab === 'glossary' && (
         <Section>
@@ -136,7 +148,7 @@ function ReferencePage() {
             if (params.length === 0) return null;
             return (
               <div key={group.id} className="space-y-2">
-                <h2 className="text-sm font-semibold text-foreground m-0">{group.label}</h2>
+                <h3 className="text-sm font-semibold text-foreground m-0">{group.label}</h3>
                 <p className="text-xs text-muted-foreground max-w-prose m-0">{group.blurb}</p>
                 <Section>
                   {params.map((p) => (
@@ -148,6 +160,7 @@ function ReferencePage() {
                       spec={p.spec}
                       body={p.note}
                       threat={p.threat}
+                      level={4}
                     />
                   ))}
                 </Section>
@@ -196,7 +209,7 @@ function ReferencePage() {
       {tab === 'errors' && (
         <div className="space-y-5">
           <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-foreground m-0">Specification error codes</h2>
+            <h3 className="text-sm font-semibold text-foreground m-0">Specification error codes</h3>
             <Section>
               {Object.entries(OAUTH_ERRORS)
                 .filter(([code, doc]) => matches(code) || matches(doc.cause))
@@ -209,14 +222,15 @@ function ReferencePage() {
                     body={doc.cause}
                     here={doc.fix}
                     hereLabel="Fix"
+                    level={4}
                   />
                 ))}
             </Section>
           </div>
           <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-foreground m-0">
+            <h3 className="text-sm font-semibold text-foreground m-0">
               Authlete result codes, reproduced against this deployment
-            </h2>
+            </h3>
             <p className="text-xs text-muted-foreground max-w-prose m-0">
               Not read out of a document. Each of these was produced by a live request here, which
               is why they are the ones a developer actually hits — the overlap with the vendor’s own
@@ -234,6 +248,7 @@ function ReferencePage() {
                     body={doc.cause}
                     here={doc.fix}
                     hereLabel="Fix"
+                    level={4}
                   />
                 ))}
             </Section>
@@ -254,9 +269,32 @@ function Section({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** A heading at a level chosen by the caller. `h${level}` is not valid JSX; a tag variable is. */
+function Heading({
+  level,
+  className,
+  children,
+}: {
+  level: 3 | 4;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const Tag = (level === 3 ? 'h3' : 'h4') as 'h3' | 'h4';
+  return <Tag className={className}>{children}</Tag>;
+}
+
 interface EntryProps {
   id: string;
   title: string;
+  /**
+   * Heading depth, because it depends on context rather than on the component.
+   *
+   * Three of the five tabs list entries directly under the section `h2`, so those entries are `h3`. Two
+   * group theirs under an `h3` — the parameter groups and the two error families — so those are `h4`.
+   * Hard-coding either produced a skipped level on the other three, which a Playwright outline check
+   * caught and a tag count in JSX never could.
+   */
+  level?: 3 | 4;
   badge?: string;
   spec: string;
   body: string;
@@ -270,6 +308,7 @@ interface EntryProps {
 function Entry({
   id,
   title,
+  level = 3,
   badge,
   spec,
   body,
@@ -283,12 +322,15 @@ function Entry({
     // `scroll-mt` keeps the sticky header from covering the entry a fragment link lands on.
     <article id={id} className="p-3.5 space-y-1.5 scroll-mt-16">
       <div className="flex items-baseline gap-2 flex-wrap">
-        <h3 className="text-xs font-mono font-semibold text-accent-text m-0">
+        {/* `h4`: the outline is h1 (page) → h2 (section) → h3 (group, where a tab has them) → h4 (entry).
+            Two tabs have group headings and three do not, so the entry sits one level deeper than the
+            deepest heading above it either way — which is what the outline check verifies. */}
+        <Heading level={level} className="text-xs font-mono font-semibold text-accent-text m-0">
           {/* A self-link, so any single entry can be shared rather than the whole page. */}
           <a href={`#${id}`} className="no-underline text-inherit hover:underline">
             {title}
           </a>
-        </h3>
+        </Heading>
         {badge && (
           <span className="text-2xs font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
             {badge}
@@ -296,14 +338,16 @@ function Entry({
         )}
       </div>
 
-      <p className="text-xs text-foreground-muted leading-relaxed max-w-prose m-0">{body}</p>
+      <Prose as="p" className="text-xs text-foreground-muted leading-relaxed max-w-prose m-0">
+        {body}
+      </Prose>
 
       {here && (
         <p className="text-xs text-muted-foreground leading-relaxed max-w-prose m-0">
-          <span className="text-2xs uppercase tracking-wider text-muted-foreground/70">
+          <span className="text-2xs uppercase tracking-wider text-muted-foreground">
             {hereLabel}:
           </span>{' '}
-          {here}
+          <Prose>{here}</Prose>
         </p>
       )}
 
@@ -311,16 +355,18 @@ function Entry({
         <p className="flex gap-1.5 text-xs text-foreground-muted leading-relaxed max-w-prose m-0 border-l-2 border-edge-warning pl-2">
           <ShieldAlert className="h-3 w-3 mt-0.5 shrink-0 text-warning-text" />
           <span>
-            <span className="text-2xs uppercase tracking-wider text-warning-text/80">
+            <span className="text-2xs uppercase tracking-wider text-warning-text">
               {threatLabel}:
             </span>{' '}
-            {threat}
+            <Prose>{threat}</Prose>
           </span>
         </p>
       )}
 
-      <p className="flex gap-1.5 text-2xs text-muted-foreground/70 font-mono m-0">
-        <Search className="h-2.5 w-2.5 mt-0.5 shrink-0" aria-hidden="true" />
+      {/* `BookOpen`, not `Search`: a magnifying glass for a *specification citation* is the wrong idea,
+          and at 11px it renders as a stray "Q" in front of the reference. Seen in a screenshot. */}
+      <p className="flex gap-1.5 text-2xs text-muted-foreground font-mono m-0">
+        <BookOpen className="h-2.5 w-2.5 mt-0.5 shrink-0" aria-hidden="true" />
         <span>{spec}</span>
       </p>
 

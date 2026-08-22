@@ -40,7 +40,7 @@ function SplitPane({
         <div className={cn('space-y-3', leftClassName)}>
           {leftLabel && (
             <div className="flex items-center gap-2">
-              <span className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+              <span className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                 {leftLabel}
               </span>
               <div className="h-px flex-1 bg-border" />
@@ -51,7 +51,7 @@ function SplitPane({
         <div className={cn('space-y-3', rightClassName)}>
           {rightLabel && (
             <div className="flex items-center gap-2">
-              <span className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+              <span className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                 {rightLabel}
               </span>
               <div className="h-px flex-1 bg-border" />

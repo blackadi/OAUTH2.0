@@ -91,7 +91,7 @@ function FederationSection() {
             onChange={(e) => setEntityConfiguration(e.target.value)}
             placeholder="Paste the entity configuration JWT of the RP to register"
           />
-          <p className="text-xs text-muted-foreground/70">— or —</p>
+          <p className="text-xs text-muted-foreground">— or —</p>
           <Textarea
             label="Trust Chain (JSON)"
             rows={6}

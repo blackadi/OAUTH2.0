@@ -42,6 +42,16 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
         return (
           <div
             key={step.id}
+            /**
+             * `role="listitem"` is required, not decorative.
+             *
+             * The container carries `role="list"`, and an explicit `list` role means the browser expects
+             * `listitem` children — a plain `<div>` does not qualify, so the whole list was announced as
+             * **empty** and none of these `aria-label`s reached anybody. Found by axe
+             * (`aria-required-children`, 9 routes); no lint rule and no jsdom test can see it, because
+             * both check the attributes rather than the resulting accessibility tree.
+             */
+            role="listitem"
             className="flex items-center flex-1 min-w-0"
             aria-label={`Step ${i + 1}, ${step.label}: ${state}${step.description ? `. ${step.description}` : ''}`}
             aria-current={isCurrent ? 'step' : undefined}
@@ -64,13 +74,13 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
                   'text-2xs font-medium text-center leading-tight px-1',
                   isCompleted && 'text-success-text',
                   isCurrent && 'text-accent-text',
-                  isPending && 'text-muted-foreground/60',
+                  isPending && 'text-muted-foreground',
                 )}
               >
                 {step.label}
               </span>
               {step.description && (
-                <span className="hidden sm:block text-2xs text-center leading-snug px-1 text-muted-foreground/70 max-w-[13ch]">
+                <span className="hidden sm:block text-2xs text-center leading-snug px-1 text-muted-foreground max-w-[13ch]">
                   {step.description}
                 </span>
               )}
@@ -78,7 +88,7 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
             {i < steps.length - 1 && (
               <div className="shrink-0 mx-1">
                 <ArrowRight
-                  className={cn('h-3 w-3', isCompleted ? 'text-success-text/50' : 'text-border')}
+                  className={cn('h-3 w-3', isCompleted ? 'text-success-text' : 'text-border')}
                 />
               </div>
             )}

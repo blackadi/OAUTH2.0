@@ -14,6 +14,7 @@ import {
 import { decodeError, statusHint } from '@/utils/decode-error';
 import { canDiagnose, diagnoseCodeExchange, type DiagnosisCheck } from '@/utils/diagnose';
 import { cn } from '@/utils/cn';
+import { Prose } from './Prose';
 
 /**
  * The raw error, plus what it means and what to do about it.
@@ -103,7 +104,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
           {error.length > RAW_PREVIEW_CHARS && (
             <button
               onClick={() => setShowFullRaw((f) => !f)}
-              className="mt-1 text-2xs text-danger-text/70 hover:text-danger-text bg-transparent border-none cursor-pointer p-0 underline"
+              className="mt-1 text-2xs text-danger-text hover:text-danger-text bg-transparent border-none cursor-pointer p-0 underline"
             >
               {showFullRaw ? 'Show less' : `Show all ${error.length.toLocaleString()} characters`}
             </button>
@@ -112,7 +113,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
             <button
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
-              className="flex items-center gap-1 mt-1.5 text-2xs text-danger-text/80 hover:text-danger-text bg-transparent border-none cursor-pointer p-0"
+              className="flex items-center gap-1 mt-1.5 text-2xs text-danger-text hover:text-danger-text bg-transparent border-none cursor-pointer p-0"
             >
               {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               {open ? 'Hide explanation' : 'What does this mean?'}
@@ -219,10 +220,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
                         </code>{' '}
                         {check.detail}
                         {check.spec && (
-                          <span className="text-muted-foreground/70 font-mono">
-                            {' '}
-                            ({check.spec})
-                          </span>
+                          <span className="text-muted-foreground font-mono"> ({check.spec})</span>
                         )}
                       </p>
                     </div>
@@ -274,7 +272,7 @@ function Entry({
         </code>
         {verifiedHere && (
           <span
-            className="flex items-center gap-1 text-2xs font-mono uppercase tracking-wider text-success-text/90"
+            className="flex items-center gap-1 text-2xs font-mono uppercase tracking-wider text-success-text"
             title="Reproduced against this deployment, not read out of a document"
           >
             <FlaskConical className="h-2.5 w-2.5" />
@@ -282,14 +280,16 @@ function Entry({
           </span>
         )}
       </div>
-      <p className="text-xs text-foreground/90 leading-relaxed">{cause}</p>
+      <Prose as="p" className="text-xs text-foreground leading-relaxed">
+        {cause}
+      </Prose>
       {fix && (
         <p className="flex gap-1.5 text-xs text-muted-foreground leading-relaxed">
-          <Wrench className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground/70" />
-          <span>{fix}</span>
+          <Wrench className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
+          <Prose>{fix}</Prose>
         </p>
       )}
-      <p className="flex gap-1.5 text-2xs text-muted-foreground/70 font-mono">
+      <p className="flex gap-1.5 text-2xs text-muted-foreground font-mono">
         <BookOpen className="h-2.5 w-2.5 mt-0.5 shrink-0" />
         <span>{spec}</span>
       </p>
