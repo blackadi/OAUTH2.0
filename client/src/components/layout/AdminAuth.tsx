@@ -50,7 +50,7 @@ function AdminAuth({
         placeholder="MGMT_CLIENT_SECRET"
       />
       {!clientId && shared.isComplete && (
-        <p className="text-[0.6rem] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           Shared across every admin section for this page — enter them once.
         </p>
       )}

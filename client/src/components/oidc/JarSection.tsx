@@ -8,6 +8,7 @@ import {
 } from '@/services/client-assertion.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -17,6 +18,7 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { useCredentials } from '@/context/CredentialContext';
 import { getDoc } from '@/data/operationDocs';
+import { parseJsonObject } from '@/utils/parse-json';
 
 function base64UrlEncode(data: ArrayBuffer | Uint8Array): string {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
@@ -117,7 +119,16 @@ function JarSection() {
       return;
     }
     try {
-      const payload = JSON.parse(claimsJson);
+      /**
+       * RFC 9101 §4 requires the request object to carry `iss`, `aud` and `client_id`, and this is a
+       * free-text editor — so the value genuinely may be anything, including not an object at all.
+       * `JSON.parse` returned `any`, which made all three of those checks unchecked reads.
+       */
+      const payload = parseJsonObject(claimsJson);
+      if (!payload) {
+        toast.error('The claims are not a JSON object');
+        return;
+      }
       if (!payload.iss || !payload.aud || !payload.client_id) {
         toast.error('JWT must include iss, aud, and client_id claims');
         return;
@@ -170,6 +181,11 @@ function JarSection() {
       description="Build, sign, and test JWT-secured authorization requests (JAR). Generate an ES256 key pair, craft the JWT claims, sign the request object, and send it to Authlete for validation."
     >
       {error && <p className="text-xs text-danger-text">{String(error)}</p>}
+      {/* JAR errors are among the most cryptic on this deployment — `[A005328]` for a bad signature —
+          and this was one of only two sections that showed the raw string and no explanation, while
+          `AUTHLETE_NOTES` has an entry for exactly that code. */}
+      {error && <ErrorExplainer error={String(error)} className="mb-3" />}
+
       {doc && <OperationDescription doc={doc} />}
 
       <Card>

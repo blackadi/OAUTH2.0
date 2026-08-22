@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { clientService } from '@/services';
+import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -12,6 +13,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
+import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { useCredentials } from '@/context/CredentialContext';
 
 type ClientOp =
@@ -32,6 +34,27 @@ type ClientOp =
   | 'get-requestable-scopes'
   | 'update-requestable-scopes'
   | 'delete-requestable-scopes';
+
+/** Every value `ClientOp` can take, as a runtime list — the allowed set for the URL parameter. */
+const ALL_OPS = [
+  'list',
+  'get',
+  'create',
+  'update',
+  'delete',
+  'lock',
+  'unlock',
+  'refresh-secret',
+  'update-secret',
+  'list-auth',
+  'update-auth',
+  'delete-auth',
+  'get-granted-scopes',
+  'delete-granted-scopes',
+  'get-requestable-scopes',
+  'update-requestable-scopes',
+  'delete-requestable-scopes',
+] as const satisfies readonly ClientOp[];
 
 const CLIENT_TYPE_OPTIONS = [
   { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
@@ -80,7 +103,15 @@ function ClientManagementSection() {
   // held their own copy, and a route change unmounts a section, so it had to be retyped on
   // every navigation.
   const { clientId: authId, clientSecret: authSecret } = useCredentials();
-  const [activeOp, setActiveOp] = useState<ClientOp | null>(null);
+  /**
+   * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
+   *
+   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
+   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
+   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
+   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<ClientOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
 
   const [listStart, setListStart] = useState('0');
@@ -122,6 +153,7 @@ function ClientManagementSection() {
 
   const auth = authId && authSecret ? btoa(`${authId}:${authSecret}`) : '';
   const doc = activeOp ? getDoc('client', activeOp) : undefined;
+  const { confirm, dialog } = useConfirmedAction();
 
   const handleCall = async (fn: () => Promise<unknown>) => {
     const { data, error: err } = await call(fn);
@@ -332,11 +364,25 @@ function ClientManagementSection() {
             onChange={(e) => setDeleteClientId(e.target.value)}
             placeholder="Numeric client ID to permanently delete"
           />
+          {/* Deleting a client at Authlete is permanent and nothing here can restore it — and two of
+              the live clients are curriculum infrastructure (`1523514379` for Module 02's plain code
+              flow, `1678274156` for Module 03's). A free-text id beside an unguarded Run button was one
+              misclick away from breaking a lab, so the id has to be typed back. */}
           <Button
-            onClick={() => handleCall(() => clientService.deleteClient(deleteClientId, auth))}
+            variant="danger"
+            disabled={!deleteClientId.trim()}
+            onClick={() =>
+              confirm({
+                title: 'Delete this client permanently?',
+                body: `Client ${deleteClientId} will be deleted at Authlete. This cannot be undone from here, and any flow, lab or tutorial that names this client will stop working.`,
+                confirmLabel: 'Delete client',
+                requireTyped: deleteClientId.trim(),
+                run: () => handleCall(() => clientService.deleteClient(deleteClientId, auth)),
+              })
+            }
             loading={loading}
           >
-            Run
+            Delete
           </Button>
         </div>
       )}
@@ -578,6 +624,8 @@ function ClientManagementSection() {
           </Button>
         </div>
       )}
+
+      {dialog}
 
       {result ? <JsonBlock data={result} label="Response" /> : null}
     </SectionPanel>

@@ -37,9 +37,52 @@
   --warning-text: #fcd34d;
   --danger-text: #f87171;
   --info-text: #7dd3fc;
-  --ring: #6366f1;
+  --ring: var(--accent);
   --radius: 0.75rem;
   --sidebar-width: 14rem;
+  /**
+   * Card elevation, per palette.
+   *
+   * `Card` hard-coded `shadow-slate-900/80` — `#0f172a` at 80%, chosen against `#020617` where it is
+   * invisible. On the light palette the same declaration is a near-black halo, and `CallbackPage` is a
+   * `Card`, so it landed on the page every learner reaches at the end of the headline flow. A shadow is
+   * a colour like any other and belongs in the palette.
+   */
+  /**
+   * Tinted status surfaces, per palette.
+   *
+   * **What these replace.** 121 literal `bg-indigo-500/10`, `border-amber-500/30`-style utilities across
+   * ~30 files, in five semantic roles and eleven different opacities. They were all chosen against
+   * `#020617`, where a 10% indigo wash is a whisper — and the same declaration over `#ffffff` reads as a
+   * considerably stronger, cooler colour. The **contrast** was never the risk (`check-contrast.mjs`
+   * proves the text on top passes AA in both themes); what was unverified was whether the *ordering* of
+   * the surface hierarchy survived, since `/10` against `/15` against `/20` may simply stop being
+   * distinguishable on a light ground.
+   *
+   * Three tokens per role rather than eleven opacities: a subtle fill, an emphasised fill, and an edge.
+   * Nothing in this application needed more than three steps — the eleven were incidental.
+   *
+   * **Deliberately translucent rather than flat.** These sit over cards, over the page and over each
+   * other; a solid colour would show a seam wherever two of them meet. The alphas are *lower* on the
+   * light palette because a tint over white reads stronger than the same tint over near-black.
+   */
+  --tint-accent: rgb(99 102 241 / 0.12);
+  --tint-accent-strong: rgb(99 102 241 / 0.2);
+  --edge-accent: rgb(99 102 241 / 0.35);
+  --tint-warning: rgb(245 158 11 / 0.12);
+  --tint-warning-strong: rgb(245 158 11 / 0.2);
+  --edge-warning: rgb(245 158 11 / 0.35);
+  --tint-danger: rgb(239 68 68 / 0.12);
+  --tint-danger-strong: rgb(239 68 68 / 0.2);
+  --edge-danger: rgb(239 68 68 / 0.3);
+  --tint-success: rgb(16 185 129 / 0.12);
+  --tint-success-strong: rgb(16 185 129 / 0.2);
+  --edge-success: rgb(16 185 129 / 0.3);
+  --tint-info: rgb(14 165 233 / 0.12);
+  --tint-info-strong: rgb(14 165 233 / 0.2);
+  --edge-info: rgb(14 165 233 / 0.3);
+  --shadow-card: 0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8);
+  --shadow-card-elevated: 0 25px 50px -12px rgb(2 6 23 / 0.85);
 }
 
 /** A viewer whose system prefers light, and who has not chosen otherwise. */
@@ -58,12 +101,32 @@
     --accent-foreground: #ffffff;
     --border: #d8dfe8;
     --input: #ffffff;
-    --ring: #4f46e5;
+    --ring: var(--accent);
     --accent-text: #4338ca;
     --success-text: #047857;
     --warning-text: #a16207;
     --danger-text: #b91c1c;
     --info-text: #0369a1;
+    --tint-accent: rgb(79 70 229 / 0.07);
+    --tint-accent-strong: rgb(79 70 229 / 0.13);
+    --edge-accent: rgb(79 70 229 / 0.28);
+    --tint-warning: rgb(180 83 9 / 0.08);
+    --tint-warning-strong: rgb(180 83 9 / 0.14);
+    --edge-warning: rgb(180 83 9 / 0.3);
+    --tint-danger: rgb(185 28 28 / 0.07);
+    --tint-danger-strong: rgb(185 28 28 / 0.12);
+    --edge-danger: rgb(185 28 28 / 0.26);
+    --tint-success: rgb(4 120 87 / 0.08);
+    --tint-success-strong: rgb(4 120 87 / 0.14);
+    --edge-success: rgb(4 120 87 / 0.28);
+    --tint-info: rgb(3 105 161 / 0.08);
+    --tint-info-strong: rgb(3 105 161 / 0.14);
+    --edge-info: rgb(3 105 161 / 0.28);
+    /* Slate at 12% rather than 80%: on a white ground the shadow's job is to lift the card a
+       millimetre, not to draw a border. */
+    --shadow-card: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+    --shadow-card-elevated:
+      0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
   }
 }
 
@@ -82,12 +145,30 @@
   --accent-foreground: #ffffff;
   --border: #d8dfe8;
   --input: #ffffff;
-  --ring: #4f46e5;
+  --ring: var(--accent);
   --accent-text: #4338ca;
   --success-text: #047857;
   --warning-text: #a16207;
   --danger-text: #b91c1c;
   --info-text: #0369a1;
+  --tint-accent: rgb(79 70 229 / 0.07);
+  --tint-accent-strong: rgb(79 70 229 / 0.13);
+  --edge-accent: rgb(79 70 229 / 0.28);
+  --tint-warning: rgb(180 83 9 / 0.08);
+  --tint-warning-strong: rgb(180 83 9 / 0.14);
+  --edge-warning: rgb(180 83 9 / 0.3);
+  --tint-danger: rgb(185 28 28 / 0.07);
+  --tint-danger-strong: rgb(185 28 28 / 0.12);
+  --edge-danger: rgb(185 28 28 / 0.26);
+  --tint-success: rgb(4 120 87 / 0.08);
+  --tint-success-strong: rgb(4 120 87 / 0.14);
+  --edge-success: rgb(4 120 87 / 0.28);
+  --tint-info: rgb(3 105 161 / 0.08);
+  --tint-info-strong: rgb(3 105 161 / 0.14);
+  --edge-info: rgb(3 105 161 / 0.28);
+  --shadow-card: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-card-elevated:
+    0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
 }
 
 :root[data-theme='dark'] {
@@ -104,12 +185,47 @@
   --accent-foreground: #ffffff;
   --border: #1e293b;
   --input: #0f172a;
-  --ring: #6366f1;
+  --ring: var(--accent);
   --accent-text: #a5b4fc;
   --success-text: #6ee7b7;
   --warning-text: #fcd34d;
   --danger-text: #f87171;
   --info-text: #7dd3fc;
+  /**
+   * Tinted status surfaces, per palette.
+   *
+   * **What these replace.** 121 literal `bg-indigo-500/10`, `border-amber-500/30`-style utilities across
+   * ~30 files, in five semantic roles and eleven different opacities. They were all chosen against
+   * `#020617`, where a 10% indigo wash is a whisper — and the same declaration over `#ffffff` reads as a
+   * considerably stronger, cooler colour. The **contrast** was never the risk (`check-contrast.mjs`
+   * proves the text on top passes AA in both themes); what was unverified was whether the *ordering* of
+   * the surface hierarchy survived, since `/10` against `/15` against `/20` may simply stop being
+   * distinguishable on a light ground.
+   *
+   * Three tokens per role rather than eleven opacities: a subtle fill, an emphasised fill, and an edge.
+   * Nothing in this application needed more than three steps — the eleven were incidental.
+   *
+   * **Deliberately translucent rather than flat.** These sit over cards, over the page and over each
+   * other; a solid colour would show a seam wherever two of them meet. The alphas are *lower* on the
+   * light palette because a tint over white reads stronger than the same tint over near-black.
+   */
+  --tint-accent: rgb(99 102 241 / 0.12);
+  --tint-accent-strong: rgb(99 102 241 / 0.2);
+  --edge-accent: rgb(99 102 241 / 0.35);
+  --tint-warning: rgb(245 158 11 / 0.12);
+  --tint-warning-strong: rgb(245 158 11 / 0.2);
+  --edge-warning: rgb(245 158 11 / 0.35);
+  --tint-danger: rgb(239 68 68 / 0.12);
+  --tint-danger-strong: rgb(239 68 68 / 0.2);
+  --edge-danger: rgb(239 68 68 / 0.3);
+  --tint-success: rgb(16 185 129 / 0.12);
+  --tint-success-strong: rgb(16 185 129 / 0.2);
+  --edge-success: rgb(16 185 129 / 0.3);
+  --tint-info: rgb(14 165 233 / 0.12);
+  --tint-info-strong: rgb(14 165 233 / 0.2);
+  --edge-info: rgb(14 165 233 / 0.3);
+  --shadow-card: 0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8);
+  --shadow-card-elevated: 0 25px 50px -12px rgb(2 6 23 / 0.85);
 }
 
 /**
@@ -148,6 +264,38 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /**
+   * One step below `text-xs`, and the floor.
+   *
+   * Six arbitrary sizes — `0.55`, `0.6`, `0.65`, `0.7`, `0.72` and `0.8rem` — accounted for **91 of 253**
+   * font-size declarations, all crowded into a quarter-rem band. `0.7rem` and `0.72rem` differ by
+   * 0.32px and both existed; `0.6`, `0.65` and `0.7` were each used dozens of times for the same role.
+   * When secondary text comes in four indistinguishable sizes, size stops encoding rank and a dense
+   * inspector has nothing for the eye to follow.
+   *
+   * `0.55rem` was **8.8px** — on the "verified here" badge, one of the highest-value labels in the app —
+   * and `0.6rem` was 9.6px. Those are legibility defects on their own terms, whatever the scale. 11px is
+   * the floor now, and everything below `text-xs` lands here.
+   */
+  --color-tint-accent: var(--tint-accent);
+  --color-tint-accent-strong: var(--tint-accent-strong);
+  --color-edge-accent: var(--edge-accent);
+  --color-tint-warning: var(--tint-warning);
+  --color-tint-warning-strong: var(--tint-warning-strong);
+  --color-edge-warning: var(--edge-warning);
+  --color-tint-danger: var(--tint-danger);
+  --color-tint-danger-strong: var(--tint-danger-strong);
+  --color-edge-danger: var(--edge-danger);
+  --color-tint-success: var(--tint-success);
+  --color-tint-success-strong: var(--tint-success-strong);
+  --color-edge-success: var(--edge-success);
+  --color-tint-info: var(--tint-info);
+  --color-tint-info-strong: var(--tint-info-strong);
+  --color-edge-info: var(--edge-info);
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.45;
+  --shadow-card: var(--shadow-card);
+  --shadow-card-elevated: var(--shadow-card-elevated);
 }
 
 @layer base {
@@ -182,8 +330,15 @@
       monospace;
   }
 
+  /**
+   * Derived from `--accent` rather than a hardcoded `rgba(99, 102, 241, 0.3)`.
+   *
+   * That literal was the *dark* accent, and it was applied on the light palette too — so selecting text
+   * on a white ground used a colour chosen for `#020617`. `color-mix` keeps one source for the accent
+   * and lets the selection follow the palette.
+   */
   ::selection {
-    background-color: rgba(99, 102, 241, 0.3);
+    background-color: color-mix(in oklab, var(--accent) 30%, transparent);
     color: inherit;
   }
 
@@ -204,6 +359,32 @@
 
   ::-webkit-scrollbar-thumb:hover {
     background: var(--foreground-muted);
+  }
+}
+
+/**
+ * Honour a stated preference for less motion.
+ *
+ * The total motion here is small — five animations and 29 transitions, 24 of them colour — so this is
+ * not a vestibular risk, and that is exactly why it is cheap to get right rather than a reason to skip
+ * it. `animate-pulse` on a status dot and the checking-state pulse are the two that actually move.
+ *
+ * Spinners are **not** reduced to nothing: a spinner that stops spinning reads as a hung request, which
+ * is worse than motion. It is slowed instead, which preserves the signal without the fast rotation.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 

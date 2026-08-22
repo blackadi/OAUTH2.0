@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { JwtInspector } from '@/components/ui/JwtInspector';
 import { Copy, Trash2, Eye, EyeOff, ChevronDown, ChevronUp, Key } from 'lucide-react';
 import { useClipboard } from '@/hooks/useClipboard';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/utils/cn';
 
 function TokenVault() {
@@ -15,6 +16,7 @@ function TokenVault() {
    * this server can issue JWT access tokens and `createLocalToken` exists to hand you one.
    */
   const [inspecting, setInspecting] = useState<string | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const { copy } = useClipboard();
 
   const hasTokens =
@@ -39,42 +41,72 @@ function TokenVault() {
 
   return (
     <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-3 py-2.5 bg-transparent border-none cursor-pointer hover:bg-muted/30 transition-colors group"
-      >
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-indigo-500/10 text-accent-text">
-            <Key className="h-3 w-3" />
-          </div>
-          <span className="text-xs font-semibold text-foreground">Token Vault</span>
-          {hasTokens && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-        </div>
-        <div className="flex items-center gap-1">
-          {hasTokens && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                clearTokens();
-              }}
-              className="p-1 rounded text-muted-foreground hover:text-danger-text hover:bg-red-500/10 transition-colors cursor-pointer bg-transparent border-none"
-              aria-label="Clear tokens"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          )}
+      {/*
+        Two sibling buttons in a row, not one nested inside the other.
+
+        The Clear control used to sit *inside* the expand `<button>`, which is invalid HTML: the parser
+        hoists the inner button out of the outer one, so the rendered DOM is not the authored tree and
+        keyboard and assistive-technology behaviour is undefined. `e.stopPropagation()` patched the mouse
+        click and nothing else. This is the sidebar header, so it was on every one of the 20 routes.
+      */}
+      <div className="flex items-stretch">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          className="flex-1 min-w-0 flex items-center justify-between gap-2 px-3 py-2.5 bg-transparent border-none cursor-pointer hover:bg-muted/30 transition-colors text-left"
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="flex items-center justify-center w-6 h-6 rounded-md bg-tint-accent text-accent-text shrink-0">
+              <Key className="h-3 w-3" />
+            </span>
+            <span className="text-xs font-semibold text-foreground truncate">Token Vault</span>
+            {hasTokens && (
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"
+                title="Tokens held in this session"
+              />
+            )}
+          </span>
           {expanded ? (
-            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           ) : (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           )}
-        </div>
-      </button>
+        </button>
+        {hasTokens && (
+          <button
+            onClick={() => setConfirmingClear(true)}
+            className="px-2 shrink-0 rounded text-muted-foreground hover:text-danger-text hover:bg-tint-danger transition-colors cursor-pointer bg-transparent border-none"
+            aria-label="Clear tokens"
+            title="Clear every token and key in this session"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
+      {/*
+        The vault clear is local-only, so it gets a plain confirm rather than the typed confirmation the
+        live-Authlete deletions use — but it does clear *more* than the three tokens on screen
+        (`resetSession` enumerates all 13 session keys, DPoP and signing keys included), which is worth
+        stating before it happens.
+      */}
+      <ConfirmDialog
+        open={confirmingClear}
+        title="Clear the token vault?"
+        body="This removes every token in this session and also the DPoP key pair, the cached DPoP nonce and any stored private_key_jwt signing key. Nothing is revoked at the authorization server — the tokens stay valid until they expire."
+        confirmLabel="Clear session"
+        onConfirm={() => {
+          clearTokens();
+          setConfirmingClear(false);
+        }}
+        onCancel={() => setConfirmingClear(false)}
+      />
 
       {expanded && (
         <div className="px-3 pb-3 space-y-2">
           {!hasTokens ? (
-            <p className="text-[0.65rem] text-muted-foreground text-center py-3">
+            <p className="text-2xs text-muted-foreground text-center py-3">
               No tokens yet. Run an authorization flow to get started.
             </p>
           ) : (
@@ -88,7 +120,7 @@ function TokenVault() {
                       <Badge variant={entry.badge}>{entry.label}</Badge>
                       <button
                         onClick={() => copy(entry.value!)}
-                        className="flex items-center gap-1 text-[0.6rem] text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none"
+                        className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none"
                       >
                         <Copy className="h-3 w-3" />
                         Copy
@@ -96,7 +128,7 @@ function TokenVault() {
                     </div>
                     <div
                       className={cn(
-                        'font-mono text-[0.65rem] leading-relaxed text-muted-foreground break-all',
+                        'font-mono text-2xs leading-relaxed text-muted-foreground break-all',
                         'bg-code/50 rounded-md p-2 border border-border/30',
                       )}
                     >
@@ -110,7 +142,7 @@ function TokenVault() {
                               current === entry.label ? null : entry.label,
                             )
                           }
-                          className="flex items-center gap-1 text-[0.6rem] text-accent-text hover:text-accent-text transition-colors cursor-pointer bg-transparent border-none"
+                          className="flex items-center gap-1 text-2xs text-accent-text hover:text-accent-text transition-colors cursor-pointer bg-transparent border-none"
                         >
                           {inspecting === entry.label ? (
                             <EyeOff className="h-3 w-3" />

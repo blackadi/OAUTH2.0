@@ -101,7 +101,14 @@ export const VCI_DEFERRED_ISSUE_ENDPOINT = `${API_BASE_URL}/api/vci/deferred/iss
 export const FAPI_CONFIG_ENDPOINT = `${API_BASE_URL}/api/fapi/config`;
 export const FAPI_STATUS_ENDPOINT = `${API_BASE_URL}/api/fapi/status`;
 
-export const MCP_AS_METADATA_ENDPOINT = `${API_BASE_URL}/api/.well-known/oauth-authorization-server`;
+/**
+ * `MCP_AS_METADATA_ENDPOINT` is gone: it had **zero** consumers anywhere in `src/`.
+ *
+ * `mcp.service.fetchAsMetadata()` builds both well-known paths itself, because RFC 8414 §3 and OIDC
+ * Discovery put the document at two different addresses and the point of that function is to try both.
+ * A constant naming only one of them was a leftover that a reader would reasonably have believed was
+ * the address in use.
+ */
 /**
  * There is no CIMD endpoint, and there never was.
  *

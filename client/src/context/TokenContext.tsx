@@ -1,14 +1,15 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { SESSION_KEYS, readKey, writeKey, resetSession } from '@/services/session-keys';
+import type { IssuedTokens } from '@/types';
 
-export interface TokenSet {
-  access_token?: string;
-  refresh_token?: string;
-  id_token?: string;
-  token_type?: string;
-  expires_in?: number;
-  scope?: string;
-}
+/**
+ * One name for one shape.
+ *
+ * This used to redeclare the same six fields that `types/token.ts` already had, which made `TokenSet`
+ * and `TokenResponse` mutually unassignable over an index signature neither the vault nor any renderer
+ * cares about. `IssuedTokens` is that shape, declared once.
+ */
+export type TokenSet = IssuedTokens;
 
 interface TokenContextValue {
   tokenSet: TokenSet | null;
@@ -66,13 +67,21 @@ export function TokenProvider({ children }: { children: ReactNode }) {
   // case-insensitive, and Authlete answers `DPoP` while some servers answer `dpop`.
   const isDpopBound = (tokenSet?.token_type ?? '').toLowerCase() === 'dpop';
 
-  return (
-    <TokenContext.Provider
-      value={{ tokenSet, setTokenSet, clearTokens, getAccessToken, isDpopBound }}
-    >
-      {children}
-    </TokenContext.Provider>
+  /**
+   * Memoised, like `CredentialContext`'s.
+   *
+   * A fresh object literal every render makes every consumer re-render whenever this provider does, and
+   * this provider wraps the entire application. The impact is nil *today* — its only state is
+   * `tokenSet`, so a re-render already means the value changed — which is exactly why it is worth
+   * fixing now: the next piece of state added here would make it a real problem, silently, and the
+   * sibling context already does it the other way.
+   */
+  const value = useMemo(
+    () => ({ tokenSet, setTokenSet, clearTokens, getAccessToken, isDpopBound }),
+    [tokenSet, setTokenSet, clearTokens, getAccessToken, isDpopBound],
   );
+
+  return <TokenContext.Provider value={value}>{children}</TokenContext.Provider>;
 }
 
 export function useToken(): TokenContextValue {

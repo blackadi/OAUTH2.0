@@ -8,12 +8,14 @@ import {
   Send,
   AlertTriangle,
   ExternalLink,
+  ShieldAlert,
 } from 'lucide-react';
 import { AUTH_PARAMS, PARAM_GROUPS, type AuthParamSpec, type ParamGroup } from '@/data/authParams';
 import { createPkcePair, generateCodeChallenge } from '@/pkce';
 import { HelpPopover } from '@/components/ui/HelpPopover';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/utils/cn';
+import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 
 /**
  * Build an authorization request parameter by parameter, see the exact URL, then send it.
@@ -100,7 +102,7 @@ function AuthorizeRequestBuilder({
   const [challengeEdited, setChallengeEdited] = useState(false);
   const [rawMode, setRawMode] = useState(false);
   const [rawUrl, setRawUrl] = useState('');
-  const [copied, setCopied] = useState(false);
+  const { copied, setCopied, resetLater } = useCopyFeedback();
   const [openGroups, setOpenGroups] = useState<Record<ParamGroup, boolean>>({
     core: true,
     oidc: true,
@@ -116,7 +118,7 @@ function AuthorizeRequestBuilder({
   // you cannot see is a value you cannot check when it comes back.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       const pair = await createPkcePair();
       if (cancelled) return;
       setCodeVerifier(pair.codeVerifier);
@@ -234,11 +236,11 @@ function AuthorizeRequestBuilder({
     try {
       await navigator.clipboard.writeText(effectiveUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      resetLater();
     } catch {
       /* clipboard unavailable */
     }
-  }, [effectiveUrl]);
+  }, [effectiveUrl, setCopied, resetLater]);
 
   const send = useCallback(() => {
     // The verifier is only meaningful if the challenge in the URL actually derives from it.
@@ -271,9 +273,9 @@ function AuthorizeRequestBuilder({
             >
               <div className="min-w-0">
                 <span className="text-xs font-semibold text-foreground">{group.label}</span>
-                <p className="text-[0.65rem] text-muted-foreground mt-0.5">{group.blurb}</p>
+                <p className="text-2xs text-muted-foreground mt-0.5">{group.blurb}</p>
               </div>
-              <span className="text-[0.65rem] font-mono text-muted-foreground shrink-0 tabular-nums">
+              <span className="text-2xs font-mono text-muted-foreground shrink-0 tabular-nums">
                 {activeCount}/{specs.length}
               </span>
             </button>
@@ -316,7 +318,7 @@ function AuthorizeRequestBuilder({
         <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/30">
           <div>
             <span className="text-xs font-semibold text-foreground">Custom parameters</span>
-            <p className="text-[0.65rem] text-muted-foreground mt-0.5">
+            <p className="text-2xs text-muted-foreground mt-0.5">
               Anything else — including a name already above, to send it twice.
             </p>
           </div>
@@ -324,7 +326,7 @@ function AuthorizeRequestBuilder({
             onClick={() =>
               setCustoms((prev) => [...prev, { id: crypto.randomUUID(), name: '', value: '' }])
             }
-            className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer shrink-0"
+            className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer shrink-0"
           >
             <Plus className="h-3 w-3" />
             Add
@@ -370,14 +372,14 @@ function AuthorizeRequestBuilder({
       </div>
 
       {/* ── the request ─────────────────────────────────────────────────────────────────────── */}
-      <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 overflow-hidden">
-        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-indigo-500/20 flex-wrap">
+      <div className="rounded-lg border border-edge-accent bg-tint-accent overflow-hidden">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-edge-accent flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-[0.65rem] font-bold uppercase tracking-wider text-success-text">
+            <span className="text-2xs font-bold uppercase tracking-wider text-success-text">
               GET
             </span>
             <span className="text-xs font-semibold text-foreground">Authorization request</span>
-            <span className="text-[0.65rem] font-mono text-muted-foreground tabular-nums">
+            <span className="text-2xs font-mono text-muted-foreground tabular-nums">
               {enabledCount} param{enabledCount === 1 ? '' : 's'}
             </span>
           </div>
@@ -385,9 +387,9 @@ function AuthorizeRequestBuilder({
             <button
               onClick={toggleRaw}
               className={cn(
-                'text-[0.65rem] px-2 py-1 rounded border cursor-pointer transition-colors',
+                'text-2xs px-2 py-1 rounded border cursor-pointer transition-colors',
                 rawMode
-                  ? 'bg-amber-500/20 text-warning-text border-amber-500/40'
+                  ? 'bg-tint-warning-strong text-warning-text border-edge-warning'
                   : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground',
               )}
             >
@@ -395,7 +397,7 @@ function AuthorizeRequestBuilder({
             </button>
             <button
               onClick={copyUrl}
-              className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer"
+              className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer"
             >
               {copied ? (
                 <Check className="h-3 w-3 text-success-text" />
@@ -413,15 +415,15 @@ function AuthorizeRequestBuilder({
             onChange={(e) => setRawUrl(e.target.value)}
             aria-label="Raw authorization URL"
             rows={5}
-            className="w-full bg-code/60 px-3 py-2 text-[0.7rem] font-mono text-foreground border-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring resize-y"
+            className="w-full bg-code/60 px-3 py-2 text-xs font-mono text-foreground border-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring resize-y"
           />
         ) : (
-          <pre className="px-3 py-2 text-[0.7rem] font-mono text-accent-text whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-code/40">
+          <pre className="px-3 py-2 text-xs font-mono text-accent-text whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-code/40">
             {builtUrl}
           </pre>
         )}
 
-        <div className="px-3 py-2 space-y-2 border-t border-indigo-500/20">
+        <div className="px-3 py-2 space-y-2 border-t border-edge-accent">
           {challengeEdited && (
             <Warning>
               <code>code_challenge</code> was edited by hand, so it no longer matches the verifier
@@ -451,13 +453,13 @@ function AuthorizeRequestBuilder({
               href={effectiveUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1 text-[0.7rem] text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ExternalLink className="h-3 w-3" />
               Open in a new tab
             </a>
           </div>
-          <p className="text-[0.6rem] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             Sending navigates this tab to the URL above. The PKCE verifier and <code>state</code>{' '}
             are stored first, so the callback can complete the exchange and check the response.
           </p>
@@ -478,7 +480,7 @@ function Warning({
     <div
       className={cn(
         'flex gap-2 items-start rounded px-2 py-1.5 border',
-        tone === 'warn' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-sky-500/10 border-sky-500/30',
+        tone === 'warn' ? 'bg-tint-warning border-edge-warning' : 'bg-tint-info border-edge-info',
       )}
     >
       <AlertTriangle
@@ -489,7 +491,7 @@ function Warning({
       />
       <p
         className={cn(
-          'text-[0.7rem] leading-relaxed',
+          'text-xs leading-relaxed',
           tone === 'warn' ? 'text-warning-text' : 'text-info-text',
         )}
       >
@@ -510,6 +512,7 @@ interface ParamRowProps {
 
 function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: ParamRowProps) {
   const error = enabled ? jsonError(value) : null;
+  const [threatOpen, setThreatOpen] = useState(false);
 
   return (
     <div className={cn('px-3 py-2', !enabled && 'opacity-55')}>
@@ -530,20 +533,38 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
         {spec.requirement && (
           <span
             className={cn(
-              'text-[0.55rem] font-mono uppercase tracking-wider px-1 py-0.5 rounded',
+              'text-2xs font-mono uppercase tracking-wider px-1 py-0.5 rounded',
               spec.requirement === 'REQUIRED'
-                ? 'bg-red-500/15 text-danger-text'
+                ? 'bg-tint-danger-strong text-danger-text'
                 : spec.requirement === 'RECOMMENDED'
-                  ? 'bg-amber-500/15 text-warning-text'
+                  ? 'bg-tint-warning-strong text-warning-text'
                   : 'bg-muted/60 text-muted-foreground',
             )}
           >
             {spec.requirement}
           </span>
         )}
-        <span className="text-[0.6rem] font-mono text-muted-foreground/80 truncate">
-          {spec.spec}
-        </span>
+        <span className="text-2xs font-mono text-muted-foreground/80 truncate">{spec.spec}</span>
+        {spec.threat && (
+          /* The attack this parameter prevents, one click away. It is a toggle rather than always-on
+             prose because the row is dense and a novice meets 24 of them — but it is *present* on every
+             parameter that carries a promise, which is the half that was missing: `attack` and
+             `attacker` appeared zero times in the whole teaching layer. */
+          <button
+            onClick={() => setThreatOpen((o) => !o)}
+            aria-expanded={threatOpen}
+            title="What attack this parameter prevents"
+            className={cn(
+              'flex items-center gap-1 text-2xs px-1 py-0.5 rounded border cursor-pointer transition-colors shrink-0',
+              threatOpen
+                ? 'bg-tint-warning-strong text-warning-text border-edge-warning'
+                : 'bg-transparent text-muted-foreground border-border hover:text-warning-text',
+            )}
+          >
+            <ShieldAlert className="h-2.5 w-2.5" />
+            why
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-1 shrink-0">
           {onRegenerate && (
             <button
@@ -558,6 +579,13 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
           <HelpPopover title={spec.label} description={spec.note} tips={spec.spec} />
         </div>
       </div>
+
+      {spec.threat && threatOpen && (
+        <div className="flex gap-2 items-start mt-1.5 mb-0.5 rounded-md border-l-2 border-edge-warning bg-tint-warning pl-2 py-1.5 pr-2">
+          <ShieldAlert className="h-3 w-3 text-warning-text mt-0.5 shrink-0" />
+          <p className="text-xs text-foreground-muted leading-relaxed m-0">{spec.threat}</p>
+        </div>
+      )}
 
       {enabled && (
         <div className="mt-1.5 pl-5">
@@ -584,7 +612,7 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
               rows={3}
               className={cn(
                 'w-full rounded-md border bg-input px-2 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y',
-                error ? 'border-red-500/60' : 'border-border',
+                error ? 'border-edge-danger' : 'border-border',
               )}
             />
           ) : (
@@ -596,7 +624,7 @@ function ParamRow({ spec, enabled, value, onToggle, onChange, onRegenerate }: Pa
               className="w-full h-8 rounded-md border border-border bg-input px-2 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           )}
-          {error && <p className="text-[0.65rem] text-danger-text mt-1">Invalid JSON: {error}</p>}
+          {error && <p className="text-2xs text-danger-text mt-1">Invalid JSON: {error}</p>}
         </div>
       )}
     </div>

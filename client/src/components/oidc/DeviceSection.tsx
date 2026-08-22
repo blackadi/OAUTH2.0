@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { deviceService } from '@/services';
+import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -12,8 +14,18 @@ import { Select } from '@/components/ui/Select';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { useTraces } from '@/hooks/useTraces';
+import { sequenceProgress, type SequenceStepSpec } from '@/utils/sequence-progress';
 
 type DeviceOp = 'authorization' | 'verification' | 'complete' | 'poll';
+
+/** Every value `DeviceOp` can take, as a runtime list — the allowed set for the URL parameter. */
+const ALL_OPS = [
+  'authorization',
+  'verification',
+  'complete',
+  'poll',
+] as const satisfies readonly DeviceOp[];
 
 const COMPLETE_RESULTS = [
   { value: 'AUTHORIZED', label: 'AUTHORIZED' },
@@ -35,8 +47,50 @@ const POLL_INTERVALS = [
   { value: '15', label: '15s' },
 ];
 
+/**
+ * RFC 8628 §3.1–3.5 is a **sequence**, and the middle of it does not happen in this app.
+ *
+ * §3.1 asks for a device and user code, §3.3 shows them to the user, §3.4 is the user typing the code on
+ * *another device*, and §3.5 is the original device polling for the token. Four peer tabs said nothing
+ * about that order, or about the step this app cannot observe at all.
+ */
+const DEVICE_STEPS: SequenceStepSpec[] = [
+  {
+    id: 'authorization',
+    label: 'Device Auth',
+    description: '§3.1: ask for a device code and a user code.',
+    endpoint: '/api/device/authorization',
+  },
+  {
+    id: 'verification',
+    label: 'Verify Code',
+    description: '§3.3: the user enters the code, on another device.',
+    endpoint: '/api/device/verification',
+  },
+  {
+    id: 'complete',
+    label: 'Approve',
+    description: 'The user approves or denies. Denial is still a success here.',
+    endpoint: '/api/device/complete',
+  },
+  {
+    id: 'poll',
+    label: 'Poll Token',
+    description: '§3.5: the device polls until it gets a token or a denial.',
+    endpoint: '/api/token',
+  },
+];
+
 function DeviceSection() {
-  const [activeOp, setActiveOp] = useState<DeviceOp | null>(null);
+  /**
+   * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
+   *
+   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
+   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
+   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
+   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<DeviceOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
 
   const [parameters, setParameters] = useState('client_id=3322138582&scope=openid');
@@ -62,6 +116,8 @@ function DeviceSection() {
   const [pollElapsed, setPollElapsed] = useState(0);
 
   const doc = activeOp ? getDoc('device', activeOp) : undefined;
+  const traces = useTraces();
+  const progress = sequenceProgress(DEVICE_STEPS, traces);
 
   // Cleanup polling on unmount or tab change
   useEffect(() => {
@@ -180,6 +236,24 @@ function DeviceSection() {
   return (
     <SectionPanel title="Device Flow (RFC 8628)" description="OAuth 2.0 Device Authorization Grant">
       {error && <ErrorExplainer error={error} className="mb-3" />}
+
+      {/* The sequence, above the tabs that select a step in it. `FlowDiagram` and the progress
+
+
+          derivation both already existed and were applied to 3 of 20 sections; this is one of the
+
+
+          eight that rendered an ordered protocol as a row of peers. */}
+
+      <FlowDiagram
+        steps={DEVICE_STEPS}
+
+        currentStep={progress.currentStep}
+
+        completedSteps={progress.completedSteps}
+
+        className="mb-3"
+      />
 
       <TabBar options={DEVICE_OPS} value={activeOp} onChange={setActiveOp} />
 
@@ -359,7 +433,7 @@ function DeviceSection() {
       ) : null}
 
       {activeOp === 'poll' && pollError && !polling && (
-        <div className="mt-3 rounded-md bg-red-500/10 p-3 text-xs text-danger-text">
+        <div className="mt-3 rounded-md bg-tint-danger p-3 text-xs text-danger-text">
           {pollError}
         </div>
       )}

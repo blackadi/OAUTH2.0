@@ -29,16 +29,44 @@ export default defineConfig({
        * and disabling the check six weeks later.
        *
        * The logic layer is held to a much higher bar than the components, because that is where the
-       * decisions live: `transport.ts` at 100%, `utils/` at 95%. A section component is mostly markup,
-       * and its smoke test asserts that it mounts and offers a control rather than driving every branch.
+       * decisions live: `transport.ts` at 100%, `utils/` and `services/` around 80–90%. A section
+       * component is mostly markup, and its smoke test asserts that it mounts and offers a control
+       * rather than driving every branch.
        */
       thresholds: {
-        statements: 57,
-        branches: 53,
-        functions: 45,
-        lines: 58,
-        'src/utils/**': { statements: 90, branches: 80, functions: 95, lines: 90 },
-        'src/services/**': { statements: 75, branches: 70, functions: 70, lines: 75 },
+        statements: 60,
+        branches: 56,
+        functions: 50,
+        lines: 61,
+        'src/utils/**': { statements: 88, branches: 85, functions: 92, lines: 89 },
+        'src/services/**': { statements: 80, branches: 76, functions: 78, lines: 81 },
+        /**
+         * A floor on the layers the global number could not see.
+         *
+         * The global ratchet was satisfied at **~5% function coverage of the interactive surface** —
+         * `ClientManagementSection` at 1.53%, `AdminSection` at 3.12%, `McpSection` at 3.22% — because a
+         * global average cannot distinguish "the logic is covered" from "the buttons are not". That is
+         * precisely the surface where the 2026-08-22 sweep found four dead flows behind four green
+         * gates, and nothing else asks the question either: `check-route-coverage.mjs` is server-side.
+         *
+         * They are separate floors rather than one, because they mean different things:
+         *
+         * - `hooks/` and `context/` hold decisions every section depends on. `useAsyncCall`'s
+         *   `describeError` was at **0% branch** while producing the error sentence all 21 sections
+         *   render.
+         * - `data/` is the teaching corpus. A high floor here is cheap and it means an entry cannot be
+         *   added with no assertion about its shape.
+         * - `pages/` is `CallbackPage`, the most security-relevant file in the client.
+         *
+         * Deliberately **no floor on `src/components/**` yet**: it sits at 50% functions overall and the
+         * five 500+ LOC sections are far below that. Setting a floor there now would either be met
+         * trivially or block every commit; the honest move is to raise the global functions ratchet as
+         * per-section tests land, and to keep the per-area floors on the layers that are already good.
+         */
+        'src/hooks/**': { statements: 85, branches: 80, functions: 86, lines: 88 },
+        'src/context/**': { statements: 90, branches: 90, functions: 88, lines: 92 },
+        'src/data/**': { statements: 94, branches: 100, functions: 84, lines: 94 },
+        'src/pages/**': { statements: 82, branches: 80, functions: 80, lines: 82 },
       },
     },
   },

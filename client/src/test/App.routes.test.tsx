@@ -39,10 +39,17 @@ describe('every route resolves to a section', () => {
     '%s at %s',
     async (label, path) => {
       renderAt(path);
-      // The section arrives through React.lazy, so the Suspense fallback shows first.
+      /**
+       * The section arrives through React.lazy, so the Suspense fallback shows first.
+       *
+       * This asserted `querySelector('h2')`, which pinned the defect rather than the behaviour: every
+       * section title was an `<h2>` and **no route had an `<h1>` at all**, so each of the 20 pages
+       * presented a heading tree with no root. Asserting exactly one `h1` is the property that was
+       * actually wanted, and it fails if the level ever regresses in either direction.
+       */
       await waitFor(
         () => {
-          expect(document.querySelector('h2')).toBeTruthy();
+          expect(document.querySelectorAll('h1').length).toBe(1);
         },
         { timeout: 5000 },
       );
@@ -63,7 +70,19 @@ describe('every route resolves to a section', () => {
     // Guards the hand-maintained id → component map in App.tsx.
     const paths = new Set(allSectionsFlat.map((s) => s.path));
     expect(paths.size).toBe(allSectionsFlat.length);
-    expect(allSectionsFlat.length).toBe(20);
+    /**
+     * 22, not 20. The two additions are `/reference` — the **only reading surface** in the application —
+     * and `/token-exchange`, which the server implemented and Module 06 taught while the debugger could
+     * not send it.
+     *
+     * A hardcoded count is the right shape here — it is a deliberate tripwire on a hand-maintained map,
+     * and it should fail when a route is added so that somebody confirms the id → component entry
+     * exists. It just has to be updated on purpose rather than treated as a regression.
+     */
+    expect(allSectionsFlat.length).toBe(22);
+    // The two routes added after the audit, named rather than merely counted.
+    expect(allSectionsFlat.map((s) => s.id)).toContain('reference');
+    expect(allSectionsFlat.map((s) => s.id)).toContain('token-exchange');
   });
 });
 
@@ -78,7 +97,7 @@ describe('the shell', () => {
     // Assert on the panel heading, not on the text: the nav item matches too, and "found multiple"
     // would pass for the wrong reason.
     await waitFor(() =>
-      expect(screen.getByRole('heading', { level: 2, name: /Discovery/i })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { level: 1, name: /Discovery/i })).toBeInTheDocument(),
     );
   });
 
@@ -194,7 +213,7 @@ describe('shared management credentials (F-18)', () => {
     fireEvent.click(screen.getAllByRole('link', { name: /Client Management/i })[0]);
     await waitFor(() =>
       expect(
-        screen.getByRole('heading', { level: 2, name: /Client Management/i }),
+        screen.getByRole('heading', { level: 1, name: /Client Management/i }),
       ).toBeInTheDocument(),
     );
 

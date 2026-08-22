@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { federationService } from '@/services';
+import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -15,6 +16,9 @@ import { useCredentials } from '@/context/CredentialContext';
 
 type FederationOp = 'configuration' | 'registration';
 
+/** Every value `FederationOp` can take, as a runtime list — the allowed set for the URL parameter. */
+const ALL_OPS = ['configuration', 'registration'] as const satisfies readonly FederationOp[];
+
 const FEDERATION_OPS: { value: FederationOp; label: string }[] = [
   { value: 'configuration', label: 'Configuration' },
   { value: 'registration', label: 'Registration' },
@@ -25,7 +29,15 @@ function FederationSection() {
   // held their own copy, and a route change unmounts a section, so it had to be retyped on
   // every navigation.
   const { clientId: authId, clientSecret: authSecret } = useCredentials();
-  const [activeOp, setActiveOp] = useState<FederationOp | null>(null);
+  /**
+   * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
+   *
+   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
+   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
+   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
+   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<FederationOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
 
   const [entityConfiguration, setEntityConfiguration] = useState('');

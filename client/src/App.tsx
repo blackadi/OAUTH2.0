@@ -25,6 +25,8 @@ import {
   FileText,
   ShieldAlert,
   Bot,
+  BookOpen,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 const AuthFlowsSection = lazy(() => import('@/components/auth/AuthFlowsSection'));
@@ -88,6 +90,16 @@ const JarSection = lazy(() =>
 const HealthSection = lazy(() =>
   import('@/components/admin/HealthSection').then((m) => ({ default: m.HealthSection })),
 );
+/**
+ * The one reading surface, and the reason it is lazy like the rest: it is 26 glossary entries plus four
+ * data modules, and a learner who never opens it should not pay for it on first paint.
+ */
+const ReferencePage = lazy(() => import('@/pages/ReferencePage'));
+const TokenExchangeSection = lazy(() =>
+  import('@/components/oidc/TokenExchangeSection').then((m) => ({
+    default: m.TokenExchangeSection,
+  })),
+);
 const StepUpSection = lazy(() =>
   import('@/components/oidc/StepUpSection').then((m) => ({ default: m.StepUpSection })),
 );
@@ -112,7 +124,9 @@ export type SectionId =
   | 'admin'
   | 'client-mgmt'
   | 'grant-mgmt'
-  | 'health';
+  | 'health'
+  | 'reference'
+  | 'token-exchange';
 
 export interface Section {
   id: SectionId;
@@ -147,6 +161,12 @@ const SECTIONS: SectionGroup[] = [
         label: 'Step-Up Auth',
         path: '/step-up',
         icon: <ShieldAlert className="h-4 w-4" />,
+      },
+      {
+        id: 'token-exchange',
+        label: 'Token Exchange',
+        path: '/token-exchange',
+        icon: <ArrowRightLeft className="h-4 w-4" />,
       },
       { id: 'logout', label: 'Logout', path: '/logout', icon: <LogOut className="h-4 w-4" /> },
     ],
@@ -195,6 +215,24 @@ const SECTIONS: SectionGroup[] = [
         label: 'Verifiable Credentials',
         path: '/vci',
         icon: <BadgeCheck className="h-4 w-4" />,
+      },
+    ],
+  },
+  {
+    /**
+     * A group of its own, first, because it is the only **reading** surface in the application.
+     *
+     * Every other route is a parameter editor with a response pane — a *doing* surface. The audit found
+     * the whole explanatory corpus reachable only by clicking a 20px icon inside a form, which meant a
+     * learner arriving from a shared link had nowhere to land except a form.
+     */
+    label: 'Learn',
+    sections: [
+      {
+        id: 'reference',
+        label: 'Reference',
+        path: '/reference',
+        icon: <BookOpen className="h-4 w-4" />,
       },
     ],
   },
@@ -252,6 +290,8 @@ const sectionComponents: Record<SectionId, React.FC> = {
   'client-mgmt': ClientManagementSection,
   'grant-mgmt': GrantManagementSection,
   health: HealthSection,
+  reference: ReferencePage,
+  'token-exchange': TokenExchangeSection,
 };
 
 const App: React.FC = () => {

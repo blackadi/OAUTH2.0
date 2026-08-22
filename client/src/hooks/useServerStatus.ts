@@ -72,7 +72,8 @@ export function useServerStatus(options?: UseServerStatusOptions): UseServerStat
       }
     };
 
-    check();
+    // Not awaited on purpose: `check` handles its own failures and an effect body cannot be async.
+    void check();
 
     const pollMs = isConnected ? interval : retryInterval;
     const intervalId = setInterval(check, pollMs);

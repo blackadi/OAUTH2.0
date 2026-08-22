@@ -4,6 +4,7 @@ import { fapiService, parService, tokenService } from '@/services';
 import type { ParSuccessResponse } from '@/services/par.service';
 import { useAsyncCall, useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -268,6 +269,7 @@ function FapiSection() {
             <CardTitle>FAPI Configuration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {error && <ErrorExplainer error={String(error)} className="mb-3" />}
             {configDoc && <OperationDescription doc={configDoc} />}
             <Button onClick={fetchConfig} loading={loading} size="sm">
               Fetch Config
@@ -340,7 +342,7 @@ function FapiSection() {
               </div>
 
               <div className="border-t border-border pt-4">
-                <h4 className="text-sm font-medium mb-3">Create DPoP Proof</h4>
+                <h2 className="text-sm font-medium mb-3">Create DPoP Proof</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     label="HTTP Method (htm)"
@@ -411,10 +413,13 @@ function FapiSection() {
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          {!!wizError && <p className="text-xs text-danger-text">{String(wizError)}</p>}
+          {/* Was a bare red paragraph. A `[A157303]` here means a stored FAPI signing key silently
+              rewired the exchange to `private_key_jwt` — which `AUTHLETE_NOTES` explains and a raw
+              string does not. */}
+          {!!wizError && <ErrorExplainer error={String(wizError)} />}
 
           <div>
-            <h4 className="text-sm font-medium mb-3">Setup: Client Configuration</h4>
+            <h2 className="text-sm font-medium mb-3">Setup: Client Configuration</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
               <Input
                 label="Client ID"
@@ -482,7 +487,7 @@ function FapiSection() {
           <div
             className={`border-t border-border pt-4 ${!wizDpopKeyPair || !wizSigningKey ? 'opacity-50 pointer-events-none' : ''}`}
           >
-            <h4 className="text-sm font-medium mb-2">Step 1: Push Authorization Request (PAR)</h4>
+            <h2 className="text-sm font-medium mb-2">Step 1: Push Authorization Request (PAR)</h2>
             <p className="text-xs text-muted-foreground mb-2">
               Pushes authorization parameters with a{' '}
               <code className="text-foreground-muted">private_key_jwt</code> client assertion and
@@ -506,7 +511,7 @@ function FapiSection() {
           <div
             className={`border-t border-border pt-4 ${!wizParResult?.request_uri ? 'opacity-50 pointer-events-none' : ''}`}
           >
-            <h4 className="text-sm font-medium mb-2">Step 2: Authorize</h4>
+            <h2 className="text-sm font-medium mb-2">Step 2: Authorize</h2>
             <p className="text-xs text-muted-foreground mb-2">
               Opens the authorization page. After login + consent, you are redirected to the
               callback page where the code is exchanged for tokens using{' '}
@@ -524,7 +529,7 @@ function FapiSection() {
           </div>
 
           <div className={`border-t border-border pt-4`}>
-            <h4 className="text-sm font-medium mb-2">Step 3: Call Userinfo with DPoP</h4>
+            <h2 className="text-sm font-medium mb-2">Step 3: Call Userinfo with DPoP</h2>
             <p className="text-xs text-muted-foreground mb-2">
               Uses the stored DPoP key and access token from the callback. The DPoP proof includes
               the <code className="text-foreground-muted">ath</code> claim (hash of the access

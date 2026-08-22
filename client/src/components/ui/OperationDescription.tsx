@@ -12,7 +12,7 @@ function OperationDescription({ doc, className }: OperationDescriptionProps) {
   return (
     <div
       className={cn(
-        'flex gap-2 items-start bg-indigo-500/8 border-l-[3px] border-indigo-500 rounded-lg p-3 mb-3',
+        'flex gap-2 items-start bg-tint-accent border-l-[3px] border-indigo-500 rounded-lg p-3 mb-3',
         className,
       )}
     >

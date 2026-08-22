@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { healthService } from '@/services';
 import { SectionPanel } from '@/components/layout/SectionPanel';
+import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Button } from '@/components/ui/Button';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
@@ -38,8 +39,9 @@ function HealthSection() {
   const docAuthlete = getDoc('health', 'authlete');
 
   useEffect(() => {
-    checkServer();
-    checkOverall();
+    // Not awaited: both own their failure paths, and an effect body cannot be async.
+    void checkServer();
+    void checkOverall();
   }, []);
 
   async function checkServer() {
@@ -105,8 +107,8 @@ function HealthSection() {
               size="sm"
               variant="ghost"
               onClick={() => {
-                checkServer();
-                checkOverall();
+                void checkServer();
+                void checkOverall();
               }}
               disabled={loading.server}
               loading={loading.server}
@@ -170,7 +172,10 @@ function HealthSection() {
           </Button>
         </div>
 
-        {authleteError && <p className="text-xs text-danger-text">{authleteError}</p>}
+        {/* A bare red line here loses the whole diagnosis: an Authlete health failure carries a status
+            and often an `[Annnnnn]`, and `statusHint` alone distinguishes a 429 rate limit from a
+            credential problem — which on this deployment is the single most confusing failure. */}
+        {authleteError && <ErrorExplainer error={authleteError} />}
 
         {authleteResult ? (
           <div>

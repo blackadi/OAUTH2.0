@@ -7,6 +7,7 @@ import { createProof, computeAth } from '@/services/dpop.service';
 import type { JWK } from '@/services/crypto-utils';
 import { CLIENT_ID, USERINFO_ENDPOINT } from '@/config';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
+import { useUrlState } from '@/hooks/useUrlState';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -14,11 +15,20 @@ import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { SESSION_KEYS, readKey, readJsonKey } from '@/services/session-keys';
 import { useCredentials } from '@/context/CredentialContext';
 
 type TokenOp = 'userinfo' | 'introspect' | 'introspect-std' | 'revoke';
+
+/** Every value `TokenOp` can take, as a runtime list — the allowed set for the URL parameter. */
+const ALL_OPS = [
+  'userinfo',
+  'introspect',
+  'introspect-std',
+  'revoke',
+] as const satisfies readonly TokenOp[];
 
 const OPS: { key: TokenOp; label: string }[] = [
   { key: 'userinfo', label: 'UserInfo' },
@@ -60,7 +70,15 @@ function TokenOpsSection() {
     return data;
   };
   const { loading, result, error, call } = useDiscriminatedAsyncCall();
-  const [activeOp, setActiveOp] = useState<TokenOp | null>(null);
+  /**
+   * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
+   *
+   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
+   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
+   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
+   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<TokenOp>('op', ALL_OPS);
 
   const [revClientId, setRevClientId] = useState(readKey(SESSION_KEYS.activeClientId) || CLIENT_ID);
   const [revClientSecret, setRevClientSecret] = useState(
@@ -79,6 +97,7 @@ function TokenOpsSection() {
   const { clientId: adminId, clientSecret: adminSecret } = useCredentials();
 
   const doc = activeOp ? getDoc('token-ops', activeOp) : undefined;
+  const { confirm, dialog } = useConfirmedAction();
 
   const handleCall = async (label: TokenOp, fn: () => Promise<unknown>) => {
     setActiveOp(label);
@@ -95,7 +114,7 @@ function TokenOpsSection() {
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {!at && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-warning-text">
+        <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
           <p className="font-medium">No access token available</p>
           <p className="mt-1 text-xs text-warning-text/80">
             Obtain a token first via the Grant Flows section (Authorization Code, Client
@@ -105,7 +124,7 @@ function TokenOpsSection() {
             <Button
               variant="outline"
               size="sm"
-              className="mt-2 border-amber-500/50 text-warning-text hover:bg-amber-500/20"
+              className="mt-2 border-edge-warning text-warning-text hover:bg-tint-warning-strong"
             >
               Go to Grant Flows
             </Button>
@@ -114,7 +133,7 @@ function TokenOpsSection() {
       )}
 
       {at && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-success-text">
+        <div className="rounded-lg border border-edge-success bg-tint-success p-2 text-xs text-success-text">
           Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
           {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
               so it is stated rather than left to be discovered. */}
@@ -137,7 +156,29 @@ function TokenOpsSection() {
             disabled={!at || loading !== null}
             loading={loading === op.key}
             onClick={() => {
-              handleCall(op.key, () => {
+              /**
+               * Revocation is the one operation here that destroys something, and RFC 7009 §2.1 makes
+               * it apply to the whole grant when the server chooses to: revoking an access token may
+               * take the refresh token with it. The other three read.
+               */
+              if (op.key === 'revoke') {
+                confirm({
+                  title: 'Revoke this access token?',
+                  body: 'The token is revoked at the authorization server and stops working immediately. RFC 7009 §2.1 permits the server to revoke the whole grant, so the refresh token issued alongside it may go too. This cannot be undone from here.',
+                  confirmLabel: 'Revoke token',
+                  run: () =>
+                    void handleCall('revoke', () =>
+                      tokenService.revocation(
+                        at!,
+                        revClientId || undefined,
+                        revClientSecret || undefined,
+                        'access_token',
+                      ),
+                    ),
+                });
+                return;
+              }
+              void handleCall(op.key, () => {
                 switch (op.key) {
                   case 'userinfo':
                     return fetchUserinfo();
@@ -155,12 +196,10 @@ function TokenOpsSection() {
                   case 'introspect-std':
                     return tokenService.introspectionStandard(at!, adminId, adminSecret);
                   case 'revoke':
-                    return tokenService.revocation(
-                      at!,
-                      revClientId || undefined,
-                      revClientSecret || undefined,
-                      'access_token',
-                    );
+                    // Unreachable: revocation is handled above, behind a confirmation. The case stays
+                    // so the switch remains exhaustive over `TokenOp` — adding a fifth operation should
+                    // be a compile error here, not a silent `undefined`.
+                    throw new Error('revoke is handled by the confirmation path above');
                 }
               });
             }}
@@ -202,7 +241,7 @@ function TokenOpsSection() {
       )}
 
       {activeOp === 'introspect' && (
-        <div className="space-y-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+        <div className="space-y-3 rounded-lg border border-edge-info bg-tint-info p-3">
           <p className="text-xs font-medium text-info-text">
             RFC 9470 Step-Up Authentication Validation
           </p>
@@ -219,12 +258,14 @@ function TokenOpsSection() {
             onChange={(e) => setIntrospectMaxAge(e.target.value)}
             placeholder="e.g. 3600"
           />
-          <p className="text-[0.6rem] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns{' '}
             <code>insufficient_user_authentication</code> with the required values.
           </p>
         </div>
       )}
+
+      {dialog}
 
       {result ? <JsonBlock data={result} label="Response" /> : null}
     </SectionPanel>

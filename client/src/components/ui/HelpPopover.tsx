@@ -12,9 +12,26 @@ interface HelpPopoverProps {
 }
 
 const GAP = 6;
-const MAX_HEIGHT = 480;
+/** The tallest the panel is ever allowed to be, before the viewport gets a say. */
+const PREFERRED_HEIGHT = 480;
 const MARGIN = 12;
+/** Below this the panel would show a line and a half of prose; better to keep it usable. */
+const MIN_HEIGHT = 160;
 
+/**
+ * Where the panel goes, and **how tall it is allowed to be**.
+ *
+ * The height used to be the constant 480, with the inner scroller sized at `480 - 44` — both
+ * viewport-independent. On a viewport shorter than about 504px the clamp
+ * `Math.min(top, vh - 480 - 12)` went negative, `Math.max(MARGIN, …)` pinned the panel at `top: 12`,
+ * and a 480px panel sat inside a shorter window with its bottom off-screen **and no scroll to reach
+ * it** — because the scroll container was sized in pixels rather than relative to what was visible. A
+ * landscape phone (~375px tall) and a short desktop window both hit it.
+ *
+ * That matters more than a clipped panel usually would: this popover is where the per-parameter
+ * explanations live, it is `position: fixed` in a portal, and the content it holds is reachable by no
+ * other route.
+ */
 function computePosition(trigger: HTMLElement) {
   const triggerRect = trigger.getBoundingClientRect();
   const vw = window.innerWidth;
@@ -23,21 +40,26 @@ function computePosition(trigger: HTMLElement) {
   const preferredWidth = Math.min(360, vw - MARGIN * 2);
   const left = Math.min(triggerRect.right - preferredWidth, vw - preferredWidth - MARGIN);
 
+  // Never taller than the space there is. `MIN_HEIGHT` keeps a very short viewport from producing a
+  // panel too small to read; it will overflow the window, but its own scroller is then reachable.
+  const available = vh - MARGIN * 2;
+  const height = Math.max(MIN_HEIGHT, Math.min(PREFERRED_HEIGHT, available));
+
   type Placement = 'bottom' | 'top';
   let placement: Placement = 'bottom';
   let top = triggerRect.bottom + GAP;
 
-  const fitsBelow = top + MAX_HEIGHT <= vh - MARGIN;
-  const fitsAbove = triggerRect.top - GAP - MAX_HEIGHT >= MARGIN;
+  const fitsBelow = top + height <= vh - MARGIN;
+  const fitsAbove = triggerRect.top - GAP - height >= MARGIN;
 
   if (!fitsBelow && fitsAbove) {
     placement = 'top';
-    top = triggerRect.top - GAP - MAX_HEIGHT;
+    top = triggerRect.top - GAP - height;
   }
 
-  top = Math.max(MARGIN, Math.min(top, vh - MAX_HEIGHT - MARGIN));
+  top = Math.max(MARGIN, Math.min(top, Math.max(MARGIN, vh - height - MARGIN)));
 
-  return { top, left, width: preferredWidth, placement };
+  return { top, left, width: preferredWidth, height, placement };
 }
 
 function HelpPopover({ title, description, params, returns, tips }: HelpPopoverProps) {
@@ -45,13 +67,18 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const [{ top, left, width }, setPosition] = useState({ top: 0, left: 0, width: 360 });
+  const [{ top, left, width, height }, setPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 360,
+    height: PREFERRED_HEIGHT,
+  });
   const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom');
 
   const reposition = useCallback(() => {
     if (!triggerRef.current) return;
     const pos = computePosition(triggerRef.current);
-    setPosition({ top: pos.top, left: pos.left, width: pos.width });
+    setPosition({ top: pos.top, left: pos.left, width: pos.width, height: pos.height });
     setPlacement(pos.placement);
   }, []);
 
@@ -153,7 +180,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            style={{ position: 'fixed', top, left, width }}
+            style={{ position: 'fixed', top, left, width, maxHeight: height }}
             className={cn(
               'z-[9999] bg-surface-2 border border-border rounded-lg shadow-xl text-xs text-foreground',
               placement === 'top' && 'origin-bottom',
@@ -171,7 +198,8 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
             </div>
             <div
               className="px-3 py-2 flex flex-col gap-2 overflow-y-auto"
-              style={{ maxHeight: MAX_HEIGHT - 44 }}
+              /* Header is 44px; the scroller gets whatever the measured panel height leaves. */
+              style={{ maxHeight: height - 44 }}
             >
               <p className="m-0 leading-relaxed">{description}</p>
               {params && params.length > 0 && (
@@ -182,7 +210,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
                   <div className="flex flex-col gap-1">
                     {params.map((p, i) => (
                       <div key={i} className="flex flex-col gap-0.5">
-                        <code className="text-xs text-accent-text bg-indigo-500/10 px-1 py-0.5 rounded">
+                        <code className="text-xs text-accent-text bg-tint-accent px-1 py-0.5 rounded">
                           {p.name}
                         </code>
                         <span className="text-xs text-foreground-muted">{p.desc}</span>

@@ -171,6 +171,32 @@ const docs: Record<string, Record<string, OpDoc>> = {
     },
   },
   'token-ops': {
+    exchange: {
+      title: 'Token Exchange (RFC 8693)',
+      description:
+        'Trade one token for another. A service holding a token for user A can obtain a token for a downstream API — either acting *as* A (impersonation) or *on behalf of* A while recording who did the acting (delegation). It uses the ordinary token endpoint with grant_type set to the RFC 8693 URN; there is no separate endpoint.',
+      params: [
+        {
+          name: 'subject_token / subject_token_type',
+          desc: 'REQUIRED (§2.1). The token being exchanged, and an identifier saying what kind it is. The type is not optional — the server cannot guess.',
+        },
+        {
+          name: 'actor_token / actor_token_type',
+          desc: 'OPTIONAL, and the switch between the two modes. Present means delegation; absent means impersonation. `actor_token_type` is REQUIRED when the actor token is present and MUST NOT be sent otherwise.',
+        },
+        {
+          name: 'audience / resource',
+          desc: 'OPTIONAL. Which downstream service the new token is for. Without one the token is as broadly usable as the subject token was, which defeats much of the point.',
+        },
+        {
+          name: 'scope / requested_token_type',
+          desc: 'OPTIONAL. Narrow the permissions, and ask for a specific token format. `requested_token_type` defaults to an access token.',
+        },
+      ],
+      returns:
+        'A token response. RFC 8693 §2.2.1 makes `access_token`, `issued_token_type` and `token_type` REQUIRED — and this deployment deliberately omits `issued_token_type`, which Module 06 teaches.',
+      tips: 'Send it once without an actor token and once with, then compare the two responses. On this deployment they are the same, because the actor token is deliberately dropped — that is Module 06 Exercise 6b, not a defect to report.',
+    },
     userinfo: {
       title: 'UserInfo Endpoint',
       description:
