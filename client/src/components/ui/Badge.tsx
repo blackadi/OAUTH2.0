@@ -6,11 +6,11 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-indigo-500/20 text-indigo-300',
-        success: 'bg-green-500/20 text-green-300',
-        danger: 'bg-red-500/20 text-red-300',
-        warning: 'bg-yellow-500/20 text-yellow-300',
-        info: 'bg-blue-500/20 text-blue-300',
+        default: 'bg-indigo-500/20 text-accent-text',
+        success: 'bg-green-500/20 text-success-text',
+        danger: 'bg-red-500/20 text-danger-text',
+        warning: 'bg-yellow-500/20 text-warning-text',
+        info: 'bg-blue-500/20 text-info-text',
       },
     },
     defaultVariants: {

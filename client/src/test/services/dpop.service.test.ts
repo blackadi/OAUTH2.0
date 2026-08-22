@@ -108,9 +108,16 @@ describe('createProof', () => {
     const proof = await createProof(pair.privateKey, 'POST', 'https://as.example/token');
     const signature = segmentBytes(proof.split('.')[2]);
 
-    // JWS ES256 is a fixed 64 bytes (IEEE P1363). A DER encoding is variable-length and starts 0x30.
+    // JWS ES256 is a fixed 64 bytes (IEEE P1363); a DER encoding is variable-length — 70–72 for P-256 —
+    // and is a SEQUENCE, `0x30 <len> …`, where `<len>` is the remaining byte count.
     expect(signature.byteLength).toBe(64);
-    expect(signature[0]).not.toBe(0x30);
+
+    // Structural, not "the first byte isn't 0x30". That earlier form was flaky: R's leading byte is
+    // uniformly random, so it is 0x30 about 1 run in 200 — measured at 15 of 3,000 signatures, against
+    // 3,000 of 3,000 being exactly 64 bytes. A test that fails 0.5% of the time teaches people to
+    // re-run it, which is worse than not having it.
+    const looksLikeDer = signature[0] === 0x30 && signature[1] === signature.byteLength - 2;
+    expect(looksLikeDer).toBe(false);
   });
 
   it('produces a signature that actually verifies against the public key', async () => {

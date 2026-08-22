@@ -299,11 +299,11 @@ const AuthFlowsSection: React.FC = () => {
                     <span className="text-xs text-muted-foreground leading-relaxed">
                       <span className="text-foreground font-medium">Sender-constrain with DPoP</span>{' '}
                       (RFC 9449) — generates a key, sends its thumbprint as{' '}
-                      <code className="text-indigo-300">dpop_jkt</code>, and proves possession at the
+                      <code className="text-accent-text">dpop_jkt</code>, and proves possession at the
                       token endpoint. The token comes back as{' '}
-                      <code className="text-indigo-300">token_type: DPoP</code> and must then be
-                      presented with the <code className="text-indigo-300">DPoP</code> scheme, never{' '}
-                      <code className="text-indigo-300">Bearer</code>.
+                      <code className="text-accent-text">token_type: DPoP</code> and must then be
+                      presented with the <code className="text-accent-text">DPoP</code> scheme, never{' '}
+                      <code className="text-accent-text">Bearer</code>.
                     </span>
                   </label>
 

@@ -126,9 +126,9 @@ function StepUpSection() {
         />
 
         {!at && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-warning-text">
             <p className="font-medium">No access token available</p>
-            <p className="mt-1 text-xs text-amber-300/80">
+            <p className="mt-1 text-xs text-warning-text/80">
               Obtain a token first via Grant Flows, then return here to test step-up challenges.
             </p>
           </div>
@@ -182,8 +182,8 @@ function StepUpSection() {
             {challenge && (
               <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4">
                 <div className="flex items-center gap-2">
-                  <ShieldAlert className="h-5 w-5 text-red-400" />
-                  <p className="text-sm font-medium text-red-300">
+                  <ShieldAlert className="h-5 w-5 text-danger-text" />
+                  <p className="text-sm font-medium text-danger-text">
                     Step-Up Authentication Required
                   </p>
                 </div>
@@ -191,18 +191,18 @@ function StepUpSection() {
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-muted-foreground">Error:</span>{' '}
-                    <code className="text-red-300">{challenge.error}</code>
+                    <code className="text-danger-text">{challenge.error}</code>
                   </div>
                   {challenge.acr && (
                     <div>
                       <span className="text-muted-foreground">Current ACR:</span>{' '}
-                      <code className="text-amber-300">{challenge.acr}</code>
+                      <code className="text-warning-text">{challenge.acr}</code>
                     </div>
                   )}
                   {challenge.auth_time && (
                     <div>
                       <span className="text-muted-foreground">Auth Time:</span>{' '}
-                      <code className="text-amber-300">
+                      <code className="text-warning-text">
                         {new Date(challenge.auth_time * 1000).toLocaleString()}
                       </code>
                     </div>
@@ -210,19 +210,19 @@ function StepUpSection() {
                   {challenge.acr_values && (
                     <div>
                       <span className="text-muted-foreground">Required ACRs:</span>{' '}
-                      <code className="text-emerald-300">{challenge.acr_values}</code>
+                      <code className="text-success-text">{challenge.acr_values}</code>
                     </div>
                   )}
                   {challenge.max_age && (
                     <div>
                       <span className="text-muted-foreground">Max Age:</span>{' '}
-                      <code className="text-emerald-300">{challenge.max_age}s</code>
+                      <code className="text-success-text">{challenge.max_age}s</code>
                     </div>
                   )}
                 </div>
 
                 {challenge.error_description && (
-                  <p className="text-xs text-red-300/80">{challenge.error_description}</p>
+                  <p className="text-xs text-danger-text/80">{challenge.error_description}</p>
                 )}
 
                 {reAuthUrl && (

@@ -131,7 +131,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
       <button
         ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center justify-center w-5 h-5 rounded-full border border-indigo-500 bg-transparent text-indigo-500 cursor-pointer hover:bg-indigo-500 hover:text-white transition-colors shrink-0"
+        className="flex items-center justify-center w-5 h-5 rounded-full border border-indigo-500 bg-transparent text-accent-text cursor-pointer hover:bg-indigo-500 hover:text-white transition-colors shrink-0"
         aria-label="Help"
         aria-expanded={open}
         aria-controls="help-popover-panel"
@@ -157,7 +157,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
             <strong className="text-sm">{title}</strong>
             <button
               onClick={close}
-              className="bg-transparent border-none text-muted-foreground hover:text-red-400 cursor-pointer p-0.5"
+              className="bg-transparent border-none text-muted-foreground hover:text-danger-text cursor-pointer p-0.5"
               aria-label="Close help"
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -171,7 +171,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
                 <div className="flex flex-col gap-1">
                   {params.map((p, i) => (
                     <div key={i} className="flex flex-col gap-0.5">
-                      <code className="text-xs text-indigo-300 bg-indigo-500/10 px-1 py-0.5 rounded">{p.name}</code>
+                      <code className="text-xs text-accent-text bg-indigo-500/10 px-1 py-0.5 rounded">{p.name}</code>
                       <span className="text-xs text-foreground-muted">{p.desc}</span>
                     </div>
                   ))}

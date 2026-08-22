@@ -12,11 +12,11 @@ interface RequestBuilderProps {
 }
 
 const methodColors: Record<string, string> = {
-  GET: 'text-green-400',
-  POST: 'text-blue-400',
-  PUT: 'text-orange-400',
-  PATCH: 'text-yellow-400',
-  DELETE: 'text-red-400',
+  GET: 'text-success-text',
+  POST: 'text-info-text',
+  PUT: 'text-warning-text',
+  PATCH: 'text-warning-text',
+  DELETE: 'text-danger-text',
 };
 
 function RequestBuilder({ method, url, headers, body, className }: RequestBuilderProps) {
@@ -56,11 +56,11 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
           aria-label="Copy as cURL"
         >
           {copied ? (
-            <Check className="h-3 w-3 text-green-400" />
+            <Check className="h-3 w-3 text-success-text" />
           ) : (
             <Copy className="h-3 w-3" />
           )}
-          <span className={copied ? 'text-green-400' : ''}>
+          <span className={copied ? 'text-success-text' : ''}>
             {copied ? 'Copied' : reveal ? 'cURL + secrets' : 'cURL'}
           </span>
         </button>
@@ -76,7 +76,7 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         <div className="px-3 py-2 border-b border-border space-y-0.5">
           {Object.entries(headers).map(([k, v]) => (
             <div key={k} className="flex gap-2 text-[0.7rem] font-mono">
-              <span className="text-indigo-400 shrink-0">{k}:</span>
+              <span className="text-accent-text shrink-0">{k}:</span>
               <span className="text-muted-foreground truncate">{v}</span>
             </div>
           ))}

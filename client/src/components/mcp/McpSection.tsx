@@ -288,7 +288,7 @@ function McpSection() {
       <AdminAuth label="Admin (for DCR)" />
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
-      {wizError && <p className="text-xs text-red-400">{wizError}</p>}
+      {wizError && <p className="text-xs text-danger-text">{wizError}</p>}
 
       <TabBar options={MCP_OPS} value={activeOp} onChange={setActiveOp} />
 
@@ -472,7 +472,7 @@ function McpSection() {
                     href={wizAuthUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-indigo-400 break-all hover:underline"
+                    className="text-xs text-accent-text break-all hover:underline"
                   >
                     {wizAuthUrl}
                   </a>

@@ -112,8 +112,8 @@ function GrantManagementSection() {
           {canDpop ? (
             <>
               — required for a sender-constrained token (RFC 9449 §7.1);{' '}
-              <code className="text-indigo-300">Bearer</code> is refused with{' '}
-              <code className="text-indigo-300">[A281305]</code>.
+              <code className="text-accent-text">Bearer</code> is refused with{' '}
+              <code className="text-accent-text">[A281305]</code>.
               {isDpopBound && ' The token in hand is DPoP-bound, so this is on by default.'}
             </>
           ) : (

@@ -96,14 +96,14 @@ function BackchannelLogoutSection() {
           <details className="rounded-lg border border-border overflow-hidden" open>
             <summary className="px-3 py-2 text-xs font-semibold cursor-pointer bg-muted/20 select-none">Decoded Logout Token (JWT Payload)</summary>
             {typeof decodedLogoutToken === 'string' ? (
-              <p className="text-xs text-red-400 p-3">{decodedLogoutToken}</p>
+              <p className="text-xs text-danger-text p-3">{decodedLogoutToken}</p>
             ) : (
               <JsonBlock data={decodedLogoutToken} className="m-0" />
             )}
             <p className="text-xs text-muted-foreground px-3 pb-2">
-              The logout token is a JWT with <code className="text-indigo-300">typ: &quot;logout+jwt&quot;</code> and an{' '}
-              <code className="text-indigo-300">events</code> claim containing{' '}
-              <code className="text-indigo-300">http://schemas.openid.net/event/backchannel-logout</code>.
+              The logout token is a JWT with <code className="text-accent-text">typ: &quot;logout+jwt&quot;</code> and an{' '}
+              <code className="text-accent-text">events</code> claim containing{' '}
+              <code className="text-accent-text">http://schemas.openid.net/event/backchannel-logout</code>.
             </p>
           </details>
         </div>

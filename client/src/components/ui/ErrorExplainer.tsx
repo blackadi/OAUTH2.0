@@ -53,9 +53,9 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
   return (
     <div className={cn('rounded-lg border border-red-500/25 bg-red-500/5 overflow-hidden', className)}>
       <div className="flex gap-2 items-start px-3 py-2">
-        <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+        <AlertCircle className="h-4 w-4 text-danger-text mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-red-300 break-words font-mono leading-relaxed">
+          <p className="text-xs text-danger-text break-words font-mono leading-relaxed">
             {showFullRaw || error.length <= RAW_PREVIEW_CHARS
               ? error
               : `${error.slice(0, RAW_PREVIEW_CHARS)}…`}
@@ -63,7 +63,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
           {error.length > RAW_PREVIEW_CHARS && (
             <button
               onClick={() => setShowFullRaw((f) => !f)}
-              className="mt-1 text-[0.65rem] text-red-200/70 hover:text-red-100 bg-transparent border-none cursor-pointer p-0 underline"
+              className="mt-1 text-[0.65rem] text-danger-text/70 hover:text-danger-text bg-transparent border-none cursor-pointer p-0 underline"
             >
               {showFullRaw
                 ? 'Show less'
@@ -74,7 +74,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
             <button
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
-              className="flex items-center gap-1 mt-1.5 text-[0.65rem] text-red-200/80 hover:text-red-100 bg-transparent border-none cursor-pointer p-0"
+              className="flex items-center gap-1 mt-1.5 text-[0.65rem] text-danger-text/80 hover:text-danger-text bg-transparent border-none cursor-pointer p-0"
             >
               {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               {open ? 'Hide explanation' : 'What does this mean?'}
@@ -97,7 +97,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
 
           {decoded.oauthError && !decoded.oauthDoc && (
             <p className="text-[0.7rem] text-muted-foreground">
-              <code className="text-red-300">{decoded.oauthError}</code> is not a code this tool
+              <code className="text-danger-text">{decoded.oauthError}</code> is not a code this tool
               recognises. It may be server-specific — read it alongside the description above.
             </p>
           )}
@@ -124,7 +124,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
 
           {decoded.authleteCode && !decoded.authleteNote && !decoded.authleteVendor && (
             <p className="text-[0.7rem] text-muted-foreground">
-              <code className="text-amber-300">{decoded.authleteCode}</code> is an Authlete result code
+              <code className="text-warning-text">{decoded.authleteCode}</code> is an Authlete result code
               this tool has no entry for — it is neither in the vendored specification nor in this
               repo&apos;s verified findings. The message beside it is the vendor&apos;s own words and is
               the best available description.
@@ -137,7 +137,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
                 href={decoded.errorUri}
                 target="_blank"
                 rel="noreferrer"
-                className="text-indigo-300 hover:text-indigo-200 underline decoration-indigo-500/40"
+                className="text-accent-text hover:text-accent-text underline decoration-indigo-500/40"
               >
                 The server&apos;s own documentation for this error →
               </a>
@@ -146,7 +146,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
 
           {hint && !decoded.recognised && (
             <p className="text-[0.7rem] text-muted-foreground leading-relaxed">
-              <span className="font-mono text-amber-300">HTTP {decoded.status ?? status}</span> — {hint}
+              <span className="font-mono text-warning-text">HTTP {decoded.status ?? status}</span> — {hint}
             </p>
           )}
         </div>
@@ -177,15 +177,15 @@ function Entry({
           className={cn(
             'text-[0.65rem] font-mono px-1.5 py-0.5 rounded',
             badgeTone === 'oauth'
-              ? 'bg-indigo-500/15 text-indigo-300'
-              : 'bg-amber-500/15 text-amber-300',
+              ? 'bg-indigo-500/15 text-accent-text'
+              : 'bg-amber-500/15 text-warning-text',
           )}
         >
           {badge}
         </code>
         {verifiedHere && (
           <span
-            className="flex items-center gap-1 text-[0.55rem] font-mono uppercase tracking-wider text-emerald-300/90"
+            className="flex items-center gap-1 text-[0.55rem] font-mono uppercase tracking-wider text-success-text/90"
             title="Reproduced against this deployment, not read out of a document"
           >
             <FlaskConical className="h-2.5 w-2.5" />

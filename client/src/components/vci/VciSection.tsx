@@ -147,7 +147,7 @@ function VciSection() {
             </div>
             {preAuthGrant && (
               <div className="space-y-3 pl-3 border-l-2 border-indigo-500/30">
-                <p className="text-xs text-indigo-300/60">Transaction code (tx_code) settings for pre-authorized code flow</p>
+                <p className="text-xs text-accent-text/60">Transaction code (tx_code) settings for pre-authorized code flow</p>
                 <Input label="Transaction Code (optional)" value={txCodeVal} onChange={(e) => setTxCodeVal(e.target.value)} placeholder="e.g. 123456" />
                 <Select label="Input Mode" options={[
                   { value: '', label: '(none)' },
@@ -207,7 +207,7 @@ function VciSection() {
               onFocus={handleTokenFocus} />
             <p className="text-xs text-muted-foreground">Request multiple credential types at once (OID4VCI §10). Each entry specifies the format and credential type.</p>
             <div className="p-2 rounded bg-indigo-500/8 border border-indigo-500/20">
-              <p className="text-xs text-indigo-300/70">
+              <p className="text-xs text-accent-text/70">
                 <strong>credential_requests</strong> format (OID4VCI):<br />
                 <code className="text-[0.6rem]">{'[{"format":"vc+sd-jwt","vct":"..."},{"format":"mso_mdoc","doctype":"..."}]'}</code>
               </p>
@@ -248,19 +248,19 @@ function VciSection() {
     <SectionPanel title="Verifiable Credential Issuance (OID4VCI)" description="Issue verifiable credentials via Authlete">
       {/* How VCI Works — Collapsible Guidance */}
       <details className="mb-5 p-3 rounded-lg bg-indigo-500/8 border border-indigo-500/20 group" open>
-        <summary className="text-xs text-indigo-300 font-medium cursor-pointer list-none flex items-center gap-2 select-none">
+        <summary className="text-xs text-accent-text font-medium cursor-pointer list-none flex items-center gap-2 select-none">
           <span className="text-xs opacity-60 group-open:opacity-100 transition-transform">▶</span>
           How VCI works — step-by-step guide
         </summary>
-        <div className="mt-3 space-y-3 text-xs text-indigo-200/70">
+        <div className="mt-3 space-y-3 text-xs text-accent-text/70">
           <p>
             OID4VCI lets a wallet app request signed digital credentials from this server.
             The server delegates credential issuance to Authlete. There are two flows:
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20">
-              <p className="font-medium text-indigo-200 mb-1">Flow A: Pre-Authorized Code</p>
-              <ol className="list-decimal ml-4 space-y-0.5 text-indigo-200/60">
+              <p className="font-medium text-accent-text mb-1">Flow A: Pre-Authorized Code</p>
+              <ol className="list-decimal ml-4 space-y-0.5 text-accent-text/60">
                 <li><strong>Discover</strong> — Check what credential types the server supports (Metadata tab)</li>
                 <li><strong>Create Offer</strong> (admin) — Create an offer with pre-authorized code grant</li>
                 <li>Copy the <code>preAuthorizedCode</code> from the offer response</li>
@@ -269,8 +269,8 @@ function VciSection() {
               </ol>
             </div>
             <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20">
-              <p className="font-medium text-indigo-200 mb-1">Flow B: Authorization Code</p>
-              <ol className="list-decimal ml-4 space-y-0.5 text-indigo-200/60">
+              <p className="font-medium text-accent-text mb-1">Flow B: Authorization Code</p>
+              <ol className="list-decimal ml-4 space-y-0.5 text-accent-text/60">
                 <li><strong>Discover</strong> — Check supported credential types</li>
                 <li><strong>Create Offer</strong> (admin) — Create an offer with authorization code grant</li>
                 <li><strong>Get Token</strong> — Go to Auth Flows → Authorization Code, log in, get tokens</li>

@@ -67,7 +67,7 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
             className={cn(
               'flex items-center gap-1.5 px-2 py-1 rounded-md border cursor-pointer transition-colors',
               traceOpen
-                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40'
+                ? 'bg-indigo-500/15 text-accent-text border-indigo-500/40'
                 : 'bg-muted/50 text-muted-foreground border-transparent hover:text-foreground',
             )}
           >
@@ -76,7 +76,7 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
             {traces.length > 0 && (
               <span className="text-[0.65rem] font-mono tabular-nums">
                 {traces.length}
-                {failures > 0 && <span className="text-amber-400"> ·{failures}</span>}
+                {failures > 0 && <span className="text-warning-text"> ·{failures}</span>}
               </span>
             )}
           </button>
@@ -145,7 +145,7 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
                     className={cn(
                       'w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg text-left cursor-pointer border-none no-underline transition-colors',
                       activePath === section.path
-                        ? 'bg-indigo-500/10 text-indigo-300 font-medium'
+                        ? 'bg-indigo-500/10 text-accent-text font-medium'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
                     )}
                   >

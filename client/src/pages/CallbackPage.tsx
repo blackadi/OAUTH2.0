@@ -213,7 +213,7 @@ const CallbackPage = () => {
         {!state.loading && state.error && <ErrorExplainer error={state.error} />}
         {!state.loading && !state.error && state.tokenResponse && (
           <div className="space-y-4">
-            <p className="text-sm text-green-400">Successfully obtained tokens from the authorization server.</p>
+            <p className="text-sm text-success-text">Successfully obtained tokens from the authorization server.</p>
             <JsonBlock data={state.tokenResponse} label="Token Response" />
             {state.tokenResponse.id_token && (
               <JwtInspector token={state.tokenResponse.id_token} label="ID Token" defaultOpen />

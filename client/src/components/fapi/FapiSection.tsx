@@ -213,7 +213,7 @@ function FapiSection() {
 
   return (
     <SectionPanel title="FAPI 2.0 Security Profile" description="FAPI 2.0 Security Profile compliance and test flow with private_key_jwt client auth and DPoP sender-constrained tokens">
-      {!!error && <p className="text-xs text-red-400">{String(error)}</p>}
+      {!!error && <p className="text-xs text-danger-text">{String(error)}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
@@ -327,7 +327,7 @@ function FapiSection() {
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
-          {!!wizError && <p className="text-xs text-red-400">{String(wizError)}</p>}
+          {!!wizError && <p className="text-xs text-danger-text">{String(wizError)}</p>}
 
           <div>
             <h4 className="text-sm font-medium mb-3">Setup: Client Configuration</h4>
@@ -396,7 +396,7 @@ function FapiSection() {
               Call Userinfo with DPoP
             </Button>
             {!wizHasToken && (
-              <p className="text-xs text-amber-400 mt-1">
+              <p className="text-xs text-warning-text mt-1">
                 No access token found. Complete Step 2 first.
               </p>
             )}

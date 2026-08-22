@@ -32,6 +32,11 @@
   --accent-foreground: #ffffff;
   --border: #1e293b;
   --input: #0f172a;
+  --accent-text: #a5b4fc;
+  --success-text: #6ee7b7;
+  --warning-text: #fcd34d;
+  --danger-text: #f87171;
+  --info-text: #7dd3fc;
   --ring: #6366f1;
   --radius: 0.75rem;
   --sidebar-width: 14rem;
@@ -54,6 +59,11 @@
     --border: #d8dfe8;
     --input: #ffffff;
     --ring: #4f46e5;
+  --accent-text: #4338ca;
+    --success-text: #047857;
+    --warning-text: #a16207;
+    --danger-text: #b91c1c;
+    --info-text: #0369a1;
   }
 }
 
@@ -73,6 +83,11 @@
   --border: #d8dfe8;
   --input: #ffffff;
   --ring: #4f46e5;
+  --accent-text: #4338ca;
+  --success-text: #047857;
+  --warning-text: #a16207;
+  --danger-text: #b91c1c;
+  --info-text: #0369a1;
 }
 
 :root[data-theme="dark"] {
@@ -90,6 +105,11 @@
   --border: #1e293b;
   --input: #0f172a;
   --ring: #6366f1;
+  --accent-text: #a5b4fc;
+  --success-text: #6ee7b7;
+  --warning-text: #fcd34d;
+  --danger-text: #f87171;
+  --info-text: #7dd3fc;
 }
 
 
@@ -115,6 +135,11 @@
   --color-foreground-muted: var(--foreground-muted);
   --color-surface-2: var(--surface-2);
   --color-code: var(--code);
+  --color-accent-text: var(--accent-text);
+  --color-success-text: var(--success-text);
+  --color-warning-text: var(--warning-text);
+  --color-danger-text: var(--danger-text);
+  --color-info-text: var(--info-text);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-muted: var(--muted);

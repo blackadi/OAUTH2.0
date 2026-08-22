@@ -35,13 +35,13 @@ function Sidebar({ groups, header }: SidebarProps) {
                   className={cn(
                     'w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-left cursor-pointer border-none no-underline',
                     activePath === section.path
-                      ? 'bg-indigo-500/10 text-indigo-300 font-medium shadow-sm shadow-indigo-500/5'
+                      ? 'bg-indigo-500/10 text-accent-text font-medium shadow-sm shadow-indigo-500/5'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
                   )}
                 >
                   <span className={cn(
                     'shrink-0',
-                    activePath === section.path ? 'text-indigo-400' : 'text-muted-foreground',
+                    activePath === section.path ? 'text-accent-text' : 'text-muted-foreground',
                   )}>
                     {section.icon}
                   </span>

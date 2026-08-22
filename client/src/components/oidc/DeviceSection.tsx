@@ -275,7 +275,7 @@ function DeviceSection() {
       ) : null}
 
       {activeOp === 'poll' && pollError && !polling && (
-        <div className="mt-3 rounded-md bg-red-500/10 p-3 text-xs text-red-400">
+        <div className="mt-3 rounded-md bg-red-500/10 p-3 text-xs text-danger-text">
           {pollError}
         </div>
       )}

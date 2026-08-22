@@ -38,8 +38,8 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
               <div
                 className={cn(
                   'flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all duration-300',
-                  isCompleted && 'bg-green-500/20 text-green-400 border-2 border-green-500/50',
-                  isCurrent && 'bg-indigo-500/20 text-indigo-300 border-2 border-indigo-500 ring-2 ring-indigo-500/20',
+                  isCompleted && 'bg-green-500/20 text-success-text border-2 border-green-500/50',
+                  isCurrent && 'bg-indigo-500/20 text-accent-text border-2 border-indigo-500 ring-2 ring-indigo-500/20',
                   isPending && 'bg-muted/30 text-muted-foreground border-2 border-border',
                 )}
               >
@@ -52,8 +52,8 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
               <span
                 className={cn(
                   'text-[0.6rem] font-medium text-center leading-tight px-1',
-                  isCompleted && 'text-green-400',
-                  isCurrent && 'text-indigo-300',
+                  isCompleted && 'text-success-text',
+                  isCurrent && 'text-accent-text',
                   isPending && 'text-muted-foreground/60',
                 )}
               >
@@ -65,7 +65,7 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
                 <ArrowRight
                   className={cn(
                     'h-3 w-3',
-                    isCompleted ? 'text-green-500/50' : 'text-border',
+                    isCompleted ? 'text-success-text/50' : 'text-border',
                   )}
                 />
               </div>

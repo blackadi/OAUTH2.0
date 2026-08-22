@@ -223,7 +223,7 @@ function CibaSection() {
               <JsonBlock data={pollResult} label="Token Response" />
             </div>
           )}
-          {pollError && <p className="text-xs text-amber-400">{pollError}</p>}
+          {pollError && <p className="text-xs text-warning-text">{pollError}</p>}
         </div>
       )}
 

@@ -152,4 +152,11 @@ jobs:
       - run: npm run check:codes
       - run: npm run check:docs
 
+      # Added 2026-08-22. The light theme shipped compiling but unusable: 25 of 26 accent colours
+      # failed WCAG AA against every light surface — `text-amber-200` at 1.25:1 — because they were
+      # chosen against a near-black ground and inherited unchanged when the second palette arrived.
+      # Nothing could see it, because a colour that fails contrast is still a valid colour. This reads
+      # the real oklch values out of the built stylesheet and scores both themes.
+      - run: npm run check:contrast
+
       - run: npm run build

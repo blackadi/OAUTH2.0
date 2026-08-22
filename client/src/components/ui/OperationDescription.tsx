@@ -16,8 +16,8 @@ function OperationDescription({ doc, className }: OperationDescriptionProps) {
         className,
       )}
     >
-      <Info className="h-4 w-4 text-indigo-400 mt-0.5 shrink-0" />
-      <span className="text-xs text-indigo-200 leading-relaxed flex-1">{doc.description}</span>
+      <Info className="h-4 w-4 text-accent-text mt-0.5 shrink-0" />
+      <span className="text-xs text-accent-text leading-relaxed flex-1">{doc.description}</span>
       <HelpPopover
         title={doc.title}
         description={doc.description}

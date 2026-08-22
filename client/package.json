@@ -15,6 +15,7 @@
     "check:theme": "node ../scripts/check-theme-tokens.mjs",
     "check:codes": "node ../scripts/extract-authlete-codes.mjs --check",
     "check:docs": "node ../scripts/check-client-docs.mjs",
+    "check:contrast": "npm run build && node ../scripts/check-contrast.mjs",
     "format": "prettier --check src/",
     "format:fix": "prettier --write src/",
     "test": "vitest run",

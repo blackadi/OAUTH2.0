@@ -78,10 +78,10 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
     return (
       <div className={cn('rounded-lg border border-amber-500/30 bg-amber-500/5 p-3', className)}>
         <div className="flex gap-2 items-start">
-          <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+          <AlertTriangle className="h-4 w-4 text-warning-text mt-0.5 shrink-0" />
           <div className="min-w-0">
-            <p className="text-xs font-medium text-amber-200">Not a decodable JWT</p>
-            <p className="text-[0.7rem] text-amber-300/80 mt-0.5">{decoded.error}</p>
+            <p className="text-xs font-medium text-warning-text">Not a decodable JWT</p>
+            <p className="text-[0.7rem] text-warning-text/80 mt-0.5">{decoded.error}</p>
             <p className="text-[0.65rem] text-muted-foreground mt-1.5">
               An opaque access token is normal and not a defect — only some deployments issue JWTs
               here.
@@ -101,7 +101,7 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
     <div className={cn('rounded-lg border border-border overflow-hidden', className)}>
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 flex-wrap">
         {label && <span className="text-xs font-semibold text-foreground">{label}</span>}
-        <span className="text-[0.6rem] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">
+        <span className="text-[0.6rem] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-accent-text">
           {alg}
         </span>
         {typ && (
@@ -114,10 +114,10 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
             className={cn(
               'flex items-center gap-1 text-[0.6rem] font-mono px-1.5 py-0.5 rounded',
               exp.delta <= 0
-                ? 'bg-red-500/15 text-red-300'
+                ? 'bg-red-500/15 text-danger-text'
                 : exp.delta < 300
-                  ? 'bg-amber-500/15 text-amber-300'
-                  : 'bg-emerald-500/15 text-emerald-300',
+                  ? 'bg-amber-500/15 text-warning-text'
+                  : 'bg-emerald-500/15 text-success-text',
             )}
             title={exp.iso}
           >
@@ -143,7 +143,7 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
       </div>
 
       {verifyError && (
-        <p className="px-3 py-2 text-[0.7rem] text-amber-300 bg-amber-500/5 border-b border-amber-500/20">
+        <p className="px-3 py-2 text-[0.7rem] text-warning-text bg-amber-500/5 border-b border-amber-500/20">
           Could not check the signature: {verifyError}
         </p>
       )}
@@ -227,10 +227,10 @@ function VerificationBadge({
   }
   const tone =
     outcome.status === 'valid'
-      ? 'bg-emerald-500/15 text-emerald-300'
+      ? 'bg-emerald-500/15 text-success-text'
       : outcome.status === 'invalid'
-        ? 'bg-red-500/15 text-red-300'
-        : 'bg-amber-500/15 text-amber-300';
+        ? 'bg-red-500/15 text-danger-text'
+        : 'bg-amber-500/15 text-warning-text';
   const Icon = outcome.status === 'valid' ? ShieldCheck : outcome.status === 'invalid' ? ShieldX : ShieldQuestion;
   const text =
     outcome.status === 'valid'
@@ -268,7 +268,7 @@ function ClaimRow({ name, value }: { name: string; value: unknown }) {
 
   return (
     <div className="flex items-start gap-2 text-[0.7rem] py-0.5">
-      <code className="font-mono text-indigo-300 shrink-0 min-w-[7rem]">{name}</code>
+      <code className="font-mono text-accent-text shrink-0 min-w-[7rem]">{name}</code>
       <div className="min-w-0 flex-1">
         <span className="font-mono text-foreground break-all">
           {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}

@@ -224,7 +224,19 @@ docker compose up -d prometheus grafana
 - **Test framework**: Vitest, 38 files. **Re-measure rather than carry these numbers forward.** Coverage thresholds are enforced as a *ratchet* set just under what the suite achieves (utils 90%, services 75%, global ~57%), so it can only rise; `npm --prefix client run test:coverage` is the gate. Note what the suite is and is not: `sections.smoke.test.tsx` renders all 20 sections and `App.routes.test.tsx` drives the real router at all 20 routes, but both measure *reachability* — a section that mounts and offers an enabled control. Anything stronger belongs in a per-section test.
 - **Styling**: Tailwind CSS v4 via `styles/globals.css`. **Utilities come from `@theme`, not from `:root`** — declaring the values on `:root` alone generates nothing, which is how ~160 usages of `bg-card`, `border-border`, `text-muted-foreground` and friends compiled to nothing across 28 files while every gate stayed green. Two complete palettes, dark-first: `:root` is dark, a media query serves a system light preference, and `[data-theme]` lets the header toggle win in both directions. Inter + JetBrains Mono, custom scrollbar, grid background utility.
 
-  ⚠️ **The theme is verified structurally, not visually.** The palettes compile, both define the same token set, and `scripts/check-theme-tokens.mjs` gates both facts — but roughly 140 accent literals (`text-indigo-300`, `text-amber-300`, `text-emerald-300`) still assume a dark ground, and no one has looked at the light theme in a browser. Expect contrast problems there and treat light mode as unproven until someone does.
+  **Accent colours are semantic tokens, not shades, and that is not cosmetic.** `text-accent-text`,
+  `text-success-text`, `text-warning-text`, `text-danger-text` and `text-info-text` each carry a
+  per-theme value. The literals they replaced — `text-indigo-300`, `text-amber-300` and 149 others —
+  were chosen against a near-black ground and inherited unchanged when the light palette arrived, so
+  **25 of 26 failed WCAG AA against every light surface**, `text-amber-200` at 1.25:1. Nothing could
+  see that: a colour which fails contrast is still a perfectly valid colour, and every other gate was
+  green. `scripts/check-contrast.mjs` now scores both themes from the real oklch values in the built
+  stylesheet, and runs on every push. Shade nuance was deliberately collapsed into one token per role —
+  no single shade can encode emphasis on both a `#020617` and a `#ffffff` ground.
+
+  ⚠️ **Still not looked at.** Contrast is measured and passing in both themes; nobody has opened the
+  light theme in a browser. Layout, borders, translucent fills (`bg-indigo-500/10` on white) and focus
+  rings are outside what a contrast check can see. Treat those as unverified.
 
 ### Three client checks, and what each cannot see
 
@@ -232,6 +244,7 @@ docker compose up -d prometheus grafana
 node scripts/check-theme-tokens.mjs    # every semantic utility is mapped; both palettes define the same tokens
 node scripts/extract-authlete-codes.mjs --check   # the generated vendor code table still matches docs/openapi-spec.json
 node scripts/check-client-docs.mjs     # every getDoc key exists, every entry is reachable, README covers every section
+node scripts/check-contrast.mjs        # WCAG AA in BOTH themes, from the built stylesheet's real values
 ```
 
 All three run on every push. They exist because **every defect found in the 2026-08-21 client review was invisible to typecheck, lint, tests and build** — those four cannot see a class that does not exist, a screen that never renders, a doc entry nobody asks for, or a vendor table drifting from its source. The Authlete one is worth one further note: of the 38 result codes the vendor documents and the 25 this repo established by probing, **the overlap is zero** — a decoder built from the vendor document alone would explain nothing a developer actually hits.

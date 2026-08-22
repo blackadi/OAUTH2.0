@@ -89,13 +89,13 @@ function TokenOpsSection() {
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
       {!at && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-warning-text">
           <p className="font-medium">No access token available</p>
-          <p className="mt-1 text-xs text-amber-300/80">
+          <p className="mt-1 text-xs text-warning-text/80">
             Obtain a token first via the Grant Flows section (Authorization Code, Client Credentials, etc.), then return here.
           </p>
           <Link to="/auth-flows">
-            <Button variant="outline" size="sm" className="mt-2 border-amber-500/50 text-amber-200 hover:bg-amber-500/20">
+            <Button variant="outline" size="sm" className="mt-2 border-amber-500/50 text-warning-text hover:bg-amber-500/20">
               Go to Grant Flows
             </Button>
           </Link>
@@ -103,11 +103,11 @@ function TokenOpsSection() {
       )}
 
       {at && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-emerald-300">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-success-text">
           Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
           {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
               so it is stated rather than left to be discovered. */}
-          <span className="ml-2 text-emerald-200/80">
+          <span className="ml-2 text-success-text/80">
             {isDpopBound
               ? dpopKey
                 ? '· sender-constrained, so UserInfo is called with the DPoP scheme and a proof'
@@ -172,7 +172,7 @@ function TokenOpsSection() {
 
       {activeOp === 'introspect' && (
         <div className="space-y-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-          <p className="text-xs font-medium text-blue-300">RFC 9470 Step-Up Authentication Validation</p>
+          <p className="text-xs font-medium text-info-text">RFC 9470 Step-Up Authentication Validation</p>
           <Input
             label="ACR Values (space-separated)"
             value={introspectAcrValues}

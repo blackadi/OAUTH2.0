@@ -125,7 +125,7 @@ function HealthSection() {
               : 'Redis is not configured (REDIS_URL unset). Sessions use in-memory storage — they are lost when the server restarts.'}
           </p>
           {redis?.error && (
-            <p className="text-xs text-red-400">{redis.error}</p>
+            <p className="text-xs text-danger-text">{redis.error}</p>
           )}
         </div>
 
@@ -143,7 +143,7 @@ function HealthSection() {
           </Button>
         </div>
 
-        {authleteError && <p className="text-xs text-red-400">{authleteError}</p>}
+        {authleteError && <p className="text-xs text-danger-text">{authleteError}</p>}
 
         {authleteResult ? (
           <div>

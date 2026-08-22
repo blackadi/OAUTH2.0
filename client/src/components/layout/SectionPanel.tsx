@@ -19,7 +19,7 @@ function SectionPanel({ title, description, icon, children, className, actions, 
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             {icon && (
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/10 text-accent-text shrink-0">
                 {icon}
               </div>
             )}

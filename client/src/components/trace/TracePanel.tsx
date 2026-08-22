@@ -25,19 +25,19 @@ import { cn } from '@/utils/cn';
 /** Status classes carry meaning here, so they get colour — and it is separate from the indigo accent. */
 function statusTone(entry: TraceEntry): string {
   if (entry.status === 0) return 'bg-slate-500/15 text-foreground-muted border-border/30';
-  if (entry.status >= 500) return 'bg-red-500/15 text-red-300 border-red-500/30';
-  if (entry.status === 429) return 'bg-orange-500/15 text-orange-300 border-orange-500/30';
-  if (entry.status >= 400) return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
-  if (entry.status >= 300) return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
-  return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+  if (entry.status >= 500) return 'bg-red-500/15 text-danger-text border-red-500/30';
+  if (entry.status === 429) return 'bg-orange-500/15 text-warning-text border-orange-500/30';
+  if (entry.status >= 400) return 'bg-amber-500/15 text-warning-text border-amber-500/30';
+  if (entry.status >= 300) return 'bg-sky-500/15 text-info-text border-sky-500/30';
+  return 'bg-emerald-500/15 text-success-text border-emerald-500/30';
 }
 
 const METHOD_TONE: Record<string, string> = {
-  GET: 'text-emerald-400',
-  POST: 'text-sky-400',
-  PUT: 'text-orange-400',
-  PATCH: 'text-amber-400',
-  DELETE: 'text-red-400',
+  GET: 'text-success-text',
+  POST: 'text-info-text',
+  PUT: 'text-warning-text',
+  PATCH: 'text-warning-text',
+  DELETE: 'text-danger-text',
 };
 
 /**
@@ -66,7 +66,7 @@ function HeaderTable({ headers }: { headers: Record<string, string> }) {
     <div className="space-y-0.5">
       {names.map((name) => (
         <div key={name} className="flex gap-2 text-[0.7rem] font-mono">
-          <span className="text-indigo-400 shrink-0">{name}:</span>
+          <span className="text-accent-text shrink-0">{name}:</span>
           <span className="text-muted-foreground break-all">{headers[name]}</span>
         </div>
       ))}
@@ -140,7 +140,7 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
           </span>
         )}
         {notable.length > 0 && (
-          <span className="hidden lg:inline text-[0.6rem] font-mono text-amber-300/90 shrink-0">
+          <span className="hidden lg:inline text-[0.6rem] font-mono text-warning-text/90 shrink-0">
             {notable[0]}
           </span>
         )}
@@ -156,7 +156,7 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
               onClick={copyCurl}
               className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
             >
-              {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+              {copied ? <Check className="h-3 w-3 text-success-text" /> : <Copy className="h-3 w-3" />}
               {copied ? 'Copied' : reveal ? 'cURL (with secrets)' : 'cURL (redacted)'}
             </button>
             <button
@@ -185,7 +185,7 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
 
           {entry.networkError && (
             <div className="rounded border border-red-500/30 bg-red-500/5 px-2 py-1.5">
-              <p className="text-[0.7rem] text-red-300">
+              <p className="text-[0.7rem] text-danger-text">
                 No response received: {entry.networkError}
               </p>
             </div>
@@ -324,7 +324,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
       aria-label="Request trace"
     >
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 flex-wrap">
-        <Activity className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+        <Activity className="h-3.5 w-3.5 text-accent-text shrink-0" />
         <span className="text-xs font-semibold text-foreground shrink-0">Request Trace</span>
         <span className="text-[0.65rem] text-muted-foreground font-mono tabular-nums shrink-0">
           {visible.length}
@@ -350,7 +350,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
               className={cn(
                 'text-[0.65rem] px-2 py-1 rounded border cursor-pointer transition-colors capitalize',
                 view === v
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                  ? 'bg-indigo-500/20 text-accent-text border-indigo-500/40'
                   : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
               )}
             >
@@ -363,7 +363,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
           className={cn(
             'text-[0.65rem] px-2 py-1 rounded border cursor-pointer transition-colors shrink-0',
             failuresOnly
-              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+              ? 'bg-amber-500/20 text-warning-text border-amber-500/40'
               : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
           )}
         >
@@ -374,13 +374,13 @@ function TracePanel({ open, onClose }: TracePanelProps) {
           disabled={visible.length === 0}
           className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
         >
-          {exported ? <Check className="h-3 w-3 text-green-400" /> : <Download className="h-3 w-3" />}
+          {exported ? <Check className="h-3 w-3 text-success-text" /> : <Download className="h-3 w-3" />}
           {exported ? 'Copied' : 'Export'}
         </button>
         <button
           onClick={clearTraces}
           disabled={traces.length === 0}
-          className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-red-400 border-none cursor-pointer disabled:opacity-40 shrink-0"
+          className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-danger-text border-none cursor-pointer disabled:opacity-40 shrink-0"
         >
           <Trash2 className="h-3 w-3" />
           Clear

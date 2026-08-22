@@ -205,7 +205,7 @@ function ParSection() {
           </p>
           <p className="text-xs text-muted-foreground">
             Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp;
-            Auth URL: <a href={authUrl} className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">{authUrl}</a>
+            Auth URL: <a href={authUrl} className="text-info-text hover:underline" target="_blank" rel="noopener noreferrer">{authUrl}</a>
           </p>
         </div>
       )}

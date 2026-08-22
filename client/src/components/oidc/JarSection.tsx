@@ -156,7 +156,7 @@ function JarSection() {
       title="JWT Secured Authorization Requests (RFC 9101)"
       description="Build, sign, and test JWT-secured authorization requests (JAR). Generate an ES256 key pair, craft the JWT claims, sign the request object, and send it to Authlete for validation."
     >
-      {error && <p className="text-xs text-red-400">{String(error)}</p>}
+      {error && <p className="text-xs text-danger-text">{String(error)}</p>}
       {doc && <OperationDescription doc={doc} />}
 
       <Card>
@@ -181,7 +181,7 @@ function JarSection() {
           {keyPair && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-amber-400 mb-1">
+                <p className="text-xs text-warning-text mb-1">
                   Register this JWK Set in Authlete Console → Client → JWK Set Content
                 </p>
                 <Textarea

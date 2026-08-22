@@ -186,7 +186,7 @@ function RarSection() {
           placeholder='[{ "type": "payment_initiation", "actions": ["initiate", "status"], "locations": ["https://bank.example.com/payments"] }]'
           className={!isRarJsonValid && rarJson.trim() ? 'border-red-500' : ''} />
         {!isRarJsonValid && rarJson.trim() && (
-          <p className="text-xs text-red-400">Invalid JSON — must be an array of objects each with a "type" string field</p>
+          <p className="text-xs text-danger-text">Invalid JSON — must be an array of objects each with a "type" string field</p>
         )}
 
         <Input label="Redirect URI" value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} placeholder="http://localhost:3001/callback" />
@@ -259,7 +259,7 @@ function RarSection() {
                       <div>
                         <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Locations</span>
                         <ul className="list-disc list-inside text-foreground-muted mt-1">
-                          {(detail.locations as string[]).map((loc: string, j: number) => <li key={j}><code className="text-blue-400">{loc}</code></li>)}
+                          {(detail.locations as string[]).map((loc: string, j: number) => <li key={j}><code className="text-info-text">{loc}</code></li>)}
                         </ul>
                       </div>
                     )}
@@ -267,7 +267,7 @@ function RarSection() {
                       <div>
                         <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Actions</span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.actions as string[]).map((a: string, j: number) => <span key={j} className="px-2 py-0.5 bg-indigo-500/10 text-indigo-300 rounded text-[10px]">{a}</span>)}
+                          {(detail.actions as string[]).map((a: string, j: number) => <span key={j} className="px-2 py-0.5 bg-indigo-500/10 text-accent-text rounded text-[10px]">{a}</span>)}
                         </div>
                       </div>
                     )}
@@ -275,7 +275,7 @@ function RarSection() {
                       <div>
                         <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Data Types</span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.datatypes as string[]).map((d: string, j: number) => <span key={j} className="px-2 py-0.5 bg-blue-500/10 text-blue-300 rounded text-[10px]">{d}</span>)}
+                          {(detail.datatypes as string[]).map((d: string, j: number) => <span key={j} className="px-2 py-0.5 bg-blue-500/10 text-info-text rounded text-[10px]">{d}</span>)}
                         </div>
                       </div>
                     )}
@@ -289,7 +289,7 @@ function RarSection() {
                       <div>
                         <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Privileges</span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.privileges as string[]).map((p: string, j: number) => <span key={j} className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded text-[10px]">{p}</span>)}
+                          {(detail.privileges as string[]).map((p: string, j: number) => <span key={j} className="px-2 py-0.5 bg-amber-500/10 text-warning-text rounded text-[10px]">{p}</span>)}
                         </div>
                       </div>
                     )}
