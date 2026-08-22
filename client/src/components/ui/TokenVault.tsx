@@ -84,7 +84,7 @@ function TokenVault() {
                     </div>
                     <div className={cn(
                       'font-mono text-[0.65rem] leading-relaxed text-muted-foreground break-all',
-                      'bg-slate-950/50 rounded-md p-2 border border-border/30',
+                      'bg-code/50 rounded-md p-2 border border-border/30',
                     )}>
                       {entry.value.length > 100
                         ? `${entry.value.slice(0, 100)}…`

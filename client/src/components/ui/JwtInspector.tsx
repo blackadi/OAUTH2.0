@@ -168,7 +168,7 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
 
           <section>
             <SectionLabel>Signature</SectionLabel>
-            <p className="text-[0.7rem] font-mono text-muted-foreground break-all bg-slate-950/50 rounded p-2 border border-border/40">
+            <p className="text-[0.7rem] font-mono text-muted-foreground break-all bg-code/50 rounded p-2 border border-border/40">
               {signature}
             </p>
           </section>

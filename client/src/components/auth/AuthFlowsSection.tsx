@@ -5,6 +5,8 @@ import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { generateKeyPair } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
+import { useTraces } from '@/hooks/useTraces';
+import { authorizationCodeProgress, twoStepProgress } from '@/utils/flow-progress';
 import { TabBar } from '@/components/ui/TabBar';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -19,7 +21,7 @@ import { AuthorizeRequestBuilder } from './AuthorizeRequestBuilder';
 import { getDoc } from '@/data/operationDocs';
 import { KeyRound, ArrowRightLeft, LogIn, RefreshCw, FileText } from 'lucide-react';
 import type { TokenResponse } from '@/types';
-import { SESSION_KEYS, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
+import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
 
 type GrantType = 'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
 
@@ -107,6 +109,28 @@ const AuthFlowsSection: React.FC = () => {
   const [jwtScope, setJwtScope] = useState(DEFAULT_SCOPES);
 
   const doc = getDoc('auth-flows', grantType);
+
+  /**
+   * Progress read out of the request trace rather than tracked in state.
+   *
+   * `FlowDiagram` has always supported `completedSteps` and no call site ever passed one, so every step
+   * was drawn pending and the diagram jumped straight to the last once a token existed. Deriving it from
+   * the traffic means the diagram cannot claim a step that produced no request, and it survives the
+   * authorization redirect — which takes the user out of this page entirely and brings them back.
+   */
+  const traces = useTraces();
+  const progress = useMemo(() => {
+    const hasToken = Boolean(displayResult);
+    if (grantType === 'authorization_code') {
+      return authorizationCodeProgress({
+        traces,
+        hasToken,
+        codeReceived: Boolean(readKey(SESSION_KEYS.pkceVerifier)) && hasToken,
+        authorizeSent: Boolean(readKey(SESSION_KEYS.oauthState)),
+      });
+    }
+    return twoStepProgress({ traces, hasToken }, flowSteps[grantType][0].id);
+  }, [traces, displayResult, grantType]);
 
   const saveClientCredentials = (clientId: string, clientSecret: string) => {
     writeKey(SESSION_KEYS.activeClientId, clientId);
@@ -240,7 +264,8 @@ const AuthFlowsSection: React.FC = () => {
 
         <FlowDiagram
           steps={flowSteps[grantType]}
-          currentStep={displayResult ? 'token' : undefined}
+          currentStep={progress.currentStep}
+          completedSteps={progress.completedSteps}
           className="py-2"
         />
 

@@ -9,6 +9,7 @@ import {
 import { toCurl } from '@/utils/curl';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
+import { SequenceView } from './SequenceView';
 import { cn } from '@/utils/cn';
 
 /**
@@ -23,7 +24,7 @@ import { cn } from '@/utils/cn';
 
 /** Status classes carry meaning here, so they get colour — and it is separate from the indigo accent. */
 function statusTone(entry: TraceEntry): string {
-  if (entry.status === 0) return 'bg-slate-500/15 text-slate-300 border-slate-500/30';
+  if (entry.status === 0) return 'bg-slate-500/15 text-foreground-muted border-border/30';
   if (entry.status >= 500) return 'bg-red-500/15 text-red-300 border-red-500/30';
   if (entry.status === 429) return 'bg-orange-500/15 text-orange-300 border-orange-500/30';
   if (entry.status >= 400) return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
@@ -73,8 +74,8 @@ function HeaderTable({ headers }: { headers: Record<string, string> }) {
   );
 }
 
-function TraceRow({ entry }: { entry: TraceEntry }) {
-  const [open, setOpen] = useState(false);
+function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean }) {
+  const [open, setOpen] = useState(Boolean(forceOpen));
   const [reveal, setReveal] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -149,7 +150,7 @@ function TraceRow({ entry }: { entry: TraceEntry }) {
       </button>
 
       {open && (
-        <div className="px-3 pb-3 pt-1 space-y-3 bg-slate-950/40">
+        <div className="px-3 pb-3 pt-1 space-y-3 bg-code/40">
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={copyCurl}
@@ -197,7 +198,7 @@ function TraceRow({ entry }: { entry: TraceEntry }) {
               </p>
               <HeaderTable headers={requestHeaders} />
               {requestBody && (
-                <pre className="text-[0.7rem] font-mono text-muted-foreground bg-slate-950/60 border border-border/40 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
+                <pre className="text-[0.7rem] font-mono text-muted-foreground bg-code/60 border border-border/40 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
                   {requestBody}
                 </pre>
               )}
@@ -280,6 +281,14 @@ function TracePanel({ open, onClose }: TracePanelProps) {
   const [filter, setFilter] = useState('');
   const [failuresOnly, setFailuresOnly] = useState(false);
   const [exported, setExported] = useState(false);
+  const [view, setView] = useState<'timeline' | 'sequence'>('timeline');
+  /**
+   * Which request the sequence view sent us to.
+   *
+   * Clicking an arrow switches to the timeline and opens that row — the connection between the diagram
+   * and the real traffic is the whole point, and a diagram you cannot click through is just a picture.
+   */
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -330,6 +339,25 @@ function TracePanel({ open, onClose }: TracePanelProps) {
           className="ml-2 flex-1 min-w-[8rem] h-7 rounded-md border border-border bg-input px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
 
+        {/* Two views of the same capture: a list, and the conversation it describes. */}
+        <div className="flex gap-0.5 shrink-0" role="tablist" aria-label="Trace view">
+          {(['timeline', 'sequence'] as const).map((v) => (
+            <button
+              key={v}
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
+              className={cn(
+                'text-[0.65rem] px-2 py-1 rounded border cursor-pointer transition-colors capitalize',
+                view === v
+                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                  : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
+              )}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => setFailuresOnly((f) => !f)}
           className={cn(
@@ -367,14 +395,32 @@ function TracePanel({ open, onClose }: TracePanelProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {visible.length === 0 ? (
+        {view === 'sequence' ? (
+          <SequenceView
+            traces={visible}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setView('timeline');
+            }}
+          />
+        ) : visible.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-8">
             {traces.length === 0
               ? 'No requests yet. Run an operation and every call will appear here.'
               : 'No requests match this filter.'}
           </p>
         ) : (
-          visible.map((entry) => <TraceRow key={entry.id} entry={entry} />)
+          visible.map((entry) => (
+            <TraceRow
+              // The key carries the selection, so a row that is already mounted remounts when it
+              // becomes the selected one — `forceOpen` is an initial state, and without this it would
+              // only work for rows that happened not to be on screen yet.
+              key={`${entry.id}:${entry.id === selectedId}`}
+              entry={entry}
+              forceOpen={entry.id === selectedId}
+            />
+          ))
         )}
       </div>
     </div>

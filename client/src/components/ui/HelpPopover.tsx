@@ -149,15 +149,15 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
           aria-label={title}
           style={{ position: 'fixed', top, left, width }}
           className={cn(
-            'z-[9999] bg-slate-800 border border-slate-700 rounded-lg shadow-xl text-xs text-slate-200',
+            'z-[9999] bg-surface-2 border border-border rounded-lg shadow-xl text-xs text-foreground',
             placement === 'top' && 'origin-bottom',
           )}
         >
-          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border">
             <strong className="text-sm">{title}</strong>
             <button
               onClick={close}
-              className="bg-transparent border-none text-slate-400 hover:text-red-400 cursor-pointer p-0.5"
+              className="bg-transparent border-none text-muted-foreground hover:text-red-400 cursor-pointer p-0.5"
               aria-label="Close help"
             >
               <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -167,12 +167,12 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
             <p className="m-0 leading-relaxed">{description}</p>
             {params && params.length > 0 && (
               <div className="flex flex-col gap-1">
-                <strong className="text-xs text-slate-400 uppercase tracking-wider">Parameters</strong>
+                <strong className="text-xs text-muted-foreground uppercase tracking-wider">Parameters</strong>
                 <div className="flex flex-col gap-1">
                   {params.map((p, i) => (
                     <div key={i} className="flex flex-col gap-0.5">
                       <code className="text-xs text-indigo-300 bg-indigo-500/10 px-1 py-0.5 rounded">{p.name}</code>
-                      <span className="text-xs text-slate-300">{p.desc}</span>
+                      <span className="text-xs text-foreground-muted">{p.desc}</span>
                     </div>
                   ))}
                 </div>
@@ -180,14 +180,14 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
             )}
             {returns && (
               <div className="flex flex-col gap-1">
-                <strong className="text-xs text-slate-400 uppercase tracking-wider">Returns</strong>
-                <p className="m-0 text-xs text-slate-300">{returns}</p>
+                <strong className="text-xs text-muted-foreground uppercase tracking-wider">Returns</strong>
+                <p className="m-0 text-xs text-foreground-muted">{returns}</p>
               </div>
             )}
             {tips && (
-              <div className="flex flex-col gap-1 border-t border-slate-700 pt-2">
-                <strong className="text-xs text-slate-400 uppercase tracking-wider">Tips</strong>
-                <p className="m-0 text-xs text-slate-300">{tips}</p>
+              <div className="flex flex-col gap-1 border-t border-border pt-2">
+                <strong className="text-xs text-muted-foreground uppercase tracking-wider">Tips</strong>
+                <p className="m-0 text-xs text-foreground-muted">{tips}</p>
               </div>
             )}
           </div>

@@ -33,10 +33,10 @@ export default defineConfig({
        * and its smoke test asserts that it mounts and offers a control rather than driving every branch.
        */
       thresholds: {
-        statements: 55,
-        branches: 50,
-        functions: 43,
-        lines: 56,
+        statements: 57,
+        branches: 52,
+        functions: 45,
+        lines: 58,
         'src/utils/**': { statements: 90, branches: 80, functions: 95, lines: 90 },
         'src/services/**': { statements: 75, branches: 70, functions: 70, lines: 75 },
       },

@@ -164,7 +164,7 @@ function JarSection() {
           <CardTitle>1. Key Management</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Generate an ES256 (ECDSA P-256) key pair. The public key must be registered in the Authlete Console
             under Client → JWK Set for Authlete to validate the JWT signature.
           </p>
@@ -205,12 +205,12 @@ function JarSection() {
           <CardTitle>2. Build & Sign JWT</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-slate-400">
-            Edit the JWT claims below. Required claims: <code className="text-slate-300">iss</code> (client ID),
-            <code className="text-slate-300"> aud</code> (Authlete service issuer URL),
-            <code className="text-slate-300"> response_type</code>, <code className="text-slate-300"> client_id</code>,
-            <code className="text-slate-300"> redirect_uri</code>. Include <code className="text-slate-300">exp</code>,
-            <code className="text-slate-300"> nbf</code>, <code className="text-slate-300"> jti</code> for replay protection.
+          <p className="text-xs text-muted-foreground">
+            Edit the JWT claims below. Required claims: <code className="text-foreground-muted">iss</code> (client ID),
+            <code className="text-foreground-muted"> aud</code> (Authlete service issuer URL),
+            <code className="text-foreground-muted"> response_type</code>, <code className="text-foreground-muted"> client_id</code>,
+            <code className="text-foreground-muted"> redirect_uri</code>. Include <code className="text-foreground-muted">exp</code>,
+            <code className="text-foreground-muted"> nbf</code>, <code className="text-foreground-muted"> jti</code> for replay protection.
           </p>
           <Textarea
             label="JWT Claims (JSON)"
@@ -237,10 +237,10 @@ function JarSection() {
           <CardTitle>3. Process JAR</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Send the signed request object to Authlete for validation. The response includes
-            <code className="text-slate-300"> action</code>, <code className="text-slate-300"> ticket</code>,
-            and the decoded <code className="text-slate-300"> requestObjectPayload</code>.
+            <code className="text-foreground-muted"> action</code>, <code className="text-foreground-muted"> ticket</code>,
+            and the decoded <code className="text-foreground-muted"> requestObjectPayload</code>.
           </p>
           <Input
             label="Client ID"

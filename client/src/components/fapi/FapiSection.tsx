@@ -268,7 +268,7 @@ function FapiSection() {
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>DPoP Key Utilities</CardTitle>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Standalone DPoP proof generation for testing with any endpoint. For the full FAPI flow, use the wizard below.
           </p>
         </CardHeader>
@@ -286,7 +286,7 @@ function FapiSection() {
                 <JsonBlock data={{ ...keyPair.privateKey, d: '***present***' }} label="Private Key (JWK, redacted)" />
               </div>
 
-              <div className="border-t border-slate-800 pt-4">
+              <div className="border-t border-border pt-4">
                 <h4 className="text-sm font-medium mb-3">Create DPoP Proof</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input label="HTTP Method (htm)" value={proofHtm} onChange={(e) => setProofHtm(e.target.value)} placeholder="POST" />
@@ -322,8 +322,8 @@ function FapiSection() {
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>FAPI 2.0 SP Test Flow</CardTitle>
-          <p className="text-xs text-slate-400 mt-1">
-            Demonstrates a FAPI 2.0 Security Profile authorization code flow with <code className="text-slate-300">private_key_jwt</code> client authentication and DPoP sender-constrained tokens. Requires a client configured with <code className="text-slate-300">PRIVATE_KEY_JWT</code> token auth method in Authlete Console.
+          <p className="text-xs text-muted-foreground mt-1">
+            Demonstrates a FAPI 2.0 Security Profile authorization code flow with <code className="text-foreground-muted">private_key_jwt</code> client authentication and DPoP sender-constrained tokens. Requires a client configured with <code className="text-foreground-muted">PRIVATE_KEY_JWT</code> token auth method in Authlete Console.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -336,8 +336,8 @@ function FapiSection() {
               <Input label="Redirect URI" value={wizRedirectUri} onChange={(e) => setWizRedirectUri(e.target.value)} placeholder="http://localhost:3001/callback" />
               <Input label="Scopes (incl. fapi2=sp scope)" value={wizScopes} onChange={(e) => setWizScopes(e.target.value)} placeholder="fapi_scope openid" />
             </div>
-            <p className="text-xs text-slate-500 mb-3">
-              Make sure your Authlete service has a scope with the <code className="text-slate-400">fapi2=sp</code> attribute and your client uses <code className="text-slate-400">PRIVATE_KEY_JWT</code> auth method.
+            <p className="text-xs text-muted-foreground/70 mb-3">
+              Make sure your Authlete service has a scope with the <code className="text-muted-foreground">fapi2=sp</code> attribute and your client uses <code className="text-muted-foreground">PRIVATE_KEY_JWT</code> auth method.
             </p>
             <div className="flex gap-2">
               <Button onClick={handleWizGenerateSigningKey} loading={wizLoading === 'setup'} size="sm" disabled={!!wizSigningKey}>
@@ -350,7 +350,7 @@ function FapiSection() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
               {wizSigningKey && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">
+                  <p className="text-xs text-muted-foreground mb-1">
                     Register this JWK in Authlete Console → Client → JWK Set. Delete any existing key.
                   </p>
                   <Textarea label="Client Auth Public Key (JWK Set)" rows={6} value={getJwkSetDisplay(wizSigningKey.publicKey)} readOnly />
@@ -362,10 +362,10 @@ function FapiSection() {
             </div>
           </div>
 
-          <div className={`border-t border-slate-800 pt-4 ${!wizDpopKeyPair || !wizSigningKey ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className={`border-t border-border pt-4 ${!wizDpopKeyPair || !wizSigningKey ? 'opacity-50 pointer-events-none' : ''}`}>
             <h4 className="text-sm font-medium mb-2">Step 1: Push Authorization Request (PAR)</h4>
-            <p className="text-xs text-slate-400 mb-2">
-              Pushes authorization parameters with a <code className="text-slate-300">private_key_jwt</code> client assertion and DPoP proof. Also generates PKCE challenge and state.
+            <p className="text-xs text-muted-foreground mb-2">
+              Pushes authorization parameters with a <code className="text-foreground-muted">private_key_jwt</code> client assertion and DPoP proof. Also generates PKCE challenge and state.
             </p>
             <Button onClick={handleWizPar} loading={wizLoading === 'par'} size="sm" disabled={!wizDpopKeyPair || !wizSigningKey}>
               Push PAR
@@ -377,20 +377,20 @@ function FapiSection() {
             )}
           </div>
 
-          <div className={`border-t border-slate-800 pt-4 ${!wizParResult ? 'opacity-50 pointer-events-none' : ''}`}>
+          <div className={`border-t border-border pt-4 ${!wizParResult ? 'opacity-50 pointer-events-none' : ''}`}>
             <h4 className="text-sm font-medium mb-2">Step 2: Authorize</h4>
-            <p className="text-xs text-slate-400 mb-2">
-              Opens the authorization page. After login + consent, you are redirected to the callback page where the code is exchanged for tokens using <code className="text-slate-300">private_key_jwt</code> + DPoP. Navigate back here for Step 3.
+            <p className="text-xs text-muted-foreground mb-2">
+              Opens the authorization page. After login + consent, you are redirected to the callback page where the code is exchanged for tokens using <code className="text-foreground-muted">private_key_jwt</code> + DPoP. Navigate back here for Step 3.
             </p>
             <Button onClick={handleWizAuthorize} size="sm" variant="secondary" disabled={!wizParResult}>
               Open Authorize Page
             </Button>
           </div>
 
-          <div className={`border-t border-slate-800 pt-4`}>
+          <div className={`border-t border-border pt-4`}>
             <h4 className="text-sm font-medium mb-2">Step 3: Call Userinfo with DPoP</h4>
-            <p className="text-xs text-slate-400 mb-2">
-              Uses the stored DPoP key and access token from the callback. The DPoP proof includes the <code className="text-slate-300">ath</code> claim (hash of the access token).
+            <p className="text-xs text-muted-foreground mb-2">
+              Uses the stored DPoP key and access token from the callback. The DPoP proof includes the <code className="text-foreground-muted">ath</code> claim (hash of the access token).
             </p>
             <Button onClick={handleWizUserinfo} loading={wizLoading === 'userinfo'} size="sm" disabled={!wizHasToken}>
               Call Userinfo with DPoP

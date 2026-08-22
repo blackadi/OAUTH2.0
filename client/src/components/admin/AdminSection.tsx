@@ -157,7 +157,7 @@ function AdminSection() {
           <Input label="Audience (aud)" value={localAud} onChange={(e) => setLocalAud(e.target.value)} placeholder="Target audience" />
           <Input label="Client ID (client_id)" value={localClientId} onChange={(e) => setLocalClientId(e.target.value)} placeholder="Client the token was issued to" />
           <Input label="Scope (optional)" value={localScope} onChange={(e) => setLocalScope(e.target.value)} placeholder="e.g. openid profile" />
-          <p className="text-xs text-slate-400 -mt-1">
+          <p className="text-xs text-muted-foreground -mt-1">
             The token is a worked example of <strong>RFC 9068 §2</strong>: <code>typ: at+jwt</code> plus the
             seven claims §2.2 marks REQUIRED, which is why <code>client_id</code> is not optional here.
             <code>scope</code> is a §2.2.3 SHOULD and is omitted from the token when left blank. Development

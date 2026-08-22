@@ -83,7 +83,7 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         </div>
       )}
       {body && (
-        <pre className="px-3 py-2 text-[0.7rem] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all max-h-32 bg-slate-950/50">
+        <pre className="px-3 py-2 text-[0.7rem] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all max-h-32 bg-code/50">
           {body}
         </pre>
       )}

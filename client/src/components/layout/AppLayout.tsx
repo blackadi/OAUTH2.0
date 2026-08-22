@@ -2,11 +2,12 @@ import { useState, Suspense } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from './ErrorBoundary';
-import { Menu, X, Bug, Activity } from 'lucide-react';
+import { Menu, X, Bug, Activity, Sun, Moon, MonitorCog } from 'lucide-react';
 import { SpinnerPage } from '@/components/ui/Spinner';
 import { cn } from '@/utils/cn';
 import { useServerStatus } from '@/hooks/useServerStatus';
 import { useTraces } from '@/hooks/useTraces';
+import { useTheme } from '@/hooks/useTheme';
 import { TracePanel } from '@/components/trace/TracePanel';
 import type { SectionGroup } from '@/App';
 
@@ -19,6 +20,7 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
   const traces = useTraces();
+  const { choice: themeChoice, resolved: themeResolved, cycle: cycleTheme } = useTheme();
   const failures = traces.filter((t) => !t.ok).length;
   const navigate = useNavigate();
   const location = useLocation();
@@ -77,6 +79,32 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
                 {failures > 0 && <span className="text-amber-400"> ·{failures}</span>}
               </span>
             )}
+          </button>
+          {/* One button cycling system → dark → light, labelled with what it will do next rather than
+              with what is currently showing — a control that names its own state leaves you guessing
+              what pressing it achieves. */}
+          <button
+            onClick={cycleTheme}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
+            title={
+              themeChoice === 'system'
+                ? `Following the system (${themeResolved}). Click for dark.`
+                : themeChoice === 'dark'
+                  ? 'Dark. Click for light.'
+                  : 'Light. Click to follow the system.'
+            }
+            aria-label={`Theme: ${themeChoice}. Change theme.`}
+          >
+            {themeChoice === 'system' ? (
+              <MonitorCog className="h-3 w-3" />
+            ) : themeChoice === 'dark' ? (
+              <Moon className="h-3 w-3" />
+            ) : (
+              <Sun className="h-3 w-3" />
+            )}
+            <span className="text-[0.65rem] font-medium uppercase tracking-wider hidden sm:inline">
+              {themeChoice}
+            </span>
           </button>
           <div
             className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50"

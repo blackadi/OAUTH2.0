@@ -200,7 +200,7 @@ function RarSection() {
 
         <div className="flex gap-2 flex-wrap">
           <Button variant="secondary" onClick={handleGeneratePkce} size="sm">Generate PKCE + State</Button>
-          {pkceVerifier && <span className="text-xs text-slate-400 self-center truncate max-w-[200px]" title={pkceVerifier}>verifier: {pkceVerifier.slice(0, 20)}...</span>}
+          {pkceVerifier && <span className="text-xs text-muted-foreground self-center truncate max-w-[200px]" title={pkceVerifier}>verifier: {pkceVerifier.slice(0, 20)}...</span>}
         </div>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -232,9 +232,9 @@ function RarSection() {
 
       {parResult && !usePar && <JsonBlock data={parResult} label="Response" />}
       {parResult?.request_uri && (
-        <div className="mt-4 p-3 bg-slate-800 rounded-lg border border-slate-700 space-y-2">
-          <p className="text-xs text-slate-300 font-mono break-all">
-            <span className="text-slate-500">request_uri: </span>
+        <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
+          <p className="text-xs text-foreground-muted font-mono break-all">
+            <span className="text-muted-foreground/70">request_uri: </span>
             {parResult.request_uri}
           </p>
         </div>
@@ -250,22 +250,22 @@ function RarSection() {
           <CardContent>
             <div className="space-y-3">
               {(parsedPreview as Array<Record<string, unknown>>).map((detail, i) => (
-                <div key={i} className="border border-slate-700 rounded-lg overflow-hidden">
-                  <div className="bg-slate-800/50 px-3 py-2 border-b border-slate-700 flex items-center gap-2">
+                <div key={i} className="border border-border rounded-lg overflow-hidden">
+                  <div className="bg-surface-2/50 px-3 py-2 border-b border-border flex items-center gap-2">
                     <Badge>{detail.type as string}</Badge>
                   </div>
                   <div className="px-3 py-2 space-y-2 text-xs">
                     {!!detail.locations && Array.isArray(detail.locations) && (
                       <div>
-                        <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Locations</span>
-                        <ul className="list-disc list-inside text-slate-300 mt-1">
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Locations</span>
+                        <ul className="list-disc list-inside text-foreground-muted mt-1">
                           {(detail.locations as string[]).map((loc: string, j: number) => <li key={j}><code className="text-blue-400">{loc}</code></li>)}
                         </ul>
                       </div>
                     )}
                     {!!detail.actions && Array.isArray(detail.actions) && (
                       <div>
-                        <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Actions</span>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Actions</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.actions as string[]).map((a: string, j: number) => <span key={j} className="px-2 py-0.5 bg-indigo-500/10 text-indigo-300 rounded text-[10px]">{a}</span>)}
                         </div>
@@ -273,7 +273,7 @@ function RarSection() {
                     )}
                     {!!detail.datatypes && Array.isArray(detail.datatypes) && (
                       <div>
-                        <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Data Types</span>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Data Types</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.datatypes as string[]).map((d: string, j: number) => <span key={j} className="px-2 py-0.5 bg-blue-500/10 text-blue-300 rounded text-[10px]">{d}</span>)}
                         </div>
@@ -281,13 +281,13 @@ function RarSection() {
                     )}
                     {!!detail.identifier && (
                       <div>
-                        <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Identifier</span>
-                        <p className="text-slate-300 mt-1 font-mono">{detail.identifier as string}</p>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Identifier</span>
+                        <p className="text-foreground-muted mt-1 font-mono">{detail.identifier as string}</p>
                       </div>
                     )}
                     {!!detail.privileges && Array.isArray(detail.privileges) && (
                       <div>
-                        <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Privileges</span>
+                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">Privileges</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.privileges as string[]).map((p: string, j: number) => <span key={j} className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded text-[10px]">{p}</span>)}
                         </div>

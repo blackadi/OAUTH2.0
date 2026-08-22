@@ -159,7 +159,7 @@ function CibaSection() {
               { value: 'post', label: 'client_secret_post (request body)' },
             ]}
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             This must match the client&apos;s registered method. Authlete checks <em>where</em> the
             credentials arrive, not just whether they are correct — the wrong channel returns
             <code> 401 [A157357]</code>. Authlete&apos;s CIBA guide recommends <code>client_secret_basic</code>,
@@ -209,14 +209,14 @@ function CibaSection() {
 
       {activeOp === 'poll' && (
         <div className="space-y-3">
-          <p className="text-xs text-slate-400">
-            Polls the token endpoint with the <code className="text-slate-300">auth_req_id</code> from the Issue step.
-            In a production CIBA POLL flow, the client polls at the <code className="text-slate-300">interval</code> returned by the Issue endpoint.
+          <p className="text-xs text-muted-foreground">
+            Polls the token endpoint with the <code className="text-foreground-muted">auth_req_id</code> from the Issue step.
+            In a production CIBA POLL flow, the client polls at the <code className="text-foreground-muted">interval</code> returned by the Issue endpoint.
           </p>
           <Input label="auth_req_id" value={authReqId} onChange={(e) => setAuthReqId(e.target.value)} placeholder="from Issue response" />
           <div className="flex gap-2 items-center">
             <Button onClick={handlePollToken} loading={loading}>Poll Token</Button>
-            <span className="text-xs text-slate-500">Expected interval: {pollInterval}s</span>
+            <span className="text-xs text-muted-foreground/70">Expected interval: {pollInterval}s</span>
           </div>
           {pollResult !== null && (
             <div className="mt-2">

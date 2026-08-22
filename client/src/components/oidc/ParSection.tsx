@@ -149,7 +149,7 @@ function ParSection() {
 
         <div className="flex gap-2 flex-wrap">
           <Button variant="secondary" onClick={handleGeneratePkce} size="sm">Generate PKCE + State</Button>
-          {pkceVerifier && <span className="text-xs text-slate-400 self-center truncate max-w-[200px]" title={pkceVerifier}>verifier: {pkceVerifier.slice(0, 20)}...</span>}
+          {pkceVerifier && <span className="text-xs text-muted-foreground self-center truncate max-w-[200px]" title={pkceVerifier}>verifier: {pkceVerifier.slice(0, 20)}...</span>}
         </div>
 
         <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="your_client_id" />
@@ -167,7 +167,7 @@ function ParSection() {
             { value: 'none', label: 'none — public client (PKCE required)' },
           ]}
         />
-        <p className="text-xs text-slate-400 -mt-1">
+        <p className="text-xs text-muted-foreground -mt-1">
           Must match the client&apos;s registered method. Authlete checks which channel the
           credentials arrive on and returns 401 on a mismatch.
         </p>
@@ -198,12 +198,12 @@ function ParSection() {
       </div>
 
       {parResult?.request_uri && (
-        <div className="mt-4 p-3 bg-slate-800 rounded-lg border border-slate-700 space-y-2">
-          <p className="text-xs text-slate-300 font-mono break-all">
-            <span className="text-slate-500">request_uri: </span>
+        <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
+          <p className="text-xs text-foreground-muted font-mono break-all">
+            <span className="text-muted-foreground/70">request_uri: </span>
             {parResult.request_uri}
           </p>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp;
             Auth URL: <a href={authUrl} className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">{authUrl}</a>
           </p>

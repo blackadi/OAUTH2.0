@@ -90,14 +90,59 @@ for (const file of walk(CLIENT_SRC)) {
 
 const missing = [...used.keys()].filter((t) => !mapped.has(t)).sort();
 
+/**
+ * Both palettes must define the same tokens.
+ *
+ * A colour defined in one branch and not the other is the classic unreadable-page bug: the light branch
+ * inherits the dark branch's value for whatever it forgot, and you get one theme's text on the other
+ * theme's ground. Comparing the sets catches it without needing to look at the page.
+ */
+const paletteBlocks = [
+  { label: ':root (dark default)', body: rootBlock },
+  {
+    label: '@media (prefers-color-scheme: light)',
+    body: css.match(/@media \(prefers-color-scheme: light\)\s*\{\s*:root[^{]*\{([^}]*)\}/)?.[1] ?? "",
+  },
+  { label: ':root[data-theme="light"]', body: css.match(/:root\[data-theme="light"\]\s*\{([^}]*)\}/)?.[1] ?? "" },
+  { label: ':root[data-theme="dark"]', body: css.match(/:root\[data-theme="dark"\]\s*\{([^}]*)\}/)?.[1] ?? "" },
+];
+
+/** Structural tokens (radius, widths) belong to the layout, not to either palette. */
+const NON_COLOUR = new Set(["radius", "sidebar-width"]);
+const colourTokens = (body) =>
+  new Set([...body.matchAll(/--([a-z-]+)\s*:/g)].map((m) => m[1]).filter((t) => !NON_COLOUR.has(t)));
+
+const baseline = colourTokens(paletteBlocks[0].body);
+const paletteGaps = [];
+for (const block of paletteBlocks.slice(1)) {
+  if (!block.body) {
+    paletteGaps.push(`${block.label} — block not found`);
+    continue;
+  }
+  const defined = colourTokens(block.body);
+  for (const token of baseline) {
+    if (!defined.has(token)) paletteGaps.push(`${block.label} — missing --${token}`);
+  }
+}
+
 console.log(`Theme tokens declared on :root : ${declared.length}`);
 console.log(`Mapped in @theme              : ${mapped.size}`);
 console.log(`Referenced by a utility       : ${used.size}`);
 
-if (missing.length === 0) {
-  console.log("\n✓ every semantic colour utility in client/src is backed by a @theme entry");
+console.log(`Colour tokens per palette     : ${baseline.size}`);
+
+if (paletteGaps.length) {
+  console.error(`\n✗ ${paletteGaps.length} palette gap(s) — a token defined in one theme and not another:`);
+  for (const gap of paletteGaps) console.error(`    ${gap}`);
+  console.error("  A missing token inherits the other theme's value, which is how a page ends up");
+  console.error("  rendering light text on a light ground.");
+}
+
+if (missing.length === 0 && paletteGaps.length === 0) {
+  console.log("\n✓ every semantic colour utility is mapped, and both palettes define the same tokens");
   process.exit(0);
 }
+if (missing.length === 0) process.exit(1);
 
 console.error(`\n✗ ${missing.length} token(s) used as a utility with no @theme mapping.`);
 console.error("  These classes compile to nothing. Add `--color-<token>: var(--<token>);` to the");

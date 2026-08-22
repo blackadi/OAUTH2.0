@@ -50,7 +50,7 @@ function FederationSection() {
 
       {activeOp === 'configuration' && (
         <div className="space-y-3">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted-foreground">
             Fetch the entity configuration JWT for this authorization server. This endpoint is public (no auth required).
           </p>
           <Button onClick={() => handleCall(() => federationService.getConfiguration())} loading={loading}>Fetch Configuration</Button>
@@ -67,7 +67,7 @@ function FederationSection() {
             onChange={(e) => setEntityConfiguration(e.target.value)}
             placeholder="Paste the entity configuration JWT of the RP to register"
           />
-          <p className="text-xs text-slate-500">— or —</p>
+          <p className="text-xs text-muted-foreground/70">— or —</p>
           <Textarea
             label="Trust Chain (JSON)"
             rows={6}

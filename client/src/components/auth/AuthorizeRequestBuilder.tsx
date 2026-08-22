@@ -400,10 +400,10 @@ function AuthorizeRequestBuilder({
             onChange={(e) => setRawUrl(e.target.value)}
             aria-label="Raw authorization URL"
             rows={5}
-            className="w-full bg-slate-950/60 px-3 py-2 text-[0.7rem] font-mono text-foreground border-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring resize-y"
+            className="w-full bg-code/60 px-3 py-2 text-[0.7rem] font-mono text-foreground border-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring resize-y"
           />
         ) : (
-          <pre className="px-3 py-2 text-[0.7rem] font-mono text-indigo-200 whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-slate-950/40">
+          <pre className="px-3 py-2 text-[0.7rem] font-mono text-indigo-200 whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-code/40">
             {builtUrl}
           </pre>
         )}
