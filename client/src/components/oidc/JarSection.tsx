@@ -14,6 +14,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { OperationDescription } from '@/components/ui/OperationDescription';
+import { AdminAuth } from '@/components/layout/AdminAuth';
+import { useCredentials } from '@/context/CredentialContext';
 import { getDoc } from '@/data/operationDocs';
 
 function base64UrlEncode(data: ArrayBuffer | Uint8Array): string {
@@ -90,6 +92,9 @@ function JarSection() {
   const [jarResult, setJarResult] = useState<JarProcessResult | null>(null);
 
   const doc = getDoc('jar', 'process');
+  // Shared with every other admin section on the page, so entering them once is enough.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
+  const auth = authId && authSecret ? btoa(`${authId}:${authSecret}`) : '';
 
   const handleGenerateKey = async () => {
     try {
@@ -135,8 +140,12 @@ function JarSection() {
       toast.error('Enter a client ID');
       return;
     }
+    if (!auth) {
+      toast.error('Enter the admin credentials — this endpoint requires them');
+      return;
+    }
 
-    const { data, error: err } = await call(() => processJar(signedJwt, clientId));
+    const { data, error: err } = await call(() => processJar(signedJwt, clientId, auth));
     if (data) {
       setJarResult(data);
       toast.success('JAR processed');
@@ -153,7 +162,7 @@ function JarSection() {
   };
 
   const canSign = !!keyPair && !!claimsJson;
-  const canProcess = !!signedJwt && !!clientId;
+  const canProcess = !!signedJwt && !!clientId && !!auth;
 
   return (
     <SectionPanel
@@ -246,11 +255,21 @@ function JarSection() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Send the signed request object to Authlete for validation. The response includes
-            <code className="text-foreground-muted"> action</code>,{' '}
-            <code className="text-foreground-muted"> ticket</code>, and the decoded{' '}
-            <code className="text-foreground-muted"> requestObjectPayload</code>.
+            Send the signed request object to Authlete for validation. The response is a five-field
+            allowlist — <code className="text-foreground-muted">action</code>,{' '}
+            <code className="text-foreground-muted">resultCode</code>,{' '}
+            <code className="text-foreground-muted">resultMessage</code>,{' '}
+            <code className="text-foreground-muted">responseContent</code> and{' '}
+            <code className="text-foreground-muted">scopes</code>.
           </p>
+          <p className="text-xs text-muted-foreground">
+            Admin credentials are required here, and the reason is a field you will <em>not</em> see
+            below: Authlete&apos;s authorization response carries a{' '}
+            <code className="text-foreground-muted">ticket</code>, and a ticket is a credential —
+            whoever holds one can drive an authorization to completion. The endpoint drops it, and
+            no longer answers anonymous callers at all.
+          </p>
+          <AdminAuth />
           <Input
             label="Client ID"
             value={clientId}

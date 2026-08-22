@@ -75,6 +75,14 @@ function McpSection() {
   const [wizCimdUrl, setWizCimdUrl] = useState('');
   const [wizCimdData, setWizCimdData] = useState<CimdMetadata | null>(null);
   const [wizClientId, setWizClientId] = useState(CLIENT_ID);
+  /**
+   * Kept, not discarded. Step 2 read the DCR `client_secret` into a local, used it in a toast and threw
+   * it away, so step 4 exchanged the code with no client authentication for a client it had just
+   * registered as confidential. Registration now asks for `NONE`, but Authlete may answer with a
+   * secret anyway (AGENTS.md, "Client auth for DCR confidential clients"), and `exchangeCode` sends it
+   * only when non-empty.
+   */
+  const [wizClientSecret, setWizClientSecret] = useState('');
   const [wizRedirectUri, setWizRedirectUri] = useState(REDIRECT_URI);
   const [wizScopes, setWizScopes] = useState(DEFAULT_SCOPES);
   const [wizResource, setWizResource] = useState('');
@@ -164,7 +172,10 @@ function McpSection() {
       redirect_uris: [wizRedirectUri],
       grant_types: ['AUTHORIZATION_CODE', 'REFRESH_TOKEN'],
       response_types: ['CODE'],
-      token_endpoint_auth_method: 'CLIENT_SECRET_BASIC',
+      // A public client with PKCE, which is what MCP and OAuth 2.1 expect of a browser app — and it
+      // is what step 3 already does. This asked for `CLIENT_SECRET_BASIC`, whose secret step 4 then
+      // failed to present.
+      token_endpoint_auth_method: 'NONE',
       scope: wizScopes,
     };
     const { data, error: err } = await wizCall('DCR Register', () =>
@@ -180,8 +191,9 @@ function McpSection() {
         '') as string;
       if (clientId) {
         setWizClientId(clientId);
+        setWizClientSecret(clientSecret);
         toast.success(
-          `DCR registered: client_id=${clientId}${clientSecret ? ' (confidential)' : ' (public)'}`,
+          `DCR registered: client_id=${clientId}${clientSecret ? ' — a secret came back despite asking for NONE; it will be sent on the exchange' : ' (public, PKCE only)'}`,
         );
       }
     } else {
@@ -221,6 +233,7 @@ function McpSection() {
         codeVerifier: wizCodeVerifier,
         // MCP requires `resource` on BOTH requests. The same value the authorize step used.
         resource: wizResource || undefined,
+        clientSecret: wizClientSecret || undefined,
       }),
     );
     if (data) {
@@ -235,6 +248,7 @@ function McpSection() {
     wizAsData,
     wizIssuer,
     wizClientId,
+    wizClientSecret,
     wizRedirectUri,
     wizResource,
     wizCall,

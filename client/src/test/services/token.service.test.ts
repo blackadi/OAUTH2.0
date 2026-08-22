@@ -83,6 +83,57 @@ describe('tokenService.refreshToken', () => {
   });
 });
 
+/**
+ * A public client gets `client_id` in the body and **no** `Authorization` header.
+ *
+ * These three grants sent Basic unconditionally, and their secret fields were pre-filled from
+ * `CLIENT_SECRET`, whose default was the literal `your_client_secret`. Probed live at the token
+ * endpoint: `Basic 4277838306:your_client_secret` earns `401 [A157303] The request contains data for
+ * client authentication although the client type is 'public' and the client authentication method is
+ * 'none'.` The Refresh Token button therefore failed for the same reason the code exchange did.
+ *
+ * The three cases above still pin the confidential path, so this pins the public one. `jwtBearerGrant`,
+ * `revocation` and `device.service.pollToken` already behaved this way; the point of the change was to
+ * make all six agree.
+ */
+describe('the three secret-bearing grants, with no secret', () => {
+  const noHeader = (call: unknown) =>
+    (call as { headers: Record<string, string> }).headers.Authorization;
+
+  it('client_credentials: client_id in the body, no Basic header', async () => {
+    mockFetch.mockResolvedValue(ok({ access_token: 'at' }));
+    await tokenService.clientCredentials('4277838306', '', 'openid');
+    const [, init] = mockFetch.mock.calls[0];
+    expect(noHeader(init)).toBeUndefined();
+    expect(init.body).toContain('client_id=4277838306');
+  });
+
+  it('password: client_id in the body, no Basic header', async () => {
+    mockFetch.mockResolvedValue(ok({ access_token: 'at' }));
+    await tokenService.passwordGrant('user', 'pass', '4277838306', '', 'openid');
+    const [, init] = mockFetch.mock.calls[0];
+    expect(noHeader(init)).toBeUndefined();
+    expect(init.body).toContain('client_id=4277838306');
+  });
+
+  it('refresh_token: client_id in the body, no Basic header', async () => {
+    mockFetch.mockResolvedValue(ok({ access_token: 'at' }));
+    await tokenService.refreshToken('rt1', '4277838306', '');
+    const [, init] = mockFetch.mock.calls[0];
+    expect(noHeader(init)).toBeUndefined();
+    expect(init.body).toContain('client_id=4277838306');
+    // The grant's own parameters survive the added one.
+    expect(init.body).toContain('refresh_token=rt1');
+  });
+
+  it('never sends an empty client_secret, which would still be client-auth data', async () => {
+    mockFetch.mockResolvedValue(ok({ access_token: 'at' }));
+    await tokenService.refreshToken('rt1', '4277838306', '');
+    const [, init] = mockFetch.mock.calls[0];
+    expect(init.body).not.toContain('client_secret');
+  });
+});
+
 describe('tokenService.userInfo', () => {
   it('sends GET with Bearer token', async () => {
     mockFetch.mockResolvedValue(ok({ sub: 'user1' }));

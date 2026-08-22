@@ -136,6 +136,29 @@ const CallbackPage = () => {
         const signingPrivateKeyRaw = readKey(SESSION_KEYS.fapiSigningKey);
         let body: TokenResponse;
 
+        /**
+         * A public client authenticates with nothing, and "nothing" means the parameter is absent.
+         *
+         * RFC 6749 §2.3.1 identifies a public client by `client_id` alone. Authlete refuses a client whose
+         * method is `none` for carrying client authentication data — `[A157303]`. The SPA's own client is
+         * public, and `client_secret` used to go into the body unconditionally, which broke the headline
+         * authorization-code + PKCE flow with a misleading `invalid_client`.
+         *
+         * Measured at the live token endpoint 2026-08-22, because the boundary is not where it looks:
+         * `client_secret=your_client_secret` and `client_secret=undefined` are both refused with
+         * `[A157303]`, while `client_secret=` (**empty**) and an omitted parameter both pass client
+         * authentication and go on to fail on the code. So an empty value would in fact work here — and
+         * omission is still what this sends, because §2.3.1 describes a public client as presenting no
+         * credentials, and "the vendor tolerates an empty one" is not a thing to build on.
+         *
+         * It must be an omitted **key** rather than an undefined value: `new URLSearchParams({...})`
+         * stringifies, so `client_secret: undefined` puts the literal string "undefined" on the wire —
+         * which is the refused case above, not the tolerated one. `secretOrEmpty` in `config.ts` is what
+         * stops the `.env` placeholder arriving here as a secret in the first place.
+         */
+        const storedSecret = readKey(SESSION_KEYS.authzClientSecret) || CLIENT_SECRET;
+        const clientAuth = storedSecret ? { client_secret: storedSecret } : {};
+
         if (dpopPrivateKeyRaw && signingPrivateKeyRaw) {
           const dpopPrivateKeyJwk = JSON.parse(dpopPrivateKeyRaw);
           const signingPrivateKeyJwk = JSON.parse(signingPrivateKeyRaw);
@@ -167,28 +190,26 @@ const CallbackPage = () => {
           // A factory, not a proof — see the note in the branch above.
           const dpopProof = (nonce?: string) =>
             createProof(privateKeyJwk, 'POST', TOKEN_ENDPOINT, undefined, nonce);
-          const storedSecret = readKey(SESSION_KEYS.authzClientSecret) || CLIENT_SECRET;
           const result: TokenResponseWithNonce = await tokenService.exchangeCodeForTokenWithDpop(
             {
               grant_type: 'authorization_code',
               code,
               redirect_uri: redirectUri,
               client_id: storedClientId,
-              client_secret: storedSecret,
               code_verifier: codeVerifier,
+              ...clientAuth,
             },
             dpopProof,
           );
           body = result.tokenResponse;
         } else {
-          const storedSecret = readKey(SESSION_KEYS.authzClientSecret) || CLIENT_SECRET;
           body = await tokenService.exchangeCodeForToken({
             grant_type: 'authorization_code',
             code,
             redirect_uri: redirectUri,
             client_id: storedClientId,
-            client_secret: storedSecret,
             code_verifier: codeVerifier,
+            ...clientAuth,
           });
         }
 

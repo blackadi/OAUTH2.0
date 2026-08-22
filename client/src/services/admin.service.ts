@@ -33,9 +33,18 @@ async function reissueToken(body: Record<string, string>, auth: string): Promise
   return http.postAdmin(TOKEN_REISSUE_ENDPOINT, body, auth);
 }
 
-async function localToken(params: Record<string, string>): Promise<unknown> {
+/**
+ * `auth` was missing, making this the one admin call in this file that sent no credentials.
+ *
+ * `GET /api/token/createLocalToken` is development-only *and* admin-authenticated — the `checkAuth`
+ * call sits deliberately after the `nodeEnv` guard, so production answers a flat 404 and development
+ * answers 401 without credentials. It had been the only admin route with no auth check at all; when
+ * that was closed on the server, this caller was not updated, so the button could not work in the one
+ * environment where the endpoint exists.
+ */
+async function localToken(params: Record<string, string>, auth: string): Promise<unknown> {
   const qs = new URLSearchParams(params).toString();
-  return http.getJson(`${TOKEN_LOCAL_ENDPOINT}?${qs}`);
+  return http.getJson(`${TOKEN_LOCAL_ENDPOINT}?${qs}`, auth);
 }
 
 export const adminService = {

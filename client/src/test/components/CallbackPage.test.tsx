@@ -139,6 +139,58 @@ describe('preconditions', () => {
   });
 });
 
+/**
+ * The token request the SPA's own client can actually use.
+ *
+ * `4277838306` is public with `tokenAuthMethod: NONE`, and Authlete refuses **any** client
+ * authentication data for such a client — `[A157303]`, observed live on the deployment breaking the
+ * headline authorization-code + PKCE flow. `client_secret` used to be added unconditionally, seeded from
+ * `VITE_CLIENT_SECRET`, whose default and whose `.env.example` value were both the literal
+ * `your_client_secret`. So the flow shipped broken and the error blamed the credential rather than its
+ * presence.
+ *
+ * These assert **omission**, not emptiness. `URLSearchParams` stringifies its values, so
+ * `client_secret: undefined` would put `client_secret=undefined` on the wire — probed live and refused
+ * with `[A157303]`, exactly like the placeholder. An *empty* `client_secret=` is, measurably, tolerated
+ * by Authlete; omission is what RFC 6749 §2.3.1 actually describes and is what these pin, so the tests
+ * do not encode a dependency on that tolerance.
+ */
+describe('client authentication on the code exchange', () => {
+  const ready = () => {
+    sessionStorage.setItem('oauth_state', 'same');
+    sessionStorage.setItem('pkce_code_verifier', 'v1');
+  };
+
+  it('omits client_secret entirely when there is no secret', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    at('?code=abc&state=same');
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+
+    const sent = exchange.mock.calls[0][0];
+    expect('client_secret' in sent).toBe(false);
+    // Neither the placeholder nor a stringified `undefined` reaches the request by any other name.
+    expect(Object.values(sent)).not.toContain('your_client_secret');
+    expect(Object.values(sent)).not.toContain('undefined');
+    // The parameters a public client does send are still there.
+    expect(sent).toMatchObject({ client_id: expect.any(String), code_verifier: 'v1' });
+  });
+
+  it('still sends a real secret for a confidential client', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    sessionStorage.setItem('authz_client_secret', 's3cr3t-for-real');
+    at('?code=abc&state=same');
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+
+    expect(exchange.mock.calls[0][0]).toMatchObject({ client_secret: 's3cr3t-for-real' });
+  });
+});
+
 describe('a successful exchange', () => {
   it('stores the tokens and inspects the ID token', async () => {
     // A structurally valid JWT — the inspector decodes it; verification is a separate, explicit step.

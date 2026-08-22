@@ -13,7 +13,7 @@
  *    `docs/openapi-spec.json`. Never paraphrased.
  * 2. `AUTHLETE_NOTES` (below) — guidance for the codes this repo has *reproduced live*, each carrying
  *    the finding it came from. **The two sets are disjoint, and that was measured rather than assumed:**
- *    of the 38 codes the vendor document carries and the 25 established here by probing, the overlap is
+ *    of the 38 codes the vendor document carries and the 26 established here by probing, the overlap is
  *    **zero**. Authlete's examples are almost all generic or success cases; every code a developer
  *    actually hits on this deployment — `A157357`, `A124301`, `A089311`, `A404301` and the rest — comes
  *    from the second list. A decoder built from the vendor document alone would explain nothing useful.
@@ -158,6 +158,13 @@ export interface AuthleteNote extends ErrorDoc {
 }
 
 export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
+  A157303: {
+    cause:
+      'The client is registered as **public** with `tokenAuthMethod: NONE`, and the request carried client authentication data anyway. A non-empty value is what triggers it, whatever the value is — a placeholder and a plausible-looking secret fail identically. (Probed here: an *empty* `client_secret=` is tolerated and gets past client authentication; an omitted parameter is what RFC 6749 §2.3.1 describes.)',
+    fix: 'Send `client_id` and nothing else: no `client_secret` in the body, no `Authorization: Basic`, no `client_assertion`. PKCE is what binds the code to this client (RFC 9700 §2.1.1 treats browser apps as public clients for exactly this reason). If you *meant* to authenticate, you are pointed at the wrong client — check its `tokenAuthMethod`.',
+    spec: 'Verified live 2026-08-22 at the token endpoint · RFC 6749 §2.3.1',
+    verifiedHere: true,
+  },
   A157357: {
     cause:
       'The client identifier was not where Authlete expected it. The credentials may be entirely correct — this is about the *channel* they arrived on, not their value.',

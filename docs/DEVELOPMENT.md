@@ -162,7 +162,7 @@ that never exercised most of the suite.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `VITE_CLIENT_ID` | No | `your_client_id` | OAuth client ID for testing |
-| `VITE_CLIENT_SECRET` | No | — | OAuth client secret for testing |
+| `VITE_CLIENT_SECRET` | No | — | OAuth client secret for testing. **Leave empty for a public client** — the literal `your_client_secret` is treated as absent, since sending any secret for a `none` client is refused with `[A157303]` |
 | `VITE_REDIRECT_URI` | No | `http://localhost:3001/callback` | Redirect URI for auth flows |
 | `VITE_API_BASE_URL` | No | `http://localhost:3000` | Backend API URL |
 | `VITE_PROD_API_BASE_URL` | No | — | Backend API URL in production |

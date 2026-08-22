@@ -87,7 +87,7 @@ describe('the repo-verified notes', () => {
 
   it('covers codes the vendor document does not — which is the whole point of the layer', () => {
     // Measured, not assumed: the two sets are **disjoint**. Authlete's OpenAPI document carries 38
-    // result-code examples, almost all of them generic or success cases, and *none* of the 25 codes
+    // result-code examples, almost all of them generic or success cases, and *none* of the 26 codes
     // this repo established by probing appears in it. So a decoder built from the vendor document
     // alone would explain nothing a developer actually hits on this deployment.
     const vendorCodes = new Set(Object.keys(AUTHLETE_CODES));
