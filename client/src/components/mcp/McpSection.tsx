@@ -21,6 +21,7 @@ import {
   DEFAULT_SCOPES,
 } from '@/config';
 import { createPkcePair } from '@/pkce';
+import { useCredentials } from '@/context/CredentialContext';
 
 type McpOp = 'discovery' | 'resource-metadata' | 'cimd';
 
@@ -59,9 +60,10 @@ function McpSection() {
   const { loading, result, error, call } = useAsyncCall();
   const wizAsync = useDiscriminatedAsyncCall<string>();
   const { loading: wizLoading, error: wizError, call: wizCall } = wizAsync;
-
-  const [authId, setAuthId] = useState('');
-  const [authSecret, setAuthSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
 
   // Discovery state
   const [issuerUrl, setIssuerUrl] = useState(API_BASE_URL);
@@ -283,13 +285,7 @@ function McpSection() {
       title="MCP (Model Context Protocol) OAuth 2.1"
       description="Test MCP authorization flows — discovery, CIMD registration, and full PKCE + resource indicator flow"
     >
-      <AdminAuth
-        clientId={authId}
-        clientSecret={authSecret}
-        onClientIdChange={setAuthId}
-        onClientSecretChange={setAuthSecret}
-        label="Admin (for DCR)"
-      />
+      <AdminAuth label="Admin (for DCR)" />
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
       {wizError && <p className="text-xs text-red-400">{wizError}</p>}

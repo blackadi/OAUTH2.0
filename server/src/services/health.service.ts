@@ -2,6 +2,23 @@ import { Authlete } from "@authlete/typescript-sdk";
 import { AuthleteError } from "@authlete/typescript-sdk/models/errors";
 import { authleteApi as defaultApi } from "./authlete.service";
 import { server } from "../config/app.config";
+/**
+ * Statically imported, and the reason is worth recording because the dynamic form was a real defect.
+ *
+ * This was `await import("../middleware/session.js")`. The `.js` extension is *correct* for the
+ * compiled output — the package uses `moduleResolution: node16`, and `dist/middleware/session.js`
+ * exists — but under `ts-node-dev` only `session.ts` does, so in **development the import always
+ * threw** and `/api/health/all` answered `503 degraded` with
+ * `redis: { healthy: false, error: "Cannot find module …/src/middleware/session.js" }` while Redis was
+ * the live session store. A health endpoint reporting a false negative is worse than one reporting
+ * nothing, and the client's Health Check section faithfully displayed the lie.
+ *
+ * The obvious justification for a dynamic import — breaking a cycle — does not apply: `session.ts`
+ * imports `express-session`, the config, the logger and a type from `redis`, and nothing else. It has
+ * no import-time side effects; `initStore()` is called explicitly. And `redisClient` is a `let`, so an
+ * ES module live binding reads the current value at call time exactly as the dynamic form did.
+ */
+import { redisClient } from "../middleware/session";
 
 export interface AuthleteHealthResponse {
   healthy: boolean;
@@ -66,7 +83,6 @@ export class HealthService {
     }
 
     try {
-      const { redisClient } = await import("../middleware/session.js");
       const connected = redisClient?.isOpen ?? false;
       return {
         healthy: connected || !server.redisUrl,

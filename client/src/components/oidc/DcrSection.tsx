@@ -12,6 +12,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 type DcrOp = 'register' | 'get' | 'update' | 'delete';
 
@@ -34,8 +35,10 @@ const DCR_OPS: { value: DcrOp; label: string }[] = [
 ];
 
 function DcrSection() {
-  const [authId, setAuthId] = useState('');
-  const [authSecret, setAuthSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
   const [activeOp, setActiveOp] = useState<DcrOp | null>(null);
   const { loading, result, error, call } = useAsyncCall();
 
@@ -81,7 +84,7 @@ function DcrSection() {
 
   return (
     <SectionPanel title="Dynamic Client Registration (RFC 7591)" description="Register and manage clients dynamically">
-      <AdminAuth clientId={authId} clientSecret={authSecret} onClientIdChange={setAuthId} onClientSecretChange={setAuthSecret} label="Admin" />
+      <AdminAuth label="Admin" />
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
 

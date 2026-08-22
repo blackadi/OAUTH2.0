@@ -16,6 +16,7 @@ import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 type VciOp = 'metadata' | 'jwtissuer' | 'jwks' | 'wellknown' | 'offer-create' | 'offer-info' | 'cred-issue' | 'cred-batch' | 'deferred-issue';
 
@@ -52,8 +53,8 @@ function VciSection() {
   const { getAccessToken } = useToken();
 
   // --- Shared offer state ---
-  const [adminId, setAdminId] = useState('');
-  const [adminSecret, setAdminSecret] = useState('');
+  // Shared for the page — see the note in AdminAuth.
+  const { clientId: adminId, clientSecret: adminSecret } = useCredentials();
   const [offerCredConfigIds, setOfferCredConfigIds] = useState('["VerifiedEmployee"]');
   const [offerSubject, setOfferSubject] = useState('');
   const [offerDuration, setOfferDuration] = useState('');
@@ -132,7 +133,7 @@ function VciSection() {
       case 'offer-create': {
         return (
           <div className="space-y-4">
-            <AdminAuth clientId={adminId} clientSecret={adminSecret} onClientIdChange={setAdminId} onClientSecretChange={setAdminSecret} label="Admin" />
+            <AdminAuth label="Admin" />
             <Input label="Credential Configuration IDs (JSON array)" value={offerCredConfigIds} onChange={(e) => setOfferCredConfigIds(e.target.value)} placeholder='["VerifiedEmployee"]' />
             <Input label="Subject (optional)" value={offerSubject} onChange={(e) => setOfferSubject(e.target.value)} placeholder="user123" />
             <Input label="Duration in seconds (optional)" value={offerDuration} onChange={(e) => setOfferDuration(e.target.value)} placeholder="3600" />
@@ -177,7 +178,7 @@ function VciSection() {
       case 'offer-info':
         return (
           <div className="space-y-3">
-            <AdminAuth clientId={adminId} clientSecret={adminSecret} onClientIdChange={setAdminId} onClientSecretChange={setAdminSecret} label="Admin" />
+            <AdminAuth label="Admin" />
             <Input label="Offer Identifier" value={offerIdentifier} onChange={(e) => setOfferIdentifier(e.target.value)} placeholder="offer-id" />
             <Button onClick={() => handleCall(() => vciService.getOfferInfo({ identifier: offerIdentifier }, auth))} loading={loading}>Get Offer Info</Button>
           </div>

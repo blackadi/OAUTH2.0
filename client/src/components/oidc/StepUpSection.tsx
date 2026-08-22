@@ -14,6 +14,7 @@ import { AdminAuth } from '@/components/layout/AdminAuth';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ShieldAlert, ArrowUpCircle } from 'lucide-react';
 import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 interface StepUpChallenge {
   error: string;
@@ -44,8 +45,10 @@ function StepUpSection() {
 
   // The introspection endpoint is protected (RFC 7662 §2.1) — this flow drives it, so it needs the
   // deployment's admin credentials.
-  const [adminId, setAdminId] = useState('');
-  const [adminSecret, setAdminSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: adminId, clientSecret: adminSecret } = useCredentials();
 
   const handleIntrospect = async () => {
     setChallenge(null);
@@ -142,10 +145,6 @@ function StepUpSection() {
                 deployment&apos;s admin credentials. Without them the server answers <code>401</code>.
               </p>
               <AdminAuth
-                clientId={adminId}
-                clientSecret={adminSecret}
-                onClientIdChange={setAdminId}
-                onClientSecretChange={setAdminSecret}
               />
               <p className="text-xs font-medium text-muted-foreground">
                 Protected Resource Requirements

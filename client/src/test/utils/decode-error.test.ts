@@ -157,8 +157,12 @@ describe('statusHint', () => {
     expect(statusHint(403)).toMatch(/identity was accepted/);
   });
 
-  it("records this deployment's 404 quirk, so a real 404 is read correctly", () => {
-    expect(statusHint(404)).toMatch(/answers 200 with the dashboard HTML/);
+  it('describes what a 404 means here, now that unmatched /api paths are terminated', () => {
+    // The hint used to say an unknown /api path answers 200 with HTML. That was true until the server
+    // grew a JSON terminator (F-27); leaving the old wording would have made the decoder authoritative
+    // and wrong, which is the failure the whole error table exists to avoid.
+    expect(statusHint(404)).toMatch(/not_found/);
+    expect(statusHint(404)).not.toMatch(/answers 200 with the dashboard HTML/);
   });
 
   it('says nothing when there is nothing to say', () => {

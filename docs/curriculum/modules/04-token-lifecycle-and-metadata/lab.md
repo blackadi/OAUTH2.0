@@ -322,13 +322,18 @@ Content-Type: application/json; charset=utf-8
 {"resource":"…/api/userinfo","authorization_servers":["…
 ```
 
-**Explain the gap.** The SPA's catch-all handler serves `index.html` for any unmatched path, so *every*
-nonexistent URL returns 200 with HTML. The status code told you nothing; the **content type** told you
-everything. Three habits follow, and they generalise well beyond this repo:
+**Explain the gap.** The SPA's catch-all handler serves `index.html` for unmatched paths outside `/api`,
+so a nonexistent URL like the one above returns 200 with HTML. The status code told you nothing; the
+**content type** told you everything. Three habits follow, and they generalise well beyond this repo:
 
 1. Check the **content type** — a metadata endpoint returns `application/json`.
 2. **Parse the body.** If `JSON.parse` throws, you have a page, not an API.
 3. **Compare against a control** — request a path you invented. Identical responses mean a catch-all.
+
+> **Try both halves.** `curl -i http://localhost:3000/api/totally-made-up` answers `404` with JSON here,
+> because this server terminates unmatched API paths deliberately (since 2026-08-22) — while the root
+> path you just probed still returns the page. Most deployments do not make that distinction, which is
+> why habits 1–3 are the ones to carry away rather than "check for a 404".
 
 This is the same trap as Module 00, where `/api/jwks` returned the SPA instead of the key set. You have now
 seen it twice; that is deliberate.

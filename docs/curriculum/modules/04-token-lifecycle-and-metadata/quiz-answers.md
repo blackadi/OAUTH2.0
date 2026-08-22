@@ -84,8 +84,9 @@ independent of any single token. **Fix:** require client authentication or a bea
 Note what does *not* fix it: calling the endpoint "internal." Network position is not authorization, and it
 fails the moment anything untrusted can route to the AS.
 
-**Q13.** **Defect:** the check trusts the HTTP status code. The server's SPA catch-all returns `200` with
-`text/html` for *every* unmatched path, so the probe passes against a server that has no PRM route at all —
+**Q13.** **Defect:** the check trusts the HTTP status code. A SPA catch-all returns `200` with
+`text/html` for unmatched paths — on this server, for any path outside `/api`; on most, for every path —
+so the probe passes against a server that has no PRM route at all —
 a monitor that reports green for a capability that does not exist, which is worse than no monitor. **Two
 checks that would not be fooled:** (1) assert the **content type** is `application/json`; (2) **parse the
 body and assert on a required field** — RFC 9728's only REQUIRED member is `resource`, so

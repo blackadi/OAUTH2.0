@@ -179,3 +179,31 @@ describe('accessibility of the shell (F-22)', () => {
     expect(await screen.findByLabelText(/Step 1, Authorize:/i)).toBeInTheDocument();
   });
 });
+
+describe('shared management credentials (F-18)', () => {
+  it('carries the credential across sections, so it is entered once', async () => {
+    renderAt('/admin');
+    const id = await screen.findByLabelText(/Admin Client ID/i);
+    const secret = await screen.findByLabelText(/Admin Client Secret/i);
+
+    fireEvent.change(id, { target: { value: 'mgmt-client' } });
+    fireEvent.change(secret, { target: { value: 's3cr3t' } });
+
+    // Each section used to hold its own useState pair, and a route change unmounts a section — so
+    // half the app's surface demanded the same two values again on every navigation.
+    fireEvent.click(screen.getAllByRole('link', { name: /Client Management/i })[0]);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 2, name: /Client Management/i })).toBeInTheDocument(),
+    );
+
+    expect(await screen.findByLabelText(/Admin Client ID/i)).toHaveValue('mgmt-client');
+    expect(await screen.findByLabelText(/Admin Client Secret/i)).toHaveValue('s3cr3t');
+  });
+
+  it('says the credential is shared, once both halves are present', async () => {
+    renderAt('/admin');
+    fireEvent.change(await screen.findByLabelText(/Admin Client ID/i), { target: { value: 'a' } });
+    fireEvent.change(await screen.findByLabelText(/Admin Client Secret/i), { target: { value: 'b' } });
+    expect(screen.getByText(/Shared across every admin section/i)).toBeInTheDocument();
+  });
+});

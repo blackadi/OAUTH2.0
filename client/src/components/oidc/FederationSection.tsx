@@ -11,6 +11,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 type FederationOp = 'configuration' | 'registration';
 
@@ -20,8 +21,10 @@ const FEDERATION_OPS: { value: FederationOp; label: string }[] = [
 ];
 
 function FederationSection() {
-  const [authId, setAuthId] = useState('');
-  const [authSecret, setAuthSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
   const [activeOp, setActiveOp] = useState<FederationOp | null>(null);
   const { loading, result, error, call } = useAsyncCall();
 
@@ -59,7 +62,7 @@ function FederationSection() {
 
       {activeOp === 'registration' && (
         <div className="space-y-3">
-          <AdminAuth clientId={authId} clientSecret={authSecret} onClientIdChange={setAuthId} onClientSecretChange={setAuthSecret} label="Admin" />
+          <AdminAuth label="Admin" />
           <Textarea
             label="Entity Configuration (JWT)"
             rows={6}

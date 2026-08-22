@@ -16,6 +16,7 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { SESSION_KEYS, readKey, readJsonKey } from '@/services/session-keys';
+import { useCredentials } from '@/context/CredentialContext';
 
 type TokenOp = 'userinfo' | 'introspect' | 'introspect-std' | 'revoke';
 
@@ -66,8 +67,10 @@ function TokenOpsSection() {
 
   // RFC 7662 §2.1 requires the introspection endpoint to be protected. Both endpoints take this
   // deployment's admin credentials — see the note in services/token.service.ts.
-  const [adminId, setAdminId] = useState('');
-  const [adminSecret, setAdminSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: adminId, clientSecret: adminSecret } = useCredentials();
 
   const doc = activeOp ? getDoc('token-ops', activeOp) : undefined;
 
@@ -163,10 +166,6 @@ function TokenOpsSection() {
             reaches Authlete.
           </p>
           <AdminAuth
-            clientId={adminId}
-            clientSecret={adminSecret}
-            onClientIdChange={setAdminId}
-            onClientSecretChange={setAdminSecret}
           />
         </div>
       )}

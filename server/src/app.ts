@@ -173,6 +173,30 @@ export function createApp() {
   app.use(routerURL, jarRoutes);
   app.use(routerURL, nativeSsoRoutes);
   app.use(routerURL, openapiRoutes); // /api/openapi.json
+  /**
+   * An unmatched `/api` path is a 404, not the dashboard.
+   *
+   * Found 2026-08-21 while probing the client's new transport layer: `GET /api/does-not-exist`
+   * answered **200** with `Content-Type: text/html` and 9,837 bytes of `index.html`, because the SPA
+   * catch-all below sits in front of the whole namespace. A client wired to a wrong or retired path saw
+   * success and a parse failure somewhere downstream, rather than the 404 that names the problem.
+   *
+   * This is the failure `AGENTS.md` already records for RFC 9728's path-suffixed well-known URL — *"a
+   * discovering client sees success and parses a web page"* — which was closed there with a second
+   * route. The general case was never closed. It matters most for a *debugging* server, whose whole
+   * job is telling people what their request did.
+   *
+   * Mounted after every `/api` router and before the catch-all, so it terminates only paths nothing
+   * else claimed. The well-known documents are unaffected: they are mounted at true root, not under
+   * `/api`, and never reach this handler.
+   */
+  app.use(routerURL, (req, res) => {
+    res.status(404).json({
+      error: "not_found",
+      error_description: `No API route matches ${req.method} ${req.baseUrl}${req.path}`,
+    });
+  });
+
   app.use("/", DefaultRoutes); // For rendering the index page at root /*
 
   // Error Handler

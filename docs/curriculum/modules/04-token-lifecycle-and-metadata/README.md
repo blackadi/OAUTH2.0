@@ -215,6 +215,12 @@ bare 401.
 > endpoint exists from a status code alone*, because the SPA's catch-all answers **HTTP 200 with HTML** for
 > any unmatched path. **That skill is still the point, and the lab still teaches it** — using a path that is
 > genuinely absent. Keep the habit; the example moved.
+>
+> **Narrowed on 2026-08-22.** Unmatched paths *under `/api`* now answer `404` with
+> `{"error":"not_found"}`, because a debugging server that reports success for an endpoint it does not
+> have is actively misleading. The catch-all still serves the SPA for everything else, which is what the
+> lab probes and why the skill still has a live example. The general lesson is unchanged and, if
+> anything, sharper: **this** server now distinguishes the two, and most do not.
 
 ### Dynamic Client Registration — RFC 7591 / RFC 7592 (July 2015)
 
@@ -428,7 +434,8 @@ better exercise, arrived at by accident. Nothing else in the curriculum depends 
 - **Trusting a metadata document fetched over a channel you did not verify**, or caching it forever. Endpoint
   URLs and keys rotate; a poisoned or stale document redirects your token requests.
 - **Assuming an endpoint exists because it returned 200.** A SPA catch-all returns 200 with HTML for
-  *anything*. Check the content type and the body.
+  anything it is asked for. Check the content type and the body. (This server answers `404` under `/api`
+  since 2026-08-22, and still serves the SPA elsewhere — most deployments do neither, so keep checking.)
 - **Open DCR.** If anyone can register a client, anyone can pick their own `redirect_uris` and client
   metadata. Require authentication, or a software statement, unless you are deliberately building an open
   ecosystem.

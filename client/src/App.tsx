@@ -1,6 +1,7 @@
 import { lazy, type ReactNode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { TokenProvider } from '@/context/TokenContext';
+import { CredentialProvider } from '@/context/CredentialContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { TokenVault } from '@/components/ui/TokenVault';
 import CallbackPage from './pages/CallbackPage';
@@ -132,6 +133,7 @@ const sectionComponents: Record<SectionId, React.FC> = {
 const App: React.FC = () => {
   return (
     <TokenProvider>
+      <CredentialProvider>
       <Routes>
         <Route element={<AppLayout groups={SECTIONS} sidebarHeader={<TokenVault />} />}>
           <Route path="/" element={<Navigate to="/auth-flows" replace />} />
@@ -142,6 +144,7 @@ const App: React.FC = () => {
         </Route>
         <Route path="/callback" element={<CallbackPage />} />
       </Routes>
+      </CredentialProvider>
     </TokenProvider>
   );
 };

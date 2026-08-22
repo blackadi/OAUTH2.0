@@ -12,6 +12,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
+import { useCredentials } from '@/context/CredentialContext';
 
 type AdminOp = 'create' | 'list' | 'update' | 'revoke' | 'delete' | 'reissue' | 'local';
 
@@ -44,8 +45,10 @@ const ADMIN_OPS: { value: AdminOp; label: string }[] = [
 ];
 
 function AdminSection() {
-  const [authId, setAuthId] = useState('');
-  const [authSecret, setAuthSecret] = useState('');
+  // The management credential is shared for the page rather than owned here: eight sections
+  // held their own copy, and a route change unmounts a section, so it had to be retyped on
+  // every navigation.
+  const { clientId: authId, clientSecret: authSecret } = useCredentials();
   const [activeOp, setActiveOp] = useState<AdminOp | null>(null);
   const { loading, result, error, call } = useAsyncCall();
 
@@ -85,7 +88,7 @@ function AdminSection() {
 
   return (
     <SectionPanel title="Admin Token Management" description="Create and manage tokens via the admin API">
-      <AdminAuth clientId={authId} clientSecret={authSecret} onClientIdChange={setAuthId} onClientSecretChange={setAuthSecret} />
+      <AdminAuth />
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
 

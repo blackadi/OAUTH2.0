@@ -106,7 +106,7 @@ export function statusHint(status: number | undefined): string | undefined {
   if (!status) return undefined;
   if (status === 401) return 'Unauthenticated — the credentials were missing, wrong, or sent on a channel this client is not registered for.';
   if (status === 403) return 'Authenticated but not permitted. Distinct from a 401: the identity was accepted and the action was not.';
-  if (status === 404) return 'No such resource. On this deployment an unknown /api path answers 200 with the dashboard HTML instead, so a real 404 means the route exists and the *object* does not.';
+  if (status === 404) return 'No such route, or no such object at it. This server terminates unmatched /api paths with a JSON not_found (since 2026-08-22) — before that they fell through to the SPA and answered 200 with HTML, so an older client may still be treating a typo as success.';
   if (status === 429) return 'Rate limited. Authlete allows roughly 15 token calls in a short window, and this server adds its own limits — wait rather than changing the request.';
   if (status === 413) return 'The payload is too large — PAR has a size limit.';
   if (status >= 500) return 'The server failed rather than refusing you. The request may be fine; check the server logs.';

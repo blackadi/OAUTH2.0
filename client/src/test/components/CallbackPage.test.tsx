@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import CallbackPage from '@/pages/CallbackPage';
 import { TokenProvider } from '@/context/TokenContext';
 import { tokenService } from '@/services';
+import { CredentialProvider } from '@/context/CredentialContext';
 
 /**
  * The callback page had no tests at all, and it is the most security-relevant file in the client: it
@@ -18,7 +19,9 @@ function at(query: string) {
   return render(
     <MemoryRouter initialEntries={[`/callback${query}`]}>
       <TokenProvider>
-        <CallbackPage />
+        <CredentialProvider>
+          <CallbackPage />
+        </CredentialProvider>
       </TokenProvider>
     </MemoryRouter>,
   );

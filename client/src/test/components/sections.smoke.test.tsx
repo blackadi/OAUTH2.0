@@ -39,6 +39,7 @@ import { GrantManagementSection } from '@/components/admin/GrantManagementSectio
 import { HealthSection } from '@/components/admin/HealthSection';
 
 import { rarService } from '@/services';
+import { CredentialProvider } from '@/context/CredentialContext';
 
 /** A section is only useful with a token in hand, so seed one for the whole file. */
 const SEEDED_TOKEN = {
@@ -50,7 +51,9 @@ const SEEDED_TOKEN = {
 function mount(ui: React.ReactElement) {
   return render(
     <MemoryRouter>
-      <TokenProvider>{ui}</TokenProvider>
+      <TokenProvider>
+        <CredentialProvider>{ui}</CredentialProvider>
+      </TokenProvider>
     </MemoryRouter>,
   );
 }
