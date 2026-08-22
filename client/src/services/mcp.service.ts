@@ -71,6 +71,21 @@ function buildAuthorizationUrl(params: {
  * access token can come back without the `aud` the wizard's earlier step asked for — and nothing in the
  * response says so. Verify with introspection rather than by inspecting the request.
  */
+/**
+ * `clientSecret` is optional and is sent **only when non-empty**.
+ *
+ * The wizard registers its own client by DCR, and it used to ask for `CLIENT_SECRET_BASIC`, read the
+ * `client_secret` out of the response, mention it in a toast and then drop it — so this exchange
+ * carried no client authentication for a client that required some. It now registers `NONE` (a public
+ * client with PKCE, which is what MCP and OAuth 2.1 expect of a browser app), but the secret is still
+ * threaded through, because Authlete is on record overriding the requested auth method on DCR-created
+ * clients — see "Client auth for DCR confidential clients" in AGENTS.md. The wizard therefore works
+ * whichever answer comes back, rather than trusting what it asked for.
+ *
+ * Non-empty rather than merely defined, for the reason the SPA's own callback omits the parameter: a
+ * public client sending client-auth data is refused with `[A157303]`, so an empty secret must not
+ * become an empty `client_secret=`.
+ */
 async function exchangeCode(params: {
   tokenEndpoint: string;
   code: string;
@@ -78,6 +93,7 @@ async function exchangeCode(params: {
   redirectUri: string;
   codeVerifier: string;
   resource?: string;
+  clientSecret?: string;
 }): Promise<unknown> {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -88,6 +104,9 @@ async function exchangeCode(params: {
   });
   if (params.resource) {
     body.set('resource', params.resource);
+  }
+  if (params.clientSecret) {
+    body.set('client_secret', params.clientSecret);
   }
   return http.postForm(params.tokenEndpoint, body);
 }

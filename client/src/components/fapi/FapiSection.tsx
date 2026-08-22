@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { fapiService, parService, tokenService } from '@/services';
+import type { ParSuccessResponse } from '@/services/par.service';
 import { useAsyncCall, useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -91,10 +92,18 @@ function FapiSection() {
   const [wizScopes, setWizScopes] = useState(DEFAULT_SCOPES);
   const [wizDpopKeyPair, setWizDpopKeyPair] = useState<DPoPKeyPair | null>(null);
   const [wizSigningKey, setWizSigningKey] = useState<SigningKeyPair | null>(null);
-  const [wizParResult, setWizParResult] = useState<{
-    requestUri?: string;
-    expiresIn?: number;
-  } | null>(null);
+  /**
+   * Typed by `ParSuccessResponse`, not by an inline shape — and that is the fix, not a tidy-up.
+   *
+   * This held `{ requestUri?: string; expiresIn?: number }` and cast the response to it. T1-11 made
+   * `POST /api/par` answer with RFC 9126 §2.2's body, whose members are `request_uri` and `expires_in`,
+   * so `requestUri` became permanently `undefined` — and step 4's handler opens with
+   * `if (!wizParResult?.requestUri) return`, which made the Authorize button *enabled and inert*: no
+   * redirect, no error, while the panel above it displayed the `request_uri` it refused to use.
+   * `RarSection` had exactly this bug and `ParSuccessResponse` exists so the rename is a compile error.
+   * A local `as { … }` cast is how a shared type gets bypassed — the lesson worth keeping.
+   */
+  const [wizParResult, setWizParResult] = useState<ParSuccessResponse | null>(null);
   const [wizUserinfoResult, setWizUserinfoResult] = useState<Record<string, unknown> | null>(null);
   const wizAsync = useDiscriminatedAsyncCall<string>();
   const { loading: wizLoading, error: wizError, call: wizCall } = wizAsync;
@@ -210,7 +219,7 @@ function FapiSection() {
         // owns the `dpop_nonce` store.
         (nonce) => createProof(wizDpopKeyPair.privateKey, 'POST', PAR_ENDPOINT, undefined, nonce),
       );
-      setWizParResult(data as { requestUri?: string; expiresIn?: number });
+      setWizParResult(data as ParSuccessResponse);
     });
     if (error) {
       toast.error(error);
@@ -220,8 +229,8 @@ function FapiSection() {
   };
 
   const handleWizAuthorize = () => {
-    if (!wizParResult?.requestUri) return;
-    const authorizeUrl = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(wizClientId)}&request_uri=${encodeURIComponent(wizParResult.requestUri)}`;
+    if (!wizParResult?.request_uri) return;
+    const authorizeUrl = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(wizClientId)}&request_uri=${encodeURIComponent(wizParResult.request_uri)}`;
     window.location.href = authorizeUrl;
   };
 
@@ -495,7 +504,7 @@ function FapiSection() {
           </div>
 
           <div
-            className={`border-t border-border pt-4 ${!wizParResult ? 'opacity-50 pointer-events-none' : ''}`}
+            className={`border-t border-border pt-4 ${!wizParResult?.request_uri ? 'opacity-50 pointer-events-none' : ''}`}
           >
             <h4 className="text-sm font-medium mb-2">Step 2: Authorize</h4>
             <p className="text-xs text-muted-foreground mb-2">
@@ -508,7 +517,7 @@ function FapiSection() {
               onClick={handleWizAuthorize}
               size="sm"
               variant="secondary"
-              disabled={!wizParResult}
+              disabled={!wizParResult?.request_uri}
             >
               Open Authorize Page
             </Button>

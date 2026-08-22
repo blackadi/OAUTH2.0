@@ -302,13 +302,16 @@ function AdminSection() {
           <Button
             onClick={() =>
               handleCall(() =>
-                adminService.localToken({
-                  iss: localIss,
-                  sub: localSub,
-                  aud: localAud,
-                  client_id: localClientId,
-                  ...(localScope ? { scope: localScope } : {}),
-                }),
+                adminService.localToken(
+                  {
+                    iss: localIss,
+                    sub: localSub,
+                    aud: localAud,
+                    client_id: localClientId,
+                    ...(localScope ? { scope: localScope } : {}),
+                  },
+                  auth,
+                ),
               )
             }
             loading={loading}

@@ -111,15 +111,22 @@ describe('adminService.reissueToken', () => {
 });
 
 describe('adminService.localToken', () => {
-  it('sends GET with query params', async () => {
+  /**
+   * This test used to assert `headers: { Accept: 'application/json' }` — i.e. it *pinned the defect*.
+   * `GET /api/token/createLocalToken` is admin-authenticated on the server (the `checkAuth` call sits
+   * after the development-only guard, so production 404s and development 401s), and this was the one
+   * admin call in `admin.service.ts` that passed no credentials. A test can lock in a missing header
+   * just as firmly as a present one; that is worth remembering when a signature changes.
+   */
+  it('sends GET with query params and the admin credentials', async () => {
     mockFetch.mockResolvedValue(ok({ token: 'jwt' }));
-    const result = await adminService.localToken({ iss: 'me', sub: 'user', aud: 'you' });
+    const result = await adminService.localToken({ iss: 'me', sub: 'user', aud: 'you' }, 'auth123');
     expect(result).toEqual({ token: 'jwt' });
     expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/token/createLocalToken?iss=me&sub=user&aud=you',
       {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', Authorization: 'Basic auth123' },
       },
     );
   });

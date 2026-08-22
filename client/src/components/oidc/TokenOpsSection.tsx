@@ -44,7 +44,15 @@ function TokenOpsSection() {
    * `ath` is REQUIRED when a proof accompanies an access token (§7.1) — and it is `ath`, not `sub`.
    */
   const fetchUserinfo = async () => {
-    if (!isDpopBound || !dpopKey) return tokenService.userInfo(at!);
+    // A bound token with no key is not a bearer token. Falling through to `userInfo()` here sent
+    // `Authorization: Bearer` for a token Authlete must refuse (`[A089311]`, RFC 9449 §7.2) — a request
+    // that cannot succeed, reported as a vendor code rather than as the thing that is actually wrong.
+    if (!isDpopBound) return tokenService.userInfo(at!);
+    if (!dpopKey) {
+      throw new Error(
+        'This access token is DPoP-bound, but the DPoP private key is no longer in this session — so no valid proof can be built for it. RFC 9449 §7.1 gives a bound token no bearer alternative. Obtain a new token with DPoP enabled.',
+      );
+    }
     const ath = await computeAth(at!);
     const { data } = await tokenService.userInfoWithDpop(at!, (nonce) =>
       createProof(dpopKey, 'POST', USERINFO_ENDPOINT, ath, nonce),

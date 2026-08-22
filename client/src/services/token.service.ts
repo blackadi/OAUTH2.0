@@ -40,18 +40,49 @@ async function exchangeCodeForTokenWithDpop(
   return { tokenResponse: data as TokenResponse, dpopNonce };
 }
 
+/**
+ * One rule for the three grants below, and for `jwtBearerGrant` and `revocation` further down: **a
+ * secret means Basic, no secret means `client_id` in the body.**
+ *
+ * These three sent `Authorization: Basic` unconditionally. Their secret fields were pre-filled from
+ * `CLIENT_SECRET`, whose default was the literal `your_client_secret`, so a public client presenting a
+ * placeholder was refused — probed live at the token endpoint: `Basic 4277838306:your_client_secret`
+ * earns `401 [A157303] The request contains data for client authentication although the client type is
+ * 'public' and the client authentication method is 'none'.` The Refresh Token button sat right beside
+ * the authorization-code flow and failed for exactly the reason the code exchange did.
+ *
+ * `secretOrEmpty` now keeps the placeholder out, and an empty Basic password happens to be tolerated by
+ * Authlete (measured) — but "the vendor tolerates it" is not the shape to ship. RFC 6749 §2.3.1 gives a
+ * public client `client_id` and no credentials, which is what `device.service.pollToken`,
+ * `jwtBearerGrant` and `revocation` already do. This makes the other three agree with them.
+ */
+function postWithOptionalBasic(
+  params: URLSearchParams,
+  clientId: string,
+  clientSecret?: string,
+): Promise<TokenResponse> {
+  if (clientSecret) {
+    return http.postBasicAuth(
+      TOKEN_ENDPOINT,
+      params,
+      clientId,
+      clientSecret,
+    ) as Promise<TokenResponse>;
+  }
+  // A bare `client_id` beside no secret is one method, not two — and it is the only one a public client
+  // has. (It is also why `client_id` alongside a Basic header is not the dual-channel shape the server
+  // refuses: that rule counts a second *credential*.)
+  params.set('client_id', clientId);
+  return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;
+}
+
 async function clientCredentials(
   clientId: string,
   clientSecret: string,
   scope: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'client_credentials', scope });
-  return http.postBasicAuth(
-    TOKEN_ENDPOINT,
-    params,
-    clientId,
-    clientSecret,
-  ) as Promise<TokenResponse>;
+  return postWithOptionalBasic(params, clientId, clientSecret);
 }
 
 async function passwordGrant(
@@ -62,12 +93,7 @@ async function passwordGrant(
   scope: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'password', username, password, scope });
-  return http.postBasicAuth(
-    TOKEN_ENDPOINT,
-    params,
-    clientId,
-    clientSecret,
-  ) as Promise<TokenResponse>;
+  return postWithOptionalBasic(params, clientId, clientSecret);
 }
 
 async function refreshToken(
@@ -76,12 +102,7 @@ async function refreshToken(
   clientSecret: string,
 ): Promise<TokenResponse> {
   const params = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken });
-  return http.postBasicAuth(
-    TOKEN_ENDPOINT,
-    params,
-    clientId,
-    clientSecret,
-  ) as Promise<TokenResponse>;
+  return postWithOptionalBasic(params, clientId, clientSecret);
 }
 
 async function jwtBearerGrant(

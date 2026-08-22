@@ -21,9 +21,25 @@ export interface JarProcessResult {
   scopes?: { name?: string; description?: string }[];
 }
 
-export async function processJar(request: string, clientId: string): Promise<JarProcessResult> {
-  // An assertion, not validation: `http.postJson` returns `unknown` and nothing here parses the response.
+/**
+ * `auth` is base64 `MGMT_CLIENT_ID:MGMT_CLIENT_SECRET` — **required**, and it was missing for months.
+ *
+ * The server put this endpoint behind `requireBasicAuth("jar")` on 2026-08-13 because the response it
+ * used to forward carried a `ticket`, and a ticket is a credential: whoever holds one can drive an
+ * authorization to completion. This function kept calling `http.postJson`, so the entire JAR section
+ * answered **401 `Client authentication required`** for every user, with no way to supply credentials.
+ *
+ * Module 05's lab had passed `-u "$MGMT_CLIENT_ID:$MGMT_CLIENT_SECRET"` since the day of that change.
+ * The documentation was updated and this caller was not — which is the actual lesson: **an auth gate
+ * added on the server is a client change too, and the docs being right is not the client being right.**
+ */
+export async function processJar(
+  request: string,
+  clientId: string,
+  auth: string,
+): Promise<JarProcessResult> {
+  // An assertion, not validation: `http.postAdmin` returns `unknown` and nothing here parses the response.
   // Every member of `JarProcessResult` is therefore optional, so a missing field reads as `undefined`
   // rather than throwing — which is the honest shape for a debugging surface whose upstream can change.
-  return (await http.postJson(JAR_ENDPOINT, { request, clientId })) as JarProcessResult;
+  return (await http.postAdmin(JAR_ENDPOINT, { request, clientId }, auth)) as JarProcessResult;
 }

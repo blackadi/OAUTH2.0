@@ -40,6 +40,26 @@ const GRANTS: { value: GrantType; label: string }[] = [
   { value: 'jwt_bearer', label: 'JWT Bearer (RFC 7523)' },
 ];
 
+/**
+ * The preview must be the request, so these mirror `postWithOptionalBasic` in `token.service.ts`.
+ *
+ * The three secret-bearing grants used to render an `Authorization: Basic` header unconditionally,
+ * which was faithful to a service that also sent one unconditionally — and both were wrong for a
+ * public client, which is refused with `[A157303]` for presenting client-auth data at all. If the
+ * service's rule changes again, change it here in the same commit: a preview that disagrees with the
+ * wire is worse than no preview, because it is the thing people read instead of the request.
+ */
+const FORM_CONTENT_TYPE = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+function basicOrNone(clientId: string, clientSecret: string): Record<string, string> {
+  if (!clientSecret) return FORM_CONTENT_TYPE;
+  return { Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`, ...FORM_CONTENT_TYPE };
+}
+
+function clientIdParam(clientId: string, clientSecret: string): string {
+  return clientSecret ? '' : `&client_id=${encodeURIComponent(clientId)}`;
+}
+
 const grantIcons: Record<GrantType, React.ReactNode> = {
   authorization_code: <KeyRound className="h-4 w-4" />,
   client_credentials: <ArrowRightLeft className="h-4 w-4" />,
@@ -79,6 +99,24 @@ const AuthFlowsSection: React.FC = () => {
   const [grantType, setGrantType] = useState<GrantType>('authorization_code');
   const { loading, result, error, call } = useAsyncCall<TokenResponse>();
   const displayResult = result || tokenSet;
+
+  /**
+   * Whether a FAPI signing key is sitting in this session — because if one is, the code exchange in
+   * `CallbackPage` takes its `private_key_jwt` branch and sends `client_assertion` instead of whatever
+   * is configured here. For a public client that is client-authentication data, refused with
+   * `[A157303]`, and *nothing on this screen used to say so*: the key is written by the FAPI section
+   * and read only by the callback. `clearTokens()` clears it, which made the mode resettable but not
+   * visible — and a mode you cannot see is the thing that costs an afternoon.
+   */
+  const [signingKeyPresent, setSigningKeyPresent] = useState(() =>
+    Boolean(readKey(SESSION_KEYS.fapiSigningKey)),
+  );
+  const forgetSigningKey = () => {
+    removeKey(SESSION_KEYS.fapiSigningKey);
+    removeKey(SESSION_KEYS.fapiSigningPublicKey);
+    setSigningKeyPresent(false);
+    toast.success('Signing key forgotten — the exchange will use this section\u2019s settings');
+  };
 
   const [acId, setAcId] = useState(CLIENT_ID);
   const [acSecret, setAcSecret] = useState(CLIENT_SECRET);
@@ -222,31 +260,22 @@ const AuthFlowsSection: React.FC = () => {
         return {
           method: 'POST' as const,
           url: '/api/token',
-          headers: {
-            Authorization: `Basic ${btoa(`${ccId}:${ccSecret}`)}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: `grant_type=client_credentials&scope=${encodeURIComponent(ccScope)}`,
+          headers: basicOrNone(ccId, ccSecret),
+          body: `grant_type=client_credentials&scope=${encodeURIComponent(ccScope)}${clientIdParam(ccId, ccSecret)}`,
         };
       case 'password':
         return {
           method: 'POST' as const,
           url: '/api/token',
-          headers: {
-            Authorization: `Basic ${btoa(`${pwId}:${pwSecret}`)}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: `grant_type=password&username=${encodeURIComponent(pwUser)}&password=${encodeURIComponent(pwPass)}&scope=${encodeURIComponent(pwScope)}`,
+          headers: basicOrNone(pwId, pwSecret),
+          body: `grant_type=password&username=${encodeURIComponent(pwUser)}&password=${encodeURIComponent(pwPass)}&scope=${encodeURIComponent(pwScope)}${clientIdParam(pwId, pwSecret)}`,
         };
       case 'refresh_token':
         return {
           method: 'POST' as const,
           url: '/api/token',
-          headers: {
-            Authorization: `Basic ${btoa(`${rtId}:${rtSecret}`)}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(rtToken)}`,
+          headers: basicOrNone(rtId, rtSecret),
+          body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(rtToken)}${clientIdParam(rtId, rtSecret)}`,
         };
       case 'jwt_bearer':
         return {
@@ -309,6 +338,19 @@ const AuthFlowsSection: React.FC = () => {
             <div className="space-y-4">
               {grantType === 'authorization_code' && (
                 <div className="space-y-3">
+                  {signingKeyPresent && (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                      <p className="text-xs text-warning-text">
+                        A <strong>FAPI signing key</strong> is stored in this session, so the token
+                        exchange will authenticate with <code>private_key_jwt</code> —{' '}
+                        <code>client_assertion</code> instead of the credentials below. For a public
+                        client that is refused with <code>[A157303]</code>.
+                      </p>
+                      <Button size="sm" variant="secondary" onClick={forgetSigningKey}>
+                        Forget the signing key
+                      </Button>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
                       label="Client ID"
