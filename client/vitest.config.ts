@@ -47,10 +47,10 @@ export default defineConfig({
        * rather than driving every branch.
        */
       thresholds: {
-        statements: 60,
-        branches: 56,
-        functions: 50,
-        lines: 61,
+        statements: 80,
+        branches: 76,
+        functions: 73,
+        lines: 81,
         'src/utils/**': { statements: 88, branches: 85, functions: 92, lines: 89 },
         'src/services/**': { statements: 80, branches: 76, functions: 78, lines: 81 },
         /**
@@ -71,15 +71,19 @@ export default defineConfig({
          *   added with no assertion about its shape.
          * - `pages/` is `CallbackPage`, the most security-relevant file in the client.
          *
-         * Deliberately **no floor on `src/components/**` yet**: it sits at 50% functions overall and the
-         * five 500+ LOC sections are far below that. Setting a floor there now would either be met
-         * trivially or block every commit; the honest move is to raise the global functions ratchet as
-         * per-section tests land, and to keep the per-area floors on the layers that are already good.
+         * - `src/components/**` carried **no floor at all** until P1-12 finished, and the note here said
+         *   why: it sat at ~50% functions, `ClientManagementSection` at 1.53%, so any floor would have
+         *   been either trivially met or a permanent block. Twenty driven section tests later it
+         *   measures **69.73% functions** (470/674) and 77.75% statements, so the floor below is a
+         *   reading rather than an aspiration — set a couple of points under, like every other row.
+         *
+         * **Re-measure before raising any of these; do not carry the numbers forward from memory.**
          */
         'src/hooks/**': { statements: 85, branches: 80, functions: 86, lines: 88 },
         'src/context/**': { statements: 90, branches: 90, functions: 88, lines: 92 },
         'src/data/**': { statements: 94, branches: 100, functions: 84, lines: 94 },
         'src/pages/**': { statements: 82, branches: 80, functions: 80, lines: 82 },
+        'src/components/**': { statements: 76, branches: 74, functions: 68, lines: 77 },
       },
     },
   },
