@@ -262,8 +262,6 @@ function FapiSection() {
       title="FAPI 2.0 Security Profile"
       description="FAPI 2.0 Security Profile compliance and test flow with private_key_jwt client auth and DPoP sender-constrained tokens"
     >
-      {!!error && <p className="text-xs text-danger-text">{String(error)}</p>}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>

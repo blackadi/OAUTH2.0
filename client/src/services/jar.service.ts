@@ -17,7 +17,19 @@ export interface JarProcessResult {
   action?: string;
   resultCode?: string;
   resultMessage?: string;
-  responseContent?: string;
+  /**
+   * `string | null`, not `string | undefined` — the server genuinely sends **`null`** here.
+   *
+   * `/api/jar/process` is one of the endpoints with no specification body to be, so it keeps Authlete's
+   * envelope, and Authlete answers `NO_INTERACTION` and `INTERACTION` with `responseContent: null` — a
+   * *"you decide"* answer rather than a redirect URL. `AGENTS.md` records that the null was deliberately
+   * left visible rather than tidied away.
+   *
+   * Declaring it `string | undefined` made a realistic response a **compile error** in a test that
+   * modelled the real payload, which is how this was found. Absent and explicitly null are different
+   * facts and the type has to be able to say both.
+   */
+  responseContent?: string | null;
   scopes?: { name?: string; description?: string }[];
 }
 
