@@ -113,10 +113,23 @@ export function fillAll(values: Array<[string | RegExp, string]>): void {
   for (const [label, value] of values) fill(label, value);
 }
 
-/** Enter the management credentials the admin-gated sections require. */
-export function fillAdminCredentials(id = 'mgmt-id', secret = 'mgmt-secret'): void {
-  fill(/Admin Client ID/i, id);
-  fill(/Admin Client Secret/i, secret);
+/**
+ * Enter the management credentials the admin-gated sections require.
+ *
+ * `label` mirrors `AdminAuth`'s own prop: a caller that passes one gets `"<label> Client ID"` instead
+ * of `"Admin Client ID"`, and `McpSection` passes `"Admin (for DCR)"`. The regex is anchored at both
+ * ends because the unanchored form matches `"Registered Client ID"` and `"Client ID (auto-filled)"` in
+ * the same section — Testing Library then throws "found multiple", which is the *good* outcome; the bad
+ * one is a section where only the wrong field exists and the credential is typed into it silently.
+ */
+export function fillAdminCredentials(
+  id = 'mgmt-id',
+  secret = 'mgmt-secret',
+  label = 'Admin',
+): void {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  fill(new RegExp(`^${escaped} Client ID$`, 'i'), id);
+  fill(new RegExp(`^${escaped} Client Secret$`, 'i'), secret);
 }
 
 /** Click a button by its accessible name, failing loudly if it is disabled. */
@@ -231,8 +244,50 @@ export async function expectReadsBack(value: string | RegExp, what: string): Pro
   );
 }
 
+/**
+ * Capture a front-channel navigation instead of performing one.
+ *
+ * The authorization request is `window.location.href = url` — a real browser navigation, which jsdom
+ * answers with a console warning and no observable effect. So a wizard step whose entire job is to
+ * *compose that URL correctly* is unobservable by default, which is exactly how the FAPI wizard's
+ * step 3→4 stayed broken: it read `requestUri` from a response carrying `request_uri`, returned early
+ * on `undefined`, and the only visible symptom was a button that did nothing.
+ *
+ * Returns a live handle — read `nav.href` after pressing the control. `resetSectionState` restores the
+ * real `location`, so a test that forgets to clean up cannot leak into the next file.
+ */
+export function stubNavigation(): { readonly href: string } {
+  if (!realLocation) realLocation = window.location;
+  const stub = {
+    ...Object.fromEntries(
+      (
+        ['origin', 'protocol', 'host', 'hostname', 'port', 'pathname', 'search', 'hash'] as const
+      ).map((k) => [k, realLocation![k]]),
+    ),
+    href: '',
+    assign(url: string) {
+      this.href = url;
+    },
+    replace(url: string) {
+      this.href = url;
+    },
+  };
+  Object.defineProperty(window, 'location', { value: stub, writable: true, configurable: true });
+  return stub as { readonly href: string };
+}
+
+let realLocation: Location | undefined;
+
 /** Reset everything a section could have left behind. Call in `beforeEach`. */
 export function resetSectionState(): void {
   sessionStorage.clear();
   vi.restoreAllMocks();
+  if (realLocation) {
+    Object.defineProperty(window, 'location', {
+      value: realLocation,
+      writable: true,
+      configurable: true,
+    });
+    realLocation = undefined;
+  }
 }

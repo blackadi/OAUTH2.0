@@ -328,7 +328,12 @@ function McpSection() {
       <AdminAuth label="Admin (for DCR)" />
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
-      {wizError && <p className="text-xs text-danger-text">{wizError}</p>}
+      {/* The wizard's failures were a bare `<p>` while the tabs directly above used the explainer — the
+          same PED-08 defect closed in JAR and FAPI, still open in one half of this one section. An
+          `[A157303]` here means the exchange presented client-authentication data for a public client,
+          and `[A157357]` means the credentials arrived on the wrong channel; both have answers written
+          down in this repo and neither is guessable from the raw string. */}
+      {wizError && <ErrorExplainer error={String(wizError)} className="mb-3" />}
 
       <TabBar options={MCP_OPS} value={activeOp} onChange={setActiveOp} />
 
