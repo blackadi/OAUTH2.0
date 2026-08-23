@@ -47,10 +47,10 @@ export default defineConfig({
        * rather than driving every branch.
        */
       thresholds: {
-        statements: 80,
-        branches: 76,
-        functions: 73,
-        lines: 81,
+        statements: 83,
+        branches: 78,
+        functions: 78,
+        lines: 83,
         'src/utils/**': { statements: 88, branches: 85, functions: 92, lines: 89 },
         'src/services/**': { statements: 80, branches: 76, functions: 78, lines: 81 },
         /**
@@ -74,8 +74,11 @@ export default defineConfig({
          * - `src/components/**` carried **no floor at all** until P1-12 finished, and the note here said
          *   why: it sat at ~50% functions, `ClientManagementSection` at 1.53%, so any floor would have
          *   been either trivially met or a permanent block. Twenty driven section tests later it
-         *   measures **69.73% functions** (470/674) and 77.75% statements, so the floor below is a
-         *   reading rather than an aspiration — set a couple of points under, like every other row.
+         *   measures **74.92% functions** and 79.20% statements, so the floor below is a reading rather
+         *   than an aspiration — set a couple of points under, like every other row. It was 69.73% when
+         *   the driven tests landed and rose again when `ClientManagementSection` became a table: the
+         *   `it.each` over `CLIENT_OPERATIONS` drives all seventeen operations, where the hand-written
+         *   test reached six.
          *
          * **Re-measure before raising any of these; do not carry the numbers forward from memory.**
          */
@@ -83,7 +86,7 @@ export default defineConfig({
         'src/context/**': { statements: 90, branches: 90, functions: 88, lines: 92 },
         'src/data/**': { statements: 94, branches: 100, functions: 84, lines: 94 },
         'src/pages/**': { statements: 82, branches: 80, functions: 80, lines: 82 },
-        'src/components/**': { statements: 76, branches: 74, functions: 68, lines: 77 },
+        'src/components/**': { statements: 78, branches: 76, functions: 73, lines: 79 },
       },
     },
   },

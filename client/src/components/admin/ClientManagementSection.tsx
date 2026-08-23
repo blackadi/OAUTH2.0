@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { clientService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
+import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { TabBar } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
@@ -13,156 +13,88 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
-import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { useCredentials } from '@/context/CredentialContext';
+import {
+  ALL_CLIENT_OPS,
+  CLIENT_OPERATIONS,
+  INITIAL_FIELD_VALUES,
+  type ClientOp,
+  type ClientOperation,
+  type FieldValues,
+  type OperationField,
+} from './client-operations';
 
-type ClientOp =
-  | 'list'
-  | 'get'
-  | 'create'
-  | 'update'
-  | 'delete'
-  | 'lock'
-  | 'unlock'
-  | 'refresh-secret'
-  | 'update-secret'
-  | 'list-auth'
-  | 'update-auth'
-  | 'delete-auth'
-  | 'get-granted-scopes'
-  | 'delete-granted-scopes'
-  | 'get-requestable-scopes'
-  | 'update-requestable-scopes'
-  | 'delete-requestable-scopes';
-
-/** Every value `ClientOp` can take, as a runtime list — the allowed set for the URL parameter. */
-const ALL_OPS = [
-  'list',
-  'get',
-  'create',
-  'update',
-  'delete',
-  'lock',
-  'unlock',
-  'refresh-secret',
-  'update-secret',
-  'list-auth',
-  'update-auth',
-  'delete-auth',
-  'get-granted-scopes',
-  'delete-granted-scopes',
-  'get-requestable-scopes',
-  'update-requestable-scopes',
-  'delete-requestable-scopes',
-] as const satisfies readonly ClientOp[];
-
-const CLIENT_TYPE_OPTIONS = [
-  { value: 'CONFIDENTIAL', label: 'CONFIDENTIAL' },
-  { value: 'PUBLIC', label: 'PUBLIC' },
-];
-
-const APP_TYPE_OPTIONS = [
-  { value: 'web', label: 'web' },
-  { value: 'native', label: 'native' },
-];
-
-const AUTH_METHOD_OPTIONS = [
-  { value: 'NONE', label: 'NONE' },
-  { value: 'CLIENT_SECRET_BASIC', label: 'CLIENT_SECRET_BASIC' },
-  { value: 'CLIENT_SECRET_POST', label: 'CLIENT_SECRET_POST' },
-  { value: 'CLIENT_SECRET_JWT', label: 'CLIENT_SECRET_JWT' },
-  { value: 'PRIVATE_KEY_JWT', label: 'PRIVATE_KEY_JWT' },
-  { value: 'SELF_SIGNED_TLS_CLIENT_AUTH', label: 'SELF_SIGNED_TLS_CLIENT_AUTH' },
-];
-
-const BASIC_OPS: { value: ClientOp; label: string }[] = [
-  { value: 'list', label: 'List' },
-  { value: 'get', label: 'Get' },
-  { value: 'create', label: 'Create' },
-  { value: 'update', label: 'Update' },
-  { value: 'delete', label: 'Delete' },
-  { value: 'lock', label: 'Lock' },
-  { value: 'unlock', label: 'Unlock' },
-  { value: 'refresh-secret', label: 'Refresh Secret' },
-  { value: 'update-secret', label: 'Update Secret' },
-];
-
-const ADVANCED_OPS: { value: ClientOp; label: string }[] = [
-  { value: 'list-auth', label: 'List Auth' },
-  { value: 'update-auth', label: 'Update Auth' },
-  { value: 'delete-auth', label: 'Delete Auth' },
-  { value: 'get-granted-scopes', label: 'Get Granted Scopes' },
-  { value: 'delete-granted-scopes', label: 'Delete Granted Scopes' },
-  { value: 'get-requestable-scopes', label: 'Get Requestable Scopes' },
-  { value: 'update-requestable-scopes', label: 'Update Requestable Scopes' },
-  { value: 'delete-requestable-scopes', label: 'Delete Requestable Scopes' },
-];
-
+/**
+ * Client Management — seventeen operations rendered from `client-operations.ts`.
+ *
+ * **What this replaces.** 635 lines and **33 `useState` calls**, the highest count in the app and the
+ * first thing the 2026-08-22 audit named. Seventeen near-identical panels, each with its own state, six
+ * of them tracking a separate *"Client ID"* — so typing an id and switching tabs lost it. The
+ * operations are a table now and this file is the renderer: one piece of field state, one form, one
+ * place where a call is made.
+ *
+ * Two things that did **not** move, on purpose. The credential lives in `CredentialContext` because it
+ * is shared with seven other sections; and each operation's `run` lives in the table beside its fields,
+ * because *what this sends and where* is what a reader comes looking for, and splitting it from its
+ * inputs is how the two drift.
+ */
 function ClientManagementSection() {
-  // The management credential is shared for the page rather than owned here: eight sections
-  // held their own copy, and a route change unmounts a section, so it had to be retyped on
-  // every navigation.
+  // The management credential is shared for the page rather than owned here: eight sections held their
+  // own copy, and a route change unmounts a section, so it had to be retyped on every navigation.
   const { clientId: authId, clientSecret: authSecret } = useCredentials();
   /**
    * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
-   *
-   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
-   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
-   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
-   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   * `useUrlState` validates the incoming value against the table's own list, so a hand-edited query
+   * cannot select an operation that does not exist.
    */
-  const [activeOp, setActiveOp] = useUrlState<ClientOp>('op', ALL_OPS);
+  const [activeOp, setActiveOp] = useUrlState<ClientOp>('op', ALL_CLIENT_OPS);
   const { loading, result, error, call } = useAsyncCall();
+  const { confirm, dialog } = useConfirmedAction();
 
-  const [listStart, setListStart] = useState('0');
-  const [listEnd, setListEnd] = useState('20');
-  const [getClientId, setGetClientId] = useState('');
-  const [deleteClientId, setDeleteClientId] = useState('');
-  const [flagClientId, setFlagClientId] = useState('');
-  const [refreshClientId, setRefreshClientId] = useState('');
-  const [secretClientId, setSecretClientId] = useState('');
-  const [newSecret, setNewSecret] = useState('');
-
-  const [createName, setCreateName] = useState('');
-  const [createType, setCreateType] = useState('CONFIDENTIAL');
-  const [createAppType, setCreateAppType] = useState('web');
-  const [createGrantTypes, setCreateGrantTypes] = useState('AUTHORIZATION_CODE');
-  const [createResponseTypes, setCreateResponseTypes] = useState('code');
-  const [createRedirectUris, setCreateRedirectUris] = useState('');
-  const [createAuthMethod, setCreateAuthMethod] = useState('CLIENT_SECRET_BASIC');
-  const [createDescription, setCreateDescription] = useState('');
-  const [createDeveloper, setCreateDeveloper] = useState('');
-
-  const [updateClientId, setUpdateClientId] = useState('');
-  const [updateName, setUpdateName] = useState('');
-  const [updateDesc, setUpdateDesc] = useState('');
-  const [updateUris, setUpdateUris] = useState('');
-
-  const [authSubject, setAuthSubject] = useState('');
-  const [authUpdateClientId, setAuthUpdateClientId] = useState('');
-  const [authUpdateSubject, setAuthUpdateSubject] = useState('');
-  const [authUpdateScopes, setAuthUpdateScopes] = useState('');
-  const [authDeleteClientId, setAuthDeleteClientId] = useState('');
-  const [authDeleteSubject, setAuthDeleteSubject] = useState('');
-
-  const [gsClientId, setGsClientId] = useState('');
-  const [gsSubject, setGsSubject] = useState('');
-
-  const [rsClientId, setRsClientId] = useState('');
-  const [rsScopes, setRsScopes] = useState('');
+  /**
+   * Every field on screen, keyed by name and shared across operations.
+   *
+   * One hook where there were thirty-three. Sharing by name is the deliberate part: `clientId` typed on
+   * Get is still there on Update, which is what the six separate copies prevented. Where the old code
+   * already shared a value within a family — the granted-scopes pair, the three requestable-scopes
+   * operations — this preserves it by construction rather than by remembering to reuse a variable.
+   */
+  const [values, setValues] = useState<FieldValues>(INITIAL_FIELD_VALUES);
+  const setField = useCallback((name: string, value: string) => {
+    setValues((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
   const auth = authId && authSecret ? btoa(`${authId}:${authSecret}`) : '';
   const doc = activeOp ? getDoc('client', activeOp) : undefined;
-  const { confirm, dialog } = useConfirmedAction();
+  const operation = CLIENT_OPERATIONS.find((o) => o.value === activeOp);
 
-  const handleCall = async (fn: () => Promise<unknown>) => {
-    const { data, error: err } = await call(fn);
+  const handleCall = async (op: ClientOperation) => {
+    const { data, error: err } = await call(() => op.run(values, auth));
     if (data) {
-      toast.success(`${activeOp} completed`);
+      toast.success(`${op.value} completed`);
     } else {
       toast.error(err);
     }
   };
+
+  const runOperation = (op: ClientOperation) => {
+    if (!op.confirm) {
+      void handleCall(op);
+      return;
+    }
+    // The table describes the question; this owns the answer, because `run` has to close over
+    // `handleCall` and a data table has no business knowing about that.
+    confirm({ ...op.confirm(values), run: () => handleCall(op) });
+  };
+
+  const tabsFor = (group: 'basic' | 'advanced') =>
+    CLIENT_OPERATIONS.filter((o) => o.group === group).map(({ value, label }) => ({
+      value,
+      label,
+    }));
+
+  const missingRequired = (op: ClientOperation) =>
+    (op.requires ?? []).some((name) => !values[name]?.trim());
 
   return (
     <SectionPanel title="Client Management" description="Register and manage OAuth clients">
@@ -170,457 +102,35 @@ function ClientManagementSection() {
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
-      <TabBar options={BASIC_OPS} value={activeOp} onChange={setActiveOp} disabled={!auth} />
+      <TabBar options={tabsFor('basic')} value={activeOp} onChange={setActiveOp} disabled={!auth} />
 
       <span className="text-xs text-muted-foreground">Advanced:</span>
-      <TabBar options={ADVANCED_OPS} value={activeOp} onChange={setActiveOp} disabled={!auth} />
+      <TabBar
+        options={tabsFor('advanced')}
+        value={activeOp}
+        onChange={setActiveOp}
+        disabled={!auth}
+      />
 
       {activeOp && doc && <OperationDescription doc={doc} />}
 
-      {activeOp === 'list' && (
+      {operation && (
         <div className="space-y-3">
-          <div className="flex gap-3">
-            <Input
-              label="Start (inclusive)"
-              value={listStart}
-              onChange={(e) => setListStart(e.target.value)}
-              placeholder="0"
+          {operation.fields.map((field) => (
+            <OperationInput
+              key={`${operation.value}:${field.name}`}
+              field={field}
+              value={values[field.name] ?? ''}
+              onChange={(value) => setField(field.name, value)}
             />
-            <Input
-              label="End (exclusive)"
-              value={listEnd}
-              onChange={(e) => setListEnd(e.target.value)}
-              placeholder="20"
-            />
-          </div>
+          ))}
           <Button
-            onClick={() =>
-              handleCall(() => clientService.listClients(auth, Number(listStart), Number(listEnd)))
-            }
+            variant={operation.variant}
+            disabled={missingRequired(operation) || loading}
             loading={loading}
+            onClick={() => runOperation(operation)}
           >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'get' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={getClientId}
-            onChange={(e) => setGetClientId(e.target.value)}
-            placeholder="Numeric client ID from Authlete"
-          />
-          <Button
-            onClick={() => handleCall(() => clientService.getClient(getClientId, auth))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'create' && (
-        <div className="space-y-3">
-          <Input
-            label="Client Name"
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            placeholder="e.g. My App"
-          />
-          <Select
-            label="Client Type"
-            options={CLIENT_TYPE_OPTIONS}
-            value={createType}
-            onChange={(e) => setCreateType(e.target.value)}
-          />
-          <Select
-            label="Application Type"
-            options={APP_TYPE_OPTIONS}
-            value={createAppType}
-            onChange={(e) => setCreateAppType(e.target.value)}
-          />
-          <Input
-            label="Grant Types (comma-separated)"
-            value={createGrantTypes}
-            onChange={(e) => setCreateGrantTypes(e.target.value)}
-            placeholder="e.g. AUTHORIZATION_CODE,REFRESH_TOKEN"
-          />
-          <Input
-            label="Response Types (space-separated)"
-            value={createResponseTypes}
-            onChange={(e) => setCreateResponseTypes(e.target.value)}
-            placeholder="e.g. code"
-          />
-          <Input
-            label="Redirect URIs (space-separated)"
-            value={createRedirectUris}
-            onChange={(e) => setCreateRedirectUris(e.target.value)}
-            placeholder="https://your-app.com/callback"
-          />
-          <Select
-            label="Token Auth Method"
-            options={AUTH_METHOD_OPTIONS}
-            value={createAuthMethod}
-            onChange={(e) => setCreateAuthMethod(e.target.value)}
-          />
-          <Input
-            label="Description"
-            value={createDescription}
-            onChange={(e) => setCreateDescription(e.target.value)}
-            placeholder="Optional description"
-          />
-          <Input
-            label="Developer"
-            value={createDeveloper}
-            onChange={(e) => setCreateDeveloper(e.target.value)}
-            placeholder="Optional developer identifier"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                clientService.createClient(
-                  {
-                    client: {
-                      clientName: createName,
-                      clientType: createType,
-                      applicationType: createAppType,
-                      grantTypes: createGrantTypes.split(/[\s,]+/).filter(Boolean),
-                      responseTypes: createResponseTypes.split(/[\s,]+/).filter(Boolean),
-                      redirectUris: createRedirectUris.split(/[\s,]+/).filter(Boolean),
-                      tokenAuthMethod: createAuthMethod,
-                      description: createDescription,
-                      developer: createDeveloper,
-                    },
-                  },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'update' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={updateClientId}
-            onChange={(e) => setUpdateClientId(e.target.value)}
-            placeholder="Numeric client ID to update"
-          />
-          <Input
-            label="Client Name"
-            value={updateName}
-            onChange={(e) => setUpdateName(e.target.value)}
-            placeholder="New name (leave empty to keep)"
-          />
-          <Input
-            label="Description"
-            value={updateDesc}
-            onChange={(e) => setUpdateDesc(e.target.value)}
-            placeholder="New description (leave empty to keep)"
-          />
-          <Input
-            label="Redirect URIs (space-separated)"
-            value={updateUris}
-            onChange={(e) => setUpdateUris(e.target.value)}
-            placeholder="https://your-app.com/callback"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                clientService.updateClient(
-                  updateClientId,
-                  {
-                    client: {
-                      clientName: updateName || undefined,
-                      description: updateDesc || undefined,
-                      redirectUris: updateUris
-                        ? updateUris.split(/[\s,]+/).filter(Boolean)
-                        : undefined,
-                    },
-                  },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'delete' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={deleteClientId}
-            onChange={(e) => setDeleteClientId(e.target.value)}
-            placeholder="Numeric client ID to permanently delete"
-          />
-          {/* Deleting a client at Authlete is permanent and nothing here can restore it — and two of
-              the live clients are curriculum infrastructure (`1523514379` for Module 02's plain code
-              flow, `1678274156` for Module 03's). A free-text id beside an unguarded Run button was one
-              misclick away from breaking a lab, so the id has to be typed back. */}
-          <Button
-            variant="danger"
-            disabled={!deleteClientId.trim()}
-            onClick={() =>
-              confirm({
-                title: 'Delete this client permanently?',
-                body: `Client ${deleteClientId} will be deleted at Authlete. This cannot be undone from here, and any flow, lab or tutorial that names this client will stop working.`,
-                confirmLabel: 'Delete client',
-                requireTyped: deleteClientId.trim(),
-                run: () => handleCall(() => clientService.deleteClient(deleteClientId, auth)),
-              })
-            }
-            loading={loading}
-          >
-            Delete
-          </Button>
-        </div>
-      )}
-
-      {(activeOp === 'lock' || activeOp === 'unlock') && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID / Alias"
-            value={flagClientId}
-            onChange={(e) => setFlagClientId(e.target.value)}
-            placeholder="Client ID to suspend/restore"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() => clientService.lockFlag(flagClientId, activeOp === 'lock', auth))
-            }
-            loading={loading}
-          >
-            {activeOp === 'lock' ? 'Lock' : 'Unlock'}
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'refresh-secret' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID / Alias"
-            value={refreshClientId}
-            onChange={(e) => setRefreshClientId(e.target.value)}
-            placeholder="Client ID to rotate secret for"
-          />
-          <Button
-            onClick={() => handleCall(() => clientService.refreshSecret(refreshClientId, auth))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'update-secret' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID / Alias"
-            value={secretClientId}
-            onChange={(e) => setSecretClientId(e.target.value)}
-            placeholder="Client ID to set secret for"
-          />
-          <Input
-            label="New Client Secret"
-            value={newSecret}
-            onChange={(e) => setNewSecret(e.target.value)}
-            placeholder="A-Z, a-z, 0-9, -, _ (max 86 chars)"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() => clientService.updateSecret(secretClientId, newSecret, auth))
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'list-auth' && (
-        <div className="space-y-3">
-          <Input
-            label="Subject (user ID)"
-            value={authSubject}
-            onChange={(e) => setAuthSubject(e.target.value)}
-            placeholder="End-user identifier"
-          />
-          <Button
-            onClick={() => handleCall(() => clientService.listAuth(authSubject, auth))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'update-auth' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={authUpdateClientId}
-            onChange={(e) => setAuthUpdateClientId(e.target.value)}
-            placeholder="Client to update authorizations for"
-          />
-          <Input
-            label="Subject (user ID)"
-            value={authUpdateSubject}
-            onChange={(e) => setAuthUpdateSubject(e.target.value)}
-            placeholder="End-user identifier"
-          />
-          <Input
-            label="Scopes (space-separated)"
-            value={authUpdateScopes}
-            onChange={(e) => setAuthUpdateScopes(e.target.value)}
-            placeholder="New scopes for existing tokens"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                clientService.updateAuth(
-                  authUpdateClientId,
-                  { subject: authUpdateSubject, scopes: authUpdateScopes },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'delete-auth' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={authDeleteClientId}
-            onChange={(e) => setAuthDeleteClientId(e.target.value)}
-            placeholder="Client to revoke authorizations for"
-          />
-          <Input
-            label="Subject (user ID)"
-            value={authDeleteSubject}
-            onChange={(e) => setAuthDeleteSubject(e.target.value)}
-            placeholder="End-user identifier"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                clientService.deleteAuth(authDeleteClientId, authDeleteSubject, auth),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {(activeOp === 'get-granted-scopes' || activeOp === 'delete-granted-scopes') && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={gsClientId}
-            onChange={(e) => setGsClientId(e.target.value)}
-            placeholder="Client to inspect/clear scopes for"
-          />
-          <Input
-            label="Subject (user ID)"
-            value={gsSubject}
-            onChange={(e) => setGsSubject(e.target.value)}
-            placeholder="End-user identifier"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                activeOp === 'get-granted-scopes'
-                  ? clientService.getGrantedScopes(gsClientId, gsSubject, auth)
-                  : clientService.deleteGrantedScopes(gsClientId, gsSubject, auth),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'get-requestable-scopes' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={rsClientId}
-            onChange={(e) => setRsClientId(e.target.value)}
-            placeholder="Client to check scope restrictions for"
-          />
-          <Button
-            onClick={() => handleCall(() => clientService.getRequestableScopes(rsClientId, auth))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'update-requestable-scopes' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={rsClientId}
-            onChange={(e) => setRsClientId(e.target.value)}
-            placeholder="Client to restrict scopes for"
-          />
-          <Input
-            label="Scopes (space-separated)"
-            value={rsScopes}
-            onChange={(e) => setRsScopes(e.target.value)}
-            placeholder="Allowed scopes (empty = unrestricted)"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                clientService.updateRequestableScopes(
-                  rsClientId,
-                  { requestableScopes: rsScopes.split(/[\s,]+/).filter(Boolean) },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'delete-requestable-scopes' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={rsClientId}
-            onChange={(e) => setRsClientId(e.target.value)}
-            placeholder="Client to remove scope restrictions from"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() => clientService.deleteRequestableScopes(rsClientId, auth))
-            }
-            loading={loading}
-          >
-            Run
+            {operation.runLabel ?? 'Run'}
           </Button>
         </div>
       )}
@@ -629,6 +139,37 @@ function ClientManagementSection() {
 
       {result ? <JsonBlock data={result} label="Response" /> : null}
     </SectionPanel>
+  );
+}
+
+/** One field, as its `kind` says. Kept here rather than exported: nothing else renders these. */
+function OperationInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: OperationField;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  if (field.kind === 'select') {
+    return (
+      <Select
+        label={field.label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        options={field.options ?? []}
+      />
+    );
+  }
+  return (
+    <Input
+      label={field.label}
+      type={field.kind === 'password' ? 'password' : undefined}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={field.placeholder}
+    />
   );
 }
 
