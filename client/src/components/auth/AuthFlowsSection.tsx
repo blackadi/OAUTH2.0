@@ -10,6 +10,7 @@ import {
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { generateKeyPair } from '@/services/dpop.service';
+import { jwkThumbprint } from '@/services/crypto-utils';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { useTraces } from '@/hooks/useTraces';
 import { authorizationCodeProgress, twoStepProgress } from '@/utils/flow-progress';
@@ -276,8 +277,22 @@ const AuthFlowsSection: React.FC = () => {
       const pair = await generateKeyPair();
       writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
       writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
+      /**
+       * **Two different values, and this line is where they used to be one.**
+       *
+       * `kid` identifies the key and is what `generateP256KeyPair` derives — the digest of the exported
+       * JWK, `key_ops` and `ext` and all. `dpop_jkt` is the **RFC 7638 thumbprint**, computed over
+       * `crv`/`kty`/`x`/`y` alone in lexicographic order, and RFC 9449 §10 makes a mismatch a MUST
+       * reject: *"the authorization server computes the JWK Thumbprint of the proof-of-possession
+       * public key in the DPoP proof and verifies that it matches the `dpop_jkt` parameter value in the
+       * authorization request. If they do not match, it MUST reject the request."*
+       *
+       * `setAcDpopThumbprint(pair.kid)` was here, which is a plausible-looking wrong answer: both are
+       * base64url SHA-256 digests of "the key". It never broke anything only because `dpop_jkt` was
+       * never actually reaching the request. Do not collapse these two lines back together.
+       */
       writeKey(SESSION_KEYS.dpopKid, pair.kid);
-      setAcDpopThumbprint(pair.kid);
+      setAcDpopThumbprint(await jwkThumbprint(pair.publicKey));
     } catch (e: unknown) {
       setAcUseDpop(false);
       toast.error(e instanceof Error ? e.message : 'Failed to generate a DPoP key');

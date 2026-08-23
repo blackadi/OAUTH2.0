@@ -4,6 +4,7 @@ import AuthFlowsSection from '@/components/auth/AuthFlowsSection';
 import { tokenService } from '@/services';
 import { getTraces, clearTraces } from '@/services/trace-store';
 import { SESSION_KEYS } from '@/services/session-keys';
+import { jwkThumbprint, type JWK } from '@/services/crypto-utils';
 import {
   mountSection,
   fill,
@@ -273,37 +274,82 @@ describe('AuthFlowsSection — the authorization request', () => {
   });
 
   /**
-   * Ticking the box generates and stores a DPoP key.
+   * **RFC 9449 §10, end to end: tick the box and a conformant `dpop_jkt` reaches the request.**
    *
-   * **What this test deliberately does not assert, because it is not true yet.** The checkbox's own
-   * copy says it *"sends its thumbprint as `dpop_jkt`"*, and it does not: `dpop_jkt` carries
-   * `defaultOn: false` in `data/authParams.ts` and sits in the collapsed `extensions` group, so nothing
-   * reaches the authorization request unless the user finds and enables that row.
-   *
-   * And if they do, the value is wrong. `AuthFlowsSection` passes `pair.kid`, which
-   * `generateP256KeyPair` derives as `SHA-256(JSON.stringify(exportedPublicJwk))` — an object that
-   * WebCrypto exports carrying `key_ops` and `ext`, in insertion order. **RFC 9449** (*"OAuth 2.0
-   * Demonstrating Proof of Possession (DPoP)"*, Standards Track, September 2023) §10 *"Authorization
-   * Code Binding to a DPoP Key"*: *"The value of the `dpop_jkt` authorization request parameter is the
-   * JWK Thumbprint [RFC7638] of the proof-of-possession public key using the SHA-256 hash function,
-   * which is the same value as used for the `jkt` confirmation method defined in Section 6.1."* And
-   * **RFC 7638** (*"JSON Web Key (JWK) Thumbprint"*, Standards Track, September 2015) §3.2 requires
-   * exactly `crv`, `kty`, `x`, `y`, *"ordered lexicographically by the Unicode code points of the
-   * member names"*. Measured on a real P-256 key, the two digests differ.
-   *
-   * The `kid` itself is fine where it is used — RFC 9449 §4.2 requires the full `jwk` in the proof
-   * header, so `kid` is only an identifier. It is `dpop_jkt` that needs a conformant thumbprint. Fixing
-   * that is a DPoP change and goes through a plan.
+   * Neither half of that sentence used to be true. `dpop_jkt` is `defaultOn: false` and sits in the
+   * collapsed `extensions` group, so nothing was sent — while the checkbox's own copy said it
+   * *"sends its thumbprint as `dpop_jkt`"*. And the value it would have sent was `pair.kid`, the digest
+   * of `JSON.stringify(exportedPublicJwk)`, an object WebCrypto exports carrying `key_ops` and `ext` in
+   * insertion order. §10 requires the RFC 7638 thumbprint and makes a mismatch a **MUST reject** at the
+   * token endpoint, so the two faults were masking each other: wrong value, never sent.
    */
-  it('generates and stores a DPoP key when the box is ticked', async () => {
+  it('puts a dpop_jkt in the authorization request when DPoP is enabled', async () => {
     stubNavigation();
     mountSection(<AuthFlowsSection />);
+    await builderReady();
 
     fireEvent.click(screen.getByRole('checkbox', { name: /Sender-constrain with DPoP/i }));
-    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEYS.dpopPrivateKey)).toBeTruthy(), {
+
+    await waitFor(
+      async () => {
+        const url = new URL(screen.getByText(/\/api\/authorization\?/).textContent!.trim());
+        const sent = url.searchParams.get('dpop_jkt');
+        expect(sent, 'the checkbox says it sends this; it has to actually send it').toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
+  });
+
+  /**
+   * And it is the **thumbprint**, not the `kid` — the assertion the whole change exists for.
+   *
+   * Both are base64url SHA-256 digests of "the key", which is why substituting one for the other reads
+   * as correct. This recomputes RFC 7638 from the stored public key and demands the request carry that,
+   * and explicitly demands it does *not* carry `dpop_kid`.
+   */
+  it('sends the RFC 7638 thumbprint, not the key id, which are different values', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Sender-constrain with DPoP/i }));
+    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEYS.dpopPublicKey)).toBeTruthy(), {
       timeout: 5000,
     });
-    expect(sessionStorage.getItem(SESSION_KEYS.dpopKid)).toBeTruthy();
+
+    const publicKey = JSON.parse(sessionStorage.getItem(SESSION_KEYS.dpopPublicKey)!) as JWK;
+    const expected = await jwkThumbprint(publicKey);
+    const kid = sessionStorage.getItem(SESSION_KEYS.dpopKid);
+
+    await waitFor(async () => {
+      const url = new URL(screen.getByText(/\/api\/authorization\?/).textContent!.trim());
+      expect(url.searchParams.get('dpop_jkt')).toBe(expected);
+    });
+    // The guard against a silent regression to the old behaviour. If these two ever coincide, the key
+    // generator has changed and `crypto-utils.thumbprint.test.ts` will say so first.
+    expect(kid, 'a kid is still stored, and is still not a thumbprint').not.toBe(expected);
+  });
+
+  it('removes dpop_jkt again when DPoP is turned off', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+    const box = screen.getByRole('checkbox', { name: /Sender-constrain with DPoP/i });
+
+    fireEvent.click(box);
+    await waitFor(
+      () => {
+        const url = new URL(screen.getByText(/\/api\/authorization\?/).textContent!.trim());
+        expect(url.searchParams.get('dpop_jkt')).toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
+
+    fireEvent.click(box);
+    await waitFor(() => {
+      const url = new URL(screen.getByText(/\/api\/authorization\?/).textContent!.trim());
+      expect(url.searchParams.get('dpop_jkt'), 'a stale binding is worse than none').toBeNull();
+    });
   });
 
   it('clears the key and the cached nonce when the box is unticked', async () => {

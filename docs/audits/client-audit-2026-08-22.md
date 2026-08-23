@@ -1645,6 +1645,52 @@ from the finding alone.
 4. **Five uncleared copy timers, not four.** The audit found four; `TracePanel` had a fifth on its
    markdown export.
 
+### Defects found by the driven-section tests — 2026-08-23
+
+The driven tests (P1-12) exist because `sections.smoke.test.tsx` proves only that a section mounts and
+offers an enabled control, which is blind to all four dead flows this audit found. Writing them found
+five more of the same class, each behind an all-green board.
+
+| # | Defect | Why nothing saw it |
+|---|---|---|
+| 1 | **`statusHint` was unreachable.** `ErrorExplainer` is `decodeError`'s only caller, **none of its 46 usages passes `status`**, and `decodeError` read one only from its object form — so the entire status-based explanation path was dead in the running app. On this deployment that path is what separates Authlete's ~15-call rate limit from a wrong credential. | `decode-error.test.ts` tested `statusHint` **in isolation** and passed. A unit test of a function nobody calls is green by construction. |
+| 2 | **`HealthSection` never carried a status at all.** It owns per-check loading state, so it uses neither async hook, and both `catch` blocks set `e.message` — the raw body, no status. | Same as above, one layer out. Both halves were reverted independently; each alone fails the same test. |
+| 3 | **The FAPI wizard's front-channel hop was never recorded.** `recordNavigation` (PED-05, above) was wired into `AuthFlowsSection` and `CallbackPage` and **not** into `FapiSection`, so a FAPI 2.0 run's outbound hop was invisible in the trace panel and `SequenceView`, and `hasAuthorizeRequest` returned `false` for it. | The identical navigation from Grant Flows *was* recorded, so the capability looked wired. A capability added, one caller never told — the same shape as the original four. |
+| 4 | **The MCP wizard printed raw errors** while its own tabs three lines above used `ErrorExplainer` — the PED-08 defect, closed in JAR and FAPI, still open in half of one section. | Nothing asks whether a section's error surfaces are consistent *with each other*. |
+| 5 | **`dpop_jkt` carried a `kid`, not a thumbprint — and was never sent.** See below; it is the largest of the five. |
+
+#### `dpop_jkt`: two faults that masked each other
+
+The **Sender-constrain with DPoP** checkbox says it *"generates a key, sends its thumbprint as
+`dpop_jkt`"*. It did neither correctly.
+
+- **It never sent.** `dpop_jkt` is `defaultOn: false` and sits in the `extensions` group, which renders
+  **collapsed** — so nothing reached the request unless the user found and enabled the row by hand.
+- **The value was wrong.** `AuthFlowsSection` passed `pair.kid`, the digest of
+  `JSON.stringify(exportedPublicJwk)` — an object WebCrypto exports carrying `key_ops` and `ext` in
+  insertion order. RFC 9449 §10 requires the **RFC 7638** thumbprint, computed over `crv`/`kty`/`x`/`y`
+  alone in lexicographic order. Measured on one P-256 key: `kid` `7dFqQh4RTWRaZ-…`, `jkt` `R05VIe6r11s2N4…`.
+
+**Probed live, both directions, 2026-08-23** — and Authlete does enforce §10:
+
+| `dpop_jkt` declared | Proof at the token endpoint | Answer |
+|---|---|---|
+| thumbprint of **K1** | signed by **K1** | `200`, `token_type: DPoP`, and introspection returned `cnf.jkt` **equal to the thumbprint we computed** |
+| thumbprint of **K2** | signed by **K1** | `400 invalid_request` **`[A050318]`** *"The DPoP key thumbprint did not match the expected value."* |
+
+So the second fault was the only thing preventing the first from breaking every DPoP flow the moment
+anybody enabled the row. `[A050318]` is now in `AUTHLETE_NOTES`, `jwkThumbprint()` in `crypto-utils.ts`
+is the single implementation — pinned against RFC 7638 §3.1's own published vector — and
+`AuthorizeRequestBuilder` **derives** the row's enabled state from the presence of a thumbprint.
+
+Two adjacent findings from the same measurement. The DPoP proof header's `jwk` carried
+**`key_ops: ["sign"]`** — inherited from the exported *private* key by a `{ ...privateKeyJwk }` spread —
+and **`ext: true`**, which is not a registered JWK member; both are gone, and a test asserts the RFC 7638
+thumbprint is unchanged by their removal, so the binding provably did not move. And of the three
+`dpop.service.ts:NNN` references in `AGENTS.md`, **two already pointed at the wrong statement** before
+this work moved them further: `check-docs.mjs` validates that a line *exists*, not that it says what the
+prose claims, and every run had been green.
+
 ### One thing the remediation could not change
 
 Everything visual is still **`[INFERRED]`** — no browser tooling was available for the fixes either. The

@@ -111,9 +111,52 @@ function AuthorizeRequestBuilder({
     extensions: false,
   });
 
+  /**
+   * Rows and groups the user has toggled by hand. Their choice outranks anything derived below.
+   *
+   * Keyed `param:<name>` / `group:<id>` so one record serves both without two pieces of state that
+   * could disagree.
+   */
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
   const setParam = useCallback((name: string, patch: Partial<ParamState>) => {
     setParams((prev) => ({ ...prev, [name]: { ...prev[name], ...patch } }));
   }, []);
+
+  /**
+   * Whether a parameter is on — **derived for `dpop_jkt`, stored for everything else.**
+   *
+   * The Grant Flows checkbox says it *"generates a key, sends its thumbprint as `dpop_jkt`"* and it did
+   * not: `dpop_jkt` is `defaultOn: false` and lives in the `extensions` group, which renders collapsed,
+   * so the parameter was neither sent nor findable. The copy described the intent and the mechanism did
+   * not follow.
+   *
+   * A static `defaultOn: true` is the wrong repair — the eight parameters that carry it are the
+   * unconditional baseline of a plain authorization-code request, and an always-ticked row holding an
+   * empty value is noise. **Having a thumbprint is the condition under which this parameter means
+   * anything**, so that is what it follows.
+   *
+   * Derived rather than written from an effect, deliberately: `react-hooks/set-state-in-effect` is
+   * right that syncing one piece of state into another is how the two drift. `touched` keeps the user
+   * in charge — this is a debugger, and sending the request with the key generated but the binding
+   * withheld, to watch what the token endpoint does with it, is a thing worth being able to do.
+   */
+  const enabledOf = useCallback(
+    (name: string): boolean =>
+      name === 'dpop_jkt' && !touched['param:dpop_jkt']
+        ? Boolean(dpopThumbprint)
+        : (params[name]?.enabled ?? false),
+    [params, touched, dpopThumbprint],
+  );
+
+  /** Same arrangement for the collapsed group: a thumbprint opens Extensions until the user says otherwise. */
+  const groupOpen = useCallback(
+    (id: ParamGroup): boolean =>
+      id === 'extensions' && !touched['group:extensions']
+        ? openGroups.extensions || Boolean(dpopThumbprint)
+        : openGroups[id],
+    [openGroups, touched, dpopThumbprint],
+  );
 
   // Mint `state`, `nonce` and a PKCE pair on mount. They are shown rather than hidden, because a value
   // you cannot see is a value you cannot check when it comes back.
@@ -209,7 +252,7 @@ function AuthorizeRequestBuilder({
   const builtUrl = useMemo(() => {
     const search = new URLSearchParams();
     for (const spec of AUTH_PARAMS) {
-      if (!params[spec.name]?.enabled) continue;
+      if (!enabledOf(spec.name)) continue;
       const value = effective(spec.name);
       if (value === '') continue;
       search.append(spec.name, value);
@@ -220,7 +263,7 @@ function AuthorizeRequestBuilder({
     }
     const query = search.toString();
     return query ? `${endpoint}?${query}` : endpoint;
-  }, [params, customs, endpoint, effective]);
+  }, [customs, endpoint, effective, enabledOf]);
 
   const effectiveUrl = rawMode ? rawUrl : builtUrl;
 
@@ -247,28 +290,29 @@ function AuthorizeRequestBuilder({
     // The verifier is only meaningful if the challenge in the URL actually derives from it.
     onSend(effectiveUrl, {
       codeVerifier: challengeEdited ? null : codeVerifier,
-      state: params.state?.enabled ? effective('state') : null,
+      state: enabledOf('state') ? effective('state') : null,
     });
-  }, [effectiveUrl, challengeEdited, codeVerifier, params.state, effective, onSend]);
+  }, [effectiveUrl, challengeEdited, codeVerifier, enabledOf, effective, onSend]);
 
-  const jsonProblems = AUTH_PARAMS.filter(
-    (p) => params[p.name]?.enabled && jsonError(effective(p.name)),
-  );
+  const jsonProblems = AUTH_PARAMS.filter((p) => enabledOf(p.name) && jsonError(effective(p.name)));
 
   const enabledCount =
-    AUTH_PARAMS.filter((p) => params[p.name]?.enabled && effective(p.name) !== '').length +
+    AUTH_PARAMS.filter((p) => enabledOf(p.name) && effective(p.name) !== '').length +
     customs.filter((c) => c.name).length;
 
   return (
     <div className="space-y-4">
       {PARAM_GROUPS.map((group) => {
         const specs = AUTH_PARAMS.filter((p) => p.group === group.id);
-        const activeCount = specs.filter((p) => params[p.name]?.enabled).length;
-        const open = openGroups[group.id];
+        const activeCount = specs.filter((p) => enabledOf(p.name)).length;
+        const open = groupOpen(group.id);
         return (
           <div key={group.id} className="rounded-lg border border-border overflow-hidden">
             <button
-              onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
+              onClick={() => {
+                setTouched((prev) => ({ ...prev, [`group:${group.id}`]: true }));
+                setOpenGroups((prev) => ({ ...prev, [group.id]: !open }));
+              }}
               aria-expanded={open}
               className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-muted/30 border-none cursor-pointer hover:bg-muted/50 transition-colors text-left"
             >
@@ -287,9 +331,12 @@ function AuthorizeRequestBuilder({
                   <ParamRow
                     key={spec.name}
                     spec={spec}
-                    enabled={params[spec.name]?.enabled ?? false}
+                    enabled={enabledOf(spec.name)}
                     value={effective(spec.name)}
-                    onToggle={(enabled) => setParam(spec.name, { enabled })}
+                    onToggle={(enabled) => {
+                      setTouched((prev) => ({ ...prev, [`param:${spec.name}`]: true }));
+                      setParam(spec.name, { enabled });
+                    }}
                     onChange={(value) => {
                       if (spec.name === 'code_challenge') setChallengeEdited(true);
                       if (spec.name === 'code_challenge_method') {
@@ -447,7 +494,7 @@ function AuthorizeRequestBuilder({
               fine — the server&apos;s complaint is worth reading — but it will not be accepted.
             </Warning>
           )}
-          {params.request_uri?.enabled && effective('request_uri') && (
+          {enabledOf('request_uri') && effective('request_uri') && (
             <Warning tone="info">
               With <code>request_uri</code> the other parameters travel inside the pushed request.
               RFC 9126 expects <code>client_id</code> alongside it and little else — turn the rest
