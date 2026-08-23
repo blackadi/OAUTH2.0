@@ -107,6 +107,27 @@ export function recordNavigation(input: NavigationInput): TraceEntry {
 }
 
 /**
+ * Leave the app, and record that we did. **The only way a section should navigate the browser.**
+ *
+ * `services/transport.ts` is the one place a *back-channel* request leaves this app, and everything goes
+ * through it precisely so nothing can be sent without reaching the trace. The front channel had no such
+ * chokepoint: `window.location.href = url` appeared in **seven places across five sections**, and only
+ * one of them — `AuthFlowsSection` — called `recordNavigation` beside it. So the authorization hop was in
+ * the trace when it started from Grant Flows and invisible when it started from PAR, RAR or the FAPI
+ * wizard, and `hasAuthorizeRequest` in `utils/flow-progress.ts` was true or false depending on which
+ * section you had used. Nothing could see that: a navigation leaves no artefact to assert against, which
+ * is the whole reason `recordNavigation` exists.
+ *
+ * Pairing the two operations in one function is what makes forgetting impossible. If you find yourself
+ * writing `window.location.href` in a component, use this instead — and if a new call site genuinely
+ * must not be recorded, say why at that call site rather than reaching past this.
+ */
+export function navigateTo(url: string, label: string): void {
+  recordNavigation({ url, label, direction: 'outbound' });
+  window.location.href = url;
+}
+
+/**
  * Bounded so a polling loop cannot grow it without limit — `useServerStatus` alone adds an entry every
  * 30 seconds, and the device-flow section polls the token endpoint on an interval. Oldest entries are
  * dropped first.

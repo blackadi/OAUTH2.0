@@ -29,7 +29,7 @@ import { getDoc } from '@/data/operationDocs';
 import { KeyRound, ArrowRightLeft, LogIn, RefreshCw, FileText } from 'lucide-react';
 import type { TokenResponse } from '@/types';
 import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
-import { recordNavigation } from '@/services/trace-store';
+import { navigateTo } from '@/services/trace-store';
 
 type GrantType =
   'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
@@ -330,13 +330,7 @@ const AuthFlowsSection: React.FC = () => {
     if (acSecret) writeKey(SESSION_KEYS.authzClientSecret, acSecret);
     else removeKey(SESSION_KEYS.authzClientSecret);
 
-    recordNavigation({
-      url,
-      direction: 'outbound',
-      label: 'authorize — front channel, browser leaves for the authorization endpoint',
-    });
-
-    window.location.href = url;
+    navigateTo(url, 'authorize — front channel, browser leaves for the authorization endpoint');
   };
 
   const requestPreview = useMemo(() => {

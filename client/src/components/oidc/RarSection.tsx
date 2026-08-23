@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { rarService } from '@/services';
+import { navigateTo } from '@/services/trace-store';
 import type { ParSuccessResponse } from '@/services/par.service';
 import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
 import { createPkcePair } from '@/pkce';
@@ -135,7 +136,10 @@ function RarSection() {
     }
     const cid = clientId || 'your_client_id';
     setParResult(d);
-    window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`;
+    navigateTo(
+      `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`,
+      'authorize (RAR via PAR) — front channel, browser leaves with the request_uri',
+    );
   };
 
   const handlePushOnly = async () => {
@@ -166,7 +170,10 @@ function RarSection() {
 
       storedParams.set('client_id', cid);
       const authUrl = `${AUTHORIZATION_ENDPOINT}?${storedParams.toString()}`;
-      window.location.href = authUrl;
+      navigateTo(
+        authUrl,
+        'authorize (RAR) — front channel, browser leaves for the authorization endpoint',
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to build authorization URL');
     }

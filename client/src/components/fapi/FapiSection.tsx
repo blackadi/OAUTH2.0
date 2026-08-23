@@ -38,7 +38,7 @@ import {
 } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { SESSION_KEYS, writeKey } from '@/services/session-keys';
-import { recordNavigation } from '@/services/trace-store';
+import { navigateTo } from '@/services/trace-store';
 
 // Mirrors GET /api/fapi/config. Every field is read from the live Authlete service — six of these used
 // to be hardcoded server-side, and all six were the opposite of the real configuration.
@@ -234,23 +234,12 @@ function FapiSection() {
   const handleWizAuthorize = () => {
     if (!wizParResult?.request_uri) return;
     const authorizeUrl = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(wizClientId)}&request_uri=${encodeURIComponent(wizParResult.request_uri)}`;
-    /**
-     * The front-channel hop, recorded before the browser leaves.
-     *
-     * `recordNavigation` exists because this line — `window.location.href = url` — is a browser
-     * navigation that no `fetch` interceptor observes, so the single most important request in OAuth
-     * never entered the trace. It was wired into `AuthFlowsSection` and `CallbackPage` and **not
-     * here**, which left a FAPI 2.0 run's outbound hop invisible in the trace panel and in
-     * `SequenceView`, and made `hasAuthorizeRequest` return false for it. Same shape as the four dead
-     * flows: a capability was added and one caller was never told.
-     */
-    recordNavigation({
-      url: authorizeUrl,
-      direction: 'outbound',
-      label:
-        'authorize (FAPI 2.0, PAR) — front channel, browser leaves for the authorization endpoint',
-    });
-    window.location.href = authorizeUrl;
+    // `navigateTo` records the hop and then leaves. This used to be a bare assignment, so a FAPI 2.0
+    // run's outbound hop was invisible in the trace panel and in `SequenceView`.
+    navigateTo(
+      authorizeUrl,
+      'authorize (FAPI 2.0, PAR) — front channel, browser leaves for the authorization endpoint',
+    );
   };
 
   const handleWizUserinfo = async () => {

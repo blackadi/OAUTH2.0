@@ -235,6 +235,18 @@ docker compose up -d prometheus grafana
 
   **What was checked and found clean**, so a future sweep need not redo it: all **62** client endpoint constants resolve to mounted routes; every admin-gated server controller was cross-checked against its client caller; PAR, RAR, Device, CIBA, DCR, Backchannel Logout, Discovery, Federation, Grant Management, Client Management, Token Management, Step-Up, Health, Logout and VCI all present credentials and read response fields correctly. **No component test covers the FAPI or MCP wizards** — the guards there are the compiler and the service tests, which is worth knowing before trusting a green suite about them.
 
+  **`navigateTo` in `services/trace-store.ts` is the only way the browser should leave this app.** The
+  back channel has had a chokepoint since the transport rewrite — every request goes through
+  `transport.ts`, so nothing can be sent without reaching the trace. The **front** channel had none:
+  `window.location.href = url` appeared in **seven places across five sections** and only *one*, Grant
+  Flows, called `recordNavigation` beside it. So the authorization hop was in the trace when the flow
+  started from Grant Flows and **invisible** when it started from PAR, RAR, the FAPI wizard or Logout,
+  and `hasAuthorizeRequest` (`utils/flow-progress.ts`) was true or false depending on which section you
+  had used. Nothing could see it: a navigation leaves no artefact to assert against, which is precisely
+  why `recordNavigation` was written in the first place — and then wired into one caller. Pairing the
+  record with the navigation in one function is what makes forgetting impossible. `recordNavigation`
+  stays exported for the **inbound** hop, which `CallbackPage` records without navigating.
+
   **`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them.
 
   **`crypto-utils.ts` holds the one P-256 generator.** `kid` is derived from the exported JWK *before* `alg`/`use` are attached — folding the tags in first would silently change every signing key's `kid`. Pinned in `keygen-characterization.test.ts`, which was written against the duplicated version first.
