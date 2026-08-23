@@ -1,4 +1,11 @@
-import { render, screen, fireEvent, waitFor, type RenderResult } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+  type RenderResult,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, vi, type MockInstance } from 'vitest';
 import type { ReactElement } from 'react';
@@ -129,9 +136,18 @@ export async function confirmDialog(typed?: string): Promise<void> {
   const dialog = await screen.findByRole('dialog');
   expect(dialog).toBeInTheDocument();
   if (typed !== undefined) {
-    fireEvent.change(screen.getByLabelText(/to confirm/i), { target: { value: typed } });
+    fireEvent.change(within(dialog).getByLabelText(/to confirm/i), { target: { value: typed } });
   }
-  const confirm = screen
+  /**
+   * Scoped to the dialog, which is not a detail.
+   *
+   * Searching the whole document found `GrantManagementSection`'s **own** "Revoke" button first — the
+   * dialog is rendered after it in DOM order — so the test re-opened the confirmation instead of
+   * confirming it, and reported that the service was never called. The guard being tested is *"the
+   * destructive button is not the one that acts"*, so a helper that can pick up the guarded button is
+   * looking in exactly the wrong place.
+   */
+  const confirm = within(dialog)
     .getAllByRole('button')
     .find((b) => b.textContent && /^(Delete|Revoke|Deregister|Clear)/i.test(b.textContent));
   expect(confirm, 'no confirm button in the dialog').toBeDefined();
