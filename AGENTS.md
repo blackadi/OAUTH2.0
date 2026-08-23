@@ -235,7 +235,40 @@ docker compose up -d prometheus grafana
 
   **What was checked and found clean**, so a future sweep need not redo it: all **62** client endpoint constants resolve to mounted routes; every admin-gated server controller was cross-checked against its client caller; PAR, RAR, Device, CIBA, DCR, Backchannel Logout, Discovery, Federation, Grant Management, Client Management, Token Management, Step-Up, Health, Logout and VCI all present credentials and read response fields correctly. **No component test covers the FAPI or MCP wizards** — the guards there are the compiler and the service tests, which is worth knowing before trusting a green suite about them.
 
-  **`navigateTo` in `services/trace-store.ts` is the only way the browser should leave this app.** The
+  **`services/schemas.ts` declares what a response must look like, and `send` enforces it.** `zod@4.4.3`
+  was a dependency imported from nowhere until 2026-08-23. Eight shapes are now written down — token
+  (RFC 6749 §5.1), PAR (RFC 9126 §2.2), device authorization (RFC 8628 §3.2), DCR (RFC 7591 §3.2.1), AS
+  metadata (RFC 8414 §2), introspection (RFC 7662 §2.2) and this deployment's two health bodies — with
+  **every conformance word read from the RFC rather than recalled**, and the one specification that
+  attaches no conformance word at all (RFC 9126 §2.2) says so instead of being given a plausible one.
+  Three rules decide the design:
+
+  - **Loose, never strict.** RFC 6749 §5.1 permits parameters beyond the five it defines and Authlete
+    sends them; a strict schema would reject `grant_id`, `authorization_details` and every vendor field,
+    turning a correct server into a broken one.
+  - **Success-only.** `send` validates, `sendRaw` never does — at that layer a non-2xx is *data*, and a
+    CIBA poll's `authorization_pending` or a DPoP `use_dpop_nonce` are the normal states of their flows.
+    Validating an error body against a success schema would report "access_token is missing" for a
+    response whose actual problem is `invalid_client`.
+  - **`SchemaError.message` carries the raw body**, like `HttpError`'s does. A debugger that says "the
+    response was wrong" without showing the response has removed the only thing worth looking at.
+
+  **`zod/mini`, not `zod`** — measured, not assumed: 120.4 kB gzip against 133.7 kB, for
+  **byte-identical** issue messages. The only difference is a functional API (`z.optional(z.number())`).
+
+  **What it found on its first run is the point.** Three service-test fixtures were still describing the
+  camelCase envelope T1-11 replaced in August — `par` mocked `requestUri`, `device` mocked
+  `deviceCode`/`userCode`, `dcr` mocked `clientId` — and two of them **asserted that shape as the
+  expected return value**. Nothing noticed, because those tests check the outgoing request and never
+  read the response. A fixture is documentation of what the server sends; a wrong one teaches the next
+  reader the wrong shape and is the only thing standing between a schema and a false pass.
+
+  **`utils/parse-json.ts` is not superseded by this and should not be deleted.** Its four uses are
+  user-typed JSON in a textarea, an *error* string (which validation deliberately never sees), a vendor
+  `responseContent` string nested inside a body, and `sessionStorage` — none of them at the transport
+  boundary.
+
+**`navigateTo` in `services/trace-store.ts` is the only way the browser should leave this app.** The
   back channel has had a chokepoint since the transport rewrite — every request goes through
   `transport.ts`, so nothing can be sent without reaching the trace. The **front** channel had none:
   `window.location.href = url` appeared in **seven places across five sections** and only *one*, Grant

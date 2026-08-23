@@ -28,6 +28,7 @@
  * read `err.status`.
  */
 
+import type { ZodMiniType } from 'zod/mini';
 import { recordTrace } from './trace-store';
 
 export interface HttpResult<T = unknown> {
@@ -69,6 +70,37 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * A 2xx whose body is not the shape this app declared it expects.
+ *
+ * **Why this is an error and not a warning.** The failure it replaces was silent: `RarSection` read
+ * `requestUri` from a body carrying `request_uri`, got `undefined`, and its button did nothing —
+ * no redirect, no message, and the error branch never ran because the response object itself was
+ * truthy. Anything quieter than a throw reproduces that.
+ *
+ * **`message` carries the raw body**, exactly as `HttpError` does, because a debugger that says "the
+ * response was wrong" without showing the response has taken away the only thing worth looking at.
+ * `ErrorExplainer` renders it verbatim, and `useAsyncCall.describeError` passes it through unchanged.
+ */
+export class SchemaError extends Error {
+  readonly issues: { path: string; message: string }[];
+  readonly body: unknown;
+  readonly raw: string;
+  readonly status: number;
+  readonly url: string;
+
+  constructor(result: HttpResult, url: string, issues: { path: string; message: string }[]) {
+    const summary = issues.map((i) => (i.path ? `${i.path}: ${i.message}` : i.message)).join('; ');
+    super(`The response did not match the shape this app expects — ${summary} · ${result.raw}`);
+    this.name = 'SchemaError';
+    this.issues = issues;
+    this.body = result.body;
+    this.raw = result.raw;
+    this.status = result.status;
+    this.url = url;
+  }
+}
+
 /** A network-level failure: no response at all, so there is no status to report. */
 export class NetworkError extends Error {
   readonly durationMs: number;
@@ -86,6 +118,16 @@ export interface SendInit {
   body?: string;
   /** Short label for the trace timeline, e.g. `token: authorization_code`. */
   label?: string;
+  /**
+   * The shape this caller expects of a **successful** body, from `services/schemas.ts`.
+   *
+   * Checked in `send` only, never in `sendRaw`: at the raw layer a non-2xx is *data* — a CIBA poll's
+   * `authorization_pending` and a DPoP `use_dpop_nonce` are the normal states of their flows — and
+   * validating an error body against a success schema would reject the very responses those callers
+   * exist to read. Omit it and nothing is checked, which is the right default for the endpoints whose
+   * bodies are genuinely open-ended.
+   */
+  schema?: ZodMiniType;
 }
 
 /**
@@ -188,7 +230,29 @@ export async function sendRaw(init: SendInit): Promise<HttpResult> {
 export async function send<T = unknown>(init: SendInit): Promise<HttpResult<T>> {
   const result = await sendRaw(init);
   if (!result.ok) throw new HttpError(result);
+  if (init.schema) validate(init.schema, result, init.url);
   return result as HttpResult<T>;
+}
+
+/**
+ * Check a successful body against the shape its caller declared, and throw if it does not fit.
+ *
+ * The parsed value is **discarded on purpose** — every schema in `services/schemas.ts` is a
+ * `looseObject`, so parsing returns the same members plus the unknown ones untouched, and returning
+ * zod's copy instead of the original body would buy nothing while making the trace entry and the
+ * caller's value two different objects.
+ */
+export function validate(schema: ZodMiniType, result: HttpResult, url: string): void {
+  const parsed = schema.safeParse(result.body);
+  if (parsed.success) return;
+  throw new SchemaError(
+    result,
+    url,
+    parsed.error.issues.map((issue) => ({
+      path: issue.path.join('.'),
+      message: issue.message,
+    })),
+  );
 }
 
 /** The body only — for the many call sites that legitimately want just that. */

@@ -1,5 +1,6 @@
 import { PAR_ENDPOINT } from '@/config';
 import { http } from './http';
+import { parResponseSchema } from './schemas';
 import { dpopRequest, type DpopProofSource } from './dpop-fetch';
 
 export interface ParResponseWithNonce {
@@ -49,7 +50,7 @@ async function pushedAuthorization(
   body: Record<string, string | undefined>,
   basicAuth?: BasicAuth,
 ): Promise<unknown> {
-  return http.postJson(PAR_ENDPOINT, body, basicHeader(basicAuth));
+  return http.postJson(PAR_ENDPOINT, body, basicHeader(basicAuth), parResponseSchema);
 }
 
 async function pushedAuthorizationWithDpop(

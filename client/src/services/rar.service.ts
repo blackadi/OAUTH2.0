@@ -1,5 +1,6 @@
 import { PAR_ENDPOINT } from '@/config';
 import { http } from './http';
+import { parResponseSchema } from './schemas';
 import { dpopRequest, type DpopProofSource } from './dpop-fetch';
 
 export interface RarPushRequest {
@@ -14,7 +15,12 @@ export interface RarResponseWithNonce {
 }
 
 async function pushAuthorization(body: RarPushRequest): Promise<unknown> {
-  return http.postJson(PAR_ENDPOINT, body as unknown as Record<string, unknown>);
+  return http.postJson(
+    PAR_ENDPOINT,
+    body as unknown as Record<string, unknown>,
+    undefined,
+    parResponseSchema,
+  );
 }
 
 async function pushAuthorizationWithDpop(

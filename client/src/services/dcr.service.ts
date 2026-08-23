@@ -5,9 +5,10 @@ import {
   DCR_DELETE_ENDPOINT,
 } from '@/config';
 import { http } from './http';
+import { dcrRegistrationSchema } from './schemas';
 
 async function dcrRegister(body: Record<string, string>, auth: string): Promise<unknown> {
-  return http.postAdmin(DCR_REGISTER_ENDPOINT, body, auth);
+  return http.postAdmin(DCR_REGISTER_ENDPOINT, body, auth, dcrRegistrationSchema);
 }
 
 async function dcrGet(token: string, clientId: string): Promise<unknown> {

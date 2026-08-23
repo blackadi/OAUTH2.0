@@ -31,6 +31,20 @@ beforeEach(() => {
   globalThis.fetch = mockFetch;
 });
 
+/**
+ * **Fixtures are conformant response bodies, not the minimum that made an assertion pass.**
+ *
+ * When `services/schemas.ts` began validating at the transport boundary, this file's mocks were among
+ * the ones it rejected — and rejected correctly. They described bodies no authorization server would
+ * send, and in three files they described the *specific* body T1-11 stopped sending: `par` mocked
+ * `requestUri`, `device` mocked `deviceCode`/`userCode`, `dcr` mocked `clientId`. Those are Authlete's
+ * camelCase envelope, replaced by the specification's snake_case body months ago. Nothing noticed,
+ * because these tests assert the outgoing *request* and never read the response.
+ *
+ * A fixture is documentation of what the server sends. One that is wrong teaches the next reader the
+ * wrong shape, and it is the only thing standing between a schema and a false pass.
+ */
+
 function ok(data: unknown) {
   return Promise.resolve({
     ok: true,
@@ -41,7 +55,9 @@ function ok(data: unknown) {
 
 describe('tokenService.exchangeCodeForToken', () => {
   it('sends POST form to TOKEN_ENDPOINT', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at1', refresh_token: 'rt1' }));
+    mockFetch.mockReturnValue(
+      ok({ access_token: 'at1', token_type: 'Bearer', refresh_token: 'rt1' }),
+    );
     const result = await tokenService.exchangeCodeForToken({
       grant_type: 'authorization_code',
       code: 'c1',
@@ -49,7 +65,7 @@ describe('tokenService.exchangeCodeForToken', () => {
       client_id: 'cid',
       code_verifier: 'v1',
     });
-    expect(result).toEqual({ access_token: 'at1', refresh_token: 'rt1' });
+    expect(result).toEqual({ access_token: 'at1', token_type: 'Bearer', refresh_token: 'rt1' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -60,9 +76,9 @@ describe('tokenService.exchangeCodeForToken', () => {
 
 describe('tokenService.clientCredentials', () => {
   it('sends POST with Basic auth', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at2' }));
+    mockFetch.mockReturnValue(ok({ access_token: 'at2', token_type: 'Bearer' }));
     const result = await tokenService.clientCredentials('cid', 'secret', 'openid');
-    expect(result).toEqual({ access_token: 'at2' });
+    expect(result).toEqual({ access_token: 'at2', token_type: 'Bearer' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/token', {
       method: 'POST',
       headers: {
@@ -76,9 +92,9 @@ describe('tokenService.clientCredentials', () => {
 
 describe('tokenService.passwordGrant', () => {
   it('sends POST with Basic auth and credentials', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at3' }));
+    mockFetch.mockReturnValue(ok({ access_token: 'at3', token_type: 'Bearer' }));
     const result = await tokenService.passwordGrant('user', 'pass', 'cid', 'secret', 'openid');
-    expect(result).toEqual({ access_token: 'at3' });
+    expect(result).toEqual({ access_token: 'at3', token_type: 'Bearer' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/token', {
       method: 'POST',
       headers: {
@@ -92,9 +108,9 @@ describe('tokenService.passwordGrant', () => {
 
 describe('tokenService.refreshToken', () => {
   it('sends POST with Basic auth and refresh_token', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at4' }));
+    mockFetch.mockReturnValue(ok({ access_token: 'at4', token_type: 'Bearer' }));
     const result = await tokenService.refreshToken('rt1', 'cid', 'secret');
-    expect(result).toEqual({ access_token: 'at4' });
+    expect(result).toEqual({ access_token: 'at4', token_type: 'Bearer' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/token', {
       method: 'POST',
       headers: {
@@ -123,7 +139,7 @@ describe('the three secret-bearing grants, with no secret', () => {
   const noHeader = (call: number) => initOf(call).headers.Authorization;
 
   it('client_credentials: client_id in the body, no Basic header', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at' }));
+    mockFetch.mockReturnValue(ok({ access_token: 'at', token_type: 'Bearer' }));
     await tokenService.clientCredentials('4277838306', '', 'openid');
     const init = initOf(0);
     expect(noHeader(0)).toBeUndefined();
@@ -131,7 +147,7 @@ describe('the three secret-bearing grants, with no secret', () => {
   });
 
   it('password: client_id in the body, no Basic header', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at' }));
+    mockFetch.mockReturnValue(ok({ access_token: 'at', token_type: 'Bearer' }));
     await tokenService.passwordGrant('user', 'pass', '4277838306', '', 'openid');
     const init = initOf(0);
     expect(noHeader(0)).toBeUndefined();
@@ -139,7 +155,7 @@ describe('the three secret-bearing grants, with no secret', () => {
   });
 
   it('refresh_token: client_id in the body, no Basic header', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at' }));
+    mockFetch.mockReturnValue(ok({ access_token: 'at', token_type: 'Bearer' }));
     await tokenService.refreshToken('rt1', '4277838306', '');
     const init = initOf(0);
     expect(noHeader(0)).toBeUndefined();
@@ -149,7 +165,7 @@ describe('the three secret-bearing grants, with no secret', () => {
   });
 
   it('never sends an empty client_secret, which would still be client-auth data', async () => {
-    mockFetch.mockReturnValue(ok({ access_token: 'at' }));
+    mockFetch.mockReturnValue(ok({ access_token: 'at', token_type: 'Bearer' }));
     await tokenService.refreshToken('rt1', '4277838306', '');
     const init = initOf(0);
     expect(init.body).not.toContain('client_secret');
@@ -240,9 +256,11 @@ describe('tokenService.revocation', () => {
 
 describe('tokenService.discovery', () => {
   it('sends GET to discovery endpoint', async () => {
-    mockFetch.mockReturnValue(ok({ issuer: 'https://example.com' }));
+    mockFetch.mockReturnValue(
+      ok({ issuer: 'https://example.com', response_types_supported: ['code'] }),
+    );
     const result = await tokenService.discovery();
-    expect(result).toEqual({ issuer: 'https://example.com' });
+    expect(result).toEqual({ issuer: 'https://example.com', response_types_supported: ['code'] });
     expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/.well-known/openid-configuration',
       {

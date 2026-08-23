@@ -13,7 +13,18 @@
  * that only ever did `toast.error(err)` are unaffected.
  */
 
+import type { ZodMiniType } from 'zod/mini';
 import { sendForBody } from './transport';
+
+/**
+ * The expected shape of a successful body, threaded through to `send`.
+ *
+ * Optional and last on every helper that takes it, so the ~60 existing call sites are untouched. Only
+ * the five request shapes whose responses this app actually reads by name accept one; the others are
+ * genuinely open-ended — an admin token list or an Authlete envelope has no fixed body worth pinning,
+ * and inventing a schema for one would reject responses that are perfectly fine.
+ */
+type Schema = ZodMiniType;
 
 const FORM = 'application/x-www-form-urlencoded';
 const JSON_TYPE = 'application/json';
@@ -26,12 +37,14 @@ async function postForm(
   url: string,
   params: URLSearchParams,
   extraHeaders?: Record<string, string>,
+  schema?: Schema,
 ): Promise<unknown> {
   return sendForBody({
     method: 'POST',
     url,
     headers: { 'Content-Type': FORM, ...extraHeaders },
     body: params.toString(),
+    ...(schema ? { schema } : {}),
   });
 }
 
@@ -40,12 +53,14 @@ async function postBasicAuth(
   params: URLSearchParams,
   clientId: string,
   clientSecret: string,
+  schema?: Schema,
 ): Promise<unknown> {
   return sendForBody({
     method: 'POST',
     url,
     headers: { 'Content-Type': FORM, Authorization: basic(clientId, clientSecret) },
     body: params.toString(),
+    ...(schema ? { schema } : {}),
   });
 }
 
@@ -53,12 +68,14 @@ async function postAdmin(
   url: string,
   body: Record<string, unknown>,
   auth: string,
+  schema?: Schema,
 ): Promise<unknown> {
   return sendForBody({
     method: 'POST',
     url,
     headers: { 'Content-Type': JSON_TYPE, Authorization: `Basic ${auth}` },
     body: JSON.stringify(body),
+    ...(schema ? { schema } : {}),
   });
 }
 
@@ -66,20 +83,23 @@ async function postJson(
   url: string,
   body: Record<string, unknown>,
   headers?: Record<string, string>,
+  schema?: Schema,
 ): Promise<unknown> {
   return sendForBody({
     method: 'POST',
     url,
     headers: { 'Content-Type': JSON_TYPE, ...headers },
     body: JSON.stringify(body),
+    ...(schema ? { schema } : {}),
   });
 }
 
-async function getJson(url: string, auth?: string): Promise<unknown> {
+async function getJson(url: string, auth?: string, schema?: Schema): Promise<unknown> {
   return sendForBody({
     method: 'GET',
     url,
     headers: { Accept: JSON_TYPE, ...(auth ? { Authorization: `Basic ${auth}` } : {}) },
+    ...(schema ? { schema } : {}),
   });
 }
 
@@ -128,7 +148,7 @@ async function put(url: string, body: Record<string, unknown>, auth: string): Pr
  * body-only helpers above stay the default because most call sites genuinely only want the body.
  */
 export { send as sendRequest } from './transport';
-export { HttpError, NetworkError } from './transport';
+export { HttpError, NetworkError, SchemaError } from './transport';
 export type { HttpResult, SendInit } from './transport';
 
 export const http = {
