@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { grantService } from '@/services/grant.service';
 
-const mockFetch = vi.fn();
+// Typed as `fetch` so `mock.calls` is a real tuple rather than `any[]` — see token.service.test.ts.
+const mockFetch = vi.fn<typeof fetch>();
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -20,9 +21,20 @@ function err(status: number, body: string) {
   return Promise.resolve({ ok: false, status, text: () => Promise.resolve(body) } as Response);
 }
 
+/**
+ * The headers of the nth call, as the record this app actually sends.
+ *
+ * `RequestInit['headers']` is `HeadersInit` — a union of `Headers`, a `[string,string][]` and a record —
+ * so a direct `.headers.Authorization` does not type-check once the mock is typed. Narrowing once here
+ * beats a cast at every read, and it is honest: every call site in this app passes a plain object.
+ */
+function headersOf(call: number): Record<string, string> {
+  return (mockFetch.mock.calls[call]?.[1]?.headers ?? {}) as Record<string, string>;
+}
+
 describe('grantService.queryGrant', () => {
   it('sends GET to grant management endpoint with Bearer token', async () => {
-    mockFetch.mockResolvedValue(ok({ grantId: 'g1', status: 'ACTIVE' }));
+    mockFetch.mockReturnValue(ok({ grantId: 'g1', status: 'ACTIVE' }));
     const result = await grantService.queryGrant({ accessToken: 'bearertok' }, 'g1');
     expect(result).toEqual({ grantId: 'g1', status: 'ACTIVE' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/gm/g1', {
@@ -32,7 +44,7 @@ describe('grantService.queryGrant', () => {
   });
 
   it('encodes special characters in grant ID', async () => {
-    mockFetch.mockResolvedValue(ok({}));
+    mockFetch.mockReturnValue(ok({}));
     await grantService.queryGrant({ accessToken: 'tok' }, 'grant/id');
     expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/gm/grant%2Fid',
@@ -41,7 +53,7 @@ describe('grantService.queryGrant', () => {
   });
 
   it('throws on error response', async () => {
-    mockFetch.mockResolvedValue(err(404, 'not found'));
+    mockFetch.mockReturnValue(err(404, 'not found'));
     await expect(grantService.queryGrant({ accessToken: 'tok' }, 'g1')).rejects.toThrow(
       'not found',
     );
@@ -50,7 +62,7 @@ describe('grantService.queryGrant', () => {
 
 describe('grantService.revokeGrant', () => {
   it('sends DELETE to grant management endpoint with Bearer token', async () => {
-    mockFetch.mockResolvedValue(ok({ result: 'REVOKED' }));
+    mockFetch.mockReturnValue(ok({ result: 'REVOKED' }));
     const result = await grantService.revokeGrant({ accessToken: 'bearertok' }, 'g1');
     expect(result).toEqual({ result: 'REVOKED' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/gm/g1', {
@@ -62,7 +74,7 @@ describe('grantService.revokeGrant', () => {
 
 describe('presentation scheme (RFC 9449 §7.1)', () => {
   it('uses the DPoP scheme and sends a proof when one is supplied', async () => {
-    mockFetch.mockResolvedValue(ok({ grantId: 'g1' }));
+    mockFetch.mockReturnValue(ok({ grantId: 'g1' }));
     await grantService.queryGrant(
       { accessToken: 'bound-token', dpopProof: async () => 'proof-jwt' },
       'g1',
@@ -78,7 +90,7 @@ describe('presentation scheme (RFC 9449 §7.1)', () => {
   });
 
   it('uses DPoP on revoke too, since the same rule applies to both', async () => {
-    mockFetch.mockResolvedValue(ok({ result: 'REVOKED' }));
+    mockFetch.mockReturnValue(ok({ result: 'REVOKED' }));
     await grantService.revokeGrant(
       { accessToken: 'bound-token', dpopProof: async () => 'proof-jwt' },
       'g1',
@@ -94,8 +106,8 @@ describe('presentation scheme (RFC 9449 §7.1)', () => {
   });
 
   it('still sends Bearer when no proof is supplied', async () => {
-    mockFetch.mockResolvedValue(ok({}));
+    mockFetch.mockReturnValue(ok({}));
     await grantService.queryGrant({ accessToken: 'plain' }, 'g1');
-    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer plain');
+    expect(headersOf(0).Authorization).toBe('Bearer plain');
   });
 });

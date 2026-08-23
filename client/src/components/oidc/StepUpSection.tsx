@@ -14,6 +14,7 @@ import { AdminAuth } from '@/components/layout/AdminAuth';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ShieldAlert, ArrowUpCircle } from 'lucide-react';
 import { getDoc } from '@/data/operationDocs';
+import { parseJsonObject, stringMember } from '@/utils/parse-json';
 import { useCredentials } from '@/context/CredentialContext';
 
 interface StepUpChallenge {
@@ -70,9 +71,22 @@ function StepUpSection() {
     } else if (err) {
       // Try to parse the error for step-up challenge details
       try {
-        const parsed = JSON.parse(err);
-        if (parsed.error === 'insufficient_user_authentication') {
-          setChallenge(parsed);
+        /**
+         * The RFC 9470 challenge, checked rather than assumed.
+         *
+         * This was `JSON.parse(err)` — `any` — with `parsed.error` read off it and the whole object then
+         * handed to `setChallenge`, so `StepUpChallenge` described a shape nothing verified. The error
+         * string here is whatever the server sent, and on this deployment that is sometimes an HTML page.
+         */
+        const parsed = parseJsonObject(err);
+        if (stringMember(parsed, 'error') === 'insufficient_user_authentication') {
+          setChallenge({
+            error: 'insufficient_user_authentication',
+            error_description: stringMember(parsed, 'error_description'),
+            acr_values: stringMember(parsed, 'acr_values'),
+            max_age: stringMember(parsed, 'max_age'),
+            acr: stringMember(parsed, 'acr'),
+          });
           toast.error('Step-up authentication required');
           return;
         }
@@ -128,9 +142,9 @@ function StepUpSection() {
         />
 
         {!at && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-warning-text">
+          <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
             <p className="font-medium">No access token available</p>
-            <p className="mt-1 text-xs text-warning-text/80">
+            <p className="mt-1 text-xs text-warning-text">
               Obtain a token first via Grant Flows, then return here to test step-up challenges.
             </p>
           </div>
@@ -180,7 +194,7 @@ function StepUpSection() {
             </div>
 
             {challenge && (
-              <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+              <div className="space-y-3 rounded-lg border border-edge-danger bg-tint-danger p-4">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="h-5 w-5 text-danger-text" />
                   <p className="text-sm font-medium text-danger-text">
@@ -222,7 +236,7 @@ function StepUpSection() {
                 </div>
 
                 {challenge.error_description && (
-                  <p className="text-xs text-danger-text/80">{challenge.error_description}</p>
+                  <p className="text-xs text-danger-text">{challenge.error_description}</p>
                 )}
 
                 {reAuthUrl && (
@@ -236,7 +250,7 @@ function StepUpSection() {
                         Re-Authenticate with Required ACR
                       </Button>
                     </a>
-                    <p className="text-[0.6rem] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                       This opens the authorization endpoint with <code>claims</code> requesting the
                       required ACR as essential, plus <code>prompt=login</code> to force
                       re-authentication.
@@ -251,7 +265,7 @@ function StepUpSection() {
         )}
 
         {error && !challenge && (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+          <div className="rounded-lg border border-edge-danger bg-tint-danger px-3 py-2">
             <ErrorExplainer error={error} />
           </div>
         )}

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 
 function GrantManagementSection() {
   const { tokenSet, isDpopBound } = useToken();
@@ -59,6 +60,8 @@ function GrantManagementSection() {
       : {}),
   });
 
+  const { confirm, dialog } = useConfirmedAction();
+
   const handleQuery = async () => {
     setLastOp('query');
     const { data, error: err } = await call(() => grantService.queryGrant(auth(), grantId));
@@ -69,15 +72,31 @@ function GrantManagementSection() {
     }
   };
 
-  const handleRevoke = async () => {
-    setLastOp('revoke');
-    const { data, error: err } = await call(() => grantService.revokeGrant(auth(), grantId));
-    if (data) {
-      toast.success('Operation completed');
-    } else {
-      toast.error(err);
-    }
-  };
+  /**
+   * Revoking a grant is irreversible, and it reaches further than it looks.
+   *
+   * `requireGrantOwnership` on the server keeps a token from revoking somebody else's grant — a
+   * compensating control added because Authlete's `/gm` API validates the token and the grant id
+   * separately and never relates the two, so `REVOKE` genuinely worked across a subject boundary in a
+   * live probe. That protection makes this *your* grant, not that it is recoverable: every access and
+   * refresh token issued under it dies, and nothing here can bring them back.
+   */
+  const revoke = () =>
+    confirm({
+      title: 'Revoke this grant permanently?',
+      body: `Grant ${grantId} will be revoked at the authorization server. Every access and refresh token issued under it stops working immediately, and this cannot be undone from here.`,
+      confirmLabel: 'Revoke grant',
+      requireTyped: grantId.trim(),
+      run: async () => {
+        setLastOp('revoke');
+        const { data, error: err } = await call(() => grantService.revokeGrant(auth(), grantId));
+        if (data) {
+          toast.success('Operation completed');
+        } else {
+          toast.error(err);
+        }
+      },
+    });
 
   return (
     <SectionPanel
@@ -144,11 +163,13 @@ function GrantManagementSection() {
           variant="danger"
           disabled={!accessToken || !grantId || loading}
           loading={loading}
-          onClick={handleRevoke}
+          onClick={revoke}
         >
           Revoke
         </Button>
       </div>
+
+      {dialog}
 
       {result ? <JsonBlock data={result} label="Response" /> : null}
     </SectionPanel>

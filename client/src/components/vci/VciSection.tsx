@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { vciService } from '@/services';
+import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { useToken } from '@/context/TokenContext';
 import { TabBar } from '@/components/ui/TabBar';
@@ -28,6 +29,19 @@ type VciOp =
   | 'cred-issue'
   | 'cred-batch'
   | 'deferred-issue';
+
+/** Every value `VciOp` can take, as a runtime list — the allowed set for the URL parameter. */
+const ALL_OPS = [
+  'metadata',
+  'jwtissuer',
+  'jwks',
+  'wellknown',
+  'offer-create',
+  'offer-info',
+  'cred-issue',
+  'cred-batch',
+  'deferred-issue',
+] as const satisfies readonly VciOp[];
 
 const VCI_OPS: { value: VciOp; label: string; group: string }[] = [
   { value: 'metadata', label: 'Metadata', group: 'Discovery' },
@@ -57,7 +71,15 @@ function toOpGroup(op: VciOp): string {
 }
 
 function VciSection() {
-  const [activeOp, setActiveOp] = useState<VciOp | null>(null);
+  /**
+   * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
+   *
+   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
+   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
+   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
+   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<VciOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
   const { getAccessToken } = useToken();
 
@@ -117,7 +139,7 @@ function VciSection() {
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/metadata</p>
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               Returns the credential issuer metadata including supported credential configurations.
             </p>
             <Button onClick={() => handleCall(() => vciService.getMetadata())} loading={loading}>
@@ -129,7 +151,7 @@ function VciSection() {
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/jwtissuer</p>
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               Returns JWT VC issuer metadata (issuer identifier + JWKS URI).
             </p>
             <Button onClick={() => handleCall(() => vciService.getJwtIssuer())} loading={loading}>
@@ -141,7 +163,7 @@ function VciSection() {
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/jwks</p>
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               Returns the public keys used to sign verifiable credentials.
             </p>
             <Button onClick={() => handleCall(() => vciService.getJwks())} loading={loading}>
@@ -153,7 +175,7 @@ function VciSection() {
         return (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">GET /api/vci/well-known</p>
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               Same as Metadata, but served at the OID4VCI-specified well-known path (convenience
               alias).
             </p>
@@ -191,7 +213,7 @@ function VciSection() {
               placeholder="Free-form context string"
             />
             <div className="space-y-1">
-              <p className="text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground/60">
+              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Grant Types
               </p>
               <div className="flex flex-wrap gap-4">
@@ -200,8 +222,8 @@ function VciSection() {
               </div>
             </div>
             {preAuthGrant && (
-              <div className="space-y-3 pl-3 border-l-2 border-indigo-500/30">
-                <p className="text-xs text-accent-text/60">
+              <div className="space-y-3 pl-3 border-l-2 border-edge-accent">
+                <p className="text-xs text-accent-text">
                   Transaction code (tx_code) settings for pre-authorized code flow
                 </p>
                 <Input
@@ -246,7 +268,7 @@ function VciSection() {
                   if (txCodeMode) body.txCodeInputMode = txCodeMode;
                   if (txCodeDesc) body.txCodeDescription = txCodeDesc;
                 }
-                handleCall(() => vciService.createOffer(body, auth));
+                void handleCall(() => vciService.createOffer(body, auth));
               }}
               loading={loading}
             >
@@ -267,7 +289,9 @@ function VciSection() {
             />
             <Button
               onClick={() =>
-                handleCall(() => vciService.getOfferInfo({ identifier: offerIdentifier }, auth))
+                void handleCall(() =>
+                  vciService.getOfferInfo({ identifier: offerIdentifier }, auth),
+                )
               }
               loading={loading}
             >
@@ -305,7 +329,7 @@ function VciSection() {
                 } catch {
                   order = { requestIdentifier: issueOrderJson };
                 }
-                handleCall(() =>
+                void handleCall(() =>
                   vciService.issueCredential({ accessToken: credAccessToken, order }),
                 );
               }}
@@ -329,11 +353,11 @@ function VciSection() {
               Request multiple credential types at once (OID4VCI §10). Each entry specifies the
               format and credential type.
             </p>
-            <div className="p-2 rounded bg-indigo-500/8 border border-indigo-500/20">
-              <p className="text-xs text-accent-text/70">
+            <div className="p-2 rounded bg-tint-accent border border-edge-accent">
+              <p className="text-xs text-accent-text">
                 <strong>credential_requests</strong> format (OID4VCI):
                 <br />
-                <code className="text-[0.6rem]">
+                <code className="text-2xs">
                   {'[{"format":"vc+sd-jwt","vct":"..."},{"format":"mso_mdoc","doctype":"..."}]'}
                 </code>
               </p>
@@ -353,7 +377,7 @@ function VciSection() {
                 } catch {
                   parsed = [];
                 }
-                handleCall(() =>
+                void handleCall(() =>
                   vciService.batchCredential({
                     accessToken: credAccessToken,
                     credential_requests: parsed,
@@ -398,7 +422,9 @@ function VciSection() {
                 } catch {
                   order = { transactionId: deferredOrderJson };
                 }
-                handleCall(() => vciService.issueDeferred({ accessToken: credAccessToken, order }));
+                void handleCall(() =>
+                  vciService.issueDeferred({ accessToken: credAccessToken, order }),
+                );
               }}
               loading={loading}
             >
@@ -417,23 +443,20 @@ function VciSection() {
       description="Issue verifiable credentials via Authlete"
     >
       {/* How VCI Works — Collapsible Guidance */}
-      <details
-        className="mb-5 p-3 rounded-lg bg-indigo-500/8 border border-indigo-500/20 group"
-        open
-      >
+      <details className="mb-5 p-3 rounded-lg bg-tint-accent border border-edge-accent group" open>
         <summary className="text-xs text-accent-text font-medium cursor-pointer list-none flex items-center gap-2 select-none">
           <span className="text-xs opacity-60 group-open:opacity-100 transition-transform">▶</span>
           How VCI works — step-by-step guide
         </summary>
-        <div className="mt-3 space-y-3 text-xs text-accent-text/70">
+        <div className="mt-3 space-y-3 text-xs text-accent-text">
           <p>
             OID4VCI lets a wallet app request signed digital credentials from this server. The
             server delegates credential issuance to Authlete. There are two flows:
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20">
+            <div className="p-2 rounded bg-tint-accent border border-edge-accent">
               <p className="font-medium text-accent-text mb-1">Flow A: Pre-Authorized Code</p>
-              <ol className="list-decimal ml-4 space-y-0.5 text-accent-text/60">
+              <ol className="list-decimal ml-4 space-y-0.5 text-accent-text">
                 <li>
                   <strong>Discover</strong> — Check what credential types the server supports
                   (Metadata tab)
@@ -456,9 +479,9 @@ function VciSection() {
                 </li>
               </ol>
             </div>
-            <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20">
+            <div className="p-2 rounded bg-tint-accent border border-edge-accent">
               <p className="font-medium text-accent-text mb-1">Flow B: Authorization Code</p>
-              <ol className="list-decimal ml-4 space-y-0.5 text-accent-text/60">
+              <ol className="list-decimal ml-4 space-y-0.5 text-accent-text">
                 <li>
                   <strong>Discover</strong> — Check supported credential types
                 </li>
@@ -522,7 +545,7 @@ function VciSection() {
             result ? (
               <JsonBlock data={result} />
             ) : (
-              <div className="flex items-center justify-center h-32 rounded-lg border border-dashed border-border text-xs text-muted-foreground/40">
+              <div className="flex items-center justify-center h-32 rounded-lg border border-dashed border-border text-xs text-muted-foreground">
                 Run an operation to see the response here
               </div>
             )

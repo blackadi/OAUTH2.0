@@ -75,9 +75,27 @@ describe('SequenceView', () => {
     expect(screen.getByText(/network error/, { selector: 'text' })).toBeInTheDocument();
   });
 
+  /**
+   * The description is on the wrapper, and the SVG carries no `role` — deliberately.
+   *
+   * This asserted `getByRole('img', …)`, which pinned a real ARIA defect: `role="img"` makes the whole
+   * subtree **presentational**, so the `role="button" tabIndex={0}` arrows inside were keyboard-focusable
+   * and simultaneously invisible to a screen reader. A user could tab onto an element that announced
+   * nothing, which is worse than no ARIA at all.
+   */
   it('is described for a screen reader, not only drawn', () => {
     render(<SequenceView traces={[entry()]} />);
-    expect(screen.getByRole('img', { name: /Message flow of 1 requests/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Message flow of 1 requests/i })).toBeInTheDocument();
+    // The old role must not come back: it is what hid the arrows.
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('keeps each arrow announceable, not merely focusable', () => {
+    render(<SequenceView traces={[entry()]} onSelect={vi.fn()} />);
+    const arrow = screen.getByRole('button');
+    expect(arrow).toHaveAttribute('tabindex', '0');
+    // The `<title>` is the arrow's accessible name; under `role="img"` on the SVG it was unreachable.
+    expect(arrow).toHaveAccessibleName();
   });
 
   it('clicks through to the request that produced the arrow', () => {

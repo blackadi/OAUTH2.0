@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -85,14 +86,16 @@ describe('state validation fails closed', () => {
 });
 
 describe('RFC 9207 iss', () => {
-  it('refuses a response whose iss is a different authorization server', async () => {
-    const exchange = vi.spyOn(tokenService, 'exchangeCodeForToken');
+  function primed() {
     sessionStorage.setItem('oauth_state', 'same');
     sessionStorage.setItem('pkce_code_verifier', 'v1');
+  }
+
+  it('refuses a response whose iss is a different authorization server', async () => {
+    const exchange = vi.spyOn(tokenService, 'exchangeCodeForToken');
+    primed();
     at('?code=abc&state=same&iss=https%3A%2F%2Fevil.example');
-    expect(
-      await screen.findByText(/not the server this app is configured for/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/whose origin is not/i)).toBeInTheDocument();
     expect(exchange).not.toHaveBeenCalled();
   });
 
@@ -100,10 +103,102 @@ describe('RFC 9207 iss', () => {
     const exchange = vi
       .spyOn(tokenService, 'exchangeCodeForToken')
       .mockResolvedValue({ access_token: 'at-1' });
-    sessionStorage.setItem('oauth_state', 'same');
-    sessionStorage.setItem('pkce_code_verifier', 'v1');
+    primed();
     at('?code=abc&state=same&iss=http%3A%2F%2Flocalhost%3A3000');
     await waitFor(() => expect(exchange).toHaveBeenCalled());
+  });
+
+  /**
+   * The two cases the old test could not see, and the reason it could not.
+   *
+   * The check was `API_BASE_URL.startsWith(new URL(issParam).origin)`, and a prefix test on an origin
+   * accepts any origin that is a **truncation** of the expected one. The suite only ever tried an
+   * obviously-different origin (`https://evil.example`) and an exact match, so both of these passed
+   * silently — in the defence whose own comment reads *"RFC 9207 exists to catch exactly this"*, and in
+   * the same `startsWith` shape the server had already removed from `post_logout_redirect_uri` matching
+   * after two live-verified open redirects.
+   *
+   * `API_BASE_URL` is `http://localhost:3000` under test, so `http://localhost:3` and
+   * `http://localhost:300` are both prefixes of it and neither is it.
+   */
+  it.each([
+    ['a truncated port', 'http%3A%2F%2Flocalhost%3A3'],
+    ['a partly truncated port', 'http%3A%2F%2Flocalhost%3A300'],
+  ])('refuses an iss that is merely a prefix of the expected origin — %s', async (_label, iss) => {
+    const exchange = vi.spyOn(tokenService, 'exchangeCodeForToken');
+    primed();
+    at(`?code=abc&state=same&iss=${iss}`);
+    expect(await screen.findByText(/whose origin is not/i)).toBeInTheDocument();
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * `new URL()` throws a `TypeError` on a value that is not a URL, and the call sat *outside* the
+   * `try`. The rejection escaped the effect, `loading` was never cleared, and the page showed the
+   * spinner and "Exchanging authorization code for tokens…" for ever — no error, no way forward.
+   */
+  it('reports a malformed iss instead of hanging on the spinner', async () => {
+    const exchange = vi.spyOn(tokenService, 'exchangeCodeForToken');
+    primed();
+    at('?code=abc&state=same&iss=notaurl');
+    expect(await screen.findByText(/whose origin is not/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Exchanging authorization code/i)).not.toBeInTheDocument();
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A missing `iss` is **reported and not fatal**, which is what the code comment always claimed and
+   * the code never did — it short-circuited on `issParam &&` and said nothing. Hard-failing would be
+   * wrong too: a client that cannot talk to an AS which sends no `iss` is broken for a different
+   * reason. What it must not do is stay silent, because silence makes "the check passed" and "there was
+   * nothing to check" look identical.
+   */
+  it('warns when no iss came back, and still completes the exchange', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    primed();
+    at('?code=abc&state=same');
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+    expect(await screen.findByText(/carried no `iss` parameter/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The authorization code is single-use, and `main.tsx` wraps the tree in `React.StrictMode` — which in
+ * development runs an effect setup → cleanup → setup on the same instance. Without a latch the code was
+ * redeemed twice: the first request succeeded, the second was refused with `invalid_grant`, and because
+ * `setState` lands in resolution order the later failure could overwrite the earlier success. A correct
+ * flow reported a protocol error, in the one environment learners actually run.
+ *
+ * Rendered inside a real `<StrictMode>` here, because that is the only way to reproduce it — the
+ * default test render does not double-invoke.
+ */
+describe('the code is exchanged exactly once (React.StrictMode)', () => {
+  it('does not redeem a single-use authorization code twice', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    sessionStorage.setItem('oauth_state', 'same');
+    sessionStorage.setItem('pkce_code_verifier', 'v1');
+
+    window.history.replaceState({}, '', '/callback?code=abc&state=same');
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/callback?code=abc&state=same']}>
+          <TokenProvider>
+            <CredentialProvider>
+              <CallbackPage />
+            </CredentialProvider>
+          </TokenProvider>
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+    // Give a second invocation every chance to land before asserting it did not.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(exchange).toHaveBeenCalledTimes(1);
   });
 });
 

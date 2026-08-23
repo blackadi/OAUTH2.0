@@ -37,9 +37,78 @@
   --warning-text: #fcd34d;
   --danger-text: #f87171;
   --info-text: #7dd3fc;
-  --ring: #6366f1;
+  --ring: var(--accent);
   --radius: 0.75rem;
   --sidebar-width: 14rem;
+  /**
+   * Card elevation, per palette.
+   *
+   * `Card` hard-coded `shadow-slate-900/80` — `#0f172a` at 80%, chosen against `#020617` where it is
+   * invisible. On the light palette the same declaration is a near-black halo, and `CallbackPage` is a
+   * `Card`, so it landed on the page every learner reaches at the end of the headline flow. A shadow is
+   * a colour like any other and belongs in the palette.
+   */
+  /**
+   * Tinted status surfaces, per palette.
+   *
+   * **What these replace.** 121 literal `bg-indigo-500/10`, `border-amber-500/30`-style utilities across
+   * ~30 files, in five semantic roles and eleven different opacities. They were all chosen against
+   * `#020617`, where a 10% indigo wash is a whisper — and the same declaration over `#ffffff` reads as a
+   * considerably stronger, cooler colour. The **contrast** was never the risk (`check-contrast.mjs`
+   * proves the text on top passes AA in both themes); what was unverified was whether the *ordering* of
+   * the surface hierarchy survived, since `/10` against `/15` against `/20` may simply stop being
+   * distinguishable on a light ground.
+   *
+   * Three tokens per role rather than eleven opacities: a subtle fill, an emphasised fill, and an edge.
+   * Nothing in this application needed more than three steps — the eleven were incidental.
+   *
+   * **Deliberately translucent rather than flat.** These sit over cards, over the page and over each
+   * other; a solid colour would show a seam wherever two of them meet. The alphas are *lower* on the
+   * light palette because a tint over white reads stronger than the same tint over near-black.
+   */
+  --tint-accent: rgb(99 102 241 / 0.12);
+  --tint-accent-strong: rgb(99 102 241 / 0.2);
+  --edge-accent: rgb(99 102 241 / 0.35);
+  --tint-warning: rgb(245 158 11 / 0.12);
+  --tint-warning-strong: rgb(245 158 11 / 0.2);
+  --edge-warning: rgb(245 158 11 / 0.35);
+  --tint-danger: rgb(239 68 68 / 0.12);
+  --tint-danger-strong: rgb(239 68 68 / 0.2);
+  --edge-danger: rgb(239 68 68 / 0.3);
+  --tint-success: rgb(16 185 129 / 0.12);
+  --tint-success-strong: rgb(16 185 129 / 0.2);
+  --edge-success: rgb(16 185 129 / 0.3);
+  --tint-info: rgb(14 165 233 / 0.12);
+  --tint-info-strong: rgb(14 165 233 / 0.2);
+  --edge-info: rgb(14 165 233 / 0.3);
+  /**
+   * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+   *
+   * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+   * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+   * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+   * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+   * hover state failed badly.
+   *
+   * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+   * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+   * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+   * took computing the stops by hand.
+   *
+   * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+   * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+   * is both the accessible direction and the one that reads as "pressed".
+   */
+  --accent-grad-from: #4338ca;
+  --accent-grad-to: #4f46e5;
+  --accent-grad-from-hover: #3730a3;
+  --accent-grad-to-hover: #4338ca;
+  --danger-grad-from: #b91c1c;
+  --danger-grad-to: #dc2626;
+  --danger-grad-from-hover: #991b1b;
+  --danger-grad-to-hover: #b91c1c;
+  --shadow-card: 0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8);
+  --shadow-card-elevated: 0 25px 50px -12px rgb(2 6 23 / 0.85);
 }
 
 /** A viewer whose system prefers light, and who has not chosen otherwise. */
@@ -58,12 +127,97 @@
     --accent-foreground: #ffffff;
     --border: #d8dfe8;
     --input: #ffffff;
-    --ring: #4f46e5;
+    --ring: var(--accent);
     --accent-text: #4338ca;
-    --success-text: #047857;
-    --warning-text: #a16207;
+    --success-text: #065f46;
+    /**
+     * Darkened after axe measured them against the **composited** tint.
+     *
+     * `--warning-text: #a16207` (amber-700) and `--success-text: #047857` (emerald-700) both cleared AA on
+     * every plain surface, which is what `check-contrast.mjs` measures — and both failed on their own
+     * tinted badge, where the real background is `tint-warning` composited over the card. Measured: 4.07:1
+     * for warning on `tint-warning-strong`, 4.49:1 for success. Amber-800 and emerald-800 clear it at
+     * 5.66:1 and 6.29:1 while staying the same hue.
+     *
+     * The pair of gates working as intended rather than either being wrong: the static check reads declared
+     * values and cannot composite three layers of translucency; axe reads the rendered page and cannot tell
+     * you which token to change. Neither alone would have found this.
+     */
+    --warning-text: #854d0e;
     --danger-text: #b91c1c;
     --info-text: #0369a1;
+    --tint-accent: rgb(79 70 229 / 0.07);
+    --tint-accent-strong: rgb(79 70 229 / 0.13);
+    --edge-accent: rgb(79 70 229 / 0.28);
+    --tint-warning: rgb(180 83 9 / 0.08);
+    --tint-warning-strong: rgb(180 83 9 / 0.14);
+    --edge-warning: rgb(180 83 9 / 0.3);
+    --tint-danger: rgb(185 28 28 / 0.07);
+    --tint-danger-strong: rgb(185 28 28 / 0.12);
+    --edge-danger: rgb(185 28 28 / 0.26);
+    --tint-success: rgb(4 120 87 / 0.08);
+    --tint-success-strong: rgb(4 120 87 / 0.14);
+    --edge-success: rgb(4 120 87 / 0.28);
+    --tint-info: rgb(3 105 161 / 0.08);
+    --tint-info-strong: rgb(3 105 161 / 0.14);
+    --edge-info: rgb(3 105 161 / 0.28);
+    /* Slate at 12% rather than 80%: on a white ground the shadow's job is to lift the card a
+       millimetre, not to draw a border. */
+    /**
+     * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+     *
+     * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+     * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+     * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+     * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+     * hover state failed badly.
+     *
+     * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+     * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+     * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+     * took computing the stops by hand.
+     *
+     * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+     * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+     * is both the accessible direction and the one that reads as "pressed".
+     */
+    --accent-grad-from: #4338ca;
+    --accent-grad-to: #4f46e5;
+    --accent-grad-from-hover: #3730a3;
+    --accent-grad-to-hover: #4338ca;
+    --danger-grad-from: #b91c1c;
+    --danger-grad-to: #dc2626;
+    --danger-grad-from-hover: #991b1b;
+    --danger-grad-to-hover: #b91c1c;
+    /**
+   * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+   *
+   * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+   * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+   * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+   * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+   * hover state failed badly.
+   *
+   * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+   * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+   * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+   * took computing the stops by hand.
+   *
+   * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+   * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+   * is both the accessible direction and the one that reads as "pressed".
+   */
+    --accent-grad-from: #4338ca;
+    --accent-grad-to: #4f46e5;
+    --accent-grad-from-hover: #3730a3;
+    --accent-grad-to-hover: #4338ca;
+    --danger-grad-from: #b91c1c;
+    --danger-grad-to: #dc2626;
+    --danger-grad-from-hover: #991b1b;
+    --danger-grad-to-hover: #b91c1c;
+    --shadow-card: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+    --shadow-card-elevated:
+      0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
   }
 }
 
@@ -82,12 +236,40 @@
   --accent-foreground: #ffffff;
   --border: #d8dfe8;
   --input: #ffffff;
-  --ring: #4f46e5;
+  --ring: var(--accent);
   --accent-text: #4338ca;
-  --success-text: #047857;
-  --warning-text: #a16207;
+  --success-text: #065f46;
+  --warning-text: #854d0e;
   --danger-text: #b91c1c;
   --info-text: #0369a1;
+  --tint-accent: rgb(79 70 229 / 0.07);
+  --tint-accent-strong: rgb(79 70 229 / 0.13);
+  --edge-accent: rgb(79 70 229 / 0.28);
+  --tint-warning: rgb(180 83 9 / 0.08);
+  --tint-warning-strong: rgb(180 83 9 / 0.14);
+  --edge-warning: rgb(180 83 9 / 0.3);
+  --tint-danger: rgb(185 28 28 / 0.07);
+  --tint-danger-strong: rgb(185 28 28 / 0.12);
+  --edge-danger: rgb(185 28 28 / 0.26);
+  --tint-success: rgb(4 120 87 / 0.08);
+  --tint-success-strong: rgb(4 120 87 / 0.14);
+  --edge-success: rgb(4 120 87 / 0.28);
+  --tint-info: rgb(3 105 161 / 0.08);
+  --tint-info-strong: rgb(3 105 161 / 0.14);
+  --edge-info: rgb(3 105 161 / 0.28);
+  --shadow-card: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-card-elevated:
+    0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08);
+  /* Same values in both palettes: the pairing is white-on-saturated, which does not depend on the page
+     behind the button. See the note in `:root` for the measurements. */
+  --accent-grad-from: #4338ca;
+  --accent-grad-to: #4f46e5;
+  --accent-grad-from-hover: #3730a3;
+  --accent-grad-to-hover: #4338ca;
+  --danger-grad-from: #b91c1c;
+  --danger-grad-to: #dc2626;
+  --danger-grad-from-hover: #991b1b;
+  --danger-grad-to-hover: #b91c1c;
 }
 
 :root[data-theme='dark'] {
@@ -104,12 +286,73 @@
   --accent-foreground: #ffffff;
   --border: #1e293b;
   --input: #0f172a;
-  --ring: #6366f1;
+  --ring: var(--accent);
   --accent-text: #a5b4fc;
   --success-text: #6ee7b7;
   --warning-text: #fcd34d;
   --danger-text: #f87171;
   --info-text: #7dd3fc;
+  /**
+   * Tinted status surfaces, per palette.
+   *
+   * **What these replace.** 121 literal `bg-indigo-500/10`, `border-amber-500/30`-style utilities across
+   * ~30 files, in five semantic roles and eleven different opacities. They were all chosen against
+   * `#020617`, where a 10% indigo wash is a whisper — and the same declaration over `#ffffff` reads as a
+   * considerably stronger, cooler colour. The **contrast** was never the risk (`check-contrast.mjs`
+   * proves the text on top passes AA in both themes); what was unverified was whether the *ordering* of
+   * the surface hierarchy survived, since `/10` against `/15` against `/20` may simply stop being
+   * distinguishable on a light ground.
+   *
+   * Three tokens per role rather than eleven opacities: a subtle fill, an emphasised fill, and an edge.
+   * Nothing in this application needed more than three steps — the eleven were incidental.
+   *
+   * **Deliberately translucent rather than flat.** These sit over cards, over the page and over each
+   * other; a solid colour would show a seam wherever two of them meet. The alphas are *lower* on the
+   * light palette because a tint over white reads stronger than the same tint over near-black.
+   */
+  --tint-accent: rgb(99 102 241 / 0.12);
+  --tint-accent-strong: rgb(99 102 241 / 0.2);
+  --edge-accent: rgb(99 102 241 / 0.35);
+  --tint-warning: rgb(245 158 11 / 0.12);
+  --tint-warning-strong: rgb(245 158 11 / 0.2);
+  --edge-warning: rgb(245 158 11 / 0.35);
+  --tint-danger: rgb(239 68 68 / 0.12);
+  --tint-danger-strong: rgb(239 68 68 / 0.2);
+  --edge-danger: rgb(239 68 68 / 0.3);
+  --tint-success: rgb(16 185 129 / 0.12);
+  --tint-success-strong: rgb(16 185 129 / 0.2);
+  --edge-success: rgb(16 185 129 / 0.3);
+  --tint-info: rgb(14 165 233 / 0.12);
+  --tint-info-strong: rgb(14 165 233 / 0.2);
+  --edge-info: rgb(14 165 233 / 0.3);
+  /**
+   * The two gradient buttons, as tokens — because their contrast was unmeasurable as literals.
+   *
+   * **What this fixes.** `Button` used `from-indigo-600 to-indigo-500` with
+   * `hover:from-indigo-500 hover:to-indigo-400`, and `danger` the red equivalents. White text on those
+   * stops measures 4.47:1 at the base's light end and **2.98:1 on hover** — and 3.76:1 / **2.77:1** for
+   * danger. AA body text needs 4.5:1. So the application's two most prominent controls failed, and the
+   * hover state failed badly.
+   *
+   * **Neither gate could see it.** `check-contrast.mjs` scores text tokens against *surface* tokens, and
+   * a gradient made of Tailwind shade literals is neither. axe reports text over a gradient as
+   * `incomplete` rather than a violation, because it cannot know which stop a given glyph sits on. It
+   * took computing the stops by hand.
+   *
+   * Every stop below clears 4.5:1 against `#ffffff`: 700→600 at rest (7.90 / 6.29 indigo, 6.47 / 4.83
+   * red) and 800→700 on hover (9.93 / 7.90, 8.31 / 6.47). **Hover darkens rather than lightens**, which
+   * is both the accessible direction and the one that reads as "pressed".
+   */
+  --accent-grad-from: #4338ca;
+  --accent-grad-to: #4f46e5;
+  --accent-grad-from-hover: #3730a3;
+  --accent-grad-to-hover: #4338ca;
+  --danger-grad-from: #b91c1c;
+  --danger-grad-to: #dc2626;
+  --danger-grad-from-hover: #991b1b;
+  --danger-grad-to-hover: #b91c1c;
+  --shadow-card: 0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8);
+  --shadow-card-elevated: 0 25px 50px -12px rgb(2 6 23 / 0.85);
 }
 
 /**
@@ -148,6 +391,46 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /**
+   * One step below `text-xs`, and the floor.
+   *
+   * Six arbitrary sizes — `0.55`, `0.6`, `0.65`, `0.7`, `0.72` and `0.8rem` — accounted for **91 of 253**
+   * font-size declarations, all crowded into a quarter-rem band. `0.7rem` and `0.72rem` differ by
+   * 0.32px and both existed; `0.6`, `0.65` and `0.7` were each used dozens of times for the same role.
+   * When secondary text comes in four indistinguishable sizes, size stops encoding rank and a dense
+   * inspector has nothing for the eye to follow.
+   *
+   * `0.55rem` was **8.8px** — on the "verified here" badge, one of the highest-value labels in the app —
+   * and `0.6rem` was 9.6px. Those are legibility defects on their own terms, whatever the scale. 11px is
+   * the floor now, and everything below `text-xs` lands here.
+   */
+  --color-tint-accent: var(--tint-accent);
+  --color-tint-accent-strong: var(--tint-accent-strong);
+  --color-edge-accent: var(--edge-accent);
+  --color-tint-warning: var(--tint-warning);
+  --color-tint-warning-strong: var(--tint-warning-strong);
+  --color-edge-warning: var(--edge-warning);
+  --color-tint-danger: var(--tint-danger);
+  --color-tint-danger-strong: var(--tint-danger-strong);
+  --color-edge-danger: var(--edge-danger);
+  --color-tint-success: var(--tint-success);
+  --color-tint-success-strong: var(--tint-success-strong);
+  --color-edge-success: var(--edge-success);
+  --color-tint-info: var(--tint-info);
+  --color-tint-info-strong: var(--tint-info-strong);
+  --color-edge-info: var(--edge-info);
+  --color-accent-grad-from: var(--accent-grad-from);
+  --color-accent-grad-to: var(--accent-grad-to);
+  --color-accent-grad-from-hover: var(--accent-grad-from-hover);
+  --color-accent-grad-to-hover: var(--accent-grad-to-hover);
+  --color-danger-grad-from: var(--danger-grad-from);
+  --color-danger-grad-to: var(--danger-grad-to);
+  --color-danger-grad-from-hover: var(--danger-grad-from-hover);
+  --color-danger-grad-to-hover: var(--danger-grad-to-hover);
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.45;
+  --shadow-card: var(--shadow-card);
+  --shadow-card-elevated: var(--shadow-card-elevated);
 }
 
 @layer base {
@@ -182,8 +465,15 @@
       monospace;
   }
 
+  /**
+   * Derived from `--accent` rather than a hardcoded `rgba(99, 102, 241, 0.3)`.
+   *
+   * That literal was the *dark* accent, and it was applied on the light palette too — so selecting text
+   * on a white ground used a colour chosen for `#020617`. `color-mix` keeps one source for the accent
+   * and lets the selection follow the palette.
+   */
   ::selection {
-    background-color: rgba(99, 102, 241, 0.3);
+    background-color: color-mix(in oklab, var(--accent) 30%, transparent);
     color: inherit;
   }
 
@@ -204,6 +494,32 @@
 
   ::-webkit-scrollbar-thumb:hover {
     background: var(--foreground-muted);
+  }
+}
+
+/**
+ * Honour a stated preference for less motion.
+ *
+ * The total motion here is small — five animations and 29 transitions, 24 of them colour — so this is
+ * not a vestibular risk, and that is exactly why it is cheap to get right rather than a reason to skip
+ * it. `animate-pulse` on a status dot and the checking-state pulse are the two that actually move.
+ *
+ * Spinners are **not** reduced to nothing: a spinner that stops spinning reads as a hung request, which
+ * is worse than motion. It is slowed instead, which preserves the signal without the fast rotation.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 

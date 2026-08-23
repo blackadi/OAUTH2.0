@@ -1,6 +1,7 @@
 import { cn } from '@/utils/cn';
 import { Copy, Check } from 'lucide-react';
 import { useState, useCallback } from 'react';
+import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { toCurl } from '@/utils/curl';
 
 interface RequestBuilderProps {
@@ -20,7 +21,7 @@ const methodColors: Record<string, string> = {
 };
 
 function RequestBuilder({ method, url, headers, body, className }: RequestBuilderProps) {
-  const [copied, setCopied] = useState(false);
+  const { copied, setCopied, resetLater } = useCopyFeedback();
   const [reveal, setReveal] = useState(false);
 
   // Shared with the request trace's copy button, so the two cannot disagree about quoting or about
@@ -34,11 +35,11 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         toCurl({ method, url, headers, body }, { revealSecrets: reveal }),
       );
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      resetLater();
     } catch {
       /* clipboard unavailable */
     }
-  }, [method, url, headers, body, reveal]);
+  }, [method, url, headers, body, reveal, setCopied, resetLater]);
 
   return (
     <div className={cn('rounded-lg border border-border overflow-hidden', className)}>
@@ -46,7 +47,7 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         <div className="flex items-center gap-2 overflow-hidden">
           <span
             className={cn(
-              'text-[0.65rem] font-bold uppercase tracking-wider shrink-0',
+              'text-2xs font-bold uppercase tracking-wider shrink-0',
               methodColors[method] || 'text-muted-foreground',
             )}
           >
@@ -56,7 +57,7 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         </div>
         <button
           onClick={copyAsCurl}
-          className="flex items-center gap-1 text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none shrink-0 ml-2"
+          className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none shrink-0 ml-2"
           aria-label="Copy as cURL"
         >
           {copied ? <Check className="h-3 w-3 text-success-text" /> : <Copy className="h-3 w-3" />}
@@ -64,22 +65,35 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
             {copied ? 'Copied' : reveal ? 'cURL + secrets' : 'cURL'}
           </span>
         </button>
+        {/*
+          This control decides whether **real client secrets** land on the clipboard, and it used to be
+          labelled `reveal` / `redacted?` — one ambiguous word, and a question mark that reads as a
+          question rather than a state or an action. For a security-relevant toggle the label has to say
+          what is currently true, so the two states are now named as states and the pressed one is
+          marked for assistive technology as well as coloured.
+        */}
         <button
           onClick={() => setReveal((r) => !r)}
-          className="text-[0.65rem] text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none shrink-0 ml-2"
+          aria-pressed={reveal}
+          className={cn(
+            'text-2xs transition-colors cursor-pointer bg-transparent border-none shrink-0 ml-2',
+            reveal
+              ? 'text-warning-text font-medium'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
           title={
             reveal
-              ? 'Redact credentials in the copied command'
-              : 'Include real credentials in the copied command'
+              ? 'Secrets are included in the copied command. Click to redact them.'
+              : 'Secrets are redacted in the copied command. Click to include them.'
           }
         >
-          {reveal ? 'redacted?' : 'reveal'}
+          {reveal ? 'secrets: shown' : 'secrets: hidden'}
         </button>
       </div>
       {headers && Object.keys(headers).length > 0 && (
         <div className="px-3 py-2 border-b border-border space-y-0.5">
           {Object.entries(headers).map(([k, v]) => (
-            <div key={k} className="flex gap-2 text-[0.7rem] font-mono">
+            <div key={k} className="flex gap-2 text-xs font-mono">
               <span className="text-accent-text shrink-0">{k}:</span>
               <span className="text-muted-foreground truncate">{v}</span>
             </div>
@@ -87,7 +101,7 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         </div>
       )}
       {body && (
-        <pre className="px-3 py-2 text-[0.7rem] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all max-h-32 bg-code/50">
+        <pre className="px-3 py-2 text-xs font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all max-h-32 bg-code/50">
           {body}
         </pre>
       )}

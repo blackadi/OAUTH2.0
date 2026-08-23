@@ -83,13 +83,13 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
 
   if (decoded.error || !decoded.parts) {
     return (
-      <div className={cn('rounded-lg border border-amber-500/30 bg-amber-500/5 p-3', className)}>
+      <div className={cn('rounded-lg border border-edge-warning bg-tint-warning p-3', className)}>
         <div className="flex gap-2 items-start">
           <AlertTriangle className="h-4 w-4 text-warning-text mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="text-xs font-medium text-warning-text">Not a decodable JWT</p>
-            <p className="text-[0.7rem] text-warning-text/80 mt-0.5">{decoded.error}</p>
-            <p className="text-[0.65rem] text-muted-foreground mt-1.5">
+            <p className="text-xs text-warning-text mt-0.5">{decoded.error}</p>
+            <p className="text-2xs text-muted-foreground mt-1.5">
               An opaque access token is normal and not a defect — only some deployments issue JWTs
               here.
             </p>
@@ -108,23 +108,23 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
     <div className={cn('rounded-lg border border-border overflow-hidden', className)}>
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 flex-wrap">
         {label && <span className="text-xs font-semibold text-foreground">{label}</span>}
-        <span className="text-[0.6rem] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 text-accent-text">
+        <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-tint-accent-strong text-accent-text">
           {alg}
         </span>
         {typ && (
-          <span className="text-[0.6rem] font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
+          <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
             typ: {typ}
           </span>
         )}
         {exp && (
           <span
             className={cn(
-              'flex items-center gap-1 text-[0.6rem] font-mono px-1.5 py-0.5 rounded',
+              'flex items-center gap-1 text-2xs font-mono px-1.5 py-0.5 rounded',
               exp.delta <= 0
-                ? 'bg-red-500/15 text-danger-text'
+                ? 'bg-tint-danger-strong text-danger-text'
                 : exp.delta < 300
-                  ? 'bg-amber-500/15 text-warning-text'
-                  : 'bg-emerald-500/15 text-success-text',
+                  ? 'bg-tint-warning-strong text-warning-text'
+                  : 'bg-tint-success-strong text-success-text',
             )}
             title={exp.iso}
           >
@@ -144,7 +144,7 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
           <button
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
-            className="text-[0.65rem] text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer"
+            className="text-2xs text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer"
           >
             {open ? 'Hide claims' : 'Show claims'}
           </button>
@@ -152,13 +152,13 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
       </div>
 
       {verifyError && (
-        <p className="px-3 py-2 text-[0.7rem] text-warning-text bg-amber-500/5 border-b border-amber-500/20">
+        <p className="px-3 py-2 text-xs text-warning-text bg-tint-warning border-b border-edge-warning">
           Could not check the signature: {verifyError}
         </p>
       )}
 
       {outcome && outcome.status !== 'valid' && (
-        <p className="px-3 py-2 text-[0.7rem] text-muted-foreground bg-muted/20 border-b border-border">
+        <p className="px-3 py-2 text-xs text-muted-foreground bg-muted/20 border-b border-border">
           {outcome.reason}
         </p>
       )}
@@ -177,29 +177,21 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
 
           <section>
             <SectionLabel>Signature</SectionLabel>
-            <p className="text-[0.7rem] font-mono text-muted-foreground break-all bg-code/50 rounded p-2 border border-border/40">
+            <p className="text-xs font-mono text-muted-foreground break-all bg-code/50 rounded p-2 border border-border/40">
               {signature}
             </p>
           </section>
 
           <button
             onClick={() => setShowRaw((r) => !r)}
-            className="text-[0.65rem] text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer"
+            className="text-2xs text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer"
           >
             {showRaw ? 'Hide raw JSON' : 'Show raw JSON'}
           </button>
           {showRaw && (
             <div className="space-y-2">
-              <JsonBlock
-                data={header}
-                label="header"
-                className="[&_pre]:text-[0.7rem] [&_pre]:p-2"
-              />
-              <JsonBlock
-                data={payload}
-                label="payload"
-                className="[&_pre]:text-[0.7rem] [&_pre]:p-2"
-              />
+              <JsonBlock data={header} label="header" className="[&_pre]:text-xs [&_pre]:p-2" />
+              <JsonBlock data={payload} label="payload" className="[&_pre]:text-xs [&_pre]:p-2" />
             </div>
           )}
         </div>
@@ -210,7 +202,7 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-muted-foreground/70 mb-1.5">
+    <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
       {children}
     </p>
   );
@@ -225,7 +217,7 @@ function VerificationBadge({
 }) {
   if (verifying) {
     return (
-      <span className="flex items-center gap-1 text-[0.6rem] font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
+      <span className="flex items-center gap-1 text-2xs font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
         <ShieldQuestion className="h-2.5 w-2.5" />
         checking
       </span>
@@ -234,7 +226,7 @@ function VerificationBadge({
   if (!outcome) {
     return (
       <span
-        className="flex items-center gap-1 text-[0.6rem] font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground"
+        className="flex items-center gap-1 text-2xs font-mono px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground"
         title="Decoded only. A payload is legible whether or not the signature is good."
       >
         <ShieldQuestion className="h-2.5 w-2.5" />
@@ -244,10 +236,10 @@ function VerificationBadge({
   }
   const tone =
     outcome.status === 'valid'
-      ? 'bg-emerald-500/15 text-success-text'
+      ? 'bg-tint-success-strong text-success-text'
       : outcome.status === 'invalid'
-        ? 'bg-red-500/15 text-danger-text'
-        : 'bg-amber-500/15 text-warning-text';
+        ? 'bg-tint-danger-strong text-danger-text'
+        : 'bg-tint-warning-strong text-warning-text';
   const Icon =
     outcome.status === 'valid'
       ? ShieldCheck
@@ -263,9 +255,7 @@ function VerificationBadge({
           ? 'no matching key'
           : 'cannot verify here';
   return (
-    <span
-      className={cn('flex items-center gap-1 text-[0.6rem] font-mono px-1.5 py-0.5 rounded', tone)}
-    >
+    <span className={cn('flex items-center gap-1 text-2xs font-mono px-1.5 py-0.5 rounded', tone)}>
       <Icon className="h-2.5 w-2.5" />
       {text}
     </span>
@@ -275,7 +265,7 @@ function VerificationBadge({
 function ClaimTable({ claims }: { claims: Record<string, unknown> }) {
   const names = Object.keys(claims);
   if (names.length === 0) {
-    return <p className="text-[0.7rem] text-muted-foreground italic">empty</p>;
+    return <p className="text-xs text-muted-foreground italic">empty</p>;
   }
   return (
     <div className="space-y-1">
@@ -291,7 +281,7 @@ function ClaimRow({ name, value }: { name: string; value: unknown }) {
   const time = TIME_CLAIMS.has(name) ? readTimeClaim(value) : null;
 
   return (
-    <div className="flex items-start gap-2 text-[0.7rem] py-0.5">
+    <div className="flex items-start gap-2 text-xs py-0.5">
       <code className="font-mono text-accent-text shrink-0 min-w-[7rem]">{name}</code>
       <div className="min-w-0 flex-1">
         <span className="font-mono text-foreground break-all">
@@ -302,7 +292,7 @@ function ClaimRow({ name, value }: { name: string; value: unknown }) {
             {time.iso} ({formatDelta(time.delta)})
           </span>
         )}
-        {doc && <p className="text-muted-foreground/80 mt-0.5 leading-snug">{doc.note}</p>}
+        {doc && <p className="text-muted-foreground mt-0.5 leading-snug">{doc.note}</p>}
       </div>
       {doc && (
         <div className="shrink-0">

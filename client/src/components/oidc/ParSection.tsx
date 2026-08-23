@@ -15,7 +15,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
-import { SESSION_KEYS, readKey, writeKey } from '@/services/session-keys';
+import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
+import type { JWK } from '@/services/crypto-utils';
 
 function ParSection() {
   const { loading, result, error, call } = useAsyncCall();
@@ -72,15 +73,25 @@ function ParSection() {
           : { parameters, clientId, clientSecret };
 
     if (useDpop) {
-      let dpopKeyRaw = readKey(SESSION_KEYS.dpopPrivateKey);
-      if (!dpopKeyRaw) {
+      // Mint a key if this session has none. The value is read back below rather than threaded through
+      // a local, so there is one read path whether the key was just generated or already stored.
+      if (!readKey(SESSION_KEYS.dpopPrivateKey)) {
         const pair = await generateKeyPair();
         writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
         writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
         writeKey(SESSION_KEYS.dpopKid, pair.kid);
-        dpopKeyRaw = JSON.stringify(pair.privateKey);
       }
-      const dpopPrivateKey = JSON.parse(dpopKeyRaw);
+      /**
+       * Read as a typed JWK. This was `JSON.parse(dpopKeyRaw)` — `any` — flowing straight into
+       * `crypto.subtle.importKey` as a **signing key**, so the compiler checked nothing about the most
+       * sensitive argument in the call. `readJsonKey` also returns `null` on a corrupted entry rather
+       * than throwing, which is the difference between "no key" and an unexplained failure.
+       */
+      const dpopPrivateKey = readJsonKey<JWK>(SESSION_KEYS.dpopPrivateKey);
+      if (!dpopPrivateKey) {
+        toast.error('The stored DPoP key is unreadable. Generate a new one in Grant Flows.');
+        return null;
+      }
       // A factory, not a proof: the nonce is inside the signature, so a `use_dpop_nonce` retry needs a
       // fresh one. `dpopRequest` owns reading and storing `dpop_nonce`.
       const { data } = await parService.pushedAuthorizationWithDpop(
@@ -231,7 +242,7 @@ function ParSection() {
       {parResult?.request_uri && (
         <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
           <p className="text-xs text-foreground-muted font-mono break-all">
-            <span className="text-muted-foreground/70">request_uri: </span>
+            <span className="text-muted-foreground">request_uri: </span>
             {parResult.request_uri}
           </p>
           <p className="text-xs text-muted-foreground">

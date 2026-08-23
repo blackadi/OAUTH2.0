@@ -4,6 +4,14 @@ import { Check, ArrowRight } from 'lucide-react';
 export interface FlowStep {
   id: string;
   label: string;
+  /**
+   * One sentence on what happens at this step.
+   *
+   * **This field was declared and never rendered.** No call site passed one and the component body
+   * ignored it, so the headline flow's diagram was five bare words — *Authorize · Login · Consent ·
+   * Callback · Token* — in a product whose premise is that each step gets explained. It told a reader
+   * *where they were* and never *what happens there*.
+   */
   description?: string;
 }
 
@@ -34,17 +42,28 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
         return (
           <div
             key={step.id}
+            /**
+             * `role="listitem"` is required, not decorative.
+             *
+             * The container carries `role="list"`, and an explicit `list` role means the browser expects
+             * `listitem` children — a plain `<div>` does not qualify, so the whole list was announced as
+             * **empty** and none of these `aria-label`s reached anybody. Found by axe
+             * (`aria-required-children`, 9 routes); no lint rule and no jsdom test can see it, because
+             * both check the attributes rather than the resulting accessibility tree.
+             */
+            role="listitem"
             className="flex items-center flex-1 min-w-0"
-            aria-label={`Step ${i + 1}, ${step.label}: ${state}`}
+            aria-label={`Step ${i + 1}, ${step.label}: ${state}${step.description ? `. ${step.description}` : ''}`}
             aria-current={isCurrent ? 'step' : undefined}
           >
             <div className="flex flex-col items-center gap-1.5 flex-1">
               <div
                 className={cn(
                   'flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all duration-300',
-                  isCompleted && 'bg-green-500/20 text-success-text border-2 border-green-500/50',
+                  isCompleted &&
+                    'bg-tint-success-strong text-success-text border-2 border-edge-success',
                   isCurrent &&
-                    'bg-indigo-500/20 text-accent-text border-2 border-indigo-500 ring-2 ring-indigo-500/20',
+                    'bg-tint-accent-strong text-accent-text border-2 border-indigo-500 ring-2 ring-edge-accent',
                   isPending && 'bg-muted/30 text-muted-foreground border-2 border-border',
                 )}
               >
@@ -52,19 +71,24 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
               </div>
               <span
                 className={cn(
-                  'text-[0.6rem] font-medium text-center leading-tight px-1',
+                  'text-2xs font-medium text-center leading-tight px-1',
                   isCompleted && 'text-success-text',
                   isCurrent && 'text-accent-text',
-                  isPending && 'text-muted-foreground/60',
+                  isPending && 'text-muted-foreground',
                 )}
               >
                 {step.label}
               </span>
+              {step.description && (
+                <span className="hidden sm:block text-2xs text-center leading-snug px-1 text-muted-foreground max-w-[13ch]">
+                  {step.description}
+                </span>
+              )}
             </div>
             {i < steps.length - 1 && (
               <div className="shrink-0 mx-1">
                 <ArrowRight
-                  className={cn('h-3 w-3', isCompleted ? 'text-success-text/50' : 'text-border')}
+                  className={cn('h-3 w-3', isCompleted ? 'text-success-text' : 'text-border')}
                 />
               </div>
             )}

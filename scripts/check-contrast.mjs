@@ -108,6 +108,36 @@ const THEMES = {
 /** The surfaces text can plausibly sit on. */
 const SURFACE_TOKENS = ["background", "card", "muted", "code", "surface-2"];
 
+/**
+ * Text tokens that are paired with a *specific* background rather than with any surface.
+ *
+ * `accent-foreground` is white, and it exists to sit on `--accent` — it is the label on a primary
+ * button, never text on a page. Scoring it against `--muted` asks a question that never occurs and
+ * answers 1.17:1, which is how adding it to the general set produced an immediate false positive. A
+ * check that reports a failure nobody can act on trains people to ignore it, so the pairing is stated
+ * instead of guessed.
+ */
+const PAIRED_WITH = {
+  /**
+   * Scored against **every** gradient stop of both buttons, and it must clear all of them.
+   *
+   * The naive pairing — `accent-foreground` against `--accent` — was itself an approximation, because
+   * the label does not sit on `--accent`: it sits on a gradient. Listing the stops makes the check exact,
+   * and `Math.min` below means the *worst* stop decides, not the best. That is the difference between
+   * this check and the one that reported a clean sheet while the hover state measured 2.77:1.
+   */
+  "accent-foreground": [
+    "accent-grad-from",
+    "accent-grad-to",
+    "accent-grad-from-hover",
+    "accent-grad-to-hover",
+    "danger-grad-from",
+    "danger-grad-to",
+    "danger-grad-from-hover",
+    "danger-grad-to-hover",
+  ],
+};
+
 // ── what the source actually uses ────────────────────────────────────────────────────────────────
 
 function walk(dir, out = []) {
@@ -119,7 +149,42 @@ function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * Every semantic text token, not just the five status ones.
+ *
+ * `muted-foreground`, `foreground`, `foreground-muted` and `card-foreground` were **not scored at all**,
+ * which is a gap of the same shape as the one the comment below describes: the check reported a clean
+ * sheet for colours it had simply never looked at.
+ */
+const SEMANTIC_TEXT = [
+  "accent-text",
+  "success-text",
+  "warning-text",
+  "danger-text",
+  "info-text",
+  "foreground",
+  "foreground-muted",
+  "muted-foreground",
+  "card-foreground",
+  "accent-foreground",
+];
+
 const used = new Map(); // "indigo-300" or "danger-text" -> count
+/**
+ * Text colours carrying an opacity modifier, which this check **refuses** rather than scores.
+ *
+ * Found by axe on 2026-08-22, on 25 of 22 routes: `text-muted-foreground/60` on the sidebar group
+ * labels was a **serious** contrast failure while this script reported a clean sheet, because it scored
+ * the *token* — which passes — and never composited the `/60`.
+ *
+ * Refused rather than computed, deliberately. Scoring `text-x/60` correctly means knowing the exact
+ * surface behind it, and with translucent tints over cards over the page that is three unknown layers.
+ * A number this script cannot compute honestly is worse than a rule it can enforce exactly: a token is
+ * chosen to clear AA, and an alpha on top silently un-chooses it. If a dimmer step is genuinely wanted,
+ * the answer is another token — which this check *can* score.
+ */
+const alphaText = new Map(); // "muted-foreground/60" -> [files]
+
 for (const file of walk(join(CLIENT, "src"))) {
   const source = readFileSync(file, "utf8");
   // Tailwind shades…
@@ -129,8 +194,17 @@ for (const file of walk(join(CLIENT, "src"))) {
   // …and the app's own semantic text tokens, which is the whole point after the migration. Without
   // this the checker would report a clean sheet purely because the literals it knew how to score had
   // been renamed — a false pass, and the worst possible outcome for a check like this.
-  for (const m of source.matchAll(/\btext-((?:accent|success|warning|danger|info)-text)\b/g)) {
+  const semantic = SEMANTIC_TEXT.join("|");
+  for (const m of source.matchAll(new RegExp(`\\btext-(${semantic})(?![a-z-])`, "g"))) {
     used.set(m[1], (used.get(m[1]) ?? 0) + 1);
+  }
+  // …and any opacity modifier on either kind, which is unscoreable and therefore not allowed.
+  for (const m of source.matchAll(
+    new RegExp(`\\btext-((?:${semantic}|[a-z]+-\\d{3})/\\d{1,3})`, "g"),
+  )) {
+    const at = alphaText.get(m[1]) ?? [];
+    at.push(file.replace(`${CLIENT}/`, ""));
+    alphaText.set(m[1], at);
   }
 }
 
@@ -146,11 +220,15 @@ console.log(`Thresholds                    : ${AA_TEXT}:1 body text, ${AA_LARGE}
 
 let failures = 0;
 
+/** The named surfaces of a theme, as linear RGB, ready to score against. */
+function surfacesFor(theme, tokens) {
+  return tokens
+    .filter((t) => THEMES[theme][t])
+    .map((t) => ({ name: t, rgb: hexToLinearRgb(THEMES[theme][t]) }));
+}
+
 for (const theme of ["dark", "light"]) {
-  const surfaces = SURFACE_TOKENS.filter((t) => THEMES[theme][t]).map((t) => ({
-    name: t,
-    rgb: hexToLinearRgb(THEMES[theme][t]),
-  }));
+  const surfaces = surfacesFor(theme, SURFACE_TOKENS);
 
   const rows = [];
   for (const [colour, count] of [...used.entries()].sort((a, b) => b[1] - a[1])) {
@@ -158,8 +236,29 @@ for (const theme of ["dark", "light"]) {
     const themeHex = THEMES[theme][colour];
     const fg = themeHex ? hexToLinearRgb(themeHex) : palette.get(colour);
     if (!fg) continue;
-    const scored = surfaces.map((s) => ({ surface: s.name, ratio: contrast(fg, s.rgb) }));
-    const best = scored.reduce((a, b) => (a.ratio > b.ratio ? a : b));
+    // A paired token is scored against the backgrounds it is actually for, not against every surface.
+    const paired = PAIRED_WITH[colour];
+    const against = paired ? surfacesFor(theme, paired) : surfaces;
+    const scored = against.map((s) => ({ surface: s.name, ratio: contrast(fg, s.rgb) }));
+    /**
+     * A paired token whose backgrounds are not defined in this theme is a **failure to report**, not a
+     * crash and not a silent skip. It means one palette declares the pairing and the other does not —
+     * which is exactly the half-landed-token bug `check-theme-tokens.mjs` exists for, and the first
+     * version of this code threw "Reduce of empty array" on it instead of saying so.
+     */
+    if (scored.length === 0) {
+      rows.push({ colour, count, best: { surface: "MISSING", ratio: 0 } });
+      continue;
+    }
+    /**
+     * A surface-scored colour is judged on its **best** plausible surface, because the script cannot
+     * know which one the text really sits on and failing it for an unlikely pairing would cry wolf.
+     * A *paired* colour is judged on its **worst**, because every listed background is one it genuinely
+     * appears on — a button whose hover state fails is a button that fails.
+     */
+    const best = paired
+      ? scored.reduce((a, b) => (a.ratio < b.ratio ? a : b))
+      : scored.reduce((a, b) => (a.ratio > b.ratio ? a : b));
     rows.push({ colour, count, best, scored });
   }
 
@@ -177,9 +276,30 @@ for (const theme of ["dark", "light"]) {
   console.log("");
 }
 
+/**
+ * The opacity-modifier rule, reported separately because it is a *different* kind of failure.
+ *
+ * Everything above is "this colour does not clear AA". This is "this colour cannot be scored at all",
+ * which is why it is refused rather than measured — see the note on `alphaText`.
+ */
+if (alphaText.size > 0) {
+  console.log("── OPACITY MODIFIERS ON TEXT ──");
+  for (const [cls, files] of [...alphaText].sort()) {
+    console.log(`  ✗  text-${cls}   in ${[...new Set(files)].join(", ")}`);
+  }
+  console.log(
+    "\n  A token is chosen to clear AA; an alpha on top silently un-chooses it, and compositing it\n" +
+      "  correctly needs the exact surface behind it — often a translucent tint over a card over the\n" +
+      "  page. Use a token for the dimmer step instead, which this check can score.\n",
+  );
+} else {
+  console.log("── OPACITY MODIFIERS ON TEXT ──\n  ✓ none — every text colour is a token this check can score\n");
+}
+
+const total = failures + alphaText.size;
 console.log(
-  failures === 0
-    ? "✓ no light-theme contrast failures"
-    : `✗ ${failures} colour(s) fail AA against every light surface — see above`,
+  total === 0
+    ? "✓ no light-theme contrast failures, and no unscoreable text colours"
+    : `✗ ${failures} colour(s) fail AA against every light surface, ${alphaText.size} unscoreable — see above`,
 );
-process.exit(failures === 0 ? 0 : 1);
+process.exit(total === 0 ? 0 : 1);

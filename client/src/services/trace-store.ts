@@ -35,9 +35,76 @@ export interface TraceEntry {
   ok: boolean;
   /** Set only when no response arrived at all; `status` is 0 in that case. */
   networkError?: string;
+  /**
+   * True for a front-channel hop — a browser navigation this app initiated or received, rather than a
+   * request it sent and awaited. Kept as an explicit flag rather than inferred from `status === 0`,
+   * because a network failure is also status 0 and means something entirely different.
+   */
+  navigation?: boolean;
+  /** For a navigation: which way it went. See `NavigationInput.direction`. */
+  direction?: 'outbound' | 'inbound';
 }
 
 export type TraceInput = Omit<TraceEntry, 'id'>;
+
+/**
+ * A front-channel hop: a full-page navigation, not a `fetch`.
+ *
+ * **The gap this closes.** `recordTrace` was called from exactly two places, both inside
+ * `transport.ts` — and the authorization request is `window.location.href = url`, a browser navigation
+ * that no `fetch` interceptor can see. So the single most important request in OAuth never entered the
+ * trace: a learner composed it parameter by parameter in a 24-field builder, sent it, and watched it
+ * disappear. The request history and the four-lane `SequenceView` both began at the token exchange, and
+ * `flow-progress.hasAuthorizeRequest` was a predicate that could never be true.
+ *
+ * That matters more here than a missing row would elsewhere. Those two hops are the *front channel*,
+ * `SequenceView`'s four lanes exist to show front channel against back channel, and the diagram could
+ * not draw the distinction it was built to teach.
+ *
+ * **A navigation is recorded honestly rather than dressed up as a request/response pair.** There is no
+ * status, because the browser — not this app — receives the answer, and the answer is a redirect the
+ * user's session follows. `status: 0` is the value the store already uses for "no response arrived",
+ * `durationMs` is 0 because nothing was awaited, and `ok` is true because nothing failed. The response
+ * body carries a sentence saying so, so nobody reads the row as a captured HTTP response.
+ */
+export interface NavigationInput {
+  url: string;
+  label: string;
+  /**
+   * Which way the hop went.
+   *
+   * `outbound` is the browser leaving for the authorization endpoint; `inbound` is the redirect coming
+   * back with the code. The direction is **passed in rather than inferred from the URL**, because a
+   * redirect back to our own `/callback` is a message *from* the authorization server, and a diagram
+   * that guessed from the host would draw it as the client talking to itself — the exact opposite of the
+   * front-channel round trip the four lanes exist to show.
+   */
+  direction: 'outbound' | 'inbound';
+  /** `GET` for an outbound navigation; the inbound redirect is also a `GET`. */
+  method?: string;
+}
+
+export function recordNavigation(input: NavigationInput): TraceEntry {
+  return recordTrace({
+    startedAt: Date.now(),
+    durationMs: 0,
+    method: input.method ?? 'GET',
+    url: input.url,
+    label: input.label,
+    requestHeaders: {},
+    requestBody: undefined,
+    status: 0,
+    statusText: 'front-channel navigation',
+    responseHeaders: {},
+    responseBody:
+      input.direction === 'outbound'
+        ? 'Front-channel hop — the browser navigated away, so this app never saw a response. The answer arrives as the redirect back to the callback.'
+        : 'Front-channel hop — this is the redirect the authorization server sent the browser. Its parameters are in the URL above.',
+    ok: true,
+    navigation: true,
+    direction: input.direction,
+  });
+}
 
 /**
  * Bounded so a polling loop cannot grow it without limit — `useServerStatus` alone adds an entry every
@@ -114,11 +181,28 @@ export function redactHeaders(headers: Record<string, string>): Record<string, s
   return out;
 }
 
-/** Body parameters whose value is a credential. Same reasoning as the headers above. */
+/**
+ * Body parameters whose value is a credential. Same reasoning as the headers above.
+ *
+ * **`code` and `token` were added deliberately, against a stated rationale that turned out to be wrong.**
+ * A test used to assert that `code=xyz` survived redaction, commented *"an authorization code is
+ * single-use and already spent"*. That is true of a *successful* exchange and false of a failed one —
+ * and this repo proved it: an authorization code **survives** a `use_dpop_nonce` refusal, so the same
+ * code replayed with the nonce still yields `OK` (verified live 2026-08-17, recorded in `AGENTS.md`).
+ * A failed exchange is exactly the request somebody exports and pastes into an issue asking what is
+ * wrong, so the one case the rationale did not cover is the one case that matters.
+ *
+ * `token` is the parameter RFC 7662 §2.1 and RFC 7009 §2.1 both define, so it is what the introspection
+ * and revocation sections send — a live access or refresh token, with nothing spent about it.
+ *
+ * Both remain visible on screen and under `reveal`; this list governs what leaves the page.
+ */
 const SENSITIVE_PARAMS = [
   'client_secret',
   'password',
+  'code',
   'code_verifier',
+  'token',
   'refresh_token',
   'assertion',
   'client_assertion',
@@ -138,10 +222,22 @@ export function redactBody(body: string | undefined): string | undefined {
   if (!body) return body;
   let out = body;
   for (const param of SENSITIVE_PARAMS) {
-    // form-encoded: `client_secret=value` up to the next `&`
-    out = out.replace(new RegExp(`(${param}=)[^&]*`, 'gi'), '$1●●●●●●');
+    /**
+     * form-encoded: `client_secret=value` up to the next `&`.
+     *
+     * The leading `(^|[^A-Za-z0-9_])` is load-bearing now that short names are on the list. Without a
+     * boundary, `token=` matches inside `refresh_token=` and `code=` matches inside anything ending in
+     * those letters, so masking became unpredictable — and a name is only a parameter name when the
+     * character before it is not part of an identifier. `_` counts as identifier, which is precisely
+     * what keeps `refresh_token` from being matched by the `token` rule.
+     *
+     * The boundary also has to admit `"`, because `par.service.ts` and `ciba.service.ts` nest a
+     * form-encoded string inside a JSON field: `{"parameters":"code_verifier=…"}`. A boundary of only
+     * `^`, `?` and `&` would silently stop masking those.
+     */
+    out = out.replace(new RegExp(`(^|[^A-Za-z0-9_])(${param})=[^&"]*`, 'gi'), '$1$2=●●●●●●');
     // JSON: `"clientSecret": "value"` in either spelling
-    const camel = param.replace(/_([a-z])/g, (_m, c) => c.toUpperCase());
+    const camel = param.replace(/_([a-z])/g, (_m: string, c: string) => c.toUpperCase());
     out = out.replace(new RegExp(`("(?:${param}|${camel})"\\s*:\\s*)"[^"]*"`, 'gi'), '$1"●●●●●●"');
   }
   return out;

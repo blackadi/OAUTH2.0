@@ -9,7 +9,7 @@ A comprehensive interactive debugging dashboard for learning, testing, and debug
 - [Setup](#setup)
 - [Dashboard Overview](#dashboard-overview)
 - [Sections Explained](#sections-explained)
-  - [1. Auth Flows — The Four Standard Grant Types](#1-auth-flows--the-four-standard-grant-types)
+  - [1. Grant Flows — The Five Standard Grant Types](#1-grant-flows--the-five-standard-grant-types)
   - [2. Token Operations](#2-token-operations)
   - [3. Token Management (Admin)](#3-token-management-admin)
   - [4. Client Management](#4-client-management)
@@ -28,6 +28,10 @@ A comprehensive interactive debugging dashboard for learning, testing, and debug
   - [17. FAPI 2.0 / DPoP](#17-fapi-20--dpop)
   - [18. MCP — Model Context Protocol](#18-mcp--model-context-protocol)
   - [19. Verifiable Credentials (OID4VCI)](#19-verifiable-credentials-oid4vci)
+  - [20. RAR — Rich Authorization Requests (RFC 9396)](#20-rar--rich-authorization-requests-rfc-9396)
+  - [21. Device Flow (RFC 8628)](#21-device-flow-rfc-8628)
+  - [22. Token Exchange (RFC 8693)](#22-token-exchange-rfc-8693)
+  - [23. Reference — the reading surface](#23-reference--the-reading-surface)
 - [Server Status Indicator](#server-status-indicator)
 - [Key Distinctions](#key-distinctions)
 - [Troubleshooting](#troubleshooting)
@@ -107,6 +111,36 @@ npm --prefix client run dev
 ```
 
 Open `http://localhost:3001` in your browser. The dashboard loads automatically.
+
+### TypeScript strictness — what is on, and what was evaluated and rejected
+
+`strict: true` plus `noImplicitOverride`. Two further options were named as gaps in the 2026-08-22 audit
+and **both were tried against the real codebase and reverted**, because the measurement did not support
+the recommendation:
+
+| Option | Diagnostics it produced | Real defects found | Kept? |
+|---|---|---|---|
+| `noImplicitOverride` | 2 | 2 (`ErrorBoundary` lifecycle methods) | **yes** |
+| `noUncheckedIndexedAccess` | 82 | **0** | no |
+| `exactOptionalPropertyTypes` | 42 | **0** | no |
+
+**Why the two were rejected, given the audit asked for them.** Every one of
+`noUncheckedIndexedAccess`'s 82 diagnostics was a narrowing the compiler cannot perform after an
+explicit `length` check — `parts[1]` following `if (parts.length !== 3) return`, `value.split(' ')[0]`,
+`steps[i].id` guarded by `i < steps.length`. Fixing them means 82 non-null assertions, and normalising
+`!` across the codebase costs more safety than the option buys. `exactOptionalPropertyTypes` was the more
+promising of the two, because it targets exactly the distinction this repo learned the hard way — an
+omitted key versus a key explicitly set to `undefined`, which `new URLSearchParams` turns into the
+literal string `"undefined"` and Authlete refuses with `[A157303]`. But all 42 of its diagnostics were
+React components receiving `undefined` for an optional prop, which is idiomatic and harmless, and the
+one case that genuinely matters is already handled by construction: `CallbackPage` spreads a
+`Record<string, string>` fragment that is empty when there is no secret, so the key is absent rather
+than undefined.
+
+The gap the audit was pointing at is real, and it is closed by two other changes instead:
+**type-aware ESLint** (`no-floating-promises`, `no-misused-promises`, `no-unsafe-member-access`,
+`no-unsafe-argument`) which found 47 genuine issues on first run, and `utils/parse-json.ts`, which
+replaced the `JSON.parse` → `any` boundary that was the actual source of unchecked protocol data.
 
 ### Configuration
 
@@ -298,6 +332,121 @@ This section covers the issuance side across three groups, and the split is by a
 > parse succeeds — and takes the credential identifier from the parse result rather than from the
 > request body, so a valid token cannot name somebody else's pending request.
 
+### 20. RAR — Rich Authorization Requests (RFC 9396)
+
+`scope=payments` says *what kind* of access. It cannot say *how much*, *to whom*, or *from which
+account*. RAR replaces the coarse string with a JSON array of **authorization details**, each object
+REQUIRING a `type` member (§2) and otherwise shaped by whatever that type means.
+
+```jsonc
+[
+  {
+    "type": "payment_initiation",          // REQUIRED — §2
+    "actions": ["initiate", "status"],
+    "instructedAmount": { "currency": "EUR", "amount": "123.50" },
+    "creditorAccount": { "iban": "DE02100100109307118603" }
+  }
+]
+```
+
+Two things the panel makes visible:
+
+- **It travels through PAR, not the front channel.** A RAR document is large and often sensitive, so it
+  is pushed server-to-server and the browser carries only a `request_uri`. The section drives that whole
+  path — push, then authorize with the reference.
+- **The consent screen is where it pays off.** A user approving "payments" learns nothing; a user
+  approving "initiate a €123.50 transfer to DE02…" is giving informed consent. The server renders these
+  details, which is why `views/consent-rar.ejs` has a test of its own.
+
+### 21. Device Flow (RFC 8628)
+
+For anything with a screen and no keyboard — a television, a printer, a CLI on a machine you cannot
+browse from. The device shows a short code; you type it on your phone.
+
+| Step | What happens | RFC 8628 |
+|---|---|---|
+| Device authorization | The device asks for a `device_code` and a short `user_code` | §3.1–3.2 |
+| Verification | **You** type the user code, on another device | §3.3 |
+| Approval | You approve or deny. A denial is still a *successful* API call | §3.4 |
+| Poll | The device polls the token endpoint until it gets a token or a refusal | §3.5 |
+
+Three details worth knowing, all of them visible in the panel:
+
+- **Step 3 does not happen in this app**, or on the device — it happens in a browser somewhere else.
+  The flow diagram marks it as a step the request trace cannot observe rather than pretending otherwise.
+- **A denial returns `SUCCESS`.** `ACCESS_DENIED` is a *request* value, not a response action: the
+  completion call succeeds, and the device learns of the refusal as `access_denied` on its next poll.
+- **`POST /api/device/complete` is development-only.** It approves any live user code as any subject
+  with no authentication of that subject, which outside development is a token-minting oracle for
+  anyone who can read a code off a screen (§5.5). It answers a flat `404` elsewhere. The authenticated
+  path is `POST /device/consent`, which works in every environment.
+
+### 22. Token Exchange (RFC 8693)
+
+One token in, a different token out. A service holding a token for user A needs to call a downstream API
+on A's behalf, and it should not simply forward the token it was given — that token was issued for a
+different audience, and forwarding it hands the downstream service more than it needs.
+
+**The whole flow turns on one optional parameter.**
+
+| You send | You get | RFC 8693 calls it |
+|---|---|---|
+| `subject_token` alone | A token that acts **as** A. Nothing records who did the acting. | impersonation (§1.1) |
+| `subject_token` **and** `actor_token` | A token that says *B acting on behalf of A*. Auditable. | delegation (§1.1) |
+
+Two things people reliably get wrong, both stated on the panel:
+
+- **There is no token-exchange endpoint.** It is the ordinary token endpoint with `grant_type` set to
+  `urn:ietf:params:oauth:grant-type:token-exchange`.
+- **`actor_token_type` is conditionally required *and* conditionally forbidden** — §2.1 makes it
+  "REQUIRED when the `actor_token` parameter is present in the request but MUST NOT be included
+  otherwise." The form derives it rather than offering it, so the invalid combination cannot be sent.
+
+> ⚠️ **This response is deliberately non-conformant, and the panel says so.** `AGENTS.md` records three
+> intentional defects in `controllers/token-exchange-response.handler.ts`, each taught by a Module 06
+> exercise and each locked by a characterization test: `issued_token_type` is omitted although §2.2.1
+> makes it REQUIRED, non-specification `client_id` and `subject` members are added (and `subject` falls
+> back to the subject *token* when no subject resolves, putting a live credential in an identity field),
+> and `actor_token` is dropped — so a request asking for **delegation** receives **impersonation**.
+>
+> The section detects each of those in the actual response and labels it as intentional, naming the
+> exercise. It does not work around them: doing so would break the lab, and this repo's rule is that a
+> deliberate defect is only ever changed together with the curriculum that teaches it.
+
+### 23. Reference — the reading surface
+
+Every other section in this dashboard is somewhere you **do** something: you fill in parameters, press a
+button, and read a response. This one is somewhere you **read**.
+
+It exists because the explanation was already written and had nowhere to live. The tooltips and parameter
+tables in the interactive panels are generated from five data modules, and until this page arrived, all of
+it was reachable only by clicking a small `i` icon inside a form — so a learner who opened a shared link
+on a phone arrived at a form, not at anything they could read.
+
+| Tab | What is in it | Where it comes from |
+|---|---|---|
+| **Glossary** | 26 terms, including the ones no RFC defines | `data/glossary.ts` |
+| **Authorization request** | All 24 parameters, grouped, with the attack each one prevents | `data/authParams.ts` |
+| **Token request** | The exchange that had no teaching surface at all | `data/tokenParams.ts` |
+| **JWT claims** | 26 claims, and *which profile* makes each one required | `data/claimDocs.ts` |
+| **Errors** | 20 specification codes, plus 26 Authlete codes reproduced live here | `data/errorDocs.ts` |
+
+Three things worth knowing about how it is built:
+
+- **It reads the same modules the panels read.** There is exactly one copy of each explanation, so a
+  correction cannot land in the reference and not in the tooltip.
+- **A convention is labelled as a convention.** *Front channel* and *back channel* are the terms
+  everybody uses and **no RFC defines**, and the page says so rather than inventing a citation. "Everyone
+  says this" and "RFC 6749 §1.1 says this" are different kinds of claim.
+- **Every entry is deep-linkable.** Each heading links to itself, so a single definition can be shared
+  rather than the whole page — which is the thing a reading surface is *for*.
+
+> **Why the attacker model is always visible here.** In the request builder, *"why it exists"* is a
+> toggle: the row is dense and there are 24 of them. On this page it is open by default, because reading
+> is the entire purpose. `state` does not merely *"get refused if you tamper with it"* — without it, any
+> page can start a flow in your browser and have your client accept the result as its own. That is the
+> half that was missing everywhere.
+
 Issuance itself needs a wallet, which this repo does not contain. What you can exercise here is
 everything up to that point.
 
@@ -323,7 +472,12 @@ The `useServerStatus` hook (in `hooks/useServerStatus.ts`) polls `GET /api/healt
 
 ## Sections Explained
 
-### 1. Auth Flows — The Four Standard Grant Types
+### 1. Grant Flows — The Five Standard Grant Types
+
+> Renamed from "Auth Flows — The Four Standard Grant Types". The sidebar has said **Grant Flows** for
+> some time and there are **five** grants, not four — JWT Bearer (RFC 7523) was added and the heading was
+> never updated. The docs gate did not notice because it matched the label against the whole README, and
+> the phrase appeared in prose elsewhere; it matches headings now.
 
 This section lets you exercise all four standard OAuth 2.0 grant types. Select a grant type via the tab bar, fill in the parameters, and click the action button. The resulting tokens appear in the **Token Vault** in the sidebar.
 

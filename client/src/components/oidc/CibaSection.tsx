@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { cibaService } from '@/services';
+import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
+import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -12,8 +14,19 @@ import { Select } from '@/components/ui/Select';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
+import { useTraces } from '@/hooks/useTraces';
+import { sequenceProgress, type SequenceStepSpec } from '@/utils/sequence-progress';
 
 type CibaOp = 'authentication' | 'issue' | 'fail' | 'complete' | 'poll';
+
+/** Every value `CibaOp` can take, as a runtime list — the allowed set for the URL parameter. */
+const ALL_OPS = [
+  'authentication',
+  'issue',
+  'fail',
+  'complete',
+  'poll',
+] as const satisfies readonly CibaOp[];
 
 const FAIL_REASONS = [
   { value: 'ACCESS_DENIED', label: 'ACCESS_DENIED' },
@@ -41,8 +54,53 @@ const CIBA_OPS: { value: CibaOp; label: string }[] = [
   { value: 'poll', label: 'Poll Token' },
 ];
 
+/**
+ * CIBA Core is a **sequence**, not a menu.
+ *
+ * §7.1 pushes the backchannel authentication request, §7.3 answers with an `auth_req_id`, the client
+ * then polls the token endpoint, and the OP reports the End-User's decision through `complete`. Rendered
+ * as four peer tabs, the ordering — and the fact that each call needs the previous one's output — was
+ * invisible. This server splits §7.1/§7.3 into two calls of its own (`authentication` returns Authlete's
+ * `ticket`, `issue` turns it into the `auth_req_id`), which is a departure worth *seeing* rather than
+ * being surprised by.
+ */
+const CIBA_STEPS: SequenceStepSpec[] = [
+  {
+    id: 'authentication',
+    label: 'Authenticate',
+    description: 'Push the request. Returns a ticket, not yet an auth_req_id.',
+    endpoint: '/api/ciba/authentication',
+  },
+  {
+    id: 'issue',
+    label: 'Issue',
+    description: 'Turn the ticket into the auth_req_id the client polls with.',
+    endpoint: '/api/ciba/issue',
+  },
+  {
+    id: 'poll',
+    label: 'Poll',
+    description: 'Poll the token endpoint while the user decides on their device.',
+    endpoint: '/api/token',
+  },
+  {
+    id: 'complete',
+    label: 'Complete',
+    description: 'Report the End-User decision back to the OP.',
+    endpoint: '/api/ciba/complete',
+  },
+];
+
 function CibaSection() {
-  const [activeOp, setActiveOp] = useState<CibaOp | null>(null);
+  /**
+   * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
+   *
+   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
+   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
+   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
+   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<CibaOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
 
   const [parameters, setParameters] = useState('login_hint=admin&scope=openid');
@@ -64,6 +122,8 @@ function CibaSection() {
   const [pollError, setPollError] = useState<string | null>(null);
 
   const doc = activeOp ? getDoc('ciba', activeOp) : undefined;
+  const traces = useTraces();
+  const progress = sequenceProgress(CIBA_STEPS, traces);
 
   const handleCall = async (fn: () => Promise<unknown>) => {
     const { data, error: err } = await call(fn);
@@ -143,6 +203,24 @@ function CibaSection() {
       description="OpenID Connect CIBA Core 1.0"
     >
       {error && <ErrorExplainer error={error} className="mb-3" />}
+
+      {/* The sequence, above the tabs that select a step in it. `FlowDiagram` and the progress
+
+
+          derivation both already existed and were applied to 3 of 20 sections; this is one of the
+
+
+          eight that rendered an ordered protocol as a row of peers. */}
+
+      <FlowDiagram
+        steps={CIBA_STEPS}
+
+        currentStep={progress.currentStep}
+
+        completedSteps={progress.completedSteps}
+
+        className="mb-3"
+      />
 
       <TabBar options={CIBA_OPS} value={activeOp} onChange={setActiveOp} />
 
@@ -293,7 +371,7 @@ function CibaSection() {
             <Button onClick={handlePollToken} loading={loading}>
               Poll Token
             </Button>
-            <span className="text-xs text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground">
               Expected interval: {pollInterval}s
             </span>
           </div>

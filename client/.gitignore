@@ -74,3 +74,10 @@ out
 
 # Debug logs from npm
 npm-debug.log*
+
+# Playwright: the report and per-run artefacts are generated. The *baselines* under
+# `e2e/**/*-snapshots/` are NOT ignored — they are the reference the suite compares against, and a
+# baseline that is not committed is a check that cannot fail.
+/playwright-report/
+/test-results/
+/blob-report/

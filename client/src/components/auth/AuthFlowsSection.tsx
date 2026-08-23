@@ -17,7 +17,7 @@ import { TabBar } from '@/components/ui/TabBar';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { JsonBlock } from '@/components/ui/JsonBlock';
+import { TokenOutcome } from '@/components/ui/TokenOutcome';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { SplitPane } from '@/components/ui/SplitPane';
@@ -28,6 +28,7 @@ import { getDoc } from '@/data/operationDocs';
 import { KeyRound, ArrowRightLeft, LogIn, RefreshCw, FileText } from 'lucide-react';
 import type { TokenResponse } from '@/types';
 import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
+import { recordNavigation } from '@/services/trace-store';
 
 type GrantType =
   'authorization_code' | 'client_credentials' | 'password' | 'refresh_token' | 'jwt_bearer';
@@ -68,29 +69,77 @@ const grantIcons: Record<GrantType, React.ReactNode> = {
   jwt_bearer: <FileText className="h-4 w-4" />,
 };
 
-const flowSteps: Record<GrantType, { id: string; label: string }[]> = {
+/**
+ * Each step says what happens there, not only what it is called.
+ *
+ * `FlowDiagram` has always accepted a `description` and no call site ever passed one, so this diagram
+ * was five bare words. Which channel a step uses is stated wherever it differs, because front channel
+ * versus back channel is the structural idea the flow exists to teach and it is invisible in a row of
+ * labels.
+ */
+const flowSteps: Record<GrantType, { id: string; label: string; description?: string }[]> = {
   authorization_code: [
-    { id: 'authz', label: 'Authorize' },
-    { id: 'login', label: 'Login' },
-    { id: 'consent', label: 'Consent' },
-    { id: 'callback', label: 'Callback' },
-    { id: 'token', label: 'Token' },
+    {
+      id: 'authz',
+      label: 'Authorize',
+      description: 'Front channel: the browser leaves for the authorization endpoint.',
+    },
+    {
+      id: 'login',
+      label: 'Login',
+      description: 'The End-User authenticates at the server, not in this app.',
+    },
+    { id: 'consent', label: 'Consent', description: 'They approve the scopes being requested.' },
+    {
+      id: 'callback',
+      label: 'Callback',
+      description: 'Front channel: a redirect brings a one-time code back.',
+    },
+    {
+      id: 'token',
+      label: 'Token',
+      description: 'Back channel: the code plus the PKCE verifier are exchanged for tokens.',
+    },
   ],
   client_credentials: [
-    { id: 'auth', label: 'Authenticate' },
-    { id: 'token', label: 'Token' },
+    {
+      id: 'auth',
+      label: 'Authenticate',
+      description: 'The client proves who it is. No user is involved.',
+    },
+    { id: 'token', label: 'Token', description: 'A token for the client itself, with no subject.' },
   ],
   password: [
-    { id: 'creds', label: 'Credentials' },
-    { id: 'token', label: 'Token' },
+    {
+      id: 'creds',
+      label: 'Credentials',
+      description: 'The user hands their password to the client — why ROPC is discouraged.',
+    },
+    { id: 'token', label: 'Token', description: 'The client forwards them to the token endpoint.' },
   ],
   refresh_token: [
-    { id: 'verify', label: 'Verify Token' },
-    { id: 'refresh', label: 'Refresh' },
+    {
+      id: 'verify',
+      label: 'Verify Token',
+      description: 'A refresh token from an earlier grant is presented.',
+    },
+    {
+      id: 'refresh',
+      label: 'Refresh',
+      description: 'A fresh access token, without sending the user back.',
+    },
   ],
   jwt_bearer: [
-    { id: 'sign', label: 'Sign JWT' },
-    { id: 'exchange', label: 'Exchange' },
+    {
+      id: 'sign',
+      label: 'Sign JWT',
+      description: 'An assertion is signed with a key the client registered.',
+    },
+    {
+      id: 'exchange',
+      label: 'Exchange',
+      description: 'RFC 7523: the assertion stands in for an interactive grant.',
+    },
   ],
 };
 
@@ -177,9 +226,19 @@ const AuthFlowsSection: React.FC = () => {
     return twoStepProgress({ traces, hasToken }, flowSteps[grantType][0].id);
   }, [traces, displayResult, grantType]);
 
+  /**
+   * Record which client the current token belongs to — and **clear the secret when there isn't one**.
+   *
+   * This was `if (clientSecret) writeKey(...)` with no else branch, so emptying the field left the
+   * previous run's secret in session storage. Sections that pre-fill from `activeClientSecret` then
+   * offered a credential the user had deliberately removed. Same shape, same cause and same fix as
+   * `sendAuthorizeRequest` below; a write with no else branch is exactly the invisible mode that
+   * `session-keys.ts` was created to end.
+   */
   const saveClientCredentials = (clientId: string, clientSecret: string) => {
     writeKey(SESSION_KEYS.activeClientId, clientId);
     if (clientSecret) writeKey(SESSION_KEYS.activeClientSecret, clientSecret);
+    else removeKey(SESSION_KEYS.activeClientSecret);
   };
 
   const handleCall = async (
@@ -244,7 +303,23 @@ const AuthFlowsSection: React.FC = () => {
     else removeKey(SESSION_KEYS.oauthState);
 
     writeKey(SESSION_KEYS.authzClientId, acId);
+    /**
+     * An emptied secret field must *remove* the stored secret, not leave the last one behind.
+     *
+     * With the old `if (acSecret) writeKey(...)` and no else branch, running the flow once with a
+     * confidential client and then clearing the field meant `CallbackPage` still read a secret —
+     * `readKey(authzClientSecret) || CLIENT_SECRET` — and sent `client_secret` for a client whose
+     * method is `none`. Authlete refuses that with `[A157303]`, and the field the user was looking at
+     * was empty. Absence has to be written down to be absent.
+     */
     if (acSecret) writeKey(SESSION_KEYS.authzClientSecret, acSecret);
+    else removeKey(SESSION_KEYS.authzClientSecret);
+
+    recordNavigation({
+      url,
+      direction: 'outbound',
+      label: 'authorize — front channel, browser leaves for the authorization endpoint',
+    });
 
     window.location.href = url;
   };
@@ -339,7 +414,7 @@ const AuthFlowsSection: React.FC = () => {
               {grantType === 'authorization_code' && (
                 <div className="space-y-3">
                   {signingKeyPresent && (
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                    <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 space-y-2">
                       <p className="text-xs text-warning-text">
                         A <strong>FAPI signing key</strong> is stored in this session, so the token
                         exchange will authenticate with <code>private_key_jwt</code> —{' '}
@@ -589,7 +664,7 @@ const AuthFlowsSection: React.FC = () => {
                     <FileText className="h-4 w-4 mr-2" />
                     Exchange JWT for Token
                   </Button>
-                  <p className="text-[0.6rem] text-muted-foreground">
+                  <p className="text-2xs text-muted-foreground">
                     The JWT must be signed with a key registered to the client (RS256 or ES256)
                   </p>
                 </div>
@@ -607,7 +682,10 @@ const AuthFlowsSection: React.FC = () => {
           }
           right={
             displayResult ? (
-              <JsonBlock data={displayResult} label="Token Response" />
+              /* Was a bare `JsonBlock`. The flow completed and the tool went quiet — no statement of
+                 what was now held, no inspector for the ID token it had just obtained, and nothing
+                 saying where to spend it. See `TokenOutcome`. */
+              <TokenOutcome tokens={displayResult} />
             ) : (
               <div className="flex items-center justify-center h-full min-h-[120px] rounded-lg border border-dashed border-border bg-muted/20">
                 <p className="text-xs text-muted-foreground">Run a flow to see the response here</p>

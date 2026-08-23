@@ -18,6 +18,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SequenceView } from './SequenceView';
 import { cn } from '@/utils/cn';
+import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 
 /**
  * The request history — every call this app has made, newest first, with the status, the headers and
@@ -31,12 +32,18 @@ import { cn } from '@/utils/cn';
 
 /** Status classes carry meaning here, so they get colour — and it is separate from the indigo accent. */
 function statusTone(entry: TraceEntry): string {
-  if (entry.status === 0) return 'bg-slate-500/15 text-foreground-muted border-border/30';
-  if (entry.status >= 500) return 'bg-red-500/15 text-danger-text border-red-500/30';
-  if (entry.status === 429) return 'bg-orange-500/15 text-warning-text border-orange-500/30';
-  if (entry.status >= 400) return 'bg-amber-500/15 text-warning-text border-amber-500/30';
-  if (entry.status >= 300) return 'bg-sky-500/15 text-info-text border-sky-500/30';
-  return 'bg-emerald-500/15 text-success-text border-emerald-500/30';
+  // A front-channel hop shares `status: 0` with a network failure and means the opposite of it: nothing
+  // went wrong, the browser simply received the answer instead of this app. It gets the accent, and the
+  // badge below reads NAV rather than ERR.
+  if (entry.navigation) return 'bg-tint-accent-strong text-accent-text border-edge-accent';
+  // Neutral, not one of the five semantic roles: nothing succeeded and nothing was refused. `muted`
+  // is the existing token for a neutral surface and it is already defined per palette.
+  if (entry.status === 0) return 'bg-muted text-foreground-muted border-border/30';
+  if (entry.status >= 500) return 'bg-tint-danger-strong text-danger-text border-edge-danger';
+  if (entry.status === 429) return 'bg-tint-warning-strong text-warning-text border-edge-warning';
+  if (entry.status >= 400) return 'bg-tint-warning-strong text-warning-text border-edge-warning';
+  if (entry.status >= 300) return 'bg-tint-info-strong text-info-text border-edge-info';
+  return 'bg-tint-success-strong text-success-text border-edge-success';
 }
 
 const METHOD_TONE: Record<string, string> = {
@@ -67,12 +74,12 @@ function shortPath(url: string): string {
 function HeaderTable({ headers }: { headers: Record<string, string> }) {
   const names = Object.keys(headers);
   if (names.length === 0) {
-    return <p className="text-[0.7rem] text-muted-foreground italic">none captured</p>;
+    return <p className="text-xs text-muted-foreground italic">none captured</p>;
   }
   return (
     <div className="space-y-0.5">
       {names.map((name) => (
-        <div key={name} className="flex gap-2 text-[0.7rem] font-mono">
+        <div key={name} className="flex gap-2 text-xs font-mono">
           <span className="text-accent-text shrink-0">{name}:</span>
           <span className="text-muted-foreground break-all">{headers[name]}</span>
         </div>
@@ -84,7 +91,7 @@ function HeaderTable({ headers }: { headers: Record<string, string> }) {
 function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean }) {
   const [open, setOpen] = useState(Boolean(forceOpen));
   const [reveal, setReveal] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, setCopied, resetLater } = useCopyFeedback();
 
   const requestHeaders = reveal ? entry.requestHeaders : redactHeaders(entry.requestHeaders);
   const requestBody = reveal ? entry.requestBody : redactBody(entry.requestBody);
@@ -104,11 +111,11 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
     try {
       await navigator.clipboard.writeText(command);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      resetLater();
     } catch {
       /* clipboard unavailable — nothing useful to say about it here */
     }
-  }, [entry, reveal]);
+  }, [entry, reveal, setCopied, resetLater]);
 
   return (
     <div className="border-b border-border/60">
@@ -124,7 +131,7 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
         )}
         <span
           className={cn(
-            'text-[0.65rem] font-bold font-mono w-12 shrink-0',
+            'text-2xs font-bold font-mono w-12 shrink-0',
             METHOD_TONE[entry.method.toUpperCase()] ?? 'text-muted-foreground',
           )}
         >
@@ -132,52 +139,65 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
         </span>
         <span
           className={cn(
-            'text-[0.65rem] font-mono px-1.5 py-0.5 rounded border shrink-0 w-11 text-center tabular-nums',
+            'text-2xs font-mono px-1.5 py-0.5 rounded border shrink-0 w-11 text-center tabular-nums',
             statusTone(entry),
           )}
         >
-          {entry.status === 0 ? 'ERR' : entry.status}
+          {entry.navigation ? 'NAV' : entry.status === 0 ? 'ERR' : entry.status}
         </span>
         <span className="text-xs font-mono text-foreground truncate flex-1">
           {shortPath(entry.url)}
         </span>
         {entry.label && (
-          <span className="hidden md:inline text-[0.65rem] text-muted-foreground truncate max-w-[14rem]">
+          <span className="hidden md:inline text-2xs text-muted-foreground truncate max-w-[14rem]">
             {entry.label}
           </span>
         )}
         {notable.length > 0 && (
-          <span className="hidden lg:inline text-[0.6rem] font-mono text-warning-text/90 shrink-0">
+          <span className="hidden lg:inline text-2xs font-mono text-warning-text shrink-0">
             {notable[0]}
           </span>
         )}
-        <span className="text-[0.65rem] font-mono text-muted-foreground shrink-0 tabular-nums w-14 text-right">
-          {Math.round(entry.durationMs)} ms
+        <span className="text-2xs font-mono text-muted-foreground shrink-0 tabular-nums w-14 text-right">
+          {/* Nothing was awaited on a navigation, so "0 ms" would be a measurement nobody took. */}
+          {entry.navigation ? '—' : `${Math.round(entry.durationMs)} ms`}
         </span>
       </button>
 
       {open && (
         <div className="px-3 pb-3 pt-1 space-y-3 bg-code/40">
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={copyCurl}
-              className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
-            >
-              {copied ? (
-                <Check className="h-3 w-3 text-success-text" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
-              {copied ? 'Copied' : reveal ? 'cURL (with secrets)' : 'cURL (redacted)'}
-            </button>
-            <button
-              onClick={() => setReveal((r) => !r)}
-              className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
-            >
-              {reveal ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-              {reveal ? 'Hide secrets' : 'Reveal secrets'}
-            </button>
-            <span className="text-[0.65rem] text-muted-foreground font-mono">
+            {/* A front-channel hop is a browser navigation, not a request this app can reissue — a cURL
+                command for it would fetch the authorization page as a document and teach the wrong
+                thing. The URL is above and copyable; that is the reproducible part. */}
+            {entry.navigation ? (
+              <span className="text-2xs text-muted-foreground italic">
+                Front-channel navigation — no request to replay. Paste the URL above into a browser
+                to repeat it.
+              </span>
+            ) : (
+              <>
+                <button
+                  onClick={copyCurl}
+                  className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
+                >
+                  {copied ? (
+                    <Check className="h-3 w-3 text-success-text" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copied ? 'Copied' : reveal ? 'cURL (with secrets)' : 'cURL (redacted)'}
+                </button>
+                <button
+                  onClick={() => setReveal((r) => !r)}
+                  className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
+                >
+                  {reveal ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  {reveal ? 'Hide secrets' : 'Reveal secrets'}
+                </button>
+              </>
+            )}
+            <span className="text-2xs text-muted-foreground font-mono">
               {new Date(entry.startedAt).toLocaleTimeString()}
               {entry.statusText ? ` · ${entry.statusText}` : ''}
             </span>
@@ -195,33 +215,31 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
           )}
 
           {entry.networkError && (
-            <div className="rounded border border-red-500/30 bg-red-500/5 px-2 py-1.5">
-              <p className="text-[0.7rem] text-danger-text">
-                No response received: {entry.networkError}
-              </p>
+            <div className="rounded border border-edge-danger bg-tint-danger px-2 py-1.5">
+              <p className="text-xs text-danger-text">No response received: {entry.networkError}</p>
             </div>
           )}
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <div className="space-y-2 min-w-0">
-              <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Request
               </p>
               <HeaderTable headers={requestHeaders} />
               {requestBody && (
-                <pre className="text-[0.7rem] font-mono text-muted-foreground bg-code/60 border border-border/40 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
+                <pre className="text-xs font-mono text-muted-foreground bg-code/60 border border-border/40 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
                   {requestBody}
                 </pre>
               )}
             </div>
             <div className="space-y-2 min-w-0">
-              <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-muted-foreground/70">
+              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Response
               </p>
               <HeaderTable headers={entry.responseHeaders} />
               <JsonBlock
                 data={entry.responseBody}
-                className="[&_pre]:text-[0.7rem] [&_pre]:p-2 [&_pre]:max-h-40 [&_pre]:overflow-auto"
+                className="[&_pre]:text-xs [&_pre]:p-2 [&_pre]:max-h-40 [&_pre]:overflow-auto"
               />
             </div>
           </div>
@@ -292,7 +310,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
   const traces = useTraces();
   const [filter, setFilter] = useState('');
   const [failuresOnly, setFailuresOnly] = useState(false);
-  const [exported, setExported] = useState(false);
+  const { copied: exported, setCopied: setExported, resetLater: resetExported } = useCopyFeedback();
   const [view, setView] = useState<'timeline' | 'sequence'>('timeline');
   /**
    * Which request the sequence view sent us to.
@@ -320,11 +338,11 @@ function TracePanel({ open, onClose }: TracePanelProps) {
     try {
       await navigator.clipboard.writeText(toMarkdown(visible));
       setExported(true);
-      setTimeout(() => setExported(false), 2000);
+      resetExported();
     } catch {
       /* clipboard unavailable */
     }
-  }, [visible]);
+  }, [visible, setExported, resetExported]);
 
   if (!open) return null;
 
@@ -338,7 +356,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 flex-wrap">
         <Activity className="h-3.5 w-3.5 text-accent-text shrink-0" />
         <span className="text-xs font-semibold text-foreground shrink-0">Request Trace</span>
-        <span className="text-[0.65rem] text-muted-foreground font-mono tabular-nums shrink-0">
+        <span className="text-2xs text-muted-foreground font-mono tabular-nums shrink-0">
           {visible.length}
           {visible.length !== traces.length ? ` / ${traces.length}` : ''}
         </span>
@@ -360,9 +378,9 @@ function TracePanel({ open, onClose }: TracePanelProps) {
               aria-selected={view === v}
               onClick={() => setView(v)}
               className={cn(
-                'text-[0.65rem] px-2 py-1 rounded border cursor-pointer transition-colors capitalize',
+                'text-2xs px-2 py-1 rounded border cursor-pointer transition-colors capitalize',
                 view === v
-                  ? 'bg-indigo-500/20 text-accent-text border-indigo-500/40'
+                  ? 'bg-tint-accent-strong text-accent-text border-edge-accent'
                   : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
               )}
             >
@@ -373,9 +391,9 @@ function TracePanel({ open, onClose }: TracePanelProps) {
         <button
           onClick={() => setFailuresOnly((f) => !f)}
           className={cn(
-            'text-[0.65rem] px-2 py-1 rounded border cursor-pointer transition-colors shrink-0',
+            'text-2xs px-2 py-1 rounded border cursor-pointer transition-colors shrink-0',
             failuresOnly
-              ? 'bg-amber-500/20 text-warning-text border-amber-500/40'
+              ? 'bg-tint-warning-strong text-warning-text border-edge-warning'
               : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
           )}
         >
@@ -384,7 +402,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
         <button
           onClick={exportMarkdown}
           disabled={visible.length === 0}
-          className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
+          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
         >
           {exported ? (
             <Check className="h-3 w-3 text-success-text" />
@@ -396,7 +414,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
         <button
           onClick={clearTraces}
           disabled={traces.length === 0}
-          className="flex items-center gap-1 text-[0.65rem] px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-danger-text border-none cursor-pointer disabled:opacity-40 shrink-0"
+          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-danger-text border-none cursor-pointer disabled:opacity-40 shrink-0"
         >
           <Trash2 className="h-3 w-3" />
           Clear

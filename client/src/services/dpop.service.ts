@@ -31,8 +31,10 @@ export async function createProof(
 ): Promise<string> {
   const privateKey = await crypto.subtle.importKey(
     'jwk',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    privateKeyJwk as any,
+    // No cast: `JWK`'s members are all optional strings and structurally assignable to `JsonWebKey`.
+    // This was `privateKeyJwk as any` with an eslint-disable, which turned a value the compiler could
+    // check into one it could not — on the argument to a signing key import, of all places.
+    privateKeyJwk,
     { name: 'ECDSA', namedCurve: 'P-256' },
     true,
     ['sign'],

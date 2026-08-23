@@ -16,7 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
-import { SESSION_KEYS, readKey, writeKey } from '@/services/session-keys';
+import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
+import type { JWK } from '@/services/crypto-utils';
 
 const DEFAULT_RAR_JSON = JSON.stringify(
   [
@@ -88,15 +89,25 @@ function RarSection() {
     const body = { parameters, clientId, clientSecret };
 
     if (useDpop) {
-      let dpopKeyRaw = readKey(SESSION_KEYS.dpopPrivateKey);
-      if (!dpopKeyRaw) {
+      // Mint a key if this session has none. The value is read back below rather than threaded through
+      // a local, so there is one read path whether the key was just generated or already stored.
+      if (!readKey(SESSION_KEYS.dpopPrivateKey)) {
         const pair = await generateKeyPair();
         writeKey(SESSION_KEYS.dpopPrivateKey, JSON.stringify(pair.privateKey));
         writeKey(SESSION_KEYS.dpopPublicKey, JSON.stringify(pair.publicKey));
         writeKey(SESSION_KEYS.dpopKid, pair.kid);
-        dpopKeyRaw = JSON.stringify(pair.privateKey);
       }
-      const dpopPrivateKey = JSON.parse(dpopKeyRaw);
+      /**
+       * Read as a typed JWK. This was `JSON.parse(dpopKeyRaw)` — `any` — flowing straight into
+       * `crypto.subtle.importKey` as a **signing key**, so the compiler checked nothing about the most
+       * sensitive argument in the call. `readJsonKey` also returns `null` on a corrupted entry rather
+       * than throwing, which is the difference between "no key" and an unexplained failure.
+       */
+      const dpopPrivateKey = readJsonKey<JWK>(SESSION_KEYS.dpopPrivateKey);
+      if (!dpopPrivateKey) {
+        toast.error('The stored DPoP key is unreadable. Generate a new one in Grant Flows.');
+        return null;
+      }
       // A factory, not a proof — see the note in ParSection: a nonce retry needs a fresh signature.
       const { data } = await rarService.pushAuthorizationWithDpop(body, (nonce) =>
         createProof(dpopPrivateKey, 'POST', PAR_ENDPOINT, undefined, nonce),
@@ -302,7 +313,7 @@ function RarSection() {
       {parResult?.request_uri && (
         <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
           <p className="text-xs text-foreground-muted font-mono break-all">
-            <span className="text-muted-foreground/70">request_uri: </span>
+            <span className="text-muted-foreground">request_uri: </span>
             {parResult.request_uri}
           </p>
         </div>
@@ -325,7 +336,7 @@ function RarSection() {
                   <div className="px-3 py-2 space-y-2 text-xs">
                     {!!detail.locations && Array.isArray(detail.locations) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Locations
                         </span>
                         <ul className="list-disc list-inside text-foreground-muted mt-1">
@@ -339,14 +350,14 @@ function RarSection() {
                     )}
                     {!!detail.actions && Array.isArray(detail.actions) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Actions
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.actions as string[]).map((a: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-indigo-500/10 text-accent-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-accent text-accent-text rounded text-[10px]"
                             >
                               {a}
                             </span>
@@ -356,14 +367,14 @@ function RarSection() {
                     )}
                     {!!detail.datatypes && Array.isArray(detail.datatypes) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Data Types
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.datatypes as string[]).map((d: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-blue-500/10 text-info-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-info text-info-text rounded text-[10px]"
                             >
                               {d}
                             </span>
@@ -373,7 +384,7 @@ function RarSection() {
                     )}
                     {!!detail.identifier && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Identifier
                         </span>
                         <p className="text-foreground-muted mt-1 font-mono">
@@ -383,14 +394,14 @@ function RarSection() {
                     )}
                     {!!detail.privileges && Array.isArray(detail.privileges) && (
                       <div>
-                        <span className="text-muted-foreground/70 font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
                           Privileges
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.privileges as string[]).map((p: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-amber-500/10 text-warning-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-warning text-warning-text rounded text-[10px]"
                             >
                               {p}
                             </span>

@@ -19,11 +19,18 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  /**
+   * `override` is required now that `noImplicitOverride` is on, and it is not ceremony.
+   *
+   * Without it, a lifecycle method renamed by a React major — or simply mistyped as
+   * `componentDidCatchError` — compiles cleanly and silently stops being called, which for an error
+   * boundary means every crash becomes a blank screen with nothing in the log.
+   */
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Error boundary caught:', error, errorInfo);
   }
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center py-12 gap-4">
@@ -33,7 +40,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
           </p>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="px-4 py-2 text-sm rounded-lg bg-indigo-500/10 text-accent-text hover:bg-indigo-500/20 transition-colors cursor-pointer border-none"
+            className="px-4 py-2 text-sm rounded-lg bg-tint-accent text-accent-text hover:bg-tint-accent-strong transition-colors cursor-pointer border-none"
           >
             Try again
           </button>

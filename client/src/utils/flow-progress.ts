@@ -26,9 +26,30 @@ export interface FlowProgress {
   currentStep?: string;
 }
 
-/** A request that reached the authorization endpoint, i.e. the flow was actually started. */
+/**
+ * A hop that reached the authorization endpoint, i.e. the flow was actually started.
+ *
+ * **This predicate could not be true until front-channel hops were recorded.** The authorization
+ * request is `window.location.href = url`, a browser navigation, and `recordTrace` was only ever called
+ * from `transport.ts` — so no trace entry ever had an `/api/authorization` URL and this function always
+ * returned `false`. It was harmless because `authorizeSent` reads session storage instead, but it is the
+ * clearest evidence that the missing trace went unnoticed. `recordNavigation` now writes both hops, so
+ * the check works for the reason it was written.
+ */
 function hasAuthorizeRequest(traces: TraceEntry[]): boolean {
   return traces.some((t) => t.url.includes('/api/authorization'));
+}
+
+/**
+ * The inbound redirect carrying the code back — the second front-channel hop.
+ *
+ * Read from the trace rather than from `hasToken`, so the callback step is complete as soon as the
+ * browser came back, even if the exchange then failed. That distinction matters: a flow that reaches the
+ * callback and fails at the token endpoint has genuinely completed four of five steps, and a diagram
+ * that showed it as stalled at step one would send the reader looking in the wrong place.
+ */
+function hasCallbackRedirect(traces: TraceEntry[]): boolean {
+  return traces.some((t) => t.navigation && t.direction === 'inbound');
 }
 
 function successfulTokenCall(traces: TraceEntry[]): boolean {
@@ -62,8 +83,9 @@ export function authorizationCodeProgress(inputs: FlowInputs): FlowProgress {
   if (authorizeSent || codeReceived || hasToken || hasAuthorizeRequest(traces)) {
     completed.push('authz');
   }
-  if (codeReceived || hasToken) {
+  if (codeReceived || hasToken || hasCallbackRedirect(traces)) {
     // A code is proof the End-User authenticated and consented; neither produces a request we see.
+    // The inbound redirect is now recorded, so this is observed from the traffic as well as inferred.
     completed.push('login', 'consent', 'callback');
   }
   if (hasToken && successfulTokenCall(traces)) completed.push('token');

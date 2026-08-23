@@ -8,11 +8,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // Tokenised, and darkened. Every stop now clears 4.5:1 against white — see the note on
+        // `--accent-grad-from` in `globals.css` for the measurements and why neither gate caught it.
         default:
-          'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white hover:from-indigo-500 hover:to-indigo-400',
+          'bg-gradient-to-r from-accent-grad-from to-accent-grad-to text-accent-foreground hover:from-accent-grad-from-hover hover:to-accent-grad-to-hover',
         secondary: 'bg-transparent border border-border text-foreground hover:bg-muted',
         danger:
-          'bg-gradient-to-r from-red-600 to-red-500 text-white hover:from-red-500 hover:to-red-400',
+          'bg-gradient-to-r from-danger-grad-from to-danger-grad-to text-accent-foreground hover:from-danger-grad-from-hover hover:to-danger-grad-to-hover',
         ghost: 'bg-transparent hover:bg-muted text-foreground',
         outline: 'border border-border bg-transparent hover:bg-muted text-foreground',
       },

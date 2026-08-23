@@ -1,6 +1,7 @@
 import { cn } from '@/utils/cn';
+import { useCopyFeedback } from '@/hooks/useCopyFeedback';
 import { Copy, Check } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 interface JsonBlockProps {
   data: unknown;
@@ -9,18 +10,25 @@ interface JsonBlockProps {
 }
 
 function JsonBlock({ data, className, label }: JsonBlockProps) {
-  const [copied, setCopied] = useState(false);
-  const formatted = JSON.stringify(data, null, 2);
+  const { copied, setCopied, resetLater } = useCopyFeedback();
+  /**
+   * Memoised: this ran on every render, and the payloads here are not small — the discovery document is
+   * 66 members and a client list is unbounded. Re-serialising it because a sibling's hover state changed
+   * is work nobody asked for.
+   */
+  const formatted = useMemo(() => JSON.stringify(data, null, 2), [data]);
 
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(formatted);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      // Cleared on unmount by `useCopyFeedback`; a bare `setTimeout` here fired `setCopied` after the
+      // component was gone.
+      resetLater();
     } catch {
       // ignore
     }
-  }, [formatted]);
+  }, [formatted, setCopied, resetLater]);
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -44,7 +52,7 @@ function JsonBlock({ data, className, label }: JsonBlockProps) {
           </button>
         </div>
       )}
-      <pre className="bg-code p-4 rounded-lg overflow-x-auto text-[0.8rem] font-mono whitespace-pre-wrap break-all border border-border">
+      <pre className="bg-code p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap break-all border border-border">
         {formatted}
       </pre>
     </div>

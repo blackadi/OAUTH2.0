@@ -93,17 +93,28 @@ const sectionLabels = [...appSource.matchAll(/label: '([^']+)',\s*path: '\/[a-z-
 );
 const readme = readFileSync(README_PATH, "utf8");
 /**
- * A label counts as documented if its normalised form is a prefix of something in the README.
+ * A label counts as documented when a **heading** names it.
  *
  * Comparing raw strings was too strict: the sidebar says "Dynamic Client Reg." where the README says
  * "Dynamic Client Registration (DCR)", and a literal `includes` called that undocumented. Stripping
- * punctuation and matching on a prefix accepts the abbreviation without accepting an unrelated section.
+ * punctuation and matching on a prefix accepts the abbreviation.
+ *
+ * **Matching against headings rather than the whole document is the second half, and it was added after
+ * this check gave a false pass** (2026-08-22). It normalised the entire README into one string, so the
+ * new "Token Exchange" section counted as documented because the *FAPI* section's prose happened to
+ * contain the phrase "token exchange with a proof". A mention inside somebody else's paragraph is not
+ * documentation, and a gate that accepts one is worse than no gate: it reports coverage that is not
+ * there. A heading is the smallest structure that means "this section is written up here".
  */
 const normalise = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
-const readmeNormalised = normalise(readme);
+const readmeHeadings = readme
+  .split("\n")
+  .filter((line) => /^#{1,6}\s/.test(line))
+  .map(normalise)
+  .join("\n");
 const undocumented = sectionLabels.filter((label) => {
   const key = normalise(label.replace(/\s*\(.*\)$/, ""));
-  return !readmeNormalised.includes(key);
+  return !readmeHeadings.includes(key);
 });
 
 // ── report ───────────────────────────────────────────────────────────────────────────────────────
@@ -130,10 +141,10 @@ if (unreached.length) {
 
 if (undocumented.length) {
   failed = true;
-  console.error(`\n✗ ${undocumented.length} section(s) in App.tsx with no mention in client/README.md:`);
+  console.error(`\n✗ ${undocumented.length} section(s) in App.tsx with no *heading* in client/README.md:`);
   for (const label of undocumented) console.error(`    ${label}`);
 }
 
 if (failed) process.exit(1);
 
-console.log("\n✓ every asked-for key exists, every entry is reachable, every section is in the README");
+console.log("\n✓ every asked-for key exists, every entry is reachable, every section has a README heading");

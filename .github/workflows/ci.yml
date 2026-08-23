@@ -167,6 +167,41 @@ jobs:
       # chosen against a near-black ground and inherited unchanged when the second palette arrived.
       # Nothing could see it, because a colour that fails contrast is still a valid colour. This reads
       # the real oklch values out of the built stylesheet and scores both themes.
+      #
+      # Extended the same day, after axe found a **serious** contrast failure this check had passed:
+      # `text-muted-foreground/60` on the sidebar group labels. The script scored the *token*, which
+      # clears AA, and never composited the `/60`. It now scores every semantic token rather than five,
+      # refuses an opacity modifier on any text colour as unscoreable, and scores `accent-foreground`
+      # against every button gradient stop taking the **worst** — which is how the primary and danger
+      # buttons turned out to fail at 2.98:1 and 2.77:1 on hover.
       - run: npm run check:contrast
 
       - run: npm run build
+
+      # Added 2026-08-22. Rendering — the defect class the eight gates above structurally cannot see.
+      #
+      # Everything before this point reads source or a built artefact. None of it can see a layout that
+      # overflows, a control that disappears below a breakpoint, a colour composited over two
+      # translucent layers, or an `aria-live` region that was never in the accessibility tree. The first
+      # run found five real defects behind an all-green board: the **Token Vault was unreachable below
+      # 1024px** (`sidebarHeader` went only to a sidebar that is `hidden lg:flex`), `role="list"` with no
+      # `listitem` children so nine flow diagrams announced as empty, a scrollable region no keyboard
+      # could reach, seven `opacity-50` wizard steps failing contrast on their prose, and — visible only
+      # in a screenshot — every backtick and asterisk in the teaching corpus rendering **literally**.
+      #
+      # Two engines: Gecko and Blink disagree most on flex shrink, `min-width: auto` on grid children and
+      # container queries, which is most of what this application's layout is made of. WebKit is omitted
+      # because Safari is not a target audience and it would triple the baselines.
+      #
+      # `--with-deps` installs the OS libraries the bundled browsers need on a clean runner. It is not
+      # required locally, where they were already present.
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:visual
+
+      - name: Upload the Playwright report when rendering fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: client/playwright-report/
+          retention-days: 7

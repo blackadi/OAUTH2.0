@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { adminService } from '@/services';
+import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -15,6 +16,17 @@ import { getDoc } from '@/data/operationDocs';
 import { useCredentials } from '@/context/CredentialContext';
 
 type AdminOp = 'create' | 'list' | 'update' | 'revoke' | 'delete' | 'reissue' | 'local';
+
+/** Every value `AdminOp` can take, as a runtime list — the allowed set for the URL parameter. */
+const ALL_OPS = [
+  'create',
+  'list',
+  'update',
+  'revoke',
+  'delete',
+  'reissue',
+  'local',
+] as const satisfies readonly AdminOp[];
 
 // Every member of Authlete's `GrantType` enum, which is what POST /api/token/create accepts.
 // This was a free-text Input, and the server coerced anything it did not recognise to
@@ -49,7 +61,15 @@ function AdminSection() {
   // held their own copy, and a route change unmounts a section, so it had to be retyped on
   // every navigation.
   const { clientId: authId, clientSecret: authSecret } = useCredentials();
-  const [activeOp, setActiveOp] = useState<AdminOp | null>(null);
+  /**
+   * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
+   *
+   * Was `useState`, which made a tab invisible to the address bar: *"look at what happened on the
+   * introspection step"* could not be communicated, Back left the section rather than undoing the tab,
+   * and a reload lost your place mid-protocol. `useUrlState` validates the incoming value against
+   * `ALL_OPS`, so a hand-edited query cannot select a tab that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<AdminOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
 
   const [createGrant, setCreateGrant] = useState('AUTHORIZATION_CODE');

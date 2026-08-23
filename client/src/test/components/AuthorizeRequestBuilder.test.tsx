@@ -10,8 +10,12 @@ const SEED = {
   scope: 'openid profile',
 };
 
-function mount(props: Partial<Parameters<typeof AuthorizeRequestBuilder>[0]> = {}) {
-  const onSend = vi.fn();
+type BuilderProps = Parameters<typeof AuthorizeRequestBuilder>[0];
+
+function mount(props: Partial<BuilderProps> = {}) {
+  // Typed from the component's own prop, so `onSend.mock.calls[0][1].codeVerifier` is a checked read
+  // rather than an `any` — these assertions are about the PKCE contract and deserve to be verified.
+  const onSend = vi.fn<BuilderProps['onSend']>();
   render(<AuthorizeRequestBuilder endpoint={ENDPOINT} seed={SEED} onSend={onSend} {...props} />);
   return { onSend };
 }
@@ -214,5 +218,68 @@ describe('DPoP', () => {
     mount();
     await waitForGenerated();
     expect(paramsOf(previewUrl()).get('dpop_jkt')).toBeNull();
+  });
+});
+
+/**
+ * The attacker model, promoted out of the code comments and into the UI.
+ *
+ * Across ~2,100 lines of teaching prose in `src/data/`, the words `attack` and `attacker` appeared
+ * **zero** times — as did `mix-up`, `injection` and `steal`. The notes said *"change this and watch it
+ * break"*, which teaches that a check exists rather than why anyone wrote one. The prose already existed
+ * in this repo, written for maintainers; these tests pin that it now reaches users.
+ */
+describe('the attacker model (PED-06)', () => {
+  it('gives every parameter that carries a security promise a threat, and none to those that do not', () => {
+    const withThreat = AUTH_PARAMS.filter((p) => p.threat).map((p) => p.name);
+    const without = AUTH_PARAMS.filter((p) => !p.threat).map((p) => p.name);
+
+    // The security-bearing set, named explicitly: a regression that quietly drops one should fail here.
+    expect(withThreat).toEqual(
+      expect.arrayContaining([
+        'state',
+        'nonce',
+        'code_challenge',
+        'code_challenge_method',
+        'redirect_uri',
+        'request',
+        'request_uri',
+        'dpop_jkt',
+        'id_token_hint',
+        'resource',
+        'max_age',
+        'acr_values',
+      ]),
+    );
+    // An invented threat is worse than silence — these carry no security promise.
+    expect(without).toEqual(expect.arrayContaining(['display', 'ui_locales', 'login_hint']));
+  });
+
+  it('names the attack rather than only the symptom', () => {
+    const byName = Object.fromEntries(AUTH_PARAMS.map((p) => [p.name, p]));
+    // `state` is the canonical case: the old note said "tamper with it and watch the callback refuse".
+    expect(byName.state.threat).toMatch(/any page can start a flow in your browser/i);
+    expect(byName.code_challenge.threat).toMatch(/code interception/i);
+    expect(byName.nonce.threat).toMatch(/replay/i);
+    expect(byName.redirect_uri.threat).toMatch(/open redirect/i);
+    expect(byName.code_challenge_method.threat).toMatch(/defaults to `plain`/i);
+  });
+
+  it('offers the explanation on the row and reveals it on demand', async () => {
+    mount();
+    // `state` is on by default, so its row is rendered.
+    const buttons = screen.getAllByRole('button', { name: /^why$/i });
+    expect(buttons.length).toBeGreaterThan(0);
+
+    expect(
+      screen.queryByText(/any page can start a flow in your browser/i),
+    ).not.toBeInTheDocument();
+
+    // Open every `why` on screen and assert `state`'s text appears: which index belongs to which row is
+    // an implementation detail of the ordering, and pinning it would make this test brittle for nothing.
+    buttons.forEach((b) => fireEvent.click(b));
+
+    expect(await screen.findByText(/proves the response answers a request/i)).toBeInTheDocument();
+    expect(screen.getByText(/code interception/i)).toBeInTheDocument();
   });
 });
