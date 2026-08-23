@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { DOING, NARROW, READING, READING_VIEWPORTS, SURFACES } from './surfaces';
+import { DOING, NARROW, READING, READING_VIEWPORTS } from './surfaces';
 
 /**
  * The defect class that four green gates cannot see: a layout that overflows.
@@ -184,7 +184,10 @@ test.describe('the help popover fits the viewport it is in', () => {
         return { top: Math.round(r.top), bottom: Math.round(r.bottom), vh };
       }, height);
 
-      expect(fits.top, `panel starts above the viewport: ${JSON.stringify(fits)}`).toBeGreaterThanOrEqual(0);
+      expect(
+        fits.top,
+        `panel starts above the viewport: ${JSON.stringify(fits)}`,
+      ).toBeGreaterThanOrEqual(0);
       expect(
         fits.bottom,
         `panel extends past the bottom of the viewport: ${JSON.stringify(fits)}`,

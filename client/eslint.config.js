@@ -9,7 +9,10 @@ export default [
   js.configs.recommended,
   prettier,
   {
-    files: ['src/**/*.{ts,tsx}', 'e2e/**/*.ts', 'playwright.config.ts'],
+    // `e2e/` is linted with the same rules as `src/`. `playwright.config.ts` is deliberately absent:
+    // the `ignores` block below excludes `*.config.*`, so naming it here yields only a "file ignored"
+    // warning. `tsc` covers it, because `tsconfig.json` does include it.
+    files: ['src/**/*.{ts,tsx}', 'e2e/**/*.ts'],
     languageOptions: {
       parser: tsparser,
       parserOptions: {

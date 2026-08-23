@@ -105,15 +105,19 @@ test.describe('the document outline', () => {
         [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((h) => Number(h.tagName[1])),
       );
 
-      expect(levels.filter((l) => l === 1), `${surface.path}: h1 count`).toHaveLength(1);
+      expect(
+        levels.filter((l) => l === 1),
+        `${surface.path}: h1 count`,
+      ).toHaveLength(1);
       expect(levels[0], `${surface.path}: first heading must be the h1`).toBe(1);
 
       // No level may jump by more than one from the deepest seen so far.
       let deepest = 1;
       for (const level of levels) {
-        expect(level, `${surface.path}: heading jumped from h${deepest} to h${level}`).toBeLessThanOrEqual(
-          deepest + 1,
-        );
+        expect(
+          level,
+          `${surface.path}: heading jumped from h${deepest} to h${level}`,
+        ).toBeLessThanOrEqual(deepest + 1);
         deepest = Math.max(deepest, level);
       }
     }
@@ -126,7 +130,9 @@ test.describe('keyboard-only operation', () => {
    * it is *first* in the tab order is the whole point — a skip link you have to tab past the nav to reach
    * is decoration.
    */
-  test('the first Tab reaches the skip link, and it moves focus to the content', async ({ page }) => {
+  test('the first Tab reaches the skip link, and it moves focus to the content', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/auth-flows');
     await page.waitForSelector('h1');
@@ -152,7 +158,10 @@ test.describe('keyboard-only operation', () => {
     await page.goto('/auth-flows');
     await page.waitForSelector('h1');
 
-    await page.getByRole('link', { name: /Discovery/i }).first().click();
+    await page
+      .getByRole('link', { name: /Discovery/i })
+      .first()
+      .click();
     await expect(page.getByRole('heading', { level: 1, name: /Discovery/i })).toBeVisible();
     await expect(page.locator('#main')).toBeFocused();
   });
@@ -241,9 +250,16 @@ test.describe('the live regions announce', () => {
     await page.goto('/discovery');
     await page.waitForSelector('h1');
 
-    await page.getByRole('button').filter({ hasText: /Discovery|Fetch|Get/i }).first().click();
-    await expect(page.locator('[role="alert"][aria-live="assertive"]')).toContainText(/Request failed/i, {
-      timeout: 10_000,
-    });
+    await page
+      .getByRole('button')
+      .filter({ hasText: /Discovery|Fetch|Get/i })
+      .first()
+      .click();
+    await expect(page.locator('[role="alert"][aria-live="assertive"]')).toContainText(
+      /Request failed/i,
+      {
+        timeout: 10_000,
+      },
+    );
   });
 });
