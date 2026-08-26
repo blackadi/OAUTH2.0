@@ -523,6 +523,55 @@
   }
 }
 
+/**
+ * Motion that does work, as opposed to motion that decorates.
+ *
+ * The audit's D8 finding was not "there is too little motion" — it was that **none of it did any work**:
+ * `FlowDiagram`'s circle already carried `transition-all duration-300` while a new response appeared
+ * instantly, with nothing drawing the eye to the pane that had just changed. In a debugger the two events
+ * worth a cue are exactly those: *a response arrived* and *the flow advanced a step*.
+ *
+ * Both amplitudes are deliberately tiny — 4px of rise, 6% of scale — for the reason the reduced-motion
+ * note above already gives: this is not a vestibular risk, and keeping it below the threshold where it
+ * could become one is what makes it safe to add at all. They need no entry in the media query, because
+ * the blanket `*` rule there already collapses every animation to one 0.01ms iteration; `both` as the
+ * fill mode is what makes that land on the finished state rather than flashing the start of it.
+ */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes step-in {
+  0% {
+    transform: scale(0.82);
+  }
+  55% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@layer utilities {
+  /* Hand-written rather than generated from `@theme`, matching `.bg-grid` and `.text-balance` below —
+     the colour tokens go through `@theme` because `check-theme-tokens.mjs` reads it; these do not. */
+  .animate-reveal {
+    animation: reveal 220ms ease-out both;
+  }
+
+  .animate-step-in {
+    animation: step-in 260ms ease-out both;
+  }
+}
+
 @layer utilities {
   .bg-grid {
     background-image:

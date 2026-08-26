@@ -72,6 +72,13 @@ export default [
       // performs this check, and does it better. Enumerating each lib type in `globals` would be a
       // never-ending list that silently rots.
       'no-undef': 'off',
+      // `no-redeclare` also comes from js.configs.recommended and is also wrong on TypeScript: it counts
+      // every **overload signature** as a redeclaration, so a three-overload `useUrlState` reported three
+      // errors while `tsc` was perfectly happy. Observed directly, not inferred. typescript-eslint ships
+      // an extension rule that understands overloads and declaration merging, so the base rule is
+      // disabled and the type-aware one takes over — the same trade already made for `no-undef` above.
+      'no-redeclare': 'off',
+      '@typescript-eslint/no-redeclare': 'error',
     },
   },
   {

@@ -122,11 +122,28 @@ defect, a broken lab, or spent vendor quota.
 
 - **Never run `npm --prefix server run test:e2e`** unless explicitly asked. It spends real Authlete API
   quota and trips the ~15-call rate limit. It is deliberately absent from `ci.yml` for the same reason —
-  which means **nothing runs it**, so after any change to a response body, a status mapping or an auth
-  gate, assume it is stale. A green `npm test` says nothing about that file.
+  which means **nothing runs it**, and a green `npm test` says nothing about that file.
+
+  **Do not "assume it is stale" — measure it.** That instruction stood here for months and was
+  unfalsifiable: equally true the day after the suite passed and a year later, so it stopped carrying
+  information. `node scripts/check-e2e-staleness.mjs` names the behaviour-deciding server files that have
+  changed since the suite was last revised, which is the question you actually needed answered. It reads
+  git history rather than code, so a pure refactor shows up too — a false positive costs you a diff, a
+  false negative costs you a broken status mapping no gate can see.
+
+  Measured 2026-08-23: **two** files had changed since `2c58dcd` (2026-08-20) — `session.controller.ts`
+  and `health.service.ts` — and **neither invalidates an assertion.** The session change altered only the
+  wrong-password *re-render* branch, which the suite never exercises (it logs in with the correct
+  password); the health change added fields, and the suite asserts property presence rather than exact
+  shape. Recorded because the useful artefact is the reasoning, not the number.
 - **Use plan mode for any change whose *concern* is on the Security-critical surfaces list below**, not
   merely for changes to a file on it. A one-line change to token issuance needs a plan; a large refactor
-  of `metrics.service.ts` does not. The only exemption is a semantics-free edit.
+  of `metrics.service.ts` does not. The only exemption is a **semantics-free** edit — renaming a local, a
+  comment typo, an import path after a file move, formatting. Two riders, both learned by getting it
+  wrong: if a change reveals **mid-edit** that behaviour *does* shift, stop and plan rather than
+  finishing and explaining afterwards; and **keep the ceremony proportionate** — a short plan stating
+  what changes, what behaviour shifts and how it is verified is enough for a small change, because the
+  point is the review checkpoint, not the paperwork.
 - **The SDK is pinned to the exact version `@authlete/typescript-sdk@1.0.0` — no caret.** `1.1.5`/`1.1.6`
   are numerically higher but are *older code*; widening to `^1.0.0` resolves up and silently
   reintroduces three bugs. A Dependabot `ignore` rule blocks that "upgrade", and GitHub's releases page
@@ -174,6 +191,8 @@ npm --prefix client run test:visual      # Playwright, Chromium + Firefox, start
 # repo
 node scripts/check-docs.mjs              # source refs, bare paths, md line refs, endpoints, links
 node scripts/check-route-coverage.mjs    # every route is named by some test
+node scripts/check-e2e-staleness.mjs     # which server files changed since the E2E suite was revised
+node scripts/check-client-server-contract.mjs   # every SPA endpoint resolves to a mounted server route
 node scripts/check-discovery.mjs         # the discovery baseline, BY NAME rather than by count
 ```
 
@@ -190,7 +209,10 @@ node scripts/check-discovery.mjs         # the discovery baseline, BY NAME rathe
 - **A count is not evidence.** `check-discovery.mjs` exists because the discovery document's member
   *count* changed and nobody could say which member. Keep the list, not the number.
 - **An auth gate added on the server is a client change too**, and the documentation being right is not
-  the client being right. Nothing asks "does the SPA still send what this route now requires?"
+  the client being right. `check-client-server-contract.mjs` now asks half of this — every SPA endpoint
+  resolves to a mounted route, and no service assembles a URL of its own — and **flags** the other half,
+  listing callers of a gated route that mention no credential. The flag is a heuristic; it reads for the
+  word, not for correctness.
 
 For the detail behind each — and for the client's own three-layer test strategy — see
 [`docs/agents/testing-and-checks.md`](docs/agents/testing-and-checks.md).

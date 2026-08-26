@@ -63,7 +63,17 @@ function TokenOutcome({ tokens, className }: TokenOutcomeProps) {
 
   return (
     <div className={cn('space-y-3', className)}>
-      <div className="rounded-lg border border-edge-success bg-tint-success p-3 space-y-2.5">
+      {/*
+        The "so what" card gets the reveal, not the whole pane.
+
+        `JsonBlock` below animates its own `<pre>`, but the summary is the part a person reads first and
+        the part that changes meaning between runs — a second token with a different scope looks identical
+        at a glance. Keyed on the access token so a *new* one animates and a re-render does not.
+      */}
+      <div
+        key={tokens.access_token ?? 'no-token'}
+        className="animate-reveal rounded-lg border border-edge-success bg-tint-success p-3 space-y-2.5"
+      >
         <p className="text-xs font-semibold text-success-text m-0">You now hold:</p>
 
         <ul className="space-y-1.5 m-0 p-0 list-none">

@@ -58,8 +58,16 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
           >
             <div className="flex flex-col items-center gap-1.5 flex-1">
               <div
+                /*
+                 * Keyed on the step's own state, so the pop fires on the render where this circle
+                 * *became* current or completed and not on every render afterwards. Only the moving
+                 * step animates — animating all five would be decoration, and would say nothing about
+                 * which one just changed.
+                 */
+                key={`${step.id}-${state}`}
                 className={cn(
                   'flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all duration-300',
+                  !isPending && 'animate-step-in',
                   isCompleted &&
                     'bg-tint-success-strong text-success-text border-2 border-edge-success',
                   isCurrent &&

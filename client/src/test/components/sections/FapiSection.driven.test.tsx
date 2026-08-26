@@ -259,3 +259,23 @@ describe('FapiSection — the test flow wizard', () => {
     expect(screen.getAllByText(/A157303/)).toHaveLength(2);
   });
 });
+
+describe('FapiSection — every wizard step is addressable', () => {
+  /** The same two halves as MCP: `useHashScroll` needs targets, and only a render can say they exist. */
+  it('gives the setup block and the three steps ids that can take focus', () => {
+    mountSection(<FapiSection />);
+
+    for (const id of ['fapi-setup', 'fapi-step-1', 'fapi-step-2', 'fapi-step-3']) {
+      const step = document.getElementById(id);
+      expect(step, `#${id} is what a link to that step points at`).not.toBeNull();
+      expect(step).toHaveAttribute('tabindex', '-1');
+    }
+  });
+
+  it('anchors each id to the block that actually holds that step', () => {
+    mountSection(<FapiSection />);
+
+    expect(document.getElementById('fapi-step-1')).toHaveTextContent(/Push Authorization Request/i);
+    expect(document.getElementById('fapi-step-3')).toHaveTextContent(/Call Userinfo with DPoP/i);
+  });
+});

@@ -49,7 +49,7 @@ export default defineConfig({
       thresholds: {
         statements: 83,
         branches: 78,
-        functions: 78,
+        functions: 79,
         lines: 83,
         'src/utils/**': { statements: 88, branches: 85, functions: 92, lines: 89 },
         'src/services/**': { statements: 80, branches: 76, functions: 78, lines: 81 },
@@ -81,12 +81,24 @@ export default defineConfig({
          *   test reached six.
          *
          * **Re-measure before raising any of these; do not carry the numbers forward from memory.**
+         *
+         * Measured 2026-08-23, after `AuthorizeRequestBuilder` and `AuthFlowsSection` were each split by
+         * concern: global **84.06/79.29/80.85/84.64**, `src/components/**` **80.13/76.99/76.79/80.89**.
+         * Three rows moved far enough to ratchet — global `functions` 78 → 79, and `src/components/**`
+         * `functions` 73 → 75 and `statements` 78 → 79. The rest stay put because they already sit within
+         * ~1.3 points of their reading, which is the tightest margin anything in this file runs at.
+         *
+         * **The refactors themselves were flat**, as behaviour-preserving ones should be — the rise came
+         * from six tests the *mutation* pass exposed, not from the restructuring. Three of those pinned
+         * things nothing had ever asserted: the row-level invalid-JSON message, the custom-parameter
+         * Remove button, and `authzClientSecret`'s else branch — the last being the `[A157303]` shape
+         * `AGENTS.md` already records a lesson about, unpinned on the authorization-code path.
          */
         'src/hooks/**': { statements: 85, branches: 80, functions: 86, lines: 88 },
         'src/context/**': { statements: 90, branches: 90, functions: 88, lines: 92 },
         'src/data/**': { statements: 94, branches: 100, functions: 84, lines: 94 },
         'src/pages/**': { statements: 82, branches: 80, functions: 80, lines: 82 },
-        'src/components/**': { statements: 78, branches: 76, functions: 73, lines: 79 },
+        'src/components/**': { statements: 79, branches: 76, functions: 75, lines: 79 },
       },
     },
   },

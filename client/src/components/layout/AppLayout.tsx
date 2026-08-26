@@ -8,6 +8,7 @@ import { cn } from '@/utils/cn';
 import { useServerStatus } from '@/hooks/useServerStatus';
 import { useTraces } from '@/hooks/useTraces';
 import { useTheme } from '@/hooks/useTheme';
+import { useHashScroll } from '@/hooks/useHashScroll';
 import { TracePanel } from '@/components/trace/TracePanel';
 import { LiveAnnouncer } from '@/components/ui/LiveAnnouncer';
 import type { SectionGroup } from '@/App';
@@ -28,6 +29,10 @@ function AppLayout({ groups, sidebarHeader }: AppLayoutProps) {
   const activePath = location.pathname;
   const { status, uptime } = useServerStatus();
   const mainRef = useRef<HTMLElement>(null);
+
+  // A `#step-3` in the address bar has to wait for the lazy section to arrive before it can
+  // resolve. Called here rather than per section, so every route gets it for free.
+  useHashScroll();
 
   /**
    * Move focus to the content region **on navigation**, and not on first paint.

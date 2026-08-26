@@ -398,7 +398,8 @@ layer up. Either implement the stated behaviour or correct the comment; the firs
 **Effort: S.**
 
 **ENG-04 · Medium · State — a cleared client secret is not cleared**
-`client/src/components/auth/AuthFlowsSection.tsx:182` and `:247`
+`client/src/components/auth/AuthFlowsSection.tsx:81` and `client/src/components/auth/AuthorizationCodePanel.tsx:136`
+(both were in `AuthFlowsSection.tsx` at `:182` and `:247` when this was written; the section was split by channel on 2026-08-23 and the second writer moved with the front channel)
 
 ```
 if (clientSecret) writeKey(SESSION_KEYS.activeClientSecret, clientSecret);
@@ -1189,6 +1190,143 @@ dark halo. **Effort: S** — a `--shadow-card` token per palette.
 
 ### Competitive benchmark
 
+> **Re-scored 2026-08-23 with citations (Q7).** The original table is preserved at the end of this
+> subsection, because *how* it was wrong is more instructive than the corrected numbers. It carried a
+> plain `[UNVERIFIED]` header and was honest about being from training knowledge — and it was still
+> wrong in two **structural** ways that no amount of care about the individual numbers would have caught.
+> All four sources were fetched on **2026-08-23**; every score below names the evidence it rests on, and
+> **cells that could not be verified carry no number at all.**
+
+#### Two structural corrections, before any score
+
+**1 · The table had five columns for four products.** `oauth.tools` and *"curity OAuth Tools"* are the
+same product. [curity.io/oauth-tools](https://curity.io/oauth-tools/) is OAuth.tools' own product page —
+it calls it *"The OAuth Laboratory"* and *"an advanced OAuth client that can easily be connected to any
+OAuth server"*. The two columns scored identically in the original table, which reads as corroboration
+between independent products and was in fact one product counted twice.
+
+**2 · One column was not a debugging tool at all.** The *Curity OAuth Assistant* is
+[`@curity/oauth-assistant`](https://curity.io/resources/learn/oauth-assistant/), an **npm library** a
+developer installs into their own application: *"Curity provides a JavaScript assistant for OAuth that
+supports the `Assisted Token-`, `Implicit-` and `Code Flow` as well as `logout` and `session
+management`. The assistant is available as a npm library"*. Its
+[tutorial](https://curity.io/resources/learn/test-using-oauth-assistant/) drives *"an open source
+example app, which you can clone"* — not a hosted tool anybody visits. Scoring a library on *"novice
+on-ramp"* and *"wire-level transparency"* against a debugger is a category error, and it produced the
+single highest competitor score in the original table (novice on-ramp, **4**) — the number that most
+shaped the roadmap. **It is removed from the rubric rather than re-scored.**
+
+So the field is **two** comparable products, not four.
+
+#### The rubric, re-scored
+
+`@client` is scored twice: as the audit found it, and as it stands on
+`fix/client-audit-remediation`, because scoring this product as it was while scoring competitors as they
+are would compare two different dates. Competitor cells marked **n/v** could not be verified from
+publicly readable material — see *What could not be verified* below. **An unverifiable cell is left
+blank rather than being given a plausible number**, which is the discipline the original table's
+`[UNVERIFIED]` header asked for and did not apply.
+
+| Rubric | `@client` (at audit) | `@client` (now) | oauthdebugger | oauth.tools |
+|---|:---:|:---:|:---:|:---:|
+| Clarity of step sequencing | **2** | **3** | 2 | 4 |
+| Parameter explanation depth | **4** | **4** | 3 | 2 |
+| Wire-level transparency | **3** | **4** | 2 | n/v |
+| Visual polish | **3** | **3** | n/v | n/v |
+| Novice on-ramp | **1** | **3** | 4 | n/v |
+| Expert velocity | **3** | **4** | 3 | 5 |
+
+#### Every competitor cell, and what it rests on
+
+**oauthdebugger.com** — [oauthdebugger.com](https://oauthdebugger.com), fetched 2026-08-23.
+
+| Cell | Was | Now | Evidence |
+|---|:---:|:---:|---|
+| Step sequencing | 2 | **2** | One form, then a redirect, then a result. The page offers *"Authorize URI, Redirect URI, Client ID, Scope"* plus optional `state` and `nonce`; **no step-by-step sequencing UI is present**. A single form is a step, not a sequence — the original score was right |
+| Parameter explanation | 2 | **3** ▲ | **Raised.** Per-parameter prose does exist — `state` is explained as an *"anti-forgery token"*, and each of the three response types carries a sentence (*"The authorization server will respond with a `code`, which the client can exchange for tokens on a secure channel"*). Shallower than this app's conformance words and verified citations, but 2 understated it |
+| Wire-level transparency | 3 | **2** ▼ | **Lowered.** The page **does not show raw HTTP requests or responses** — it shows the URL it constructs and what comes back on the redirect. The original 3 implied parity with this app's status/header/timing capture, and there is nothing to support it |
+| Visual polish | 3 | **n/v** | A text extraction cannot score aesthetics. I did not view it rendered, so there is no basis for a number |
+| Novice on-ramp | 3 | **4** ▲ | **Raised.** The initial screen is one short form with its required fields named and explained, and PKCE offered as *"SHA-256"* or *"plain"* with `Code Verifier` and `Code Challenge` fields. This is the axis the audit's headline claim rests on, and the evidence makes the gap **wider**, not narrower |
+| Expert velocity | 4 | **3** ▼ | **Lowered.** **URL-shareable state is not offered**, and the extension surface is PKCE only — no PAR, DPoP, CIBA, device flow, RAR or JAR. Three response types and one form is fast, but it is not a power tool |
+
+**oauth.tools** — [curity.io/oauth-tools](https://curity.io/oauth-tools/), the
+[launch post](https://curity.io/blog/oauth-tools-the-free-oauth-laboratory/) and the
+[usage tutorial](https://curity.io/resources/learn/test-using-oauth-tools/), all fetched 2026-08-23. The
+application itself is a JavaScript shell — fetching `oauth.tools` returns a heading and nothing else — so
+every cell below rests on the vendor's own published material, with the limits that implies.
+
+| Cell | Was | Now | Evidence |
+|---|:---:|:---:|---|
+| Step sequencing | 4 | **4** | Confirmed. The launch post: *"the clean UI clearly highlights each flow, showing the order in which actions occur and what tokens are returned"*. The tutorial describes the sequence explicitly — select environment → **Start Flow** → choose flow type → configure parameters → **Run** — plus an *"Auto-redeem code"* option. This remains the axis where the gap is real |
+| Parameter explanation | 3 | **2** ▼ | **Lowered.** The product page does not mention parameter explanations at all, and the tutorial's are minimal — it explains that *"The client must send the `openid` scope to receive an ID Token"* and references `prompt=login`. What it offers is the ability to *"tweak all of the parameters sent in each flow to see how the server responds"*, which is editability, not explanation |
+| Wire-level transparency | 5 | **n/v** ⚠ | **The least defensible number in the original table, and it is now blank.** Nothing across the product page, the launch post or the tutorial mentions raw HTTP requests, response headers or status codes. What is documented is flow visualisation, token display, and *"JWT signature validation results are clearly displayed"* with *"missing claims… drawn to the user's attention"*. A **5** — a full point above this app's trace layer — had nothing behind it. Note that **n/v is not a rebuttal**: it may well show raw HTTP. It is a statement that a score of 5 was asserted with no evidence, and that a lower number would be the same mistake in the other direction |
+| Visual polish | 4 | **n/v** | The only source is the vendor calling its own UI *"clean"*. That is not evidence |
+| Novice on-ramp | 3 | **n/v** | Pre-defined flows and *"Run 10+ OAuth Flows"* suggest a low barrier, but nothing published says what a first-time visitor actually sees, and the app would not load as text. **This is the cell the audit's central claim most depends on**, and it is unverifiable from outside — see below |
+| Expert velocity | 4 | **5** ▲ | **Raised, and the one place a competitor moved clearly ahead.** *"Multiple Environments"*, *"Import/export data and share configuration links"*, a desktop build *"for macOS, Windows and Linux"* so an internal server need not be exposed, and JWT work in both directions: *"Paste a JWT and instantly decode its header, payload, and signature"* and *"Create a JWT by editing the header, body and signature"* |
+
+#### Where `@client` moved, and why
+
+The three raised cells are all changes on `fix/client-audit-remediation` that close a gap this table
+named. Each is a mechanism, not an intention:
+
+- **Novice on-ramp 1 → 3.** `/` was `<Navigate to="/auth-flows" replace />`; it is now a landing page
+  that says what the tool is, reads the **live** configuration and marks what will fail, and offers one
+  path in (Q1(b), `pages/LandingPage.tsx`). Held at 3 rather than 4 deliberately: oauthdebugger's whole
+  product is one form, and a twenty-two-item sidebar behind a good front door is still a
+  twenty-two-item sidebar.
+- **Wire-level transparency 3 → 4.** The gap the audit named was specific — *"it is missing the
+  authorization request, which is the one request the competitors always show"* (PED-05). Both
+  front-channel hops now enter the trace through `navigateTo`, and a run can be exported and re-imported
+  as a file (P3-4).
+- **Expert velocity 3 → 4.** The three named absences were *"no deep-linking, no saved runs, no
+  shareable state"*. Ten sections now carry `?op=`, every wizard step is a `#fragment`, and a run is a
+  file. Still 4 rather than 5 because oauth.tools' multi-environment model has no counterpart here.
+- **Step sequencing 2 → 3.** `FlowDiagram` now receives `completedSteps` and a per-step `description`
+  and derives progress from the request trace, so it can no longer claim a step that produced no
+  request. Only +1 because PED-02's substance stands: several sequences are still drawn as tab bars.
+- **Parameter explanation 4 and visual polish 3 are unchanged.** Nothing on this branch moved either,
+  and the light theme remains un-looked-at in a browser beyond the four baselines captured for it.
+
+#### What could not be verified, stated plainly
+
+- **Neither competitor was operated.** Both need connecting to a live OAuth server, which is not
+  something to point at a third party's tool from an audit. Every competitor cell above rests on
+  published material.
+- **oauth.tools would not render as text**, so three of its six cells are blank. The two axes the
+  audit's headline claim leans on hardest — novice on-ramp and visual polish — are among them.
+- **Neither product was viewed rendered**, so visual polish is blank for both. It was scored 3 and 4 in
+  the original table.
+
+#### The claim that survives, and the one that does not
+
+**Survives:** this app is ahead on error diagnosis — nothing else decodes a vendor result code against
+*this* deployment, and **27** of them were established by probing — and ahead on per-parameter conformance
+and citation depth, which the fetches confirm from the other side: oauthdebugger's explanations are one
+sentence each and oauth.tools' are near-absent. Breadth is not close; nineteen specifications including
+CIBA, VCI, Federation and MCP, against three response types plus PKCE and *"10+ OAuth Flows"*.
+
+**Does not survive:** *"the worst of the five at getting someone started"*. There were never five
+comparable products; there are two. The direction was right and the evidence makes the on-ramp gap
+against oauthdebugger **wider** than the original table said (4 rather than 3, against 1). But the
+superlative rested on a library and a duplicate, and it should be stated as *"behind oauthdebugger on
+the on-ramp, by the width of a whole product"* — which is both more accurate and more actionable.
+
+> **A count in this section was stale too, and it is worth saying which.** The probed vendor-code
+> figure above is **27**, measured from `AUTHLETE_NOTES` on 2026-08-23. This document said **26** and
+> `docs/agents/client-spa.md` said **25** — two different wrong numbers for the same set, which is
+> precisely the failure mode `check-discovery.mjs` was written to end: *a count is not evidence*. The
+> claims either number was supporting both hold when re-measured — the vendor documents **38** codes and
+> the overlap with the 27 is still **zero**, so a decoder built from the vendor document alone would
+> explain nothing a developer actually hits.
+
+**The lesson worth keeping, independent of any score:** the original table declared itself unverified
+and was still trusted, because a number in a table reads as a measurement no matter what the paragraph
+above it says. Two of its five columns should not have existed, and the error was in the *shape* of the
+table rather than in any cell. **A `[UNVERIFIED]` label is not a substitute for leaving a cell blank.**
+
+<details>
+<summary>The original table, preserved</summary>
+
 ⚠️ **`[UNVERIFIED]` — method stated plainly.** oauthdebugger.com, oauth.tools and the two curity.io pages
 are **not** on this session's pre-approved WebFetch list, so I did not visit them. The scores below are
 from training knowledge and may be stale on any point. **Say the word and I will fetch all four and
@@ -1203,28 +1341,12 @@ re-score with receipts.** `@client` scores are from this audit and are firm.
 | Novice on-ramp | **1** | 3 | 3 | 3 | 4 |
 | Expert velocity | **3** | 4 | 4 | 4 | 2 |
 
-**Ahead of the field, clearly:** error diagnosis (nothing else can decode a vendor result code against
-*this* deployment, let alone flag 26 of them as reproduced live), per-parameter conformance and citation
-depth, and `JwtInspector` starting **unverified** on purpose. Also ahead on breadth — 19 specs including
-CIBA, VCI, Federation and MCP, which none of the four cover.
+Of the 24 competitor cells above: **2** are confirmed by the 2026-08-23 fetch, **6** are corrected,
+**4** are withdrawn as unverifiable, and **12** — half the table — belonged to a duplicate column and a
+library. Counted, not estimated: oauthdebugger 1 confirmed / 4 corrected / 1 withdrawn; oauth.tools
+1 confirmed / 2 corrected / 3 withdrawn; twelve removed. 2 + 6 + 4 + 12 = 24.
 
-**At parity:** visual polish, and wire-level transparency for anything reached by `fetch`.
-
-**Behind, and each for a nameable reason:**
-
-- **Novice on-ramp — 1 vs 3–4, the widest gap in the table.** oauthdebugger opens with a single
-  pre-filled form and a sentence; the curity assistant walks you in. This app redirects `/` to a
-  20-item dashboard whose first field is a placeholder guaranteed to fail (Phase 2, walkthrough step 5),
-  with no front door and no reading surface (UX-01).
-- **Step sequencing — 2 vs 4.** oauth.tools' flow model is its central metaphor. Here `FlowDiagram` is
-  applied to 3 of 20 sections and eight sequences are drawn as tab bars (PED-02).
-- **Wire-level — 3 vs 5.** The trace layer is genuinely good, and it is missing the *authorization
-  request* (PED-05), which is the one request the competitors always show.
-- **Expert velocity — 3 vs 4.** No deep-linking, no saved runs, no shareable state (UX-08).
-
-The honest summary the designer and the education specialist both signed: **this product is already the
-best of the five at explaining a parameter and at explaining an error, and the worst of the five at
-getting someone started.** Those are separable problems, and the second one is smaller.
+</details>
 
 ### Where the three voices disagree
 

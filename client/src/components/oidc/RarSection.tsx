@@ -343,7 +343,7 @@ function RarSection() {
                   <div className="px-3 py-2 space-y-2 text-xs">
                     {!!detail.locations && Array.isArray(detail.locations) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Locations
                         </span>
                         <ul className="list-disc list-inside text-foreground-muted mt-1">
@@ -357,14 +357,14 @@ function RarSection() {
                     )}
                     {!!detail.actions && Array.isArray(detail.actions) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Actions
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.actions as string[]).map((a: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-tint-accent text-accent-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-accent text-accent-text rounded text-2xs"
                             >
                               {a}
                             </span>
@@ -374,14 +374,14 @@ function RarSection() {
                     )}
                     {!!detail.datatypes && Array.isArray(detail.datatypes) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Data Types
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.datatypes as string[]).map((d: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-tint-info text-info-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-info text-info-text rounded text-2xs"
                             >
                               {d}
                             </span>
@@ -391,7 +391,7 @@ function RarSection() {
                     )}
                     {!!detail.identifier && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Identifier
                         </span>
                         <p className="text-foreground-muted mt-1 font-mono">
@@ -401,14 +401,14 @@ function RarSection() {
                     )}
                     {!!detail.privileges && Array.isArray(detail.privileges) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Privileges
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.privileges as string[]).map((p: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-tint-warning text-warning-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-warning text-warning-text rounded text-2xs"
                             >
                               {p}
                             </span>

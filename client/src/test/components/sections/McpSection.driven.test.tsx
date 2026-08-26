@@ -4,6 +4,8 @@ import { McpSection } from '@/components/mcp/McpSection';
 import { mcpService, dcrService } from '@/services';
 import {
   mountSection,
+  mountSectionAt,
+  selectOp,
   fill,
   fillAdminCredentials,
   press,
@@ -275,5 +277,74 @@ describe('McpSection — the credential the user obtained', () => {
 
     expect(await screen.findByText(/What does this mean\?|Hide explanation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/A157303/)).toHaveLength(2);
+  });
+});
+
+describe('McpSection — the selected lookup is addressable', () => {
+  /**
+   * The tenth and last `TabBar` to move to `?op=`. No fallback here, deliberately: none of the three
+   * lookups is the obvious default and the section reads fine with all three collapsed, so an absent
+   * `?op=` means absent rather than "the first one".
+   */
+  it('opens the lookup named in the URL', () => {
+    mountSectionAt(<McpSection />, '/mcp?op=cimd');
+
+    expect(screen.getByRole('tab', { name: /CIMD Metadata/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    // The other two must be *off*, not merely un-asserted — a section that ignored `?op=` and selected
+    // its first tab would satisfy a one-sided check. `CIMD URL` is deliberately not queried: the
+    // six-step wizard below renders a field by that name too, and the anchored label matches both.
+    expect(screen.getByRole('tab', { name: /AS Metadata/i })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(screen.getByRole('tab', { name: /Protected Resource/i })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+  });
+
+  it('writes the lookup back to the URL', async () => {
+    const view = mountSectionAt(<McpSection />, '/mcp');
+    await selectOp(/Protected Resource/i);
+
+    expect(new URLSearchParams(view.search()).get('op')).toBe('resource-metadata');
+  });
+
+  it('selects nothing on a value that does not exist, rather than asking getDoc for it', () => {
+    mountSectionAt(<McpSection />, '/mcp?op=not_a_lookup');
+
+    for (const name of [/AS Metadata/i, /Protected Resource/i, /CIMD Metadata/i]) {
+      expect(screen.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'false');
+    }
+  });
+});
+
+describe('McpSection — every wizard step is addressable', () => {
+  /**
+   * **The hook and the anchors are two halves and neither is worth anything alone.**
+   * `useHashScroll.test.tsx` drives the hook against its own fixture, so it cannot see a wizard whose
+   * steps carry no `id` — which is the whole point of `#mcp-step-4`. This asserts the targets exist,
+   * that they are focusable, and that they are on the right cards.
+   */
+  it('gives each of the six steps an id that can take focus', () => {
+    mountSection(<McpSection />);
+
+    for (const n of [1, 2, 3, 4, 5, 6]) {
+      const step = document.getElementById(`mcp-step-${n}`);
+      expect(step, `#mcp-step-${n} is what a link to that step points at`).not.toBeNull();
+      // Without this the fragment scrolls the page and leaves the keyboard at the top of the document.
+      expect(step).toHaveAttribute('tabindex', '-1');
+    }
+  });
+
+  it('anchors each id to the card that actually holds that step', () => {
+    mountSection(<McpSection />);
+
+    expect(document.getElementById('mcp-step-1')).toHaveTextContent(/Discover AS/i);
+    expect(document.getElementById('mcp-step-4')).toHaveTextContent(/Token Exchange/i);
+    expect(document.getElementById('mcp-step-6')).toHaveTextContent(/Introspect/i);
   });
 });

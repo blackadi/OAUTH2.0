@@ -80,6 +80,13 @@ export const CIBA_FAIL_ENDPOINT = `${API_BASE_URL}/api/ciba/fail`;
 export const CIBA_COMPLETE_ENDPOINT = `${API_BASE_URL}/api/ciba/complete`;
 
 export const PAR_ENDPOINT = `${API_BASE_URL}/api/par`;
+/**
+ * Lived in `jar.service.ts` as a local `const` until 2026-08-23, which made it the **only** endpoint in
+ * the app that `scripts/check-client-server-contract.mjs` could not see — the check written *because of*
+ * the JAR outage was not checking JAR. Found by mutating that script. The script now fails if any service
+ * builds an endpoint from `API_BASE_URL` itself, so this file stays the one place they live.
+ */
+export const JAR_PROCESS_ENDPOINT = `${API_BASE_URL}/api/jar/process`;
 
 export const DEVICE_AUTHORIZATION_ENDPOINT = `${API_BASE_URL}/api/device/authorization`;
 export const DEVICE_VERIFICATION_ENDPOINT = `${API_BASE_URL}/api/device/verification`;

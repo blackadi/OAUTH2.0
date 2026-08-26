@@ -50,6 +50,34 @@ for (const scheme of ['dark', 'light'] as const) {
       await expect(page.locator('header')).toHaveScreenshot(`header-360-${scheme}.png`);
     });
 
+    /**
+     * The landing page, in both themes and at both ends of the range.
+     *
+     * It is the **first** thing anyone sees now that `/` is not a redirect, and it is a reading surface —
+     * so it is held to the same standard as `/reference`: single column, prose measured, and it has to
+     * hold at 360px. Two baselines rather than one because the configuration block is the part most
+     * likely to break narrow: a `dl` that goes side-by-side at `sm` and stacks below it.
+     */
+    test(`landing at 360px`, async ({ page }) => {
+      await page.setViewportSize(NARROW);
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto('/');
+      await page.waitForSelector('h1');
+      await settle(page);
+
+      await expect(page).toHaveScreenshot(`landing-360-${scheme}.png`, { fullPage: false });
+    });
+
+    test(`landing at 1440px`, async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto('/');
+      await page.waitForSelector('h1');
+      await settle(page);
+
+      await expect(page).toHaveScreenshot(`landing-1440-${scheme}.png`, { fullPage: false });
+    });
+
     test(`reference at 360px`, async ({ page }) => {
       await page.setViewportSize(NARROW);
       await page.emulateMedia({ colorScheme: scheme });

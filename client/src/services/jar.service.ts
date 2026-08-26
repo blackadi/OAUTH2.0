@@ -1,7 +1,5 @@
-import { API_BASE_URL } from '@/config';
+import { JAR_PROCESS_ENDPOINT } from '@/config';
 import { http } from './http';
-
-const JAR_ENDPOINT = `${API_BASE_URL}/api/jar/process`;
 
 /**
  * What `POST /api/jar/process` returns — **an allowlist, mirroring the server's** `EXPOSED_FIELDS`
@@ -53,5 +51,9 @@ export async function processJar(
   // An assertion, not validation: `http.postAdmin` returns `unknown` and nothing here parses the response.
   // Every member of `JarProcessResult` is therefore optional, so a missing field reads as `undefined`
   // rather than throwing — which is the honest shape for a debugging surface whose upstream can change.
-  return (await http.postAdmin(JAR_ENDPOINT, { request, clientId }, auth)) as JarProcessResult;
+  return (await http.postAdmin(
+    JAR_PROCESS_ENDPOINT,
+    { request, clientId },
+    auth,
+  )) as JarProcessResult;
 }

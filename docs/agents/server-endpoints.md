@@ -46,7 +46,8 @@
 
   **The capability is advertised since 2026-08-15 (BCL-W5), and the RP it delivers to is us.** The service
   carries `backchannelLogoutSupported: true`, so discovery advertises `backchannel_logout_supported: true`
-  (65 members), and client `1523514379` has a `backchannel_logout_uri` pointing at **this deployment's own**
+  (65 members **as of that change** — the document has grown since; `scripts/check-discovery.mjs` holds the
+  live list, and reads it **by name** rather than by count for exactly this reason), and client `1523514379` has a `backchannel_logout_uri` pointing at **this deployment's own**
   `/api/backchannel_logout`. That makes `issueAndDeliverToAll` executable for the first time — it now has
   somebody to deliver to. ⚠️ **Demonstrable is not interoperable.** There is no third-party RP; the loop is
   closed against ourselves, so do not write up a successful delivery as *"back-channel logout works"*. Two

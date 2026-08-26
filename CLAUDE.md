@@ -6,36 +6,31 @@
 duplicate its content here, and do not create a competing set of instructions. If a project fact
 changes, edit `AGENTS.md`, not this file.
 
-### Working style
+> **This file used to break its own rule, in four places** (fixed 2026-08-23). The plan-mode gate, the
+> `test:e2e` prohibition, the never-commit-credentials rule and the spec-citation rules were all stated
+> here *and* in the `AGENTS.md` core — so the same obligation had two wordings that could drift, and the
+> shorter one was not always the one being read. Three details existed **only** here and would have been
+> lost by a plain delete: the examples of a semantics-free edit, the stop-mid-edit rider, and the
+> proportionality note. Those moved **into** `AGENTS.md`'s plan-mode bullet rather than being dropped,
+> because they apply to any agent working here and not only to Claude Code. What is left below is what
+> is genuinely specific to this tool or is a stated preference of mine.
 
-- Use plan mode for any change to a file listed under **Security-critical surfaces** in `AGENTS.md`.
-  The trigger is the concern, not the diff size — a one-line change to token issuance needs a plan;
-  a large refactor of `metrics.service.ts` does not. The only exemption is a semantics-free edit
-  (renaming a local, comment typo, import path after a file move, formatting). If a change reveals
-  mid-edit that behaviour *does* shift, stop and plan rather than finishing and explaining after.
-  A change described in an earlier plan's follow-up section is **not** pre-approved.
-  Keep the ceremony proportionate: a short plan stating what changes, what behaviour shifts and how
-  it is verified is enough for a small change — the point is the review checkpoint, not paperwork.
-- Run `npm --prefix server run typecheck && npm --prefix server run lint && npm --prefix server run test`
-  before proposing a commit. All three must be clean.
-- Do not run `npm --prefix server run test:e2e` unless I ask — it consumes real Authlete API quota
-  and trips the ~15-call rate limit.
-- Never commit `.env` files or real Authlete credentials, tokens, or client secrets. Redact them in
-  logs, docs, and examples.
+### How I want you to work
 
-### Specification accuracy
-
-This repo teaches OAuth and OIDC, so a wrong citation propagates into other people's mental models.
-
-- Verify every spec identifier — number, exact title, status, date — against the primary source
-  before citing it in code comments or docs. Do not cite from recall.
-- Label each reference as: published RFC, active Internet-Draft (with revision and date consulted),
-  OpenID Foundation final, OpenID implementer's draft, or vendor-specific behavior.
-- Mark anything unverified inline as `UNVERIFIED` and tell me. Stated uncertainty is more useful to
-  me than confident prose.
-- Distinguish Authlete implementation behavior from normative spec requirements whenever both are in
-  play. That gap is where real deployments break.
+- **Stated uncertainty is more useful to me than confident prose.** When something is unverified, mark
+  it `UNVERIFIED` inline *and* say so in your reply — do not quietly round it up to a claim.
+  `AGENTS.md` requires the inline marker; the "and tell me" half is mine.
+- **Tell me when a premise in my request turns out to be wrong**, and do the honest equivalent rather
+  than the literal thing. Two examples from 2026-08-23, both of which saved work: "put the wizard step
+  in URL state" — the wizards have no step state, they render every step at once, so a step is a
+  `#fragment`; and "`prefers-reduced-motion` still needs doing" — it was already there.
+- **Re-measure counts before quoting them.** Not a style preference: on 2026-08-23 the probed
+  vendor-code figure was **25** in one document and **26** in another, and measured **27**. `AGENTS.md`
+  says this about the check scripts; I mean it about every number in a sentence you write.
+- **Corrections plainly and once.** If you got something wrong earlier in a session, say what the right
+  answer is and move on. No tallying, no re-litigating.
 
 ### Documentation
 
-Follow the documentation style guide already defined in `AGENTS.md`. Do not invent a second style.
+Follow the documentation style guide already defined in `AGENTS.md` → `docs/agents/doc-style.md`. Do not
+invent a second style.

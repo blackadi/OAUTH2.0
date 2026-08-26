@@ -18,6 +18,9 @@
  * so it costs milliseconds and runs on every push. It answers one question — *is every semantic
  * utility mapped?* — and does not attempt to judge whether the resulting colour is a good one.
  *
+ * **It answers a second question too**: *is every font size on the three-step type scale?* Same
+ * failure mode, same invisibility to every other gate — see the note on `arbitrarySizes` below.
+ *
  * Usage: node scripts/check-theme-tokens.mjs
  */
 
@@ -70,9 +73,29 @@ const vocabulary = [...declared].sort((a, b) => b.length - a.length);
 
 const used = new Map(); // token -> Set of "file:line class"
 
+/**
+ * Arbitrary font sizes, collected in the same pass.
+ *
+ * **Why this belongs in the theme check.** The type scale is a `@theme` token set exactly like the
+ * palette is, and it failed the same way: UX-04 found **91 of 253 font-size declarations arbitrary**,
+ * with `text-[0.7rem]` and `text-[0.72rem]` — 0.32px apart — both in the codebase, and
+ * `text-[0.55rem]` (**8.8px**) on the "verified here" badge, one of the highest-value labels in the
+ * app. Four near-identical sizes for one role means size stops encoding rank.
+ *
+ * Nothing else can see this. An arbitrary size is a *valid* Tailwind utility, so it compiles, renders,
+ * type-checks and lints; `check-contrast.mjs` scores colour and would pass 8px text at 21:1. The fix
+ * was three `@theme` steps with a floor at `--text-2xs: 0.6875rem` (11px), and this is what keeps a
+ * ninety-second edit from reintroducing the ninety-second one.
+ */
+const arbitrarySizes = []; // "file:line class"
+const ARBITRARY_SIZE = /\btext-\[[0-9.]+(?:rem|px|em)\]/g;
+
 for (const file of walk(CLIENT_SRC)) {
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, i) => {
+    for (const hit of line.matchAll(ARBITRARY_SIZE)) {
+      arbitrarySizes.push(`${relative(REPO_ROOT, file)}:${i + 1}  ${hit[0]}`);
+    }
     for (const token of vocabulary) {
       // The token must be a whole utility suffix: `text-muted-foreground` must not register as
       // `muted`, and `bg-border` must not be found inside `border-border`.
@@ -146,8 +169,18 @@ if (paletteGaps.length) {
   console.error("  rendering light text on a light ground.");
 }
 
-if (missing.length === 0 && paletteGaps.length === 0) {
-  console.log("\n✓ every semantic colour utility is mapped, and both palettes define the same tokens");
+console.log(`Arbitrary font sizes          : ${arbitrarySizes.length}`);
+
+if (arbitrarySizes.length) {
+  console.error(`\n✗ ${arbitrarySizes.length} arbitrary font size(s) — the type scale has three steps and these are not on it:`);
+  for (const site of arbitrarySizes.slice(0, 12)) console.error(`    ${site}`);
+  if (arbitrarySizes.length > 12) console.error(`    … and ${arbitrarySizes.length - 12} more`);
+  console.error("  Use text-2xs (0.6875rem/11px, the floor), text-xs or text-sm. An arbitrary value is a");
+  console.error("  valid utility, so it compiles and renders — which is why no other gate can see it.");
+}
+
+if (missing.length === 0 && paletteGaps.length === 0 && arbitrarySizes.length === 0) {
+  console.log("\n✓ every semantic colour utility is mapped, both palettes agree, and the type scale holds");
   process.exit(0);
 }
 if (missing.length === 0) process.exit(1);

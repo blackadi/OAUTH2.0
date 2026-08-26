@@ -7,6 +7,8 @@ import { SESSION_KEYS } from '@/services/session-keys';
 import { jwkThumbprint, type JWK } from '@/services/crypto-utils';
 import {
   mountSection,
+  mountSectionAt,
+  seedTokens,
   fill,
   press,
   selectOp,
@@ -125,6 +127,22 @@ describe('AuthFlowsSection — client authentication that matches the client', (
     expect(clientSecret, 'sending Basic here is what earned [A157303] on the deployment').toBe('');
   });
 
+  /**
+   * The refresh token from an earlier grant is offered rather than retyped.
+   *
+   * Pinned because a mutation found it unpinned: emptying the initial value left every test green, since
+   * the tests above all type a token in by hand. It is a convenience rather than a security property,
+   * but it is the one piece of state in these four panels that comes from *outside* them — so it is the
+   * one a refactor can drop without anything noticing, and this refactor moved it behind a prop.
+   */
+  it('offers the refresh token already held, so it need not be retyped', async () => {
+    seedTokens({ refresh_token: 'rt-from-an-earlier-grant' });
+    mountSection(<AuthFlowsSection />);
+    await selectOp(/Refresh Token/i);
+
+    expect(screen.getByLabelText(/^Refresh Token$/i)).toHaveValue('rt-from-an-earlier-grant');
+  });
+
   it('carries the credentials the user typed on the password grant', async () => {
     const spy = vi.spyOn(tokenService, 'passwordGrant').mockResolvedValue(TOKENS);
     mountSection(<AuthFlowsSection />);
@@ -198,6 +216,46 @@ describe('AuthFlowsSection — client authentication that matches the client', (
   });
 });
 
+describe('AuthFlowsSection — the selected grant is addressable', () => {
+  /**
+   * **`?op=` was on nine sections and not on the headline one.**
+   *
+   * The tab a person wants to send you a link to is *"the refresh-token flow"*, and Grant Flows was the
+   * last `TabBar` in the app still holding its selection in `useState`. These three tests are the first
+   * in the suite to assert the *wiring* rather than the hook: `useUrlState.test.tsx` drives the hook
+   * against its own harness, which cannot see a section reading the wrong key or never writing back.
+   */
+  it('opens the tab named in the URL', () => {
+    mountSectionAt(<AuthFlowsSection />, '/auth-flows?op=refresh_token');
+
+    expect(screen.getByRole('tab', { name: /Refresh Token/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByLabelText(/^Refresh Token$/i)).toBeInTheDocument();
+  });
+
+  it('writes the tab back to the URL, so the link is the state', async () => {
+    const view = mountSectionAt(<AuthFlowsSection />, '/auth-flows');
+    await selectOp(/Password \(ROPC\)/i);
+
+    expect(new URLSearchParams(view.search()).get('op')).toBe('password');
+  });
+
+  /**
+   * A hand-edited query must not be trusted: `flowSteps[grantType]` is indexed with this value, so an
+   * unvalidated one renders a diagram from `undefined`.
+   */
+  it('falls back to the authorization-code tab on a value that does not exist', () => {
+    mountSectionAt(<AuthFlowsSection />, '/auth-flows?op=not_a_grant');
+
+    expect(screen.getByRole('tab', { name: /Auth Code \(PKCE\)/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+});
+
 describe('AuthFlowsSection — the authorization request', () => {
   /**
    * **The URL the builder shows is the URL it navigates to.** A separately-assembled preview drifted
@@ -233,6 +291,40 @@ describe('AuthFlowsSection — the authorization request', () => {
     // Regenerating a verifier here would guarantee a mismatch with the challenge in the URL.
     expect(sessionStorage.getItem(SESSION_KEYS.oauthState)).toBe(stateShown);
     expect(challengeShown, 'PKCE S256 is required on this client').toBeTruthy();
+  });
+
+  /**
+   * **The authorization-code path has its own stored secret, and its own else branch.**
+   *
+   * Two keys, two writers, one lesson learned twice: `saveClientCredentials` writes
+   * `activeClientSecret` after a back-channel grant, and `sendAuthorizeRequest` writes
+   * `authzClientSecret` before the redirect. The test above covers the first. A mutation found the
+   * second unpinned — deleting `else removeKey(SESSION_KEYS.authzClientSecret)` left every test green.
+   *
+   * That is the more dangerous of the two. `CallbackPage` reads
+   * `readKey(authzClientSecret) || CLIENT_SECRET`, so a stale secret makes the *code exchange* send
+   * `client_secret` for a client whose method is `none` — refused with `[A157303]` — while the field the
+   * user is looking at is empty. Absence has to be written down to be absent.
+   */
+  it('clears the stored authorization-code secret when that field is emptied', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    fill(/^Client Secret$/i, 'confidential-secret');
+    press(/Send authorization request/i);
+    await waitFor(() =>
+      expect(sessionStorage.getItem(SESSION_KEYS.authzClientSecret)).toBe('confidential-secret'),
+    );
+
+    fill(/^Client Secret$/i, '');
+    press(/Send authorization request/i);
+    await waitFor(() =>
+      expect(
+        sessionStorage.getItem(SESSION_KEYS.authzClientSecret),
+        'CallbackPage would send this secret for a client whose method is none',
+      ).toBeNull(),
+    );
   });
 
   /**
@@ -367,6 +459,62 @@ describe('AuthFlowsSection — the authorization request', () => {
     // mislead the next request.
     await waitFor(() => expect(sessionStorage.getItem(SESSION_KEYS.dpopPrivateKey)).toBeNull());
     expect(sessionStorage.getItem(SESSION_KEYS.dpopNonce)).toBeNull();
+  });
+
+  /**
+   * **Switching tabs must not discard the other tab's state — and must not untick DPoP.**
+   *
+   * This is the reason the two panels are rendered *unconditionally* and each returns `null` when it is
+   * not the selected grant, rather than being mounted conditionally. The single 710-line component did
+   * this implicitly, because all 24 pieces of state lived in one component instance and a hidden branch
+   * simply did not render.
+   *
+   * Both tests below were written because a mutation proved the claim unenforced: replacing the panel
+   * with `{grantType === 'authorization_code' && <AuthorizationCodePanel active />}` left every test
+   * green while silently recreating the invisible-mode class of bug this section keeps producing — a key
+   * sitting in `sessionStorage` with the checkbox that describes it showing unticked.
+   */
+  it('keeps what was typed on one tab while another is visited', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    fill(/^Client ID$/i, 'ac-typed-by-hand');
+    await selectOp(/Client Credentials/i);
+    // The visible Client ID is now the client-credentials one, still at its own default.
+    expect(screen.getByLabelText(/^Client ID$/i)).not.toHaveValue('ac-typed-by-hand');
+
+    await selectOp(/Auth Code \(PKCE\)/i);
+    expect(screen.getByLabelText(/^Client ID$/i)).toHaveValue('ac-typed-by-hand');
+
+    // The same claim in the other direction: the four back-channel forms share one component, and a
+    // `key={grantType}` on it would remount them on every tab click. Typing a password, stepping away
+    // and coming back is the cheapest thing that notices.
+    await selectOp(/Password \(ROPC\)/i);
+    fill(/^Username$/i, 'typed-once');
+    await selectOp(/Refresh Token/i);
+    await selectOp(/Password \(ROPC\)/i);
+    expect(screen.getByLabelText(/^Username$/i)).toHaveValue('typed-once');
+  });
+
+  it('does not untick DPoP behind a key that is still in the session', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Sender-constrain with DPoP/i }));
+    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEYS.dpopPrivateKey)).toBeTruthy(), {
+      timeout: 5000,
+    });
+
+    await selectOp(/Client Credentials/i);
+    await selectOp(/Auth Code \(PKCE\)/i);
+
+    expect(sessionStorage.getItem(SESSION_KEYS.dpopPrivateKey)).toBeTruthy();
+    expect(
+      screen.getByRole('checkbox', { name: /Sender-constrain with DPoP/i }),
+      'the key is still in session storage; an unticked box describes a state this session is not in',
+    ).toBeChecked();
   });
 
   it('explains a refusal instead of printing it raw', async () => {

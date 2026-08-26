@@ -29,7 +29,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       </p>
 
       {/* ── Step 1: Discovery ─────────────────────────── */}
-      <Card className="mb-3">
+      <Card id="mcp-step-1" tabIndex={-1} className="mb-3">
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
             Step 1: Discover AS
@@ -70,7 +70,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       </Card>
 
       {/* ── Step 2: Register Client ────────────────────── */}
-      <Card {...stepState(Boolean(flow.asData), 'mb-3')}>
+      <Card id="mcp-step-2" tabIndex={-1} {...stepState(Boolean(flow.asData), 'mb-3')}>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
             Step 2: Register Client
@@ -132,7 +132,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       </Card>
 
       {/* ── Step 3: Authorize ──────────────────────────── */}
-      <Card {...stepState(Boolean(flow.asData), 'mb-3')}>
+      <Card id="mcp-step-3" tabIndex={-1} {...stepState(Boolean(flow.asData), 'mb-3')}>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
             Step 3: Authorize (PKCE + Resource)
@@ -183,7 +183,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       </Card>
 
       {/* ── Step 4: Token Exchange ─────────────────────── */}
-      <Card {...stepState(Boolean(flow.authUrl), 'mb-3')}>
+      <Card id="mcp-step-4" tabIndex={-1} {...stepState(Boolean(flow.authUrl), 'mb-3')}>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
             Step 4: Token Exchange
@@ -219,7 +219,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       </Card>
 
       {/* ── Step 5: UserInfo ───────────────────────────── */}
-      <Card {...stepState(Boolean(flow.tokenResult), 'mb-3')}>
+      <Card id="mcp-step-5" tabIndex={-1} {...stepState(Boolean(flow.tokenResult), 'mb-3')}>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
             Step 5: Fetch UserInfo
@@ -244,7 +244,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       </Card>
 
       {/* ── Step 6: Introspect ─────────────────────────── */}
-      <Card {...stepState(Boolean(flow.tokenResult), 'mb-3')}>
+      <Card id="mcp-step-6" tabIndex={-1} {...stepState(Boolean(flow.tokenResult), 'mb-3')}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Step 6: Introspect the token

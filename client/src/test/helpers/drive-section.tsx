@@ -6,7 +6,7 @@ import {
   within,
   type RenderResult,
 } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { expect, vi, type MockInstance } from 'vitest';
 import type { ReactElement } from 'react';
 import { TokenProvider } from '@/context/TokenContext';
@@ -62,6 +62,40 @@ export function mountSection(ui: ReactElement): RenderResult {
       </TokenProvider>
     </MemoryRouter>,
   );
+}
+
+/**
+ * Mount a section at a given URL, and read the query string back afterwards.
+ *
+ * **Why this is separate from `mountSection`.** Ten sections keep their selected tab in `?op=` via
+ * `useUrlState`, and until this existed **nothing tested the wiring** — `useUrlState.test.tsx` drives the
+ * hook against its own harness, and every driven test mounted at `/` with no query and clicked the tab by
+ * hand. So a section could read the wrong key, validate against the wrong set, or never write back, and
+ * every gate stayed green. It is the same shape as *"a route named by a test is not a tested route"*: the
+ * hook being right is not the section being right.
+ *
+ * The probe renders `null`, so the section's own DOM is unchanged and label queries are unaffected.
+ */
+export function mountSectionAt(
+  ui: ReactElement,
+  url: string,
+): RenderResult & { search: () => string } {
+  let search = '';
+  function LocationProbe() {
+    search = useLocation().search;
+    return null;
+  }
+  const view = render(
+    <MemoryRouter initialEntries={[url]}>
+      <TokenProvider>
+        <CredentialProvider>
+          {ui}
+          <LocationProbe />
+        </CredentialProvider>
+      </TokenProvider>
+    </MemoryRouter>,
+  );
+  return { ...view, search: () => search };
 }
 
 /**

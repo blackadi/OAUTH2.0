@@ -58,9 +58,19 @@ interface ProseProps {
   className?: string;
   /** The element to render. A `span` by default, so it can sit inside an existing paragraph. */
   as?: 'span' | 'p';
+  /**
+   * Needed whenever this prose is the *target* of an `aria-describedby` — a field hint, a help body.
+   * Without it the describing element cannot be referenced and the description reaches only the sighted
+   * reader, which is the half that needed it least.
+   */
+  id?: string;
 }
 
 /** One explanation string, with its inline markup honoured. */
-export function Prose({ children, className, as: Tag = 'span' }: ProseProps) {
-  return <Tag className={className}>{renderInline(children)}</Tag>;
+export function Prose({ children, className, as: Tag = 'span', id }: ProseProps) {
+  return (
+    <Tag className={className} id={id}>
+      {renderInline(children)}
+    </Tag>
+  );
 }

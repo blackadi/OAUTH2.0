@@ -9,14 +9,33 @@
 ## Client SPA architecture
 
 - **Routing**: React Router v6 with lazy-loaded sections, map-based route resolution via `sectionComponents` record in `App.tsx`. Typed `Section` and `SectionGroup` interfaces.
+
+  **`/` is a landing page, not a redirect, and there are two routes for it on purpose.** It was
+  `<Navigate to="/auth-flows" replace />`, so first paint was a twenty-two-item sidebar and a form — the
+  audit scored the on-ramp **1/5** and called it the widest competitive gap. `pages/LandingPage.tsx` now
+  says what the tool is, reads the **live** configuration and marks what will fail, and offers one path
+  in. `/` is preference-gated through `HomeRoute`; **`/start` always renders it**, so the opt-out is not
+  a one-way door — somebody who ticked the box a month ago can still read the introduction and untick it
+  there. A single gated `/` would have made the page unreachable to the only people likely to want it
+  back, and a mutation confirmed no test noticed until one was written for it.
+
+  **State below the section is addressable two ways, and which one depends on whether it is state.**
+  `?op=` carries the selected tab in **ten** sections through `useUrlState` — Grant Flows was the last
+  `TabBar` still holding its selection in `useState`, which mattered because it is the link people
+  actually send each other. A **wizard step is a `#fragment`** instead: the FAPI and MCP wizards have no
+  selected step to store, since they render every step at once and grey the ones whose prerequisite has
+  not happened (`utils/step-state.ts`), which is right for teaching a protocol — you can read step 4
+  before running step 1. `useHashScroll` resolves the fragment, moving **focus** as well as scrolling,
+  because scrolling a sighted reader to step 4 and leaving the keyboard at the top of the document is the
+  standard skip-link defect one layer along.
 - **Sections**: 22 sections organized in 3 sidebar groups — OAuth 2.0 (Grant Flows, Token Operations, Step-Up Auth, Logout), OIDC & Extensions (DCR, CIBA, PAR, RAR, JAR, Device Flow, Backchannel Logout, Discovery, OIDC Federation, FAPI 2.0/DPoP, MCP, Verifiable Credentials), Admin (Token Management, Client Management, Grant Management, Health Check).
 - **Layout**: Sticky 48px header with AppLayout, collapsible mobile nav, 56px sidebar (desktop only). Backdrop blur on header. Grouped sidebar with lucide icons and active-state shadows.
-- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` (AuthFlowsSection, AuthorizeRequestBuilder), `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components; `ClientManagementSection` renders its seventeen operations from the `client-operations.ts` table rather than from seventeen branches), `components/fapi/` (FapiSection — the live posture report and the DPoP key tools; `use-fapi-flow.ts` owns the four-step sequence and `FapiTestFlow.tsx` renders it), `components/mcp/` (McpSection — three metadata lookups; `use-mcp-flow.ts` owns the six-step sequence and `McpWizard.tsx` renders it), `components/vci/` (VciSection plus one panel file per **authentication posture** — `VciDiscoveryPanels` public, `VciOfferPanels` admin-gated, `VciCredentialPanels` access-token — and `vci-operations.ts`), `components/trace/` (TracePanel, SequenceView), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription, **JwtInspector**, **ErrorExplainer**).
+- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` — split on two different lines, and each line is the point. **Grant Flows splits by channel**: `AuthorizationCodePanel.tsx` is the front channel (a DPoP key, four `sessionStorage` keys `CallbackPage` will read, and a navigation), `BackChannelGrantPanels.tsx` is the four grants that are one `POST /api/token` each, `grant-flows.ts` is the tab and step configuration, `AuthFlowsSection.tsx` is what is genuinely shared — the diagram, the result pane, and the one place that records which client a token belongs to. Both panels are rendered **unconditionally** and return `null` when not selected, because conditional mounting would discard the other tab's state — including unticking DPoP while its key is still in session, which is the invisible-mode bug this section keeps producing. **The authorization-request builder splits by what owns which state**: `use-authorize-params.ts` is the parameter table and the one URL derived from it, `AuthorizeParamRow.tsx` is one row, `AuthorizeRequestPanel.tsx` owns raw-URL mode and therefore the send, `AuthorizeRequestBuilder.tsx` is the accordion and the wiring. Plus TokenRequestPanel, `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components; `ClientManagementSection` renders its seventeen operations from the `client-operations.ts` table rather than from seventeen branches), `components/fapi/` (FapiSection — the live posture report and the DPoP key tools; `use-fapi-flow.ts` owns the four-step sequence and `FapiTestFlow.tsx` renders it), `components/mcp/` (McpSection — three metadata lookups; `use-mcp-flow.ts` owns the six-step sequence and `McpWizard.tsx` renders it), `components/vci/` (VciSection plus one panel file per **authentication posture** — `VciDiscoveryPanels` public, `VciOfferPanels` admin-gated, `VciCredentialPanels` access-token — and `vci-operations.ts`), `components/trace/` (TracePanel, SequenceView), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription, **JwtInspector**, **ErrorExplainer**).
 
-  **Four of these carry the debugging capability added 2026-08-21/22 and are worth knowing before adding a fifth surface.** `AuthorizeRequestBuilder` builds an authorization request from `data/authParams.ts` — 24 parameters, each with its conformance word and a spec reference verified against the primary source — and **the URL it displays is the string it navigates to**, because a separately-assembled preview drifted from the real request. `JwtInspector` decodes *and verifies* against the JWKS (`utils/jwt.ts`, `crypto.subtle`, RS/PS/ES); it starts **unverified** deliberately, since a legible payload is not an authenticated one. `ErrorExplainer` turns an OAuth error code or an Authlete `[Annnnnn]` into cause and fix via `data/errorDocs.ts` — and **never invents one**: the vendor half is generated from `docs/openapi-spec.json` and CI-gated, an unknown code is reported as unknown. `TracePanel`/`SequenceView` render the request trace as a timeline and as a message flow whose every arrow is a captured request.
+  **Four of these carry the debugging capability added 2026-08-21/22 and are worth knowing before adding a fifth surface.** `AuthorizeRequestBuilder` builds an authorization request from `data/authParams.ts` — 24 parameters, each with its conformance word and a spec reference verified against the primary source — and **the URL it displays is the string it navigates to**, because a separately-assembled preview drifted from the real request. That invariant now spans two files, which is why the split runs where it does: `builtUrl` is derived in `use-authorize-params.ts` and `effectiveUrl` — which is what actually gets sent — is decided in `AuthorizeRequestPanel.tsx` beside the raw-mode state it depends on. Computing the URL in one place and choosing which URL to send in another is precisely how the original preview drifted. `JwtInspector` decodes *and verifies* against the JWKS (`utils/jwt.ts`, `crypto.subtle`, RS/PS/ES); it starts **unverified** deliberately, since a legible payload is not an authenticated one. `ErrorExplainer` turns an OAuth error code or an Authlete `[Annnnnn]` into cause and fix via `data/errorDocs.ts` — and **never invents one**: the vendor half is generated from `docs/openapi-spec.json` and CI-gated, an unknown code is reported as unknown. `TracePanel`/`SequenceView` render the request trace as a timeline and as a message flow whose every arrow is a captured request.
 - **Server status indicator**: `useServerStatus` hook (in `hooks/`) polls `GET /api/health` every 30s (10s retry on failure, 5s timeout). Color-coded badge in header: green=connected, red=offline, yellow pulse=checking. Hover shows uptime.
-- **Hooks**: `useAsyncCall`, `useClipboard`, `useServerStatus`, `useTraces`, `useTheme` in `hooks/`. `useServerStatus` re-runs its effect when connectivity flips — deliberately, since a connected server is polled every 30s and an unreachable one every 10s — so two requests on first connect is expected, not a duplicate.
-- **Services**: Organized by domain in `services/` — `token.service.ts`, `admin.service.ts`, `client.service.ts`, `dcr.service.ts`, `ciba.service.ts`, `par.service.ts`, `rar.service.ts`, `device.service.ts`, `grant.service.ts`, `jar.service.ts`, `federation.service.ts`, `vci.service.ts`, `fapi.service.ts`, `backchannel-logout.service.ts`, `health.service.ts`, `mcp.service.ts`, `token-exchange.service.ts`, `client-assertion.service.ts`, `dpop.service.ts` and `announcer.ts`. All exported from `services/index.ts`. Beneath them sit `transport.ts` (the one place a request leaves), `http.ts` (request shapes over it), `schemas.ts` (what a response must look like), `dpop-fetch.ts`, `session-keys.ts`, `crypto-utils.ts` and `trace-store.ts` — **read the directory rather than trusting this list**, which is the kind of inventory that goes stale silently.
+- **Hooks**: `useAsyncCall`, `useClipboard`, `useServerStatus`, `useTraces`, `useTheme`, `useCopyFeedback`, `useUrlState` and `useHashScroll` in `hooks/`. `useUrlState` carries three overloads so a caller supplying a real fallback is never handed `null` — without them every section with a default tab re-applied it beside a hook that had already been given it, and the second copy is the one that goes stale. Its `replace`-not-`push` choice is deliberate and documented in the file. `useServerStatus` re-runs its effect when connectivity flips — deliberately, since a connected server is polled every 30s and an unreachable one every 10s — so two requests on first connect is expected, not a duplicate.
+- **Services**: Organized by domain in `services/` — `token.service.ts`, `admin.service.ts`, `client.service.ts`, `dcr.service.ts`, `ciba.service.ts`, `par.service.ts`, `rar.service.ts`, `device.service.ts`, `grant.service.ts`, `jar.service.ts`, `federation.service.ts`, `vci.service.ts`, `fapi.service.ts`, `backchannel-logout.service.ts`, `health.service.ts`, `mcp.service.ts`, `token-exchange.service.ts`, `client-assertion.service.ts`, `dpop.service.ts` and `announcer.ts`. All exported from `services/index.ts`. Beneath them sit `transport.ts` (the one place a request leaves), `http.ts` (request shapes over it), `schemas.ts` (what a response must look like), `run-file.ts` (a run as a file, exported and read back), `preferences.ts` (the `localStorage` counterpart to `session-keys.ts`), `dpop-fetch.ts`, `session-keys.ts`, `crypto-utils.ts` and `trace-store.ts` — **read the directory rather than trusting this list**, which is the kind of inventory that goes stale silently.
 
   **`services/transport.ts` is the only place a request leaves the app, and nothing should bypass it.** `http.ts` is now request *shapes* over it. Every service ended with `throw new Error(await response.text())` until 2026-08-21 — nine times in `http.ts` and again in six other files — which discarded the status, the status text and every response header at the boundary, so nothing downstream could tell 400 from 401 from 429 from 500. `WWW-Authenticate` carries the whole step-up and DPoP challenge mechanism, `DPoP-Nonce` carries the value a client must replay, and `Retry-After` distinguishes a rate limit from a rejection; all three were invisible. `sendRaw` deliberately does **not** throw on a non-2xx — at a debugger's transport layer a 401 is data — and `send` wraps it for callers that want the throw. `HttpError.message` is the raw body, which is what let ~20 `toast.error(err)` call sites keep working. Every call is recorded to `services/trace-store.ts`, which the trace panel and the flow diagram both read.
 
@@ -85,13 +104,35 @@
   record with the navigation in one function is what makes forgetting impossible. `recordNavigation`
   stays exported for the **inbound** hop, which `CallbackPage` records without navigating.
 
-  **`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them.
+  **`services/run-file.ts` is a run as data; the Markdown export is a run as prose. Both stay.**
+  `TracePanel.toMarkdown` produces something you paste into a chat or an issue and **nothing could read it
+  back**, so a run was shareable only as prose — the recipient saw the exchange and could not load it.
+  Parsing the Markdown back would have been the wrong repair: a rendering is lossy on purpose, and a
+  parser for it breaks every time the prose improves. Three rules decide the format. It is **redacted on
+  export unconditionally**, through the same `redactHeaders`/`redactBody` the panel uses, because a file
+  travels and there is no per-entry reveal decision left to honour — while response headers are
+  deliberately *not* stripped, since `WWW-Authenticate` and `DPoP-Nonce` are the whole challenge
+  mechanism and neither is a secret of the sender. It is **validated on import**, loose-never-strict like
+  `schemas.ts`, because a file is untrusted input. And **an imported entry carries `imported: true` on
+  the entry rather than in the panel's state** — a trace showing somebody else's requests as though they
+  were yours is worse than no import at all, so the panel marks every row *and* shows a standing
+  `role="status"` notice, and `importTraces` sets the flag itself rather than trusting what the file
+  claimed. Import **replaces** rather than merges: interleaving two machines' requests by `startedAt`
+  produces a timeline that never happened.
+
+  **`preferences.ts` owns `localStorage`, and it is separate from `session-keys.ts` on purpose.** Same
+  argument, different store — and the difference is the point: a `sessionStorage` preference resets when
+  you close the tab, which makes it not a preference. Nothing sensitive goes in it, ever. Every read and
+  write is wrapped, because `localStorage` *throws* rather than returning null in a private window and
+  under some enterprise policies, and a preference is never worth a blank screen.
+
+**`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them.
 
   **`crypto-utils.ts` holds the one P-256 generator.** `kid` is derived from the exported JWK *before* `alg`/`use` are attached — folding the tags in first would silently change every signing key's `kid`. Pinned in `keygen-characterization.test.ts`, which was written against the duplicated version first.
 - **Config**: `config.ts` reads `VITE_*` env vars at build time, provides per-environment overrides via `PROD_CONFIG` + `getApiBaseUrl()`/`getRedirectUri()`. Separate `HEALTH_ENDPOINT` for the live status polling.
 - **Token storage**: `TokenContext` (React Context API) persists tokens in `sessionStorage`. TokenVault in sidebar displays/copies/inspects stored tokens. Cleared on explicit action or tab close. **It also exposes `isDpopBound`** (from `token_type`, compared case-insensitively per RFC 9110 §11.1), and every protected-resource call reads it: a sender-constrained token must be presented with the `DPoP` scheme and a proof, and Authlete refuses the bearer downgrade with `[A089311]` at UserInfo and `[A281305]` at `/gm`. Presenting `Bearer` unconditionally is what made the headline flow produce a token half the app could not use.
 - **Management credentials**: `CredentialContext` holds one profile for the page. Eight sections used to hold their own `useState` pair, and a route change unmounts a section, so the same two values had to be retyped on every navigation. In memory only, deliberately — a React context lives exactly as long as the page, which is the right lifetime for something typed by hand.
-- **Test framework**: Vitest, 77 files (1037 tests). **Re-measure rather than carry these numbers forward — these were `41 files (420 tests)` for four months after they stopped being true.** Coverage thresholds are enforced as a *ratchet* set just under what the suite achieves, so they can only rise; `npm --prefix client run test:coverage` is the gate. There are **eight** floors: a global one plus `utils`, `services`, `hooks`, `context`, `data`, `pages` and `components`. Read the current numbers from `vitest.config.ts`; do not quote them from here.
+- **Test framework**: Vitest, 81 files (1117 tests) — measured 2026-08-23. **Re-measure rather than carry these numbers forward — these were `41 files (420 tests)` for four months after they stopped being true.** Coverage thresholds are enforced as a *ratchet* set just under what the suite achieves, so they can only rise; `npm --prefix client run test:coverage` is the gate. There are **eight** floors: a global one plus `utils`, `services`, `hooks`, `context`, `data`, `pages` and `components`. Read the current numbers from `vitest.config.ts`; do not quote them from here.
 
   **Three layers, and each sees what the one below cannot.** `sections.smoke.test.tsx` renders all 22 sections and `App.routes.test.tsx` drives the real router at all 22 routes — but both measure *reachability*, a section that mounts and offers an enabled control, which is blind to a control that looks fine and does the wrong thing. Every section therefore also has a **driven** test in `src/test/components/sections/*.driven.test.tsx` that presses the control and asserts what reached the service; see the header of `src/test/helpers/drive-section.tsx` for the layer boundary and the four dead flows that motivated it. Below both, `services/schemas.ts` validates response *shape* at the transport boundary, which is the only one of the three that catches a rename for every caller at once.
 - **Styling**: Tailwind CSS v4 via `styles/globals.css`. **Utilities come from `@theme`, not from `:root`** — declaring the values on `:root` alone generates nothing, which is how ~160 usages of `bg-card`, `border-border`, `text-muted-foreground` and friends compiled to nothing across 28 files while every gate stayed green. Two complete palettes, dark-first: `:root` is dark, a media query serves a system light preference, and `[data-theme]` lets the header toggle win in both directions. Inter + JetBrains Mono, custom scrollbar, grid background utility.
@@ -106,9 +147,41 @@
   stylesheet, and runs on every push. Shade nuance was deliberately collapsed into one token per role —
   no single shade can encode emphasis on both a `#020617` and a `#ffffff` ground.
 
+  **Motion does work now, and there are exactly two animations that do it.** The audit's D8 finding was
+  not that there is too little motion — it is that none of it did any: `FlowDiagram`'s circle already
+  carried `transition-all duration-300` while a new response appeared instantly with nothing drawing the
+  eye. `.animate-reveal` fires on a **changed response** and `.animate-step-in` on the **step that
+  moved**, and both are keyed rather than classed — a CSS animation runs on mount, so a second run of the
+  same operation would otherwise update text in place and animate nothing. `JsonBlock` keys on the
+  serialised payload, so an *identical* response deliberately does not re-animate; `FlowDiagram` keys on
+  `${step.id}-${state}`, so only the circle that changed replays. Both amplitudes are tiny — 4px of rise,
+  6% of scale — and the `prefers-reduced-motion` block collapses them with a blanket `*` rule, so a
+  keyframe added later is covered on arrival. `both` as the fill mode is what makes that collapse land on
+  the finished state rather than flashing the start of one. `src/test/components/ui/motion.test.tsx`
+  reads those guarantees out of the stylesheet, since jsdom runs no animations and Playwright disables
+  them.
+
   ⚠️ **Still not looked at.** Contrast is measured and passing in both themes; nobody has opened the
   light theme in a browser. Layout, borders, translucent fills (`bg-indigo-500/10` on white) and focus
   rings are outside what a contrast check can see. Treat those as unverified.
+
+**`e2e/a11y.spec.ts` is the accessibility gate, and it predates this branch.** It runs **axe-core** over
+every surface in both palettes, plus the heading outline on every route, keyboard-only operation and both
+live regions — in a real browser, over the browser's own accessibility tree. **A deliberate scope
+decision (2026-08-23): a manual screen-reader script was written for this repo and then removed as
+overkill for a teaching project.** Do not add one back without a reason; axe plus the existing keyboard
+and live-region tests is the level this project is held to.
+
+  **One lesson from that episode is worth keeping, because it is not about accessibility.** jsdom has no
+  accessibility tree, and the gap cuts both ways. `getByRole` computes roles from the DOM by Testing
+  Library's own mapping — which catches a missing `role` and is blind to what broke `FlowDiagram`, a
+  `role="list"` whose `<div>` children the *browser* discarded. And `useHashScroll` passed **six** jsdom
+  tests while not working in a browser at all: sections arrive through `React.lazy`, so its one-shot
+  lookup ran before the chunk resolved and never looked again. A jsdom fixture renders its target
+  synchronously in the same tree, so the lookup always hit. One Playwright assertion failed immediately.
+  **A feature whose only tests are jsdom tests is a feature nobody has seen work** — which is the
+  argument for `e2e/` in general, and the reason the fragment-focus test in `a11y.spec.ts` was kept when
+  the rest of that block was deleted.
 
 ### Three client checks, and what each cannot see
 
@@ -119,4 +192,4 @@ node scripts/check-client-docs.mjs     # every getDoc key exists, every entry is
 node scripts/check-contrast.mjs        # WCAG AA in BOTH themes, from the built stylesheet's real values
 ```
 
-All three run on every push. They exist because **every defect found in the 2026-08-21 client review was invisible to typecheck, lint, tests and build** — those four cannot see a class that does not exist, a screen that never renders, a doc entry nobody asks for, or a vendor table drifting from its source. The Authlete one is worth one further note: of the 38 result codes the vendor documents and the 25 this repo established by probing, **the overlap is zero** — a decoder built from the vendor document alone would explain nothing a developer actually hits.
+All three run on every push. They exist because **every defect found in the 2026-08-21 client review was invisible to typecheck, lint, tests and build** — those four cannot see a class that does not exist, a screen that never renders, a doc entry nobody asks for, or a vendor table drifting from its source. The Authlete one is worth one further note: of the 38 result codes the vendor documents and the 27 this repo established by probing (both re-measured 2026-08-23; this line said 25), **the overlap is zero** — a decoder built from the vendor document alone would explain nothing a developer actually hits.

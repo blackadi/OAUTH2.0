@@ -206,6 +206,36 @@ describe('escape hatches', () => {
     expect(paramsOf(previewUrl()).getAll('scope')).toEqual([SEED.scope, 'extra']);
   });
 
+  /**
+   * The Remove button, which nothing had ever clicked.
+   *
+   * Found by function coverage rather than by reading: the custom-parameter row's trash button was the
+   * only control in this component with no test behind it, so "remove" could have been a no-op — or
+   * could have removed the wrong row, which is the more likely bug, since the handler keys off `id` and
+   * two custom rows can legitimately carry the same `name`. Two rows with the same name is therefore
+   * what this drives.
+   */
+  it('removes the custom parameter that was asked for, not the one with a matching name', async () => {
+    mount();
+    await waitForGenerated();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/i }));
+    const [nameA, nameB] = screen.getAllByLabelText(/Custom parameter name/i);
+    const [valueA, valueB] = screen.getAllByLabelText(/Custom parameter value/i);
+    fireEvent.change(nameA, { target: { value: 'resource' } });
+    fireEvent.change(valueA, { target: { value: 'first' } });
+    fireEvent.change(nameB, { target: { value: 'resource' } });
+    fireEvent.change(valueB, { target: { value: 'second' } });
+    expect(paramsOf(previewUrl()).getAll('resource')).toEqual(['first', 'second']);
+
+    // The **first** row, deliberately. Removing the last one cannot tell `filter(c => c.id !== id)`
+    // apart from `slice(0, -1)` — a mutation confirmed that, so the weaker assertion was replaced.
+    // Removing the first also kills a name-based filter, which would take both rows at once.
+    fireEvent.click(screen.getAllByRole('button', { name: /^Remove resource$/i })[0]);
+    expect(paramsOf(previewUrl()).getAll('resource')).toEqual(['second']);
+  });
+
   it('warns on invalid JSON without blocking the send', async () => {
     mount();
     await waitForGenerated();
@@ -213,6 +243,33 @@ describe('escape hatches', () => {
     fireEvent.change(screen.getByLabelText('claims value'), { target: { value: '{not json' } });
     expect(screen.getByText(/is not valid JSON/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send authorization request/i })).toBeEnabled();
+  });
+
+  /**
+   * **The row's own message, which is a different message from the panel's.**
+   *
+   * Added because a mutation found it inert: replacing `ParamRow`'s `jsonError(value)` with a flat
+   * `null` — deleting the per-row report entirely — left all 39 tests green. The one JSON assertion
+   * above matches the *aggregate* warning beside the Send button ("claims is not valid JSON. Sending it
+   * anyway is fine"), and the two strings do not overlap, so nothing was watching the field-level one.
+   *
+   * The parser's wording is V8's and changes between versions, so the prefix is what is pinned. The
+   * second half is the real assertion: an error that appears and never clears is a worse bug than one
+   * that never appears, because it makes the valid state look broken.
+   */
+  it('reports the JSON error on the row itself, and clears it when the value parses', async () => {
+    mount();
+    await waitForGenerated();
+    fireEvent.click(screen.getByLabelText(/^claims$/i, { selector: 'input[type="checkbox"]' }));
+
+    const box = screen.getByLabelText('claims value');
+    fireEvent.change(box, { target: { value: '{not json' } });
+    expect(screen.getByText(/^Invalid JSON: .+/)).toBeInTheDocument();
+
+    fireEvent.change(box, { target: { value: '{"id_token":{"acr":null}}' } });
+    expect(screen.queryByText(/^Invalid JSON: /)).not.toBeInTheDocument();
+    // And the aggregate warning goes with it — one valid value means no problems to report.
+    expect(screen.queryByText(/is not valid JSON/i)).not.toBeInTheDocument();
   });
 });
 

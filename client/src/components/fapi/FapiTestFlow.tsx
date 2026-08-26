@@ -35,7 +35,7 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
               string does not. */}
         {!!flow.error && <ErrorExplainer error={String(flow.error)} />}
 
-        <div>
+        <div id="fapi-setup" tabIndex={-1}>
           <h2 className="text-sm font-medium mb-3">Setup: Client Configuration</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <Input
@@ -101,6 +101,8 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
         </div>
 
         <div
+          id="fapi-step-1"
+          tabIndex={-1}
           {...stepState(
             Boolean(flow.dpopKeyPair && flow.signingKey),
             'border-t border-border pt-4',
@@ -127,7 +129,11 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
           )}
         </div>
 
-        <div {...stepState(Boolean(flow.parResult?.request_uri), 'border-t border-border pt-4')}>
+        <div
+          id="fapi-step-2"
+          tabIndex={-1}
+          {...stepState(Boolean(flow.parResult?.request_uri), 'border-t border-border pt-4')}
+        >
           <h2 className="text-sm font-medium mb-2">Step 2: Authorize</h2>
           <p className="text-xs text-muted-foreground mb-2">
             Opens the authorization page. After login + consent, you are redirected to the callback
@@ -145,7 +151,7 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
           </Button>
         </div>
 
-        <div className={`border-t border-border pt-4`}>
+        <div id="fapi-step-3" tabIndex={-1} className="border-t border-border pt-4">
           <h2 className="text-sm font-medium mb-2">Step 3: Call Userinfo with DPoP</h2>
           <p className="text-xs text-muted-foreground mb-2">
             Uses the stored DPoP key and access token from the callback. The DPoP proof includes the{' '}

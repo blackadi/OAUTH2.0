@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useUrlState } from '@/hooks/useUrlState';
 import { toast } from 'sonner';
 import { mcpService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
@@ -76,12 +77,22 @@ const LOOKUPS: Lookup[] = [
   },
 ];
 
+/** The tab values, for `useUrlState` to validate `?op=` against rather than trusting it. */
+const ALL_OPS: readonly McpOp[] = LOOKUPS.map((l) => l.value);
+
 const INITIAL_URLS: Record<string, string> = Object.fromEntries(
   LOOKUPS.map((l) => [l.value, l.initial]),
 );
 
 function McpSection() {
-  const [activeOp, setActiveOp] = useState<McpOp | null>(null);
+  /**
+   * The selected lookup lives in the URL, like the nine other tabbed sections.
+   *
+   * No fallback: none of the three lookups is the obvious default, and the section reads fine with all
+   * three collapsed. `useUrlState` validates the incoming value, so `?op=nonsense` selects nothing rather
+   * than asking `getDoc('mcp', …)` for an entry that does not exist.
+   */
+  const [activeOp, setActiveOp] = useUrlState<McpOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
   /** One URL per lookup, keyed by operation — they are different addresses, so they are not shared. */
   const [urls, setUrls] = useState<Record<string, string>>(INITIAL_URLS);

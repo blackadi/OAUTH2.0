@@ -1,5 +1,6 @@
 import { lazy, type ReactNode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { shouldSkipLanding } from '@/services/preferences';
 import { TokenProvider } from '@/context/TokenContext';
 import { CredentialProvider } from '@/context/CredentialContext';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -95,6 +96,7 @@ const HealthSection = lazy(() =>
  * data modules, and a learner who never opens it should not pay for it on first paint.
  */
 const ReferencePage = lazy(() => import('@/pages/ReferencePage'));
+const LandingPage = lazy(() => import('@/pages/LandingPage'));
 const TokenExchangeSection = lazy(() =>
   import('@/components/oidc/TokenExchangeSection').then((m) => ({
     default: m.TokenExchangeSection,
@@ -294,13 +296,36 @@ const sectionComponents: Record<SectionId, React.FC> = {
   'token-exchange': TokenExchangeSection,
 };
 
+/**
+ * What `/` does, which depends on a stored preference.
+ *
+ * Read at render rather than held in state: the value can change on `/start` in the same session, and a
+ * copy in state would be the stale one. `Navigate` with `replace` so Back does not bounce between the
+ * two — a redirect the user did not ask for should not occupy a history entry.
+ */
+function HomeRoute() {
+  return shouldSkipLanding() ? <Navigate to="/auth-flows" replace /> : <LandingPage />;
+}
+
 const App: React.FC = () => {
   return (
     <TokenProvider>
       <CredentialProvider>
         <Routes>
           <Route element={<AppLayout groups={SECTIONS} sidebarHeader={<TokenVault />} />}>
-            <Route path="/" element={<Navigate to="/auth-flows" replace />} />
+            {/*
+              `/` was this redirect, so first paint was a twenty-item sidebar and a form. See
+              `pages/LandingPage.tsx` — the audit scored the on-ramp 1/5 and called it the widest
+              competitive gap.
+
+              Two routes rather than one, deliberately. `/start` **always** renders the page, so the
+              preference is an opt-out and not a one-way door: somebody who ticked the box a month ago
+              can still read the introduction, and unticking it there restores `/`. A single
+              preference-gated `/` would have made the page unreachable to the only people likely to
+              want it back.
+            */}
+            <Route path="/" element={<HomeRoute />} />
+            <Route path="/start" element={<LandingPage />} />
             {allSectionsFlat.map((s) => {
               const Component = sectionComponents[s.id];
               return <Route key={s.id} path={s.path} element={<Component />} />;

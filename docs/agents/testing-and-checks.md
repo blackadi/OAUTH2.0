@@ -42,7 +42,7 @@
   > It also hid a genuine test bug for far longer: the DCR update had **never** sent a conformant RFC 7592
   > §2.2 request — the metadata document must contain `client_id`, and sending only the changed field earns
   > `[A214301]`.
-- Run with `npm --prefix server run test` — **1130 tests across 77 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — **1037 tests across 77 files**, plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
+- Run with `npm --prefix server run test` — **1130 tests across 77 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — **1117 tests across 81 files** (measured 2026-08-23), plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 
@@ -83,7 +83,7 @@ to anonymous callers; `federation.service.ts` had no tests and *could not* have 
 was found by reading code, one at a time. **The question that finds them as a list is *"which routes does no
 test mention?"***, and that is all this script asks.
 
-**The backlog is drained: `scripts/route-coverage-baseline.json` is empty and all 91 routes are named by a
+**The backlog is drained: `scripts/route-coverage-baseline.json` is empty and all 92 routes are named by a
 test** (2026-08-13). An empty baseline is the intended terminal state, not a missing file — the check now
 fails on *any* unreferenced route, so a new endpoint without a test breaks the build immediately. It still
 **ratchets**, which is how it got here: 47 routes were carried as debt on day one, `--triage` split them into

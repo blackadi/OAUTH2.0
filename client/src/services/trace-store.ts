@@ -43,6 +43,16 @@ export interface TraceEntry {
   navigation?: boolean;
   /** For a navigation: which way it went. See `NavigationInput.direction`. */
   direction?: 'outbound' | 'inbound';
+  /**
+   * True for an entry loaded from a saved run rather than observed by this build.
+   *
+   * **The flag lives on the entry, not on the panel's state, and that is the whole safety property.** A
+   * trace panel showing somebody else's requests as though they were yours is worse than having no import
+   * at all — you would spend an afternoon debugging traffic your own build never sent. Because it travels
+   * with the row, nothing can render an imported entry without knowing it is one. See
+   * `services/run-file.ts`.
+   */
+  imported?: boolean;
 }
 
 export type TraceInput = Omit<TraceEntry, 'id'>;
@@ -144,7 +154,11 @@ function emit(): void {
 
 export function recordTrace(input: TraceInput): TraceEntry {
   counter += 1;
-  const entry: TraceEntry = { id: `t${counter}`, ...input };
+  // The id goes **after** the spread, not before. `TraceInput` omits `id`, so the compiler already stops
+  // a caller supplying one — but the ordering is what makes "the store mints its own ids" true by
+  // construction rather than true because every caller was well typed. Found by a test that cast past
+  // the type and got the caller's id back.
+  const entry: TraceEntry = { ...input, id: `t${counter}` };
   // A new array each time, not a mutation: `useSyncExternalStore` compares snapshots by identity, and
   // pushing in place would leave the panel showing a stale list.
   entries = [entry, ...entries].slice(0, MAX_ENTRIES);
@@ -160,6 +174,30 @@ export function clearTraces(): void {
   entries = [];
   counter = 0;
   emit();
+}
+
+/**
+ * Replace the trace with a run loaded from a file.
+ *
+ * **Replace rather than merge**, deliberately. Interleaving somebody else's requests with your own by
+ * `startedAt` produces a timeline that never happened — two clocks, two machines, one axis — and the
+ * sequence view would draw arrows between exchanges that have nothing to do with each other. A run is a
+ * whole artefact or it is nothing, which is also why the panel confirms before doing this.
+ *
+ * The counter resets with the entries so ids stay dense and predictable, and the newest-first order the
+ * store maintains is preserved from the file rather than re-derived — the file was written in that order
+ * by `getTraces()`.
+ */
+export function importTraces(input: TraceInput[]): TraceEntry[] {
+  counter = 0;
+  entries = input.slice(0, MAX_ENTRIES).map((item) => {
+    counter += 1;
+    // `id` and `imported` both go after the spread: the store owns the id, and an entry loaded from a
+    // file does not get to declare itself live. A hand-edited `"imported": false` buys no disguise.
+    return { ...item, id: `t${counter}`, imported: true };
+  });
+  emit();
+  return entries;
 }
 
 export function subscribeToTraces(listener: () => void): () => void {
