@@ -51,33 +51,25 @@ for (const scheme of ['dark', 'light'] as const) {
     });
 
     /**
-     * The landing page, in both themes and at both ends of the range.
+     * **The landing page is deliberately NOT pixel-baselined. Do not add it back.**
      *
-     * It is the **first** thing anyone sees now that `/` is not a redirect, and it is a reading surface —
-     * so it is held to the same standard as `/reference`: single column, prose measured, and it has to
-     * hold at 360px. Two baselines rather than one because the configuration block is the part most
-     * likely to break narrow: a `dl` that goes side-by-side at `sm` and stacks below it.
+     * It was, briefly, at 360px and 1440px in both themes — and CI failed on `landing-1440-dark` with 3%
+     * of pixels different while all four baselines passed locally. The cause is the page itself, not the
+     * runner: `pages/LandingPage.tsx` renders the **live** configuration, and `client/.env` is
+     * gitignored. On a developer machine `VITE_CLIENT_ID` is set and that row reads *"Read from
+     * VITE_CLIENT_ID"*; on CI it falls back to the `your_client_id` placeholder, which flips the row to a
+     * warning and a three-line note about how to fix it. The `dl` grows, everything below it shifts.
+     *
+     * Masking the block does not help — `toHaveScreenshot({ mask })` paints over a region but cannot stop
+     * that region's *height* from changing, and the height is what moved. A pixel baseline of a surface
+     * whose whole point is to reflect the environment is machine-dependent by construction.
+     *
+     * It is not unwatched. `src/test/components/LandingPage.test.tsx` asserts the content in both the
+     * configured and placeholder branches, `layout.spec.ts` holds it at four reading viewports because it
+     * is in `SURFACES`, `a11y.spec.ts` sweeps it with axe, and `light-theme.spec.ts` checks it for
+     * overflow, invisible borders, transparent text and focus rings. All four are content-independent,
+     * which is exactly what a baseline here could not be.
      */
-    test(`landing at 360px`, async ({ page }) => {
-      await page.setViewportSize(NARROW);
-      await page.emulateMedia({ colorScheme: scheme });
-      await page.goto('/');
-      await page.waitForSelector('h1');
-      await settle(page);
-
-      await expect(page).toHaveScreenshot(`landing-360-${scheme}.png`, { fullPage: false });
-    });
-
-    test(`landing at 1440px`, async ({ page }) => {
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.emulateMedia({ colorScheme: scheme });
-      await page.goto('/');
-      await page.waitForSelector('h1');
-      await settle(page);
-
-      await expect(page).toHaveScreenshot(`landing-1440-${scheme}.png`, { fullPage: false });
-    });
-
     test(`reference at 360px`, async ({ page }) => {
       await page.setViewportSize(NARROW);
       await page.emulateMedia({ colorScheme: scheme });
