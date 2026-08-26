@@ -47,7 +47,16 @@ export const NARROW = { name: '360', width: 360, height: 800 } as const;
 const H1 = 'h1';
 
 export const SURFACES: Surface[] = [
-  // ── the one reading surface ──────────────────────────────────────────────────────────────────────
+  // ── reading surfaces ────────────────────────────────────────────────────────────────────────────
+  /**
+   * `/` is the landing page, and it is a **reading** surface — so it is held from 360px up.
+   *
+   * It was missing from this list for as long as it existed, which meant the one route every first-time
+   * visitor lands on was the one route axe never swept, while twenty-one *doing* surfaces were. Adding a
+   * route here is what enrols it in the axe pass, the heading-outline check and the layout suite at four
+   * viewports; a new route that is not in this list is checked by nothing.
+   */
+  { path: '/', name: 'landing', cls: 'reading', ready: H1 },
   { path: '/reference', name: 'reference', cls: 'reading', ready: H1 },
 
   // ── doing surfaces ──────────────────────────────────────────────────────────────────────────────

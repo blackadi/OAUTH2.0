@@ -38,3 +38,14 @@ coverage/
 
 .DS_Store
 *.log
+
+# Working notes left at the repo root — handoff notes between sessions, scratch plans, paste buffers.
+#
+# `source_of_truth.txt` is the one that prompted this: a 5-line session handoff note that sat untracked
+# through a whole branch and was one `git add -A` away from being committed. Ignored as a **class** rather
+# than by filename, because the next one will be called something else. Nothing the project needs should
+# live at the root as a bare .txt — docs go in `docs/`, and agent instructions go in `AGENTS.md`.
+/*.txt
+/notes.md
+/scratch.md
+/TODO.md

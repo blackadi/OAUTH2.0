@@ -147,6 +147,46 @@ function TokenOpsSection() {
         </div>
       )}
 
+      {/**
+       * The credentials, **above** the buttons, because they used to be below them.
+       *
+       * This block was inside `activeOp === 'introspect' || activeOp === 'introspect-std'` — and
+       * `activeOp` is set by the very click that fires the request. So the fields appeared only
+       * *after* the first introspection had already gone out without them, which the section's own
+       * prose says answers `401` and never reaches Authlete. A control that appears only after the
+       * failure it prevents is not a control, and on an endpoint carrying a 20/min limiter and real
+       * vendor quota that wasted call is not free.
+       *
+       * The revocation client credentials were worse than late — they were **unreachable in time**.
+       * `setActiveOp` runs only inside `handleCall`, and the revoke path returns before reaching it,
+       * so the fields rendered *after the token had already been revoked*. And even given the chance,
+       * editing them then would have changed nothing: `confirm({ … run })` captures the values at
+       * press time, so an edit made while the dialog is open is discarded. Both pairs therefore live
+       * here, above the controls that use them, where they can be set before anything fires.
+       *
+       * These are two different credentials and not interchangeable: the admin pair authenticates
+       * *this deployment* at the introspection endpoints (RFC 7662 §2.1), and the client pair
+       * authenticates *the client the token belongs to* at revocation (RFC 7009 §2.1).
+       */}
+      {at && (
+        <div className="space-y-3">
+          <AdminAuth />
+          <Input
+            label="Revocation Client ID"
+            value={revClientId}
+            onChange={(e) => setRevClientId(e.target.value)}
+            placeholder="The client the token belongs to"
+          />
+          <Input
+            label="Revocation Client Secret"
+            type="password"
+            value={revClientSecret}
+            onChange={(e) => setRevClientSecret(e.target.value)}
+            placeholder="Client secret for revocation auth"
+          />
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {OPS.map((op) => (
           <Button
@@ -162,6 +202,10 @@ function TokenOpsSection() {
                * take the refresh token with it. The other three read.
                */
               if (op.key === 'revoke') {
+                // Select the operation before asking, so the docs panel describes what is about to
+                // happen while the confirmation is on screen. `handleCall` — which is what normally
+                // sets this — only runs after the user confirms.
+                setActiveOp('revoke');
                 confirm({
                   title: 'Revoke this access token?',
                   body: 'The token is revoked at the authorization server and stops working immediately. RFC 7009 §2.1 permits the server to revoke the whole grant, so the refresh token issued alongside it may go too. This cannot be undone from here.',
@@ -211,33 +255,12 @@ function TokenOpsSection() {
 
       {activeOp && doc && <OperationDescription doc={doc} />}
 
-      {activeOp === 'revoke' && (
-        <div className="space-y-3">
-          <Input
-            label="Revocation Client ID"
-            value={revClientId}
-            onChange={(e) => setRevClientId(e.target.value)}
-            placeholder="The client the token belongs to"
-          />
-          <Input
-            label="Revocation Client Secret"
-            type="password"
-            value={revClientSecret}
-            onChange={(e) => setRevClientSecret(e.target.value)}
-            placeholder="Client secret for revocation auth"
-          />
-        </div>
-      )}
-
       {(activeOp === 'introspect' || activeOp === 'introspect-std') && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints
-            take this deployment&apos;s admin credentials. Without them the server answers{' '}
-            <code>401</code> and never reaches Authlete.
-          </p>
-          <AdminAuth />
-        </div>
+        <p className="text-xs text-muted-foreground">
+          RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints take
+          this deployment&apos;s admin credentials. Without them the server answers <code>401</code>{' '}
+          and never reaches Authlete.
+        </p>
       )}
 
       {activeOp === 'introspect' && (

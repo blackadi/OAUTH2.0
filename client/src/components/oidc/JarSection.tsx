@@ -180,7 +180,6 @@ function JarSection() {
       title="JWT Secured Authorization Requests (RFC 9101)"
       description="Build, sign, and test JWT-secured authorization requests (JAR). Generate an ES256 key pair, craft the JWT claims, sign the request object, and send it to Authlete for validation."
     >
-      {error && <p className="text-xs text-danger-text">{String(error)}</p>}
       {/* JAR errors are among the most cryptic on this deployment — `[A005328]` for a bad signature —
           and this was one of only two sections that showed the raw string and no explanation, while
           `AUTHLETE_NOTES` has an entry for exactly that code. */}

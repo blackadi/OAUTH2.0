@@ -61,6 +61,27 @@ export async function createClientAssertion(
   return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
 }
 
+/**
+ * The public key as a JWK Set, for pasting into Authlete Console → Client → JWK Set.
+ *
+ * Members are named rather than the key being rendered as exported, for the same reason `createProof`
+ * builds its header key that way: `crypto.subtle.exportKey('jwk', …)` adds `key_ops` and `ext`, and
+ * `ext` is not a registered JWK member at all. They were being published to the authorization server as
+ * part of a key set a human is told to register by hand.
+ *
+ * **Nothing about an already-registered key changes**: `kid` and the key material are byte-identical
+ * and only those two extra members go, so a key registered from the old output still matches a
+ * signature made with it.
+ */
 export function getJwkSetDisplay(publicKey: JWK): string {
-  return JSON.stringify({ keys: [publicKey] }, null, 2);
+  const published: JWK = {
+    kty: publicKey.kty,
+    crv: publicKey.crv,
+    x: publicKey.x,
+    y: publicKey.y,
+    ...(publicKey.use ? { use: publicKey.use } : {}),
+    ...(publicKey.alg ? { alg: publicKey.alg } : {}),
+    ...(publicKey.kid ? { kid: publicKey.kid } : {}),
+  };
+  return JSON.stringify({ keys: [published] }, null, 2);
 }

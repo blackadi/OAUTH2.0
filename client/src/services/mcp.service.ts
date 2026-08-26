@@ -1,4 +1,5 @@
 import { http } from './http';
+import { tokenResponseSchema, asMetadataSchema } from './schemas';
 
 async function fetchAsMetadata(issuerUrl: string): Promise<unknown> {
   // Try RFC 8414 first, then fall back to OIDC Discovery
@@ -11,7 +12,9 @@ async function fetchAsMetadata(issuerUrl: string): Promise<unknown> {
   for (const path of wellKnownPaths) {
     const url = `${issuerUrl.replace(/\/$/, '')}${path}`;
     try {
-      const data = await http.getJson(url);
+      // Validated, and the fallback below is why that is safe: a document at the RFC 8414 path that
+      // is not RFC 8414 metadata is a reason to try the OIDC Discovery path, not to fail the step.
+      const data = await http.getJson(url, undefined, asMetadataSchema);
       return data;
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e));
@@ -108,7 +111,7 @@ async function exchangeCode(params: {
   if (params.clientSecret) {
     body.set('client_secret', params.clientSecret);
   }
-  return http.postForm(params.tokenEndpoint, body);
+  return http.postForm(params.tokenEndpoint, body, undefined, tokenResponseSchema);
 }
 
 /**

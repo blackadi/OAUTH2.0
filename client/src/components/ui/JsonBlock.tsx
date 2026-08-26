@@ -52,7 +52,20 @@ function JsonBlock({ data, className, label }: JsonBlockProps) {
           </button>
         </div>
       )}
-      <pre className="bg-code p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap break-all border border-border">
+      {/*
+        `key={formatted}` is the reveal, and it is doing real work rather than being decorative.
+
+        A CSS animation runs on mount, so without the key a *second* run of the same operation would
+        update the text in place with no cue at all — which is the exact case the audit named: "a new
+        response appears instantly with no cue drawing the eye". Keying on the serialised payload
+        remounts this node whenever the response actually changed, and leaves it alone when a sibling's
+        hover state caused the render. An identical response twice deliberately does **not** re-animate:
+        nothing changed, so there is nothing to point at.
+      */}
+      <pre
+        key={formatted}
+        className="animate-reveal bg-code p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap break-all border border-border"
+      >
         {formatted}
       </pre>
     </div>

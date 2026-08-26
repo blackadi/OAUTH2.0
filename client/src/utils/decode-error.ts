@@ -68,9 +68,29 @@ const OAUTH_ERROR_RE = /["']?error["']?\s*[:=]\s*["']?([a-z_]{3,60})["']?/i;
 const ERROR_URI_RE = /["']?error_uri["']?\s*[:=]\s*["']?(https?:\/\/[^"'\s,}]{1,300})/i;
 const DESCRIPTION_RE = /["']?error_description["']?\s*[:=]\s*["']([^"']{1,400})["']/i;
 
+/**
+ * The leading `429 Too Many Requests` that `describeError` puts at the front of every error string.
+ *
+ * **Why this had to exist.** `statusHint` was written, unit-tested and unreachable. `ErrorExplainer` is
+ * `decodeError`'s only caller, **not one of its 46 usages passes `status`**, and `status` arrived only
+ * on the object form — so the entire status-based explanation path was dead in the running app while a
+ * green test asserted it worked. Found by a driven section test that expected a 429 to be explained and
+ * watched nothing appear.
+ *
+ * Anchored at the very start and exactly three digits, because that is the only place `describeError`
+ * writes one: `${status}${statusText ? ' ' + statusText : ''}` joined with ` · `. A body that merely
+ * *contains* a number is not a status, and guessing from one would be the thing this decoder promises
+ * not to do.
+ */
+const LEADING_STATUS_RE = /^(\d{3})(?=\s|$)/;
+
 export function decodeError(input: string | { raw?: string; status?: number }): DecodedError {
   const raw = typeof input === 'string' ? input : (input.raw ?? '');
-  const status = typeof input === 'string' ? undefined : input.status;
+  const carried = raw.match(LEADING_STATUS_RE)?.[1];
+  // An explicitly supplied status wins; otherwise read the one the error string already carries.
+  const status =
+    (typeof input === 'string' ? undefined : input.status) ??
+    (carried ? Number(carried) : undefined);
 
   const authleteCode = raw.match(AUTHLETE_CODE_RE)?.[1];
   const oauthError = raw.match(OAUTH_ERROR_RE)?.[1]?.toLowerCase();

@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import App, { allSectionsFlat } from '@/App';
 import { clearTraces, recordTrace } from '@/services/trace-store';
+import { PREFERENCE_KEYS } from '@/services/preferences';
 
 /**
  * The whole app, through the real router.
@@ -17,6 +18,8 @@ import { clearTraces, recordTrace } from '@/services/trace-store';
 beforeEach(() => {
   clearTraces();
   sessionStorage.clear();
+  // `/` branches on a `localStorage` preference now, so a test that set it must not leak into the next.
+  localStorage.clear();
   // The layout polls /api/health on mount; nothing here is asserting on connectivity.
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline in test'));
 });
@@ -61,9 +64,69 @@ describe('every route resolves to a section', () => {
     },
   );
 
-  it('sends / to the first section rather than a blank page', async () => {
+  /**
+   * **`/` is a landing page now, and this test used to assert the opposite.**
+   *
+   * It read *"sends / to the first section rather than a blank page"* and passed against
+   * `<Navigate to="/auth-flows" replace />` — which is exactly the behaviour the audit scored 1/5 on the
+   * on-ramp: first paint was a twenty-item sidebar and a form, with nothing saying what the tool is. The
+   * assertion was right about "not a blank page" and wrong about what should be there instead, so it is
+   * rewritten rather than deleted.
+   */
+  it('gives / a landing page that says what this is and what to configure', async () => {
+    renderAt('/');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+        /OAuth 2.x and OpenID Connect server/i,
+      ),
+    );
+    expect(screen.getByText(/What is configured right now/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /Start the authorization-code flow/i }),
+      'one path in, not a tour',
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * The one path in lands on the flow the page just described, which is the payoff from putting the tab
+   * in the URL — a bare `/auth-flows` would arrive on whichever tab happens to be the default.
+   */
+  it('points the first-flow link at the authorization-code tab specifically', async () => {
+    renderAt('/');
+    const link = await screen.findByRole('link', { name: /Start the authorization-code flow/i });
+    expect(link).toHaveAttribute('href', '/auth-flows?op=authorization_code');
+  });
+
+  it('still serves the landing page at /start, so the preference is not a one-way door', async () => {
+    // **With the preference set**, which is the only configuration where this route matters. Without it
+    // `/start` and `/` render the same thing, and the test would pass against a `/start` that was itself
+    // preference-gated — a mutation proved exactly that.
+    localStorage.setItem(PREFERENCE_KEYS.skipLanding, 'true');
+    renderAt('/start');
+    await waitFor(() =>
+      expect(screen.getByText(/What is configured right now/i)).toBeInTheDocument(),
+    );
+  });
+
+  /**
+   * The opt-out, and it is an *opt-out* rather than "has visited": arriving a second time is not a
+   * request to skip the introduction, ticking the box is. See `services/preferences.ts`.
+   */
+  it('sends / straight to Grant Flows once the preference is set', async () => {
+    localStorage.setItem(PREFERENCE_KEYS.skipLanding, 'true');
     renderAt('/');
     await waitFor(() => expect(screen.getByText(/Authorization Flows/i)).toBeInTheDocument());
+    expect(screen.queryByText(/What is configured right now/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the landing page again when the preference is cleared', async () => {
+    localStorage.setItem(PREFERENCE_KEYS.skipLanding, 'false');
+    renderAt('/');
+    // Only the literal `'true'` opts out — `'false'` is a value nothing writes, and a stale one must not
+    // be read as a stale opt-*in* either.
+    await waitFor(() =>
+      expect(screen.getByText(/What is configured right now/i)).toBeInTheDocument(),
+    );
   });
 
   it('maps every section id in the registry to a route', () => {
@@ -228,5 +291,41 @@ describe('shared management credentials (F-18)', () => {
       target: { value: 'b' },
     });
     expect(screen.getByText(/Shared across every admin section/i)).toBeInTheDocument();
+  });
+});
+
+describe('a URL fragment lands on the wizard step it names', () => {
+  /**
+   * **The third half of the feature, and the one a mutation found missing.**
+   *
+   * `useHashScroll.test.tsx` proves the hook works against its own fixture. The MCP and FAPI driven tests
+   * prove the step cards carry the ids. Neither can see whether anything ever *calls* the hook — deleting
+   * `useHashScroll()` from `AppLayout` left both suites green, which is the same shape as the four dead
+   * flows of 2026-08-22: two correct halves and no wiring. Only the real router can answer it.
+   */
+  it('moves focus to the step, through the real router and the lazy section', async () => {
+    renderAt('/mcp#mcp-step-4');
+
+    await waitFor(
+      () => {
+        expect(document.getElementById('mcp-step-4')).not.toBeNull();
+      },
+      { timeout: 5000 },
+    );
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.getElementById('mcp-step-4'));
+    });
+  });
+
+  it('leaves focus alone on a route with no fragment', async () => {
+    renderAt('/mcp');
+
+    await waitFor(
+      () => {
+        expect(document.getElementById('mcp-step-4')).not.toBeNull();
+      },
+      { timeout: 5000 },
+    );
+    expect(document.activeElement).toBe(document.body);
   });
 });

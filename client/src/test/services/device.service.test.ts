@@ -8,6 +8,20 @@ beforeEach(() => {
   globalThis.fetch = mockFetch;
 });
 
+/**
+ * **Fixtures are conformant response bodies, not the minimum that made an assertion pass.**
+ *
+ * When `services/schemas.ts` began validating at the transport boundary, this file's mocks were among
+ * the ones it rejected — and rejected correctly. They described bodies no authorization server would
+ * send, and in three files they described the *specific* body T1-11 stopped sending: `par` mocked
+ * `requestUri`, `device` mocked `deviceCode`/`userCode`, `dcr` mocked `clientId`. Those are Authlete's
+ * camelCase envelope, replaced by the specification's snake_case body months ago. Nothing noticed,
+ * because these tests assert the outgoing *request* and never read the response.
+ *
+ * A fixture is documentation of what the server sends. One that is wrong teaches the next reader the
+ * wrong shape, and it is the only thing standing between a schema and a false pass.
+ */
+
 function ok(data: unknown) {
   return Promise.resolve({
     ok: true,
@@ -18,12 +32,24 @@ function ok(data: unknown) {
 
 describe('deviceService.authorization', () => {
   it('sends POST to device authorization endpoint', async () => {
-    mockFetch.mockResolvedValue(ok({ deviceCode: 'dc1', userCode: 'uc1' }));
+    mockFetch.mockResolvedValue(
+      ok({
+        device_code: 'dc1',
+        user_code: 'uc1',
+        verification_uri: 'http://localhost:3000/device',
+        expires_in: 1800,
+      }),
+    );
     const result = await deviceService.authorization({
       parameters: 'client_id=123&scope=openid',
       clientId: 'cid',
     });
-    expect(result).toEqual({ deviceCode: 'dc1', userCode: 'uc1' });
+    expect(result).toEqual({
+      device_code: 'dc1',
+      user_code: 'uc1',
+      verification_uri: 'http://localhost:3000/device',
+      expires_in: 1800,
+    });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/device/authorization', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

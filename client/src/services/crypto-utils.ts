@@ -7,6 +7,10 @@ export interface JWK {
   d?: string;
   alg?: string;
   use?: string;
+  /** RSA modulus and exponent, and the `oct` symmetric key — needed by `jwkThumbprint`. */
+  n?: string;
+  e?: string;
+  k?: string;
 }
 
 export interface CryptoKeyPair {
@@ -25,7 +29,80 @@ export function base64UrlEncode(data: ArrayBuffer | Uint8Array): string {
 }
 
 /**
+ * The RFC 7638 JWK Thumbprint, SHA-256, base64url — the value `dpop_jkt` and `cnf.jkt` both carry.
+ *
+ * **This is not `kid`, and the difference is why this function exists.** `generateP256KeyPair` below
+ * derives `kid` as the digest of `JSON.stringify(exportedPublicJwk)` — an object WebCrypto exports
+ * carrying `key_ops` and `ext`, in insertion order. That is a perfectly good *identifier* and a wrong
+ * *thumbprint*: measured on one real P-256 key, `kid` was `7dFqQh4RTWRaZ-Lokajf7cBLhpsadZS8Rw_yQ8UCYEs`
+ * and the thumbprint `R05VIe6r11s2N4MDumjT4cNecENRuYc8JMc4kXuefbE`.
+ *
+ * `AuthFlowsSection` passed `kid` as `dpop_jkt`, which RFC 9449 §10 makes a **MUST reject** at the token
+ * endpoint: *"the authorization server computes the JWK Thumbprint of the proof-of-possession public key
+ * in the DPoP proof and verifies that it matches the `dpop_jkt` parameter value in the authorization
+ * request. If they do not match, it MUST reject the request."* It was harmless only because the
+ * parameter was never actually sent.
+ *
+ * **RFC 7638** (*"JSON Web Key (JWK) Thumbprint"*, Standards Track, September 2015) §3.2 fixes the
+ * required members per key type, *"ordered lexicographically by the Unicode code points of the member
+ * names"*, and §3.1 requires the JSON be built *"with no whitespace or line breaks before or after any
+ * syntactic elements"* before hashing *"the octets of the UTF-8 representation"*.
+ *
+ * | `kty` | Required members, in the order they must appear |
+ * |---|---|
+ * | `EC`  | `crv`, `kty`, `x`, `y` |
+ * | `RSA` | `e`, `kty`, `n` |
+ * | `oct` | `k`, `kty` |
+ *
+ * Two rules not to undo:
+ *
+ * - **The members are named, never copied-and-pruned.** A `{ ...jwk }` with deletions is a denylist, and
+ *   the next member WebCrypto adds to its export would silently join the digest — which is precisely the
+ *   bug this replaces. Same reasoning as the allowlist on `/api/jar/process`.
+ * - **A missing required member throws.** Hashing a partial object yields a well-formed, confidently
+ *   wrong digest that matches nothing and explains nothing — this bug's failure mode, one layer down.
+ *   `JSON.stringify` would simply omit an `undefined` and hand back a plausible string.
+ */
+export async function jwkThumbprint(jwk: JWK): Promise<string> {
+  const required = requiredMembers(jwk);
+  const canonical = `{${required.map(([k, v]) => `${JSON.stringify(k)}:${JSON.stringify(v)}`).join(',')}}`;
+  return base64UrlEncode(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical)),
+  );
+}
+
+/** The §3.2 members for this key type, in lexicographic order, with every one present. */
+function requiredMembers(jwk: JWK): [string, string][] {
+  const names = MEMBERS_BY_KTY[jwk.kty ?? ''];
+  if (!names) {
+    throw new Error(
+      `Cannot compute a JWK thumbprint for kty "${jwk.kty ?? '(absent)'}" — RFC 7638 §3.2 defines the required members for EC, RSA and oct only.`,
+    );
+  }
+  return names.map((name) => {
+    const value = jwk[name];
+    if (typeof value !== 'string' || value === '') {
+      throw new Error(
+        `JWK is missing "${name}", which RFC 7638 §3.2 requires for a ${jwk.kty} thumbprint. Hashing without it would produce a valid-looking digest that matches nothing.`,
+      );
+    }
+    return [name, value];
+  });
+}
+
+/** Lexicographic by Unicode code point, per §3.2 — the order is the specification, not a convention. */
+const MEMBERS_BY_KTY: Record<string, (keyof JWK)[]> = {
+  EC: ['crv', 'kty', 'x', 'y'],
+  RSA: ['e', 'kty', 'n'],
+  oct: ['k', 'kty'],
+};
+
+/**
  * Generate a P-256 key pair and export both halves as JWKs, with a thumbprint-style `kid`.
+ *
+ * **"Thumbprint-style" is doing real work in that sentence — this `kid` is not an RFC 7638 thumbprint.**
+ * When you need one, call `jwkThumbprint` above; the two values differ and confusing them is a
+ * MUST-reject at the token endpoint.
  *
  * Both callers needed exactly this and each had its own copy — twenty identical lines in
  * `dpop.service.ts` and `client-assertion.service.ts`, differing only in whether the result is tagged

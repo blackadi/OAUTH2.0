@@ -5,9 +5,10 @@ import {
   TOKEN_ENDPOINT,
 } from '@/config';
 import { http } from './http';
+import { deviceAuthorizationSchema } from './schemas';
 
 async function authorization(body: Record<string, string>): Promise<unknown> {
-  return http.postJson(DEVICE_AUTHORIZATION_ENDPOINT, body);
+  return http.postJson(DEVICE_AUTHORIZATION_ENDPOINT, body, undefined, deviceAuthorizationSchema);
 }
 
 async function verification(userCode: string): Promise<unknown> {

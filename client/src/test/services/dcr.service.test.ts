@@ -8,6 +8,20 @@ beforeEach(() => {
   globalThis.fetch = mockFetch;
 });
 
+/**
+ * **Fixtures are conformant response bodies, not the minimum that made an assertion pass.**
+ *
+ * When `services/schemas.ts` began validating at the transport boundary, this file's mocks were among
+ * the ones it rejected — and rejected correctly. They described bodies no authorization server would
+ * send, and in three files they described the *specific* body T1-11 stopped sending: `par` mocked
+ * `requestUri`, `device` mocked `deviceCode`/`userCode`, `dcr` mocked `clientId`. Those are Authlete's
+ * camelCase envelope, replaced by the specification's snake_case body months ago. Nothing noticed,
+ * because these tests assert the outgoing *request* and never read the response.
+ *
+ * A fixture is documentation of what the server sends. One that is wrong teaches the next reader the
+ * wrong shape, and it is the only thing standing between a schema and a false pass.
+ */
+
 function ok(data: unknown) {
   return Promise.resolve({
     ok: true,
@@ -18,9 +32,9 @@ function ok(data: unknown) {
 
 describe('dcrService.dcrRegister', () => {
   it('sends POST to register endpoint with admin auth', async () => {
-    mockFetch.mockResolvedValue(ok({ clientId: 'new1' }));
+    mockFetch.mockResolvedValue(ok({ client_id: 'new1' }));
     const result = await dcrService.dcrRegister({ json: '{}' }, 'auth123');
-    expect(result).toEqual({ clientId: 'new1' });
+    expect(result).toEqual({ client_id: 'new1' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/client/dcr/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Basic auth123' },

@@ -8,6 +8,20 @@ beforeEach(() => {
   globalThis.fetch = mockFetch;
 });
 
+/**
+ * **Fixtures are conformant response bodies, not the minimum that made an assertion pass.**
+ *
+ * When `services/schemas.ts` began validating at the transport boundary, this file's mocks were among
+ * the ones it rejected — and rejected correctly. They described bodies no authorization server would
+ * send, and in three files they described the *specific* body T1-11 stopped sending: `par` mocked
+ * `requestUri`, `device` mocked `deviceCode`/`userCode`, `dcr` mocked `clientId`. Those are Authlete's
+ * camelCase envelope, replaced by the specification's snake_case body months ago. Nothing noticed,
+ * because these tests assert the outgoing *request* and never read the response.
+ *
+ * A fixture is documentation of what the server sends. One that is wrong teaches the next reader the
+ * wrong shape, and it is the only thing standing between a schema and a false pass.
+ */
+
 function ok(data: unknown, headers?: Record<string, string>) {
   const h = new Headers(headers ?? {});
   return Promise.resolve({
@@ -33,12 +47,17 @@ function fail(status: number, body: string, headers?: Record<string, string>) {
 
 describe('parService.pushedAuthorization', () => {
   it('sends POST to PAR endpoint', async () => {
-    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:ietf:params:oauth:request_uri:abc' }));
+    mockFetch.mockResolvedValue(
+      ok({ expires_in: 600, request_uri: 'urn:ietf:params:oauth:request_uri:abc' }),
+    );
     const result = await parService.pushedAuthorization({
       parameters: 'response_type=code&client_id=cid',
       clientId: 'cid',
     });
-    expect(result).toEqual({ requestUri: 'urn:ietf:params:oauth:request_uri:abc' });
+    expect(result).toEqual({
+      expires_in: 600,
+      request_uri: 'urn:ietf:params:oauth:request_uri:abc',
+    });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/par', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,7 +73,7 @@ describe('parService.pushedAuthorization', () => {
   });
 
   it('sends an Authorization: Basic header when basic credentials are supplied', async () => {
-    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
+    mockFetch.mockResolvedValue(ok({ expires_in: 600, request_uri: 'urn:x' }));
     await parService.pushedAuthorization(
       { parameters: 'response_type=code' },
       {
@@ -73,7 +92,7 @@ describe('parService.pushedAuthorization', () => {
   });
 
   it('omits the Authorization header when no basic credentials are supplied', async () => {
-    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
+    mockFetch.mockResolvedValue(ok({ expires_in: 600, request_uri: 'urn:x' }));
     await parService.pushedAuthorization({ parameters: 'response_type=code', clientId: 'cid' });
     const init = mockFetch.mock.calls[0][1] as RequestInit;
     expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
@@ -107,12 +126,17 @@ describe('parService.pushedAuthorizationWithDpop', () => {
   });
 
   it('returns undefined dpopNonce when no nonce header present', async () => {
-    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:ietf:params:oauth:request_uri:test' }));
+    mockFetch.mockResolvedValue(
+      ok({ expires_in: 600, request_uri: 'urn:ietf:params:oauth:request_uri:test' }),
+    );
     const result = await parService.pushedAuthorizationWithDpop(
       { parameters: 'response_type=code&client_id=cid' },
       dpopProof,
     );
-    expect(result.data).toEqual({ requestUri: 'urn:ietf:params:oauth:request_uri:test' });
+    expect(result.data).toEqual({
+      expires_in: 600,
+      request_uri: 'urn:ietf:params:oauth:request_uri:test',
+    });
     expect(result.dpopNonce).toBeUndefined();
   });
 
@@ -124,7 +148,7 @@ describe('parService.pushedAuthorizationWithDpop', () => {
   });
 
   it('sends both DPoP and Authorization: Basic when basic credentials are supplied', async () => {
-    mockFetch.mockResolvedValue(ok({ requestUri: 'urn:x' }));
+    mockFetch.mockResolvedValue(ok({ expires_in: 600, request_uri: 'urn:x' }));
     await parService.pushedAuthorizationWithDpop({ parameters: 'response_type=code' }, dpopProof, {
       clientId: 'cid',
       clientSecret: 'sec',

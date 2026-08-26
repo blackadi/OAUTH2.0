@@ -16,6 +16,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
+import { navigateTo } from '@/services/trace-store';
 import type { JWK } from '@/services/crypto-utils';
 
 function ParSection() {
@@ -123,7 +124,10 @@ function ParSection() {
       const d = data as ParSuccessResponse;
       if (d?.request_uri) {
         const cid = clientId || parameters.match(/client_id=([^&]+)/)?.[1] || '';
-        window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`;
+        navigateTo(
+          `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`,
+          'authorize (PAR) — front channel, browser leaves with the request_uri',
+        );
       }
     } else {
       toast.error(err);
@@ -140,7 +144,8 @@ function ParSection() {
   }, [parResult, clientId, parameters]);
 
   const handleRedirectToAuthorize = () => {
-    if (authUrl) window.location.href = authUrl;
+    if (authUrl)
+      navigateTo(authUrl, 'authorize (PAR) — front channel, browser leaves with the request_uri');
   };
 
   // `authUrl` is derived, so clearing `parResult` clears it too — there is nothing else to reset.

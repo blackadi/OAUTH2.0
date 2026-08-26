@@ -15,12 +15,40 @@ import { useSearchParams } from 'react-router-dom';
  *
  * **`replace` rather than `push`, deliberately.** Selecting a tab is not navigation — it is refining
  * where you already are. Pushing would make the back button walk through every tab somebody clicked
- * before it left the section, which is worse than the behaviour it replaced. A wizard *step* is the
- * arguable exception, and it is left to the caller.
+ * before it left the section, which is worse than the behaviour it replaced.
+ *
+ * **A wizard step is not one of these, and that turned out not to be a gap.** The original note here left
+ * the step "to the caller"; the FAPI and MCP wizards have no step to leave — they render every step at
+ * once and grey the ones whose prerequisite has not happened (`utils/step-state.ts`), which is right for
+ * teaching a protocol, since you can read step 4 before running step 1. A step is therefore addressed by
+ * **fragment** rather than by query: `#mcp-step-3`, resolved by `useHashScroll`.
  *
  * The value is validated against the allowed set rather than trusted, because it arrives from the URL:
  * a hand-edited `?op=nonsense` selects the fallback instead of rendering a section with no valid tab.
  */
+/**
+ * Two overloads, because a caller that supplies a real fallback can never be handed `null`.
+ *
+ * Without them every call site with a default tab had to re-apply it — `activeOp ?? 'introspect'` beside
+ * a hook that was already given `'introspect'` — and the second copy is the one that goes stale. Grant
+ * Flows needs this: its tab indexes `flowSteps[grantType]`, so `null` is not a state it can render.
+ */
+export function useUrlState<T extends string>(
+  key: string,
+  allowed: readonly T[],
+  fallback: T,
+): [T, (value: T) => void];
+export function useUrlState<T extends string>(
+  key: string,
+  allowed: readonly T[],
+  fallback?: null,
+): [T | null, (value: T | null) => void];
+/** A fallback that may or may not be there — a computed default, or the test harness that drives both. */
+export function useUrlState<T extends string>(
+  key: string,
+  allowed: readonly T[],
+  fallback: T | null,
+): [T | null, (value: T | null) => void];
 export function useUrlState<T extends string>(
   key: string,
   allowed: readonly T[],

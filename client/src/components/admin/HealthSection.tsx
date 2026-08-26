@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { healthService } from '@/services';
+import { describeError } from '@/hooks/useAsyncCall';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Button } from '@/components/ui/Button';
@@ -51,8 +52,10 @@ function HealthSection() {
       const res = await healthService.serverHealth();
       setServerStatus(res);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Request failed';
-      setServerError(msg);
+      // `describeError`, not `e.message`: the raw body alone drops the status, and the status is the
+      // whole diagnosis here — a 429 from Authlete's rate limit and a 401 from a wrong bearer token
+      // have bodies that read almost identically.
+      setServerError(describeError(e));
       setServerStatus(null);
     } finally {
       setLoading((s) => ({ ...s, server: false }));
@@ -76,8 +79,7 @@ function HealthSection() {
       const res = await healthService.authleteHealth(extended);
       setAuthleteResult(res);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Request failed';
-      setAuthleteError(msg);
+      setAuthleteError(describeError(e));
     } finally {
       setLoading((s) => ({ ...s, authlete: false }));
     }

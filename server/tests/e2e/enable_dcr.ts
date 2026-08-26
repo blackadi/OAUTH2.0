@@ -24,7 +24,7 @@ async function main() {
     service: {
       ...svc,
       supportedClientRegistrationTypes: ["AUTOMATIC"],
-      registrationEndpoint: "https://authlete-node-authz-server.onrender.com/api/client/dcr/register",
+      registrationEndpoint: "https://oauth2-0-ekh2.onrender.com/api/client/dcr/register",
       dcrScopeUsedAsRequestable: true,
     } as any,
   })

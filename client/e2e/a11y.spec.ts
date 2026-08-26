@@ -263,3 +263,22 @@ test.describe('the live regions announce', () => {
     );
   });
 });
+
+test.describe('fragment navigation', () => {
+  /**
+   * A `#step-N` link has to land **focus**, not merely scroll.
+   *
+   * The only test of this feature in a real browser, and it is here because it earned its place: it
+   * failed the first time it ran, while six jsdom tests passed. Sections arrive through `React.lazy`, so
+   * `useHashScroll` looked for its target before the chunk resolved, found nothing, and never looked
+   * again — a jsdom fixture renders its target synchronously in the same tree, so the one-shot lookup
+   * always hit and the bug was invisible there by construction. `useHashScroll.test.tsx` now simulates
+   * late arrival; this asserts it against a genuinely lazy route.
+   */
+  test('a fragment link lands focus on the wizard step it names', async ({ page }) => {
+    await page.goto('/mcp#mcp-step-4');
+    await page.waitForSelector('#mcp-step-4');
+
+    await expect(page.locator('#mcp-step-4')).toBeFocused();
+  });
+});

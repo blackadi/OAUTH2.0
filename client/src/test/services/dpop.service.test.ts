@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateKeyPair, createProof, computeAth } from '@/services/dpop.service';
 import { createClientAssertion, generateSigningKeyPair } from '@/services/client-assertion.service';
+import { jwkThumbprint, type JWK } from '@/services/crypto-utils';
 
 /**
  * The cryptographic core had no tests at all, and it has broken before: DPoP proofs were once signed
@@ -69,6 +70,45 @@ describe('createProof', () => {
     // The proof travels in a request header. A `d` here would publish the signing key to every hop.
     expect(header.jwk.d).toBeUndefined();
     expect(proof).not.toContain(String(pair.privateKey.d));
+  });
+
+  /**
+   * The header key is an allowlist, so what it contains is worth stating exactly.
+   *
+   * It used to be `{ ...privateKeyJwk }` with `delete publicJwk.d`, and a spread carries members the
+   * `JWK` type does not model — so the public key in every proof went out advertising
+   * `key_ops: ["sign"]`, a **private**-key operation, alongside `ext: true`, which is a WebCrypto
+   * artefact and not a registered JWK member. RFC 7517 §4.3 requires `use` and `key_ops` to convey
+   * consistent information.
+   *
+   * This is one of the few places an exact-membership assertion is right rather than the mistake the
+   * driven-test harness warns about: the point of an allowlist is that nothing else is present, so
+   * pinning "nothing else" is pinning the design. A new member appearing here should fail loudly.
+   */
+  it('publishes exactly the allowlisted members — no key_ops, no ext', async () => {
+    const pair = await generateKeyPair();
+    const proof = await createProof(pair.privateKey, 'POST', 'https://as.example/token');
+    const header = decodeSegment(proof.split('.')[0]) as { jwk: Record<string, unknown> };
+
+    expect(Object.keys(header.jwk).sort()).toEqual(['alg', 'crv', 'kid', 'kty', 'x', 'y']);
+    expect(header.jwk.key_ops, 'inherited from the exported private key').toBeUndefined();
+    expect(header.jwk.ext, 'a WebCrypto artefact, not a JWK member').toBeUndefined();
+  });
+
+  /**
+   * The binding must be identical before and after that change.
+   *
+   * RFC 7638 §3.2 computes an `EC` thumbprint over `crv`/`kty`/`x`/`y` only, so dropping `key_ops` and
+   * `ext` cannot move it — but "cannot" is a claim, and this is the assertion that makes it a fact.
+   * `cnf.jkt` on the issued token is derived from this key, so a shift here would silently unbind every
+   * token from the key that proved possession.
+   */
+  it('leaves the RFC 7638 thumbprint of the header key unchanged', async () => {
+    const pair = await generateKeyPair();
+    const proof = await createProof(pair.privateKey, 'POST', 'https://as.example/token');
+    const header = decodeSegment(proof.split('.')[0]) as { jwk: JWK };
+
+    expect(await jwkThumbprint(header.jwk)).toBe(await jwkThumbprint(pair.publicKey));
   });
 
   it('carries htm, htu, iat and a fresh jti', async () => {

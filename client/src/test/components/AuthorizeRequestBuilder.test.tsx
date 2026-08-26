@@ -16,8 +16,20 @@ function mount(props: Partial<BuilderProps> = {}) {
   // Typed from the component's own prop, so `onSend.mock.calls[0][1].codeVerifier` is a checked read
   // rather than an `any` — these assertions are about the PKCE contract and deserve to be verified.
   const onSend = vi.fn<BuilderProps['onSend']>();
-  render(<AuthorizeRequestBuilder endpoint={ENDPOINT} seed={SEED} onSend={onSend} {...props} />);
-  return { onSend };
+  const view = render(
+    <AuthorizeRequestBuilder endpoint={ENDPOINT} seed={SEED} onSend={onSend} {...props} />,
+  );
+  /** Re-render with a changed prop, for the DPoP toggle arriving and going away. */
+  const update = (next: Partial<BuilderProps>) =>
+    view.rerender(
+      <AuthorizeRequestBuilder endpoint={ENDPOINT} seed={SEED} onSend={onSend} {...next} />,
+    );
+  return { onSend, update };
+}
+
+/** The `dpop_jkt` row exists in the DOM only while the Extensions group is open. */
+function dpopJktRow(): HTMLElement | null {
+  return screen.queryByLabelText(/^dpop_jkt$/i, { selector: 'input[type="checkbox"]' });
 }
 
 /** The URL as rendered in the preview, which is the same string Send navigates to. */
@@ -194,6 +206,36 @@ describe('escape hatches', () => {
     expect(paramsOf(previewUrl()).getAll('scope')).toEqual([SEED.scope, 'extra']);
   });
 
+  /**
+   * The Remove button, which nothing had ever clicked.
+   *
+   * Found by function coverage rather than by reading: the custom-parameter row's trash button was the
+   * only control in this component with no test behind it, so "remove" could have been a no-op — or
+   * could have removed the wrong row, which is the more likely bug, since the handler keys off `id` and
+   * two custom rows can legitimately carry the same `name`. Two rows with the same name is therefore
+   * what this drives.
+   */
+  it('removes the custom parameter that was asked for, not the one with a matching name', async () => {
+    mount();
+    await waitForGenerated();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/i }));
+    const [nameA, nameB] = screen.getAllByLabelText(/Custom parameter name/i);
+    const [valueA, valueB] = screen.getAllByLabelText(/Custom parameter value/i);
+    fireEvent.change(nameA, { target: { value: 'resource' } });
+    fireEvent.change(valueA, { target: { value: 'first' } });
+    fireEvent.change(nameB, { target: { value: 'resource' } });
+    fireEvent.change(valueB, { target: { value: 'second' } });
+    expect(paramsOf(previewUrl()).getAll('resource')).toEqual(['first', 'second']);
+
+    // The **first** row, deliberately. Removing the last one cannot tell `filter(c => c.id !== id)`
+    // apart from `slice(0, -1)` — a mutation confirmed that, so the weaker assertion was replaced.
+    // Removing the first also kills a name-based filter, which would take both rows at once.
+    fireEvent.click(screen.getAllByRole('button', { name: /^Remove resource$/i })[0]);
+    expect(paramsOf(previewUrl()).getAll('resource')).toEqual(['second']);
+  });
+
   it('warns on invalid JSON without blocking the send', async () => {
     mount();
     await waitForGenerated();
@@ -202,22 +244,91 @@ describe('escape hatches', () => {
     expect(screen.getByText(/is not valid JSON/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send authorization request/i })).toBeEnabled();
   });
+
+  /**
+   * **The row's own message, which is a different message from the panel's.**
+   *
+   * Added because a mutation found it inert: replacing `ParamRow`'s `jsonError(value)` with a flat
+   * `null` — deleting the per-row report entirely — left all 39 tests green. The one JSON assertion
+   * above matches the *aggregate* warning beside the Send button ("claims is not valid JSON. Sending it
+   * anyway is fine"), and the two strings do not overlap, so nothing was watching the field-level one.
+   *
+   * The parser's wording is V8's and changes between versions, so the prefix is what is pinned. The
+   * second half is the real assertion: an error that appears and never clears is a worse bug than one
+   * that never appears, because it makes the valid state look broken.
+   */
+  it('reports the JSON error on the row itself, and clears it when the value parses', async () => {
+    mount();
+    await waitForGenerated();
+    fireEvent.click(screen.getByLabelText(/^claims$/i, { selector: 'input[type="checkbox"]' }));
+
+    const box = screen.getByLabelText('claims value');
+    fireEvent.change(box, { target: { value: '{not json' } });
+    expect(screen.getByText(/^Invalid JSON: .+/)).toBeInTheDocument();
+
+    fireEvent.change(box, { target: { value: '{"id_token":{"acr":null}}' } });
+    expect(screen.queryByText(/^Invalid JSON: /)).not.toBeInTheDocument();
+    // And the aggregate warning goes with it — one valid value means no problems to report.
+    expect(screen.queryByText(/is not valid JSON/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('DPoP', () => {
-  it('fills dpop_jkt from the supplied thumbprint once enabled', async () => {
+  /**
+   * **A thumbprint arriving is what enables the row — the user does not have to find it.**
+   *
+   * This test used to open the Extensions group and tick the checkbox by hand, because that was the
+   * only way `dpop_jkt` ever reached a request. Meanwhile the Grant Flows checkbox that produces the
+   * thumbprint told the user it *"sends its thumbprint as `dpop_jkt`"*. The copy described the intent
+   * and the mechanism did not follow, so the parameter was neither sent nor findable: `defaultOn:
+   * false` in a group that renders collapsed.
+   *
+   * The old assertions are kept below as the *manual override* case, which is still worth having.
+   */
+  it('enables and fills dpop_jkt as soon as a thumbprint exists, with no clicks', async () => {
     mount({ dpopThumbprint: 'thumb-abc' });
     await waitForGenerated();
-    // The Extensions group starts collapsed — the rows do not exist until it is opened.
-    fireEvent.click(screen.getByRole('button', { name: /Extensions/i }));
-    fireEvent.click(screen.getByLabelText(/^dpop_jkt$/i, { selector: 'input[type="checkbox"]' }));
+
     expect(paramsOf(previewUrl()).get('dpop_jkt')).toBe('thumb-abc');
+  });
+
+  it('opens the Extensions group, so the parameter is findable and not merely present', async () => {
+    mount({ dpopThumbprint: 'thumb-abc' });
+    await waitForGenerated();
+
+    // The rows do not exist in the DOM until the group is open, so finding the row *is* the assertion.
+    expect(dpopJktRow(), 'a row nobody can find is how this went unnoticed').toBeInTheDocument();
+    expect(dpopJktRow()).toBeChecked();
   });
 
   it('is absent when no key has been generated', async () => {
     mount();
     await waitForGenerated();
     expect(paramsOf(previewUrl()).get('dpop_jkt')).toBeNull();
+  });
+
+  /**
+   * The override survives, deliberately. This is a debugger: sending an authorization request with the
+   * DPoP key generated but `dpop_jkt` withheld, and watching what the token endpoint then does, is a
+   * thing somebody should be able to do on purpose.
+   */
+  it('can still be turned off by hand once it is on', async () => {
+    mount({ dpopThumbprint: 'thumb-abc' });
+    await waitForGenerated();
+
+    fireEvent.click(dpopJktRow()!);
+    expect(paramsOf(previewUrl()).get('dpop_jkt')).toBeNull();
+  });
+
+  it('drops the parameter when the thumbprint goes away', async () => {
+    const { update } = mount({ dpopThumbprint: 'thumb-abc' });
+    await waitForGenerated();
+    expect(paramsOf(previewUrl()).get('dpop_jkt')).toBe('thumb-abc');
+
+    update({ dpopThumbprint: undefined });
+    // A binding to a key that no longer exists is worse than no binding: it earns a MUST reject at the
+    // token endpoint (RFC 9449 §10) for a request the user thinks they simplified.
+    await waitFor(() => expect(paramsOf(previewUrl()).get('dpop_jkt')).toBeNull());
   });
 });
 

@@ -362,10 +362,12 @@ export const AUTH_PARAMS: AuthParamSpec[] = [
     requirement: 'OPTIONAL',
     threat:
       'Binding the **code** to the DPoP key closes the window that binding only the token leaves open: without it, a stolen code can still be redeemed by whoever stole it, and only the resulting token is sender-constrained. With it, a code is useless to anyone who cannot prove possession of the key.',
-    note: 'The SHA-256 JWK Thumbprint of the DPoP key you will prove possession of at the token endpoint — the same value that becomes `cnf.jkt` on the token. Binding the *code* to the key closes the window where a stolen code could be redeemed by someone else. Filled from the generated DPoP key when DPoP is enabled.',
+    note: 'The **RFC 7638** JWK Thumbprint (SHA-256, base64url) of the DPoP key you will prove possession of at the token endpoint — the same value that comes back as `cnf.jkt` on the token. Filled and enabled automatically when you tick **Sender-constrain with DPoP**. **Get it wrong and the token request is refused**, not ignored: §10 says the AS *"computes the JWK Thumbprint of the proof-of-possession public key in the DPoP proof and verifies that it matches the `dpop_jkt` parameter value… If they do not match, it **MUST** reject the request."* The thumbprint is computed over `crv`, `kty`, `x`, `y` **only**, in that lexicographic order with no whitespace — every other member of the JWK is excluded, which is the single most common way to compute the wrong one. A key `kid` is **not** a thumbprint even when it also looks like a base64url SHA-256 digest.',
     kind: 'text',
     placeholder: 'JWK thumbprint',
     group: 'extensions',
+    // Not on by default, and not a static default at all: `AuthorizeRequestBuilder` enables this row
+    // when a thumbprint actually exists, which is the only state in which the parameter means anything.
     defaultOn: false,
   },
   {

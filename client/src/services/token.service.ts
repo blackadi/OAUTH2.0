@@ -8,12 +8,18 @@ import {
   JWKS_ENDPOINT,
 } from '@/config';
 import { http } from './http';
+import { tokenResponseSchema, asMetadataSchema, introspectionSchema } from './schemas';
 import { dpopRequest, type DpopProofSource } from './dpop-fetch';
 import type { TokenRequest, TokenResponse, JwksResponse } from '@/types';
 
 async function exchangeCodeForToken(tokenRequest: TokenRequest): Promise<TokenResponse> {
   const params = new URLSearchParams(tokenRequest as unknown as Record<string, string>);
-  return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;
+  return http.postForm(
+    TOKEN_ENDPOINT,
+    params,
+    undefined,
+    tokenResponseSchema,
+  ) as Promise<TokenResponse>;
 }
 
 export interface TokenResponseWithNonce {
@@ -67,13 +73,19 @@ function postWithOptionalBasic(
       params,
       clientId,
       clientSecret,
+      tokenResponseSchema,
     ) as Promise<TokenResponse>;
   }
   // A bare `client_id` beside no secret is one method, not two — and it is the only one a public client
   // has. (It is also why `client_id` alongside a Basic header is not the dual-channel shape the server
   // refuses: that rule counts a second *credential*.)
   params.set('client_id', clientId);
-  return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;
+  return http.postForm(
+    TOKEN_ENDPOINT,
+    params,
+    undefined,
+    tokenResponseSchema,
+  ) as Promise<TokenResponse>;
 }
 
 async function clientCredentials(
@@ -125,7 +137,12 @@ async function jwtBearerGrant(
     ) as Promise<TokenResponse>;
   }
   if (clientId) params.append('client_id', clientId);
-  return http.postForm(TOKEN_ENDPOINT, params) as Promise<TokenResponse>;
+  return http.postForm(
+    TOKEN_ENDPOINT,
+    params,
+    undefined,
+    tokenResponseSchema,
+  ) as Promise<TokenResponse>;
 }
 
 export interface UserinfoResponseWithNonce {
@@ -191,6 +208,9 @@ async function introspectionStandard(
     new URLSearchParams({ token }),
     adminClientId,
     adminClientSecret,
+    // RFC 7662 §2.2's shape. The **Authlete** introspection endpoint above deliberately gets no schema:
+    // it answers a vendor envelope, not §2.2's body, and pinning one would reject correct responses.
+    introspectionSchema,
   );
 }
 
@@ -210,7 +230,7 @@ async function revocation(
 }
 
 async function discovery(): Promise<unknown> {
-  return http.getJson(DISCOVERY_ENDPOINT);
+  return http.getJson(DISCOVERY_ENDPOINT, undefined, asMetadataSchema);
 }
 
 async function getJwks(): Promise<JwksResponse> {

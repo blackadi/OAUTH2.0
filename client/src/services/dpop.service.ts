@@ -57,9 +57,36 @@ export async function createProof(
     payload.nonce = nonce;
   }
 
-  const publicJwk = { ...privateKeyJwk };
-  delete publicJwk.d;
-  publicJwk.alg = 'ES256';
+  /**
+   * The public half, built by naming its members — never by copying the private key and deleting.
+   *
+   * This was `{ ...privateKeyJwk }` with `delete publicJwk.d`, and the spread carried two members the
+   * `JWK` type does not model and so could not warn about. Measured on a real key, the header went out
+   * as:
+   *
+   * ```json
+   * {"key_ops":["sign"],"ext":true,"kty":"EC","x":"…","y":"…","crv":"P-256","kid":"…","alg":"ES256"}
+   * ```
+   *
+   * `key_ops: ["sign"]` came from the exported **private** key, so the public key in the proof
+   * advertised a private-key operation — RFC 7517 §4.3 requires `use` and `key_ops` to convey
+   * consistent information. `ext` is a WebCrypto artefact and not a registered JWK member at all.
+   * Authlete accepts either form, and RFC 7638 ignores both members when computing an `EC` thumbprint,
+   * so **the `cnf.jkt` binding is identical before and after** — this is correctness of the key we
+   * publish, not of the binding.
+   *
+   * The allowlist also makes it structurally impossible for `d` to appear, which the `delete` achieved
+   * only by remembering to remove it. `kid` is carried when present: it identifies the key and is
+   * excluded from the thumbprint, so it is free.
+   */
+  const publicJwk: JWK = {
+    kty: privateKeyJwk.kty,
+    crv: privateKeyJwk.crv,
+    x: privateKeyJwk.x,
+    y: privateKeyJwk.y,
+    alg: 'ES256',
+    ...(privateKeyJwk.kid ? { kid: privateKeyJwk.kid } : {}),
+  };
   const header = { typ: 'dpop+jwt', alg: 'ES256', jwk: publicJwk };
 
   const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));

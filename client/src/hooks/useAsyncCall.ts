@@ -139,5 +139,13 @@ function useDiscriminatedAsyncCall<Label extends string, Result = unknown>() {
   return { loading, result, error, call, reset };
 }
 
+/**
+ * Exported for `HealthSection`, which owns its own loading state per check and so cannot use either
+ * hook — it would need three independent `useAsyncCall` instances plus an effect that fires two of
+ * them. It still has to produce the *same* error string, because that string is what `decodeError`
+ * reads the status out of: without it, the section's own comment about `statusHint` distinguishing a
+ * 429 rate limit from a credential problem describes something that could not happen.
+ */
+export { describeError };
 export { useAsyncCall, useDiscriminatedAsyncCall };
 export type { CallResult };

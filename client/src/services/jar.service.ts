@@ -1,7 +1,5 @@
-import { API_BASE_URL } from '@/config';
+import { JAR_PROCESS_ENDPOINT } from '@/config';
 import { http } from './http';
-
-const JAR_ENDPOINT = `${API_BASE_URL}/api/jar/process`;
 
 /**
  * What `POST /api/jar/process` returns — **an allowlist, mirroring the server's** `EXPOSED_FIELDS`
@@ -17,7 +15,19 @@ export interface JarProcessResult {
   action?: string;
   resultCode?: string;
   resultMessage?: string;
-  responseContent?: string;
+  /**
+   * `string | null`, not `string | undefined` — the server genuinely sends **`null`** here.
+   *
+   * `/api/jar/process` is one of the endpoints with no specification body to be, so it keeps Authlete's
+   * envelope, and Authlete answers `NO_INTERACTION` and `INTERACTION` with `responseContent: null` — a
+   * *"you decide"* answer rather than a redirect URL. `AGENTS.md` records that the null was deliberately
+   * left visible rather than tidied away.
+   *
+   * Declaring it `string | undefined` made a realistic response a **compile error** in a test that
+   * modelled the real payload, which is how this was found. Absent and explicitly null are different
+   * facts and the type has to be able to say both.
+   */
+  responseContent?: string | null;
   scopes?: { name?: string; description?: string }[];
 }
 
@@ -41,5 +51,9 @@ export async function processJar(
   // An assertion, not validation: `http.postAdmin` returns `unknown` and nothing here parses the response.
   // Every member of `JarProcessResult` is therefore optional, so a missing field reads as `undefined`
   // rather than throwing — which is the honest shape for a debugging surface whose upstream can change.
-  return (await http.postAdmin(JAR_ENDPOINT, { request, clientId }, auth)) as JarProcessResult;
+  return (await http.postAdmin(
+    JAR_PROCESS_ENDPOINT,
+    { request, clientId },
+    auth,
+  )) as JarProcessResult;
 }

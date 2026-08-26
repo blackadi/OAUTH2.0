@@ -9,10 +9,22 @@ import {
   Eye,
   EyeOff,
   Download,
+  Upload,
   Activity,
+  FileDown,
+  Info,
 } from 'lucide-react';
 import { useTraces } from '@/hooks/useTraces';
-import { clearTraces, redactHeaders, redactBody, type TraceEntry } from '@/services/trace-store';
+import {
+  clearTraces,
+  importTraces,
+  redactHeaders,
+  redactBody,
+  type TraceEntry,
+} from '@/services/trace-store';
+import { parseRunFile, serializeRunFile, RunFileError } from '@/services/run-file';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { toast } from 'sonner';
 import { toCurl } from '@/utils/curl';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -145,6 +157,22 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
         >
           {entry.navigation ? 'NAV' : entry.status === 0 ? 'ERR' : entry.status}
         </span>
+        {/*
+          Every imported row says so, on the row.
+
+          A banner alone would be a mode you can scroll away from — and a trace panel showing somebody
+          else's requests as though they were yours is the one failure of this feature that costs real
+          time. `title` carries the same thing for a pointer; the row's own `aria-label` further down
+          carries it for a screen reader.
+        */}
+        {entry.imported && (
+          <span
+            title="Loaded from a saved run — this build did not send it"
+            className="text-2xs font-mono px-1 py-0.5 rounded border border-edge-info bg-tint-info text-info-text shrink-0"
+          >
+            saved
+          </span>
+        )}
         <span className="text-xs font-mono text-foreground truncate flex-1">
           {shortPath(entry.url)}
         </span>
@@ -344,6 +372,65 @@ function TracePanel({ open, onClose }: TracePanelProps) {
     }
   }, [visible, setExported, resetExported]);
 
+  /**
+   * Save the run as a file, so somebody can open it here rather than only read it.
+   *
+   * The Markdown export copies to the clipboard because its destination is a chat or an issue. A run
+   * file's destination is this tool, on someone else's machine, so it is a file — and `visible` rather
+   * than `traces`, matching Markdown: if you filtered to the four failing requests, those four are the
+   * run you meant to hand over.
+   */
+  const saveRunFile = useCallback(() => {
+    const text = serializeRunFile(visible, new Date());
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `oauth-run-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+    link.click();
+    // Without this the blob is held for the lifetime of the document. `click()` on a detached anchor is
+    // synchronous enough that the download has already been queued by the time this runs.
+    URL.revokeObjectURL(url);
+  }, [visible]);
+
+  /**
+   * The file waiting on a confirmation, because importing **replaces** the current trace.
+   *
+   * Held as parsed entries rather than as the `File`, so the dialog only ever appears for a file that is
+   * actually readable — being asked "discard your trace?" and then told the file was malformed is the
+   * wrong order to learn those two things in.
+   */
+  const [pendingImport, setPendingImport] = useState<{
+    entries: Parameters<typeof importTraces>[0];
+    name: string;
+  } | null>(null);
+
+  const readRunFile = useCallback(
+    async (file: File | undefined) => {
+      if (!file) return;
+      try {
+        const { entries } = parseRunFile(await file.text());
+        if (entries.length === 0) {
+          toast.error('That run file has no requests in it.');
+          return;
+        }
+        // Nothing to discard, so nothing to confirm.
+        if (traces.length === 0) {
+          importTraces(entries);
+          toast.success(`Loaded ${entries.length} request${entries.length === 1 ? '' : 's'}`);
+          return;
+        }
+        setPendingImport({ entries, name: file.name });
+      } catch (e) {
+        // `RunFileError`'s message is written to be shown; anything else is a surprise and says so.
+        toast.error(e instanceof RunFileError ? e.message : 'That file could not be read.');
+      }
+    },
+    [traces.length],
+  );
+
+  const viewingImported = traces.length > 0 && traces.every((t) => t.imported);
+  const mixedImported = !viewingImported && traces.some((t) => t.imported);
+
   if (!open) return null;
 
   return (
@@ -411,6 +498,41 @@ function TracePanel({ open, onClose }: TracePanelProps) {
           )}
           {exported ? 'Copied' : 'Export'}
         </button>
+        {/* Two exports with two destinations: Markdown to the clipboard for a chat or an issue, a run
+            file to disk for somebody to open here. See `services/run-file.ts` on why not one. */}
+        <button
+          onClick={saveRunFile}
+          disabled={visible.length === 0}
+          title="Save these requests as a file somebody can open in this tool"
+          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
+        >
+          <FileDown className="h-3 w-3" />
+          Save run
+        </button>
+        <label
+          title="Open a saved run — this replaces the requests shown here"
+          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+        >
+          <Upload className="h-3 w-3" />
+          Open run
+          {/*
+            A real `<input type="file">` inside the label rather than a button that clicks a hidden one.
+            The label makes the whole control the file picker's trigger, keyboard included, and
+            `sr-only` keeps the input in the accessibility tree — `display: none` would take it out of
+            it, which is how a file picker becomes unreachable without a pointer.
+          */}
+          <input
+            type="file"
+            accept="application/json,.json"
+            aria-label="Open a saved run"
+            className="sr-only"
+            onChange={(e) => {
+              void readRunFile(e.target.files?.[0]);
+              // Cleared so choosing the *same* file twice fires `change` the second time too.
+              e.target.value = '';
+            }}
+          />
+        </label>
         <button
           onClick={clearTraces}
           disabled={traces.length === 0}
@@ -427,6 +549,52 @@ function TracePanel({ open, onClose }: TracePanelProps) {
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      {/*
+        The banner is the second of two signals, not the only one — every imported row is marked too.
+
+        A banner alone is a mode you can scroll past; a row marker alone is easy to read as decoration.
+        Together they answer the question at whichever moment it gets asked. `role="status"` rather than
+        `alert`: this is a standing condition, not an event, so it should be available on demand and not
+        interrupt whatever a screen reader is in the middle of.
+      */}
+      {(viewingImported || mixedImported) && (
+        <div
+          role="status"
+          className="flex items-start gap-2 px-3 py-2 border-b border-edge-info bg-tint-info shrink-0"
+        >
+          <Info className="h-3.5 w-3.5 text-info-text mt-0.5 shrink-0" />
+          <p className="text-2xs text-info-text leading-relaxed m-0">
+            {viewingImported ? (
+              <>
+                <strong>You are looking at a saved run.</strong> These requests were recorded
+                somewhere else — this build did not send them, and the credentials in them were
+                redacted on export. Clear the trace to go back to your own traffic.
+              </>
+            ) : (
+              <>
+                <strong>This trace mixes a saved run with your own requests.</strong> The rows
+                marked <span className="font-mono">saved</span> came from a file; the rest are live.
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={pendingImport !== null}
+        title="Open this saved run?"
+        body={`Loading ${pendingImport?.name ?? 'this file'} replaces the ${traces.length} request${traces.length === 1 ? '' : 's'} currently in the trace. They are held in memory only, so this cannot be undone.`}
+        confirmLabel="Replace the trace"
+        onConfirm={() => {
+          if (!pendingImport) return;
+          const count = pendingImport.entries.length;
+          importTraces(pendingImport.entries);
+          setPendingImport(null);
+          toast.success(`Loaded ${count} request${count === 1 ? '' : 's'} from a saved run`);
+        }}
+        onCancel={() => setPendingImport(null)}
+      />
 
       <div className="flex-1 overflow-y-auto">
         {view === 'sequence' ? (

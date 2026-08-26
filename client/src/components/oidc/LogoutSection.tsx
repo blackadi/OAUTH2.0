@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LOGOUT_ENDPOINT, CLIENT_ID } from '@/config';
+import { navigateTo } from '@/services/trace-store';
 import { useToken } from '@/context/TokenContext';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -22,7 +23,11 @@ function LogoutSection() {
     if (postLogoutUri) params.set('post_logout_redirect_uri', postLogoutUri);
     if (state) params.set('state', state);
     if (CLIENT_ID && CLIENT_ID !== 'your_client_id') params.set('client_id', CLIENT_ID);
-    window.location.href = `${LOGOUT_ENDPOINT}?${params.toString()}`;
+    // RP-Initiated Logout is a front-channel hop like any other, and it was the fifth unrecorded one.
+    navigateTo(
+      `${LOGOUT_ENDPOINT}?${params.toString()}`,
+      'logout — front channel, browser leaves for the RP-initiated logout endpoint',
+    );
   };
 
   return (

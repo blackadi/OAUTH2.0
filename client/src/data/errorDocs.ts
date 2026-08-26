@@ -13,7 +13,7 @@
  *    `docs/openapi-spec.json`. Never paraphrased.
  * 2. `AUTHLETE_NOTES` (below) — guidance for the codes this repo has *reproduced live*, each carrying
  *    the finding it came from. **The two sets are disjoint, and that was measured rather than assumed:**
- *    of the 38 codes the vendor document carries and the 26 established here by probing, the overlap is
+ *    of the 38 codes the vendor document carries and the 27 established here by probing, the overlap is
  *    **zero**. Authlete's examples are almost all generic or success cases; every code a developer
  *    actually hits on this deployment — `A157357`, `A124301`, `A089311`, `A404301` and the rest — comes
  *    from the second list. A decoder built from the vendor document alone would explain nothing useful.
@@ -163,6 +163,13 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
       'The client is registered as **public** with `tokenAuthMethod: NONE`, and the request carried client authentication data anyway. A non-empty value is what triggers it, whatever the value is — a placeholder and a plausible-looking secret fail identically. (Probed here: an *empty* `client_secret=` is tolerated and gets past client authentication; an omitted parameter is what RFC 6749 §2.3.1 describes.)',
     fix: 'Send `client_id` and nothing else: no `client_secret` in the body, no `Authorization: Basic`, no `client_assertion`. PKCE is what binds the code to this client (RFC 9700 §2.1.1 treats browser apps as public clients for exactly this reason). If you *meant* to authenticate, you are pointed at the wrong client — check its `tokenAuthMethod`.',
     spec: 'Verified live 2026-08-22 at the token endpoint · RFC 6749 §2.3.1',
+    verifiedHere: true,
+  },
+  A050318: {
+    cause:
+      'The authorization request declared a `dpop_jkt`, and the DPoP proof presented at the token endpoint is for a **different key**. RFC 9449 §10 makes this a MUST reject: the AS computes the JWK Thumbprint of the proof key and compares it to what was declared. The commonest cause is not a wrong key at all but a **wrongly computed thumbprint** — RFC 7638 §3.2 hashes `crv`, `kty`, `x`, `y` **only**, lexicographically ordered with no whitespace, so a digest taken over the whole JWK (a `kid`, say, or anything carrying `key_ops`/`ext` from a WebCrypto export) is a plausible-looking value that matches nothing.',
+    fix: 'Recompute `dpop_jkt` as the RFC 7638 thumbprint of the *same* key that signs the token-endpoint proof — `JSON.stringify({crv, kty, x, y})`, SHA-256, base64url. `jwkThumbprint` in `client/src/services/crypto-utils.ts` does it. To confirm you have the right value, it is the same one that comes back as `cnf.jkt` when you introspect the resulting token. If you did not mean to bind the code at all, omit `dpop_jkt` — §10 makes it OPTIONAL.',
+    spec: 'Verified live 2026-08-23 at the token endpoint, both directions · RFC 9449 §10 · RFC 7638 §3.2',
     verifiedHere: true,
   },
   A157357: {

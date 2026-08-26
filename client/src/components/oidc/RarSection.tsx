@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { rarService } from '@/services';
+import { navigateTo } from '@/services/trace-store';
 import type { ParSuccessResponse } from '@/services/par.service';
 import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
 import { createPkcePair } from '@/pkce';
@@ -135,7 +136,10 @@ function RarSection() {
     }
     const cid = clientId || 'your_client_id';
     setParResult(d);
-    window.location.href = `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`;
+    navigateTo(
+      `${AUTHORIZATION_ENDPOINT}?client_id=${encodeURIComponent(cid)}&request_uri=${encodeURIComponent(d.request_uri)}`,
+      'authorize (RAR via PAR) — front channel, browser leaves with the request_uri',
+    );
   };
 
   const handlePushOnly = async () => {
@@ -166,7 +170,10 @@ function RarSection() {
 
       storedParams.set('client_id', cid);
       const authUrl = `${AUTHORIZATION_ENDPOINT}?${storedParams.toString()}`;
-      window.location.href = authUrl;
+      navigateTo(
+        authUrl,
+        'authorize (RAR) — front channel, browser leaves for the authorization endpoint',
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to build authorization URL');
     }
@@ -336,7 +343,7 @@ function RarSection() {
                   <div className="px-3 py-2 space-y-2 text-xs">
                     {!!detail.locations && Array.isArray(detail.locations) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Locations
                         </span>
                         <ul className="list-disc list-inside text-foreground-muted mt-1">
@@ -350,14 +357,14 @@ function RarSection() {
                     )}
                     {!!detail.actions && Array.isArray(detail.actions) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Actions
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.actions as string[]).map((a: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-tint-accent text-accent-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-accent text-accent-text rounded text-2xs"
                             >
                               {a}
                             </span>
@@ -367,14 +374,14 @@ function RarSection() {
                     )}
                     {!!detail.datatypes && Array.isArray(detail.datatypes) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Data Types
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.datatypes as string[]).map((d: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-tint-info text-info-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-info text-info-text rounded text-2xs"
                             >
                               {d}
                             </span>
@@ -384,7 +391,7 @@ function RarSection() {
                     )}
                     {!!detail.identifier && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Identifier
                         </span>
                         <p className="text-foreground-muted mt-1 font-mono">
@@ -394,14 +401,14 @@ function RarSection() {
                     )}
                     {!!detail.privileges && Array.isArray(detail.privileges) && (
                       <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">
+                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
                           Privileges
                         </span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(detail.privileges as string[]).map((p: string, j: number) => (
                             <span
                               key={j}
-                              className="px-2 py-0.5 bg-tint-warning text-warning-text rounded text-[10px]"
+                              className="px-2 py-0.5 bg-tint-warning text-warning-text rounded text-2xs"
                             >
                               {p}
                             </span>
