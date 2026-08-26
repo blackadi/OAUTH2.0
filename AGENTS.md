@@ -136,6 +136,20 @@ defect, a broken lab, or spent vendor quota.
   wrong-password *re-render* branch, which the suite never exercises (it logs in with the correct
   password); the health change added fields, and the suite asserts property presence rather than exact
   shape. Recorded because the useful artefact is the reasoning, not the number.
+
+  **Run 2026-08-26, on request: 99 passed, 2 skipped, 0 failed** — 10.6s, against service `3693555522`
+  on `eu.authlete.com`, no rate-limit errors. So the reasoning above is now confirmed rather than
+  inferred. Do not read this as standing permission: the next change to a response body or a status
+  mapping puts it back to *measure, then ask*.
+
+  **The 2 skips can never run, and that is worth knowing before trusting the count.** Both are the
+  device-flow completion pair behind `itInDevelopment` (`tests/e2e/e2e.test.ts`), which resolves to
+  `it.skip` unless `NODE_ENV === "development"`. Vitest sets `NODE_ENV=test`, and `configDotenv()` is
+  called without `override`, so `.env` saying `development` has no effect under the runner. **Setting it
+  in `vitest.e2e.config.ts` is not the fix** — the suite also asserts the other side of that gate
+  (*"complete is development-only and 404s outside development"*), so flipping it trades one skipped test
+  for one failing one. Reaching them needs two runs at different `NODE_ENV`, or the production-safe
+  `POST /device/consent` path with a browser leg. So the honest count is **99 of 101 exercised**.
 - **Use plan mode for any change whose *concern* is on the Security-critical surfaces list below**, not
   merely for changes to a file on it. A one-line change to token issuance needs a plan; a large refactor
   of `metrics.service.ts` does not. The only exemption is a **semantics-free** edit — renaming a local, a
