@@ -4,7 +4,6 @@ import { shouldSkipLanding } from '@/services/preferences';
 import { TokenProvider } from '@/context/TokenContext';
 import { CredentialProvider } from '@/context/CredentialContext';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { TokenVault } from '@/components/ui/TokenVault';
 import CallbackPage from './pages/CallbackPage';
 import {
   KeyRound,
@@ -312,7 +311,7 @@ const App: React.FC = () => {
     <TokenProvider>
       <CredentialProvider>
         <Routes>
-          <Route element={<AppLayout groups={SECTIONS} sidebarHeader={<TokenVault />} />}>
+          <Route element={<AppLayout groups={SECTIONS} />}>
             {/*
               `/` was this redirect, so first paint was a twenty-item sidebar and a form. See
               `pages/LandingPage.tsx` — the audit scored the on-ramp 1/5 and called it the widest

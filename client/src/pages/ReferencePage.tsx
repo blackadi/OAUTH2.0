@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { BookOpen, ShieldAlert } from 'lucide-react';
 import { AUTH_PARAMS, PARAM_GROUPS } from '@/data/authParams';
 import { TOKEN_PARAMS } from '@/data/tokenParams';
@@ -7,6 +8,7 @@ import { OAUTH_ERRORS, AUTHLETE_NOTES } from '@/data/errorDocs';
 import { GLOSSARY, glossarySlug } from '@/data/glossary';
 import { Input } from '@/components/ui/Input';
 import { Prose } from '@/components/ui/Prose';
+import { useUrlState } from '@/hooks/useUrlState';
 import { cn } from '@/utils/cn';
 
 /**
@@ -46,8 +48,49 @@ const TABS: { id: Tab; label: string; blurb: string }[] = [
   { id: 'errors', label: 'Errors', blurb: 'Specification codes, and vendor codes verified here.' },
 ];
 
+const TAB_IDS = TABS.map((t) => t.id);
+
+/**
+ * Which tab holds a given anchor — and this is the fix for a claim this file made and did not keep.
+ *
+ * The comment above says *"every section deep-linkable by fragment"*, and for five of the six corpora it
+ * was **false**. The tab lived in `useState`, so `/reference#claim-s_hash` rendered the Glossary tab, the
+ * element with that id was never in the DOM, and `useHashScroll` watched for it until its 5s deadline and
+ * gave up — silently, because a fragment naming nothing is indistinguishable from a page that simply did
+ * not scroll. Only `#glossary-*` worked, because glossary is the default tab.
+ *
+ * Nothing could see it: the anchors are rendered, so `check-docs.mjs` is satisfied; the ids exist in the
+ * source, so a grep finds them; and no test navigated to one. It surfaced the moment the command palette
+ * started emitting these fragments in earnest.
+ *
+ * The prefixes are the ones `utils/command-index.ts` builds and this file renders, in one mapping rather
+ * than two — the same reason the index reads `claimDocs.ts` instead of restating it.
+ */
+function tabForAnchor(hash: string): Tab | null {
+  const id = hash.replace(/^#/, '');
+  if (id.startsWith('glossary-')) return 'glossary';
+  if (id.startsWith('param-')) return 'authorize';
+  if (id.startsWith('token-')) return 'token';
+  if (id.startsWith('claim-')) return 'claims';
+  if (id.startsWith('error-') || id.startsWith('authlete-')) return 'errors';
+  return null;
+}
+
 function ReferencePage() {
-  const [tab, setTab] = useState<Tab>('glossary');
+  const { hash } = useLocation();
+  /*
+    `?tab=` in the URL, with the incoming **fragment** as the fallback rather than a constant.
+
+    Two things had to be true at once. A tab has to be addressable — that is UX-08, and ten other sections
+    already carry their selection in the URL through this hook. And an anchor has to select its own tab,
+    so a link to an entry works whether or not whoever sent it knew about `?tab=`. Deriving the fallback
+    from the hash gives both, and it means a bare `/reference#claim-nonce` — the shape the palette emits
+    and the shape a person copies out of the address bar — resolves with no query string at all.
+
+    The palette deliberately does **not** emit `?tab=`: the anchor prefix already implies the tab, and two
+    encodings of one fact is how they come apart.
+  */
+  const [tab, setTab] = useUrlState('tab', TAB_IDS, tabForAnchor(hash) ?? 'glossary');
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
 

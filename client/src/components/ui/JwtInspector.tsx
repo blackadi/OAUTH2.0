@@ -105,7 +105,18 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
   const typ = typeof header.typ === 'string' ? header.typ : undefined;
 
   return (
-    <div className={cn('rounded-lg border border-border overflow-hidden', className)}>
+    /*
+      A query container, because this component is rendered at two wildly different widths and only one
+      of them was ever designed for.
+
+      `JwtInspector` appears in the section panes (~500-900px) *and* in the Token Vault, which lives in
+      the 224px sidebar rail. `ClaimRow` gave the claim name a fixed `min-w-[7rem]` — 112px — and put a
+      `HelpPopover` after the value, which in the rail left **7 to 29px** for the value itself. Measured
+      on a real ID token at 1440x900: `nonce` rendered over **38 lines**, `iss` over 31, `s_hash` over
+      23, one or two characters at a time. The container query is on the width that actually decides
+      rather than on the viewport, which at 1440px says nothing at all about a 224px rail.
+    */
+    <div className={cn('@container rounded-lg border border-border overflow-hidden', className)}>
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 flex-wrap">
         {label && <span className="text-xs font-semibold text-foreground">{label}</span>}
         <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-tint-accent-strong text-accent-text">
@@ -135,7 +146,10 @@ function JwtInspector({ token, label, defaultOpen = false, className }: JwtInspe
           </span>
         )}
         <VerificationBadge outcome={outcome} verifying={verifying} />
-        <div className="ml-auto flex items-center gap-2 shrink-0">
+        {/* `shrink-0` only once there is room for it. In the 224px rail the pair — a "Verify signature"
+            button plus "Hide claims" — is wider than the box, and an unshrinkable group inside
+            `overflow-hidden` is *clipped*: the screenshot that started this showed "Hide cl". */}
+        <div className="ml-auto flex flex-wrap items-center gap-2 @[22rem]:shrink-0">
           {!outcome && (
             <Button size="sm" variant="outline" onClick={verify} loading={verifying}>
               Verify signature
@@ -280,10 +294,24 @@ function ClaimRow({ name, value }: { name: string; value: unknown }) {
   const doc = CLAIM_DOCS[name];
   const time = TIME_CLAIMS.has(name) ? readTimeClaim(value) : null;
 
+  /*
+    Wrap-then-unwrap rather than two layouts, so the wide rendering is unchanged and there is still
+    exactly **one** `HelpPopover` in the tree. Two instances would be two focus-trapping dialogs for one
+    claim, which is a worse defect than the one being fixed.
+
+    Narrow (< 22rem of container): the row wraps, so the name and its help control take the first line
+    and `basis-full` drops the value onto its own line at the full width. Wide: `flex-nowrap` plus
+    `order-last` on the control reproduces today's three columns exactly — name (7rem), value, help.
+  */
   return (
-    <div className="flex items-start gap-2 text-xs py-0.5">
-      <code className="font-mono text-accent-text shrink-0 min-w-[7rem]">{name}</code>
-      <div className="min-w-0 flex-1">
+    <div className="flex flex-wrap items-start gap-x-2 text-xs py-0.5 @[22rem]:flex-nowrap">
+      <code className="font-mono text-accent-text shrink-0 @[22rem]:min-w-[7rem]">{name}</code>
+      {doc && (
+        <div className="shrink-0 ml-auto @[22rem]:ml-0 @[22rem]:order-last">
+          <HelpPopover title={`${name} — ${doc.name}`} description={doc.note} tips={doc.spec} />
+        </div>
+      )}
+      <div className="min-w-0 flex-1 basis-full @[22rem]:basis-auto">
         <span className="font-mono text-foreground break-all">
           {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)}
         </span>
@@ -294,11 +322,6 @@ function ClaimRow({ name, value }: { name: string; value: unknown }) {
         )}
         {doc && <p className="text-muted-foreground mt-0.5 leading-snug">{doc.note}</p>}
       </div>
-      {doc && (
-        <div className="shrink-0">
-          <HelpPopover title={`${name} — ${doc.name}`} description={doc.note} tips={doc.spec} />
-        </div>
-      )}
     </div>
   );
 }

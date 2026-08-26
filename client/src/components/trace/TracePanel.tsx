@@ -74,6 +74,15 @@ const METHOD_TONE: Record<string, string> = {
  */
 const NOTABLE_RESPONSE_HEADERS = ['www-authenticate', 'dpop-nonce', 'retry-after', 'location'];
 
+/**
+ * Visible from `32rem` of container width, in the accessibility tree always.
+ *
+ * `sr-only` rather than `hidden`, because `display: none` takes the text out of the accessibility tree
+ * too — the button would then have no accessible name at all, and the fix for that (an `aria-label` on
+ * each) is a second copy of every name, free to drift from the one on screen.
+ */
+const ACTION_LABEL = 'sr-only @[32rem]:not-sr-only';
+
 function shortPath(url: string): string {
   try {
     const parsed = new URL(url, window.location.origin);
@@ -332,9 +341,25 @@ function toMarkdown(entries: TraceEntry[]): string {
 interface TracePanelProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Where this is being rendered, which changes the frame and nothing else.
+   *
+   * `drawer` is the original: `position: fixed` across the bottom of the window, with its own title and
+   * close button. `pane` fills the evidence rail, which already supplies both — so those two pieces of
+   * chrome come off, and the container stops positioning itself. Everything below the toolbar is
+   * identical in both, deliberately: the filter, the timeline/sequence switch, the export pair and the
+   * import confirmation are the panel, and a second implementation of them would be a second set of
+   * bugs.
+   *
+   * **Exactly one instance is mounted at a time** — `AppLayout` chooses by viewport through
+   * `useMediaQuery`, rather than rendering both and hiding one. Two would put two `role="region"`
+   * landmarks with the same accessible name in the tree and split the filter state between them.
+   */
+  variant?: 'drawer' | 'pane';
 }
 
-function TracePanel({ open, onClose }: TracePanelProps) {
+function TracePanel({ open, onClose, variant = 'drawer' }: TracePanelProps) {
+  const isDrawer = variant === 'drawer';
   const traces = useTraces();
   const [filter, setFilter] = useState('');
   const [failuresOnly, setFailuresOnly] = useState(false);
@@ -435,119 +460,170 @@ function TracePanel({ open, onClose }: TracePanelProps) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card shadow-2xl flex flex-col"
-      style={{ height: 'min(52vh, 30rem)' }}
+      className={cn(
+        'flex flex-col bg-card',
+        isDrawer
+          ? 'fixed bottom-0 left-0 right-0 z-50 border-t border-border shadow-2xl'
+          : /* The rail owns the width, the height and the left border. */ 'h-full min-h-0',
+      )}
+      style={isDrawer ? { height: 'min(52vh, 30rem)' } : undefined}
       role="region"
       aria-label="Request trace"
     >
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 flex-wrap">
-        <Activity className="h-3.5 w-3.5 text-accent-text shrink-0" />
-        <span className="text-xs font-semibold text-foreground shrink-0">Request Trace</span>
-        <span className="text-2xs text-muted-foreground font-mono tabular-nums shrink-0">
-          {visible.length}
-          {visible.length !== traces.length ? ` / ${traces.length}` : ''}
-        </span>
+      {/*
+        The toolbar reduces its own labels to icons when its container is narrow — **progressive
+        reduction**, not progressive disclosure.
 
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter by path, method, status…"
-          aria-label="Filter requests"
-          className="ml-2 flex-1 min-w-[8rem] h-7 rounded-md border border-border bg-input px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+        Nine controls in a 380px rail wrapped to three rows, which is a third of the pane's height spent
+        on chrome before a single request is shown. The usual reach is an overflow menu, and it is the
+        wrong tool here: four of these are one-click primitives, one of them is *Clear*, and burying a
+        destructive action one level deeper than the three benign ones beside it is how it gets pressed by
+        accident. Dropping the labels keeps every control one click away, at 28px each, which is what a
+        dense utility toolbar does.
 
-        {/* Two views of the same capture: a list, and the conversation it describes. */}
-        <div className="flex gap-0.5 shrink-0" role="tablist" aria-label="Trace view">
-          {(['timeline', 'sequence'] as const).map((v) => (
+        The query is on the **container**, not the viewport, so the same component is correct in a 380px
+        rail, a rail the reader has dragged to 640px, and the full-width bottom sheet — the lesson
+        `SplitPane` already carries. Labels return at `32rem`, which is the first width where the four of
+        them plus the filter and the view switch fit on two rows.
+      */}
+      <div className="@container border-b border-border shrink-0">
+        <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
+          {/* In the rail the tab already says "Trace", and repeating it costs a line of a 380px column. */}
+          {isDrawer && (
+            <>
+              <Activity className="h-3.5 w-3.5 text-accent-text shrink-0" />
+              <span className="text-xs font-semibold text-foreground shrink-0">Request Trace</span>
+            </>
+          )}
+          {/* In the rail the tab already reads `Trace · 12`, so an unfiltered count here is a bare number
+            with nothing to attach it to. Once a filter narrows the list, `3 / 12` is the only place that
+            says so, and it earns its space. */}
+          {(isDrawer || visible.length !== traces.length) && (
+            <span className="text-2xs text-muted-foreground font-mono tabular-nums shrink-0">
+              {visible.length}
+              {visible.length !== traces.length ? ` / ${traces.length}` : ''}
+            </span>
+          )}
+
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by path, method, status…"
+            aria-label="Filter requests"
+            /* `basis-40` with `flex-1`: the filter takes 10rem as its starting size and grows into whatever
+             row 1 has left, which makes the wrap point predictable instead of a function of the
+             placeholder's intrinsic width. */
+            className={cn(
+              'flex-1 basis-40 min-w-0 h-7 rounded-md border border-border bg-input px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring',
+              isDrawer && 'ml-2',
+            )}
+          />
+
+          {/* Two views of the same capture: a list, and the conversation it describes. */}
+          <div className="flex gap-0.5 shrink-0" role="tablist" aria-label="Trace view">
+            {(['timeline', 'sequence'] as const).map((v) => (
+              <button
+                key={v}
+                role="tab"
+                aria-selected={view === v}
+                onClick={() => setView(v)}
+                className={cn(
+                  'text-2xs px-2 py-1 rounded border cursor-pointer transition-colors capitalize',
+                  view === v
+                    ? 'bg-tint-accent-strong text-accent-text border-edge-accent'
+                    : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setFailuresOnly((f) => !f)}
+            className={cn(
+              'text-2xs px-2 py-1 rounded border cursor-pointer transition-colors shrink-0',
+              failuresOnly
+                ? 'bg-tint-warning-strong text-warning-text border-edge-warning'
+                : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
+            )}
+          >
+            Failures only
+          </button>
+          {/* One cluster, so the four of them wrap together and stay right-aligned on whichever row they
+            land on. `ACTION_LABEL` is `sr-only` below the threshold rather than `hidden`: the text stays
+            in the accessibility tree, so these keep their accessible names without a second copy of each
+            name in an `aria-label` that could drift from the visible one. */}
+          <div className="ml-auto flex items-center gap-1 shrink-0">
             <button
-              key={v}
-              role="tab"
-              aria-selected={view === v}
-              onClick={() => setView(v)}
-              className={cn(
-                'text-2xs px-2 py-1 rounded border cursor-pointer transition-colors capitalize',
-                view === v
-                  ? 'bg-tint-accent-strong text-accent-text border-edge-accent'
-                  : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
-              )}
+              onClick={exportMarkdown}
+              disabled={visible.length === 0}
+              title="Copy these requests as Markdown, for a chat or an issue"
+              className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
             >
-              {v}
+              {exported ? (
+                <Check className="h-3 w-3 text-success-text" />
+              ) : (
+                <Download className="h-3 w-3" />
+              )}
+              <span className={ACTION_LABEL}>{exported ? 'Copied' : 'Export'}</span>
             </button>
-          ))}
-        </div>
-        <button
-          onClick={() => setFailuresOnly((f) => !f)}
-          className={cn(
-            'text-2xs px-2 py-1 rounded border cursor-pointer transition-colors shrink-0',
-            failuresOnly
-              ? 'bg-tint-warning-strong text-warning-text border-edge-warning'
-              : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',
-          )}
-        >
-          Failures only
-        </button>
-        <button
-          onClick={exportMarkdown}
-          disabled={visible.length === 0}
-          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
-        >
-          {exported ? (
-            <Check className="h-3 w-3 text-success-text" />
-          ) : (
-            <Download className="h-3 w-3" />
-          )}
-          {exported ? 'Copied' : 'Export'}
-        </button>
-        {/* Two exports with two destinations: Markdown to the clipboard for a chat or an issue, a run
+            {/* Two exports with two destinations: Markdown to the clipboard for a chat or an issue, a run
             file to disk for somebody to open here. See `services/run-file.ts` on why not one. */}
-        <button
-          onClick={saveRunFile}
-          disabled={visible.length === 0}
-          title="Save these requests as a file somebody can open in this tool"
-          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
-        >
-          <FileDown className="h-3 w-3" />
-          Save run
-        </button>
-        <label
-          title="Open a saved run — this replaces the requests shown here"
-          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
-        >
-          <Upload className="h-3 w-3" />
-          Open run
-          {/*
+            <button
+              onClick={saveRunFile}
+              disabled={visible.length === 0}
+              title="Save these requests as a file somebody can open in this tool"
+              className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground border-none cursor-pointer disabled:opacity-40 shrink-0"
+            >
+              <FileDown className="h-3 w-3" />
+              <span className={ACTION_LABEL}>Save run</span>
+            </button>
+            <label
+              title="Open a saved run — this replaces the requests shown here"
+              className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+            >
+              <Upload className="h-3 w-3" />
+              <span className={ACTION_LABEL}>Open run</span>
+              {/*
             A real `<input type="file">` inside the label rather than a button that clicks a hidden one.
             The label makes the whole control the file picker's trigger, keyboard included, and
             `sr-only` keeps the input in the accessibility tree — `display: none` would take it out of
             it, which is how a file picker becomes unreachable without a pointer.
           */}
-          <input
-            type="file"
-            accept="application/json,.json"
-            aria-label="Open a saved run"
-            className="sr-only"
-            onChange={(e) => {
-              void readRunFile(e.target.files?.[0]);
-              // Cleared so choosing the *same* file twice fires `change` the second time too.
-              e.target.value = '';
-            }}
-          />
-        </label>
-        <button
-          onClick={clearTraces}
-          disabled={traces.length === 0}
-          className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-danger-text border-none cursor-pointer disabled:opacity-40 shrink-0"
-        >
-          <Trash2 className="h-3 w-3" />
-          Clear
-        </button>
-        <button
-          onClick={onClose}
-          aria-label="Close request trace"
-          className="p-1 rounded text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer shrink-0"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+              <input
+                type="file"
+                accept="application/json,.json"
+                aria-label="Open a saved run"
+                className="sr-only"
+                onChange={(e) => {
+                  void readRunFile(e.target.files?.[0]);
+                  // Cleared so choosing the *same* file twice fires `change` the second time too.
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <button
+              onClick={clearTraces}
+              disabled={traces.length === 0}
+              title="Discard the requests shown here — they are held in memory only"
+              className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/40 text-muted-foreground hover:text-danger-text border-none cursor-pointer disabled:opacity-40 shrink-0"
+            >
+              <Trash2 className="h-3 w-3" />
+              <span className={ACTION_LABEL}>Clear</span>
+            </button>
+          </div>
+          {/* The rail has one close control for all three of its tabs; a second one here would be two
+            controls for one action, and the wrong one would be the nearer. */}
+          {isDrawer && (
+            <button
+              onClick={onClose}
+              aria-label="Close request trace"
+              className="p-1 rounded text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer shrink-0"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/*
@@ -596,7 +672,7 @@ function TracePanel({ open, onClose }: TracePanelProps) {
         onCancel={() => setPendingImport(null)}
       />
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {view === 'sequence' ? (
           <SequenceView
             traces={visible}
