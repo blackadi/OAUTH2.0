@@ -26,9 +26,9 @@ import { TOKEN_PARAMS } from '@/data/tokenParams';
 
 afterEach(cleanup);
 
-function mount() {
+function mount(entry = '/reference') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[entry]}>
       <ReferencePage />
     </MemoryRouter>,
   );
@@ -195,5 +195,62 @@ describe('the glossary data itself', () => {
     for (const entry of GLOSSARY) {
       expect(paramNames.has(entry.term)).toBe(false);
     }
+  });
+});
+
+describe('an anchor selects its own tab', () => {
+  /**
+   * The defect this closes, and it had been true since the page was written.
+   *
+   * The file's own doc comment claims *"every section deep-linkable by fragment"*. For five of the six
+   * corpora it was **false**: the tab lived in `useState`, so `/reference#claim-s_hash` rendered the
+   * Glossary tab, the element with that id was never in the DOM, and `useHashScroll` watched for it until
+   * its 5s deadline and gave up — silently, because a fragment naming nothing is indistinguishable from a
+   * page that simply did not scroll. Only `#glossary-*` worked, because glossary is the default.
+   *
+   * Nothing could see it. The anchors *are* rendered, so `check-docs.mjs` is satisfied and a grep finds
+   * every id. It surfaced only when the command palette started emitting these fragments in earnest —
+   * which is also why this mapping is now the contract two files depend on and gets a case per prefix.
+   */
+  it.each([
+    ['#glossary-authorization-server', 'Glossary'],
+    ['#param-code_challenge', 'Authorization request'],
+    ['#token-code_verifier', 'Token request'],
+    ['#claim-s_hash', 'JWT claims'],
+    ['#error-invalid_grant', 'Errors'],
+    ['#authlete-A157303', 'Errors'],
+  ])('opens %s on the %s tab', (hash, label) => {
+    mount(`/reference${hash}`);
+    expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-current', 'true');
+    // And the anchor is actually in the document, which is the half that was missing.
+    expect(document.getElementById(hash.slice(1))).not.toBeNull();
+  });
+
+  it('falls back to the glossary for a fragment it does not recognise', () => {
+    // A stale or hand-edited fragment should land somewhere legible rather than on an empty page.
+    mount('/reference#something-else');
+    expect(screen.getByRole('button', { name: 'Glossary' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+  });
+
+  it('lets ?tab= win over the fragment, so a chosen tab is addressable', () => {
+    /*
+      Both are honoured, and the precedence is deliberate. `?tab=` is what clicking a tab writes, so it
+      represents a decision made *after* arriving; the fragment is only the fallback. That ordering is what
+      lets somebody land on an entry, switch tabs to read something else, and copy a URL that reopens what
+      they were actually looking at.
+    */
+    mount('/reference?tab=errors#claim-s_hash');
+    expect(screen.getByRole('button', { name: 'Errors' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('ignores a ?tab= value that is not a tab', () => {
+    mount('/reference?tab=nonsense');
+    expect(screen.getByRole('button', { name: 'Glossary' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
   });
 });

@@ -29,12 +29,101 @@
   because scrolling a sighted reader to step 4 and leaving the keyboard at the top of the document is the
   standard skip-link defect one layer along.
 - **Sections**: 22 sections organized in 3 sidebar groups — OAuth 2.0 (Grant Flows, Token Operations, Step-Up Auth, Logout), OIDC & Extensions (DCR, CIBA, PAR, RAR, JAR, Device Flow, Backchannel Logout, Discovery, OIDC Federation, FAPI 2.0/DPoP, MCP, Verifiable Credentials), Admin (Token Management, Client Management, Grant Management, Health Check).
-- **Layout**: Sticky 48px header with AppLayout, collapsible mobile nav, 56px sidebar (desktop only). Backdrop blur on header. Grouped sidebar with lucide icons and active-state shadows.
-- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` — split on two different lines, and each line is the point. **Grant Flows splits by channel**: `AuthorizationCodePanel.tsx` is the front channel (a DPoP key, four `sessionStorage` keys `CallbackPage` will read, and a navigation), `BackChannelGrantPanels.tsx` is the four grants that are one `POST /api/token` each, `grant-flows.ts` is the tab and step configuration, `AuthFlowsSection.tsx` is what is genuinely shared — the diagram, the result pane, and the one place that records which client a token belongs to. Both panels are rendered **unconditionally** and return `null` when not selected, because conditional mounting would discard the other tab's state — including unticking DPoP while its key is still in session, which is the invisible-mode bug this section keeps producing. **The authorization-request builder splits by what owns which state**: `use-authorize-params.ts` is the parameter table and the one URL derived from it, `AuthorizeParamRow.tsx` is one row, `AuthorizeRequestPanel.tsx` owns raw-URL mode and therefore the send, `AuthorizeRequestBuilder.tsx` is the accordion and the wiring. Plus TokenRequestPanel, `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components; `ClientManagementSection` renders its seventeen operations from the `client-operations.ts` table rather than from seventeen branches), `components/fapi/` (FapiSection — the live posture report and the DPoP key tools; `use-fapi-flow.ts` owns the four-step sequence and `FapiTestFlow.tsx` renders it), `components/mcp/` (McpSection — three metadata lookups; `use-mcp-flow.ts` owns the six-step sequence and `McpWizard.tsx` renders it), `components/vci/` (VciSection plus one panel file per **authentication posture** — `VciDiscoveryPanels` public, `VciOfferPanels` admin-gated, `VciCredentialPanels` access-token — and `vci-operations.ts`), `components/trace/` (TracePanel, SequenceView), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription, **JwtInspector**, **ErrorExplainer**).
+- **Layout**: three zones at `lg:` and up — **left navigates, centre acts, right is evidence**. A 48px
+  header, a 224px navigation rail (`w-56`, desktop only, grouped, lucide icons, active-state shadows), the
+  content pane, and the **evidence rail**. Collapsible mobile nav below `lg:`.
+
+  **The shell is a shell only at `lg:`, and that is the fix for a defect that hid the vault** (2026-08-26).
+  `AppLayout`'s root was `min-h-screen` — a *minimum* — while everything under it was written for a
+  fixed-height shell: the row is `overflow-hidden`, `nav` and `main` are both `overflow-y-auto`. None of it
+  engaged. Measured on `/auth-flows` at 1440×900: the document was **2,694px** tall, the `<aside>` was
+  2,646px of it, and the Token Vault sat at **y = 2,637** — 1,737px below the fold on a rail that scrolled
+  away with the page. Opening the vault's JWT inspector took the aside to ~8,700px and squeezed `nav` from
+  2,575px to 992px, which is what "the sidebar looks missing" looks like. `min-h-screen lg:h-dvh` plus
+  `min-h-0` on the row and on `nav`; constrained only at `lg:` because below it the sidebar is hidden and
+  the reading surfaces are prose, which belongs in the document scroll a phone gives you for free.
+
+  **`components/layout/EvidenceRail.tsx` is the third zone**, and it solves placement rather than adding
+  features. The evidence this debugger captures was already good and was scattered across three unrelated
+  idioms at three edges: tokens in the sidebar *footer* under 22 nav links in 224px, the request trace in a
+  `position: fixed` drawer that **covered the content it explained** (`AppLayout` reserved
+  `min(52vh, 30rem)` of bottom padding to compensate), and a decoded token wherever the producing section
+  put it — nowhere at all for a token you brought with you. Three tabs: **Tokens** (the vault, expanded),
+  **Trace** (`TracePanel variant="pane"`), **Inspect** (`JwsScratchpad`, which decodes and verifies any
+  pasted JWS and normalises away the `Bearer` prefix, quotes and line wraps a real paste carries).
+
+  Four rules it follows, each of which was a decision rather than a default:
+
+  - **Open, tab and width persist in `localStorage`** through `services/preferences.ts`. `railOpen` stores
+    both `'true'` and `'false'`, breaking that file's own remove-rather-than-write rule, because the
+    default is not a constant — see the note on the key.
+  - **It auto-opens from 1440px, derived not chosen.** `SplitPane` needs a 704px container; content pane =
+    viewport − 224 − 380, container = min(1024, that) − 64, so two columns survive from **1372px** up. 1440
+    is the first real display width above that bound, and a 1366×768 laptop correctly does not auto-open.
+  - **The vault has exactly one home at a time** — the rail when open, the sidebar footer when shut. Both
+    at once would be two instances with two expanded states and two Clear-session dialogs for one session;
+    neither would make it reachable only to people who already know the rail exists.
+  - **The trace is mounted once**, in the rail above `lg:` and as the bottom sheet below it, chosen through
+    `hooks/useMediaQuery.ts` (`useSyncExternalStore`, `matchMedia`-guarded for jsdom). Rendering both and
+    hiding one would put two `role="region"` landmarks with one accessible name in the tree.
+
+  **`⌘K` / `Ctrl+K` is the way in, and `utils/command-index.ts` is what it searches.** The sidebar is the
+  only route to a section and it does not fit: 22 links plus 4 group headings need 992px of a rail that
+  has 781px, so Admin is permanently below the fold. One level down, `/reference` renders the whole cited
+  corpus — 24 authorization parameters, 6 token-request parameters, 26 claims, 20 specification error
+  codes, 18 Authlete codes, a glossary — each with its own anchor, and the only way to reach an entry was
+  to know the page existed and scroll it. The corpus was the differentiator and its index was a scrollbar.
+
+  The palette searches **the data, not the pages**: the index is built from the same modules
+  `ReferencePage` renders, so nothing is authored twice and a renamed anchor breaks in one place. Four
+  rules, each of which was a decision:
+
+  - **`role="combobox"` with `aria-activedescendant`**, options not focusable, focus never leaving the
+    input — the APG pattern. Move DOM focus onto each row instead and every keystroke after the first goes
+    to a `<div>` rather than the query.
+  - **The listbox is always mounted and the empty message is its sibling.** A `listbox` may contain only
+    `option` and `group`, and `aria-controls` must point at a real element; those two rules pull opposite
+    ways and this is the shape that satisfies both. Both are in the WCAG set axe runs.
+  - **Groups are ordered by their best member**, not by a fixed category order, which is what keeps "type,
+    then press Enter" true. A fixed order would put a weak Glossary hit above a strong Claims hit and
+    Enter would open the wrong thing.
+  - **No destructive commands.** Clearing the vault, revoking a token and deleting a client stay behind
+    their typed confirmations. A palette is the one surface where you are typing fast at a list you have
+    not finished reading.
+
+  Matching is coarse on purpose — title beats keywords beats subtitle beats prose, every whitespace token
+  must match something (AND, not OR), and a two-character query matches **initials**, so `cm` reaches
+  *Client Management*. A relevance model nobody can predict is worse than a blunt one everybody can.
+
+  **Writing the palette found a defect that had been there since `/reference` was written.** Its own doc
+  comment claims *"every section deep-linkable by fragment"* and for **five of its six corpora that was
+  false**: the tab lived in `useState`, so `/reference#claim-s_hash` rendered the Glossary tab, the element
+  with that id was never in the DOM, and `useHashScroll` watched for it until its 5s deadline and gave up
+  silently. Only `#glossary-*` worked, because glossary is the default. The tab is now `useUrlState('tab',
+  …)` with **the incoming fragment as the fallback** — so `?tab=` stays addressable (UX-08) and a bare
+  `/reference#claim-nonce` selects its own tab. The palette deliberately emits only the fragment: the
+  prefix already implies the tab, and two encodings of one fact drift apart.
+
+  **The trace toolbar reduces rather than discloses.** Nine controls in a 380px rail wrapped to three rows
+  — a third of the pane's height spent on chrome before a single request appeared. The four file and
+  clipboard actions now drop their labels to icons below `32rem` of *container* width, so one component is
+  correct in the rail, in a rail dragged to 640px, and in the full-width bottom sheet. An overflow menu was
+  the wrong tool: four one-click primitives, one of them **Clear**, and burying a destructive action a
+  level deeper than the three benign buttons beside it is how it gets pressed by accident. The labels are
+  `sr-only`, never `hidden` — `display: none` would take the text out of the accessibility tree and leave
+  four icon buttons with no accessible name, and the fix for *that* is a second copy of every name in an
+  `aria-label` free to drift from the one on screen.
+
+  The sidebar footer is capped at `max-h-[50%]`: `nav` is `flex-1` so its flex base size is 0, which means
+  a `shrink-0` footer wins every contest for height no matter how tall it gets. `JwtInspector` is a
+  `@container` for the same class of reason — it renders at ~500–900px in a section pane and at 224px in
+  the sidebar, and its fixed `min-w-[7rem]` claim column left **7–29px** for the value there, wrapping
+  `nonce` over **38 lines**.
+- **Components**: Organized into `components/layout/` (AppLayout, Sidebar, **EvidenceRail**, **CommandPalette**, SectionPanel, ErrorBoundary, AdminAuth), `components/auth/` — split on two different lines, and each line is the point. **Grant Flows splits by channel**: `AuthorizationCodePanel.tsx` is the front channel (a DPoP key, four `sessionStorage` keys `CallbackPage` will read, and a navigation), `BackChannelGrantPanels.tsx` is the four grants that are one `POST /api/token` each, `grant-flows.ts` is the tab and step configuration, `AuthFlowsSection.tsx` is what is genuinely shared — the diagram, the result pane, and the one place that records which client a token belongs to. Both panels are rendered **unconditionally** and return `null` when not selected, because conditional mounting would discard the other tab's state — including unticking DPoP while its key is still in session, which is the invisible-mode bug this section keeps producing. **The authorization-request builder splits by what owns which state**: `use-authorize-params.ts` is the parameter table and the one URL derived from it, `AuthorizeParamRow.tsx` is one row, `AuthorizeRequestPanel.tsx` owns raw-URL mode and therefore the send, `AuthorizeRequestBuilder.tsx` is the accordion and the wiring. Plus TokenRequestPanel, `components/oidc/` (8 OIDC/OAuth section components), `components/admin/` (4 admin section components; `ClientManagementSection` renders its seventeen operations from the `client-operations.ts` table rather than from seventeen branches), `components/fapi/` (FapiSection — the live posture report and the DPoP key tools; `use-fapi-flow.ts` owns the four-step sequence and `FapiTestFlow.tsx` renders it), `components/mcp/` (McpSection — three metadata lookups; `use-mcp-flow.ts` owns the six-step sequence and `McpWizard.tsx` renders it), `components/vci/` (VciSection plus one panel file per **authentication posture** — `VciDiscoveryPanels` public, `VciOfferPanels` admin-gated, `VciCredentialPanels` access-token — and `vci-operations.ts`), `components/trace/` (TracePanel, SequenceView), `components/ui/` (Button, Input, Select, Textarea, Badge, Card, TabBar, Spinner, Skeleton, FlowDiagram, SplitPane, RequestBuilder, TokenVault, JsonBlock, HelpPopover, OperationDescription, **JwtInspector**, **JwsScratchpad**, **ErrorExplainer**).
 
   **Four of these carry the debugging capability added 2026-08-21/22 and are worth knowing before adding a fifth surface.** `AuthorizeRequestBuilder` builds an authorization request from `data/authParams.ts` — 24 parameters, each with its conformance word and a spec reference verified against the primary source — and **the URL it displays is the string it navigates to**, because a separately-assembled preview drifted from the real request. That invariant now spans two files, which is why the split runs where it does: `builtUrl` is derived in `use-authorize-params.ts` and `effectiveUrl` — which is what actually gets sent — is decided in `AuthorizeRequestPanel.tsx` beside the raw-mode state it depends on. Computing the URL in one place and choosing which URL to send in another is precisely how the original preview drifted. `JwtInspector` decodes *and verifies* against the JWKS (`utils/jwt.ts`, `crypto.subtle`, RS/PS/ES); it starts **unverified** deliberately, since a legible payload is not an authenticated one. `ErrorExplainer` turns an OAuth error code or an Authlete `[Annnnnn]` into cause and fix via `data/errorDocs.ts` — and **never invents one**: the vendor half is generated from `docs/openapi-spec.json` and CI-gated, an unknown code is reported as unknown. `TracePanel`/`SequenceView` render the request trace as a timeline and as a message flow whose every arrow is a captured request.
 - **Server status indicator**: `useServerStatus` hook (in `hooks/`) polls `GET /api/health` every 30s (10s retry on failure, 5s timeout). Color-coded badge in header: green=connected, red=offline, yellow pulse=checking. Hover shows uptime.
-- **Hooks**: `useAsyncCall`, `useClipboard`, `useServerStatus`, `useTraces`, `useTheme`, `useCopyFeedback`, `useUrlState` and `useHashScroll` in `hooks/`. `useUrlState` carries three overloads so a caller supplying a real fallback is never handed `null` — without them every section with a default tab re-applied it beside a hook that had already been given it, and the second copy is the one that goes stale. Its `replace`-not-`push` choice is deliberate and documented in the file. `useServerStatus` re-runs its effect when connectivity flips — deliberately, since a connected server is polled every 30s and an unreachable one every 10s — so two requests on first connect is expected, not a duplicate.
+- **Hooks**: `useAsyncCall`, `useClipboard`, `useServerStatus`, `useTraces`, `useTheme`, `useCopyFeedback`, `useUrlState`, `useHashScroll` and `useMediaQuery` in `hooks/`. **`useMediaQuery` is for one narrow job and should not spread**: a Tailwind breakpoint belongs in the stylesheet and a container query usually beats a viewport one (`SplitPane`). It exists because the trace panel has to be *mounted in a different place* depending on the viewport, which CSS cannot express — and it uses `useSyncExternalStore` rather than `useState` + `useEffect`, both because a `MediaQueryList` is exactly an external mutable source and because a synchronous `setState` in an effect body is a cascading render that `react-hooks/set-state-in-effect` rejects. `useUrlState` carries three overloads so a caller supplying a real fallback is never handed `null` — without them every section with a default tab re-applied it beside a hook that had already been given it, and the second copy is the one that goes stale. Its `replace`-not-`push` choice is deliberate and documented in the file. `useServerStatus` re-runs its effect when connectivity flips — deliberately, since a connected server is polled every 30s and an unreachable one every 10s — so two requests on first connect is expected, not a duplicate.
 - **Services**: Organized by domain in `services/` — `token.service.ts`, `admin.service.ts`, `client.service.ts`, `dcr.service.ts`, `ciba.service.ts`, `par.service.ts`, `rar.service.ts`, `device.service.ts`, `grant.service.ts`, `jar.service.ts`, `federation.service.ts`, `vci.service.ts`, `fapi.service.ts`, `backchannel-logout.service.ts`, `health.service.ts`, `mcp.service.ts`, `token-exchange.service.ts`, `client-assertion.service.ts`, `dpop.service.ts` and `announcer.ts`. All exported from `services/index.ts`. Beneath them sit `transport.ts` (the one place a request leaves), `http.ts` (request shapes over it), `schemas.ts` (what a response must look like), `run-file.ts` (a run as a file, exported and read back), `preferences.ts` (the `localStorage` counterpart to `session-keys.ts`), `dpop-fetch.ts`, `session-keys.ts`, `crypto-utils.ts` and `trace-store.ts` — **read the directory rather than trusting this list**, which is the kind of inventory that goes stale silently.
 
   **`services/transport.ts` is the only place a request leaves the app, and nothing should bypass it.** `http.ts` is now request *shapes* over it. Every service ended with `throw new Error(await response.text())` until 2026-08-21 — nine times in `http.ts` and again in six other files — which discarded the status, the status text and every response header at the boundary, so nothing downstream could tell 400 from 401 from 429 from 500. `WWW-Authenticate` carries the whole step-up and DPoP challenge mechanism, `DPoP-Nonce` carries the value a client must replay, and `Retry-After` distinguishes a rate limit from a rejection; all three were invisible. `sendRaw` deliberately does **not** throw on a non-2xx — at a debugger's transport layer a 401 is data — and `send` wraps it for callers that want the throw. `HttpError.message` is the raw body, which is what let ~20 `toast.error(err)` call sites keep working. Every call is recorded to `services/trace-store.ts`, which the trace panel and the flow diagram both read.

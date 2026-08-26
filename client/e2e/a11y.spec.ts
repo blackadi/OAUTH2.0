@@ -48,6 +48,33 @@ test.describe('no WCAG A/AA violations', () => {
   }
 
   /**
+   * The palette gets its own pass, because it is the one surface axe never sees on a route sweep.
+   *
+   * It is a portal-rendered modal that only exists after a keystroke, so none of the 22 route scans above
+   * reach it — and it is dense ARIA: a `combobox` with `aria-activedescendant`, a `listbox` that must
+   * contain only `option` and `group`, and an `aria-controls` that has to point at a real element even
+   * when nothing matched. Two of those constraints pull against each other, and the shape that satisfies
+   * both is not the obvious one; this is what says it still does.
+   */
+  test('the command palette, open and with results', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/auth-flows');
+    await page.waitForSelector('h1');
+    await page.keyboard.press('Control+k');
+    await page.getByRole('combobox', { name: /Search sections/ }).fill('nonce');
+    await settle(page);
+
+    const withResults = await scan(page).analyze();
+    expect(JSON.stringify(summarise(withResults.violations), null, 2)).toBe('[]');
+
+    // And with none, which is the branch where the listbox is empty and `aria-activedescendant` is gone.
+    await page.getByRole('combobox', { name: /Search sections/ }).fill('zzzznothing');
+    await settle(page);
+    const withNone = await scan(page).analyze();
+    expect(JSON.stringify(summarise(withNone.violations), null, 2)).toBe('[]');
+  });
+
+  /**
    * The light palette gets its own pass.
    *
    * `check-contrast.mjs` scores the *declared token values* from the built stylesheet, which is real but
@@ -201,14 +228,55 @@ test.describe('keyboard-only operation', () => {
     await page.goto('/auth-flows');
     await page.waitForSelector('h1');
 
-    const tabs = page.getByRole('tab');
-    await tabs.first().focus();
+    /*
+      Scoped to the tab list under test, and it has to be.
+
+      This was `page.getByRole('tab')` across the whole document, which was unambiguous only while the
+      page had exactly one tab list. The evidence rail added a second one at this viewport, so
+      `{ selected: true }` began resolving to two elements — one per list, each of them correct. The
+      assertion's *intent* never changed: a roving-tabindex list has exactly one selected tab. It just
+      never said which list it meant.
+    */
+    const grantTabs = page.locator('#main [role="tablist"]').first();
+    await grantTabs.getByRole('tab').first().focus();
     const before = await page.evaluate(() => document.activeElement?.textContent);
     await page.keyboard.press('ArrowRight');
     const after = await page.evaluate(() => document.activeElement?.textContent);
 
     expect(after).not.toBe(before);
-    await expect(page.getByRole('tab', { selected: true })).toHaveCount(1);
+    await expect(grantTabs.getByRole('tab', { selected: true })).toHaveCount(1);
+  });
+
+  /**
+   * And the same contract on the rail's own tab list, which is a `TabBar` too.
+   *
+   * Worth its own test rather than folding into the one above: the rail is the newer of the two and is
+   * reached by keyboard *after* twenty-two navigation links and a whole section, so if roving tabindex
+   * were broken anywhere it would be the easier place to not notice.
+   */
+  test('arrow keys move between the evidence tabs', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 950 });
+    await page.goto('/auth-flows');
+    await page.waitForSelector('h1');
+
+    /*
+      Scoped to the *tablist*, not to the rail — the rail contains two of them once the Trace tab is
+      showing, because `TracePanel`'s timeline/sequence switch is a tab list in its own right. Scoping to
+      the `<aside>` reproduced the exact ambiguity this test was written to close, one level in.
+    */
+    const rail = page.locator('aside[aria-label="Evidence"]');
+    const evidenceTabs = page.getByRole('tablist', { name: 'Evidence' });
+    await expect(rail).toBeVisible();
+    await evidenceTabs.getByRole('tab', { name: 'Tokens' }).focus();
+    await page.keyboard.press('ArrowRight');
+
+    await expect(evidenceTabs.getByRole('tab', { name: /Trace/ })).toBeFocused();
+    await expect(evidenceTabs.getByRole('tab', { selected: true })).toHaveCount(1);
+    /* Selection follows focus, which is what `TabBar` implements and what the pattern expects. */
+    await expect(evidenceTabs.getByRole('tab', { name: /Trace/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });
 

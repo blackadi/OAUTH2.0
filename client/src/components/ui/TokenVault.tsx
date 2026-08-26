@@ -7,9 +7,20 @@ import { useClipboard } from '@/hooks/useClipboard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/utils/cn';
 
-function TokenVault() {
+interface TokenVaultProps {
+  /**
+   * Start with the token list showing.
+   *
+   * Collapsed is right in the sidebar footer and in the mobile drawer, where the vault is one item among
+   * others competing for a small space. It is wrong in the evidence rail's Tokens tab, where the tab
+   * *is* the request to see the tokens — asking for them twice is a click that carries no information.
+   */
+  defaultExpanded?: boolean;
+}
+
+function TokenVault({ defaultExpanded = false }: TokenVaultProps) {
   const { tokenSet, clearTokens } = useToken();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   /**
    * Which token is open in the inspector. It used to be an ID-token-only payload decode via
    * `jwt-decode` — no header, no signature check, and no way to look at an access token at all, though
@@ -40,7 +51,17 @@ function TokenVault() {
   ];
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+    /*
+      A flex column whose *body* scrolls, not the card.
+
+      The sidebar bounds this at half the rail (see `Sidebar`), and the obvious way to honour that — let
+      the container scroll — pushed the "Token Vault" title and the Clear control out of view the moment
+      the JWT inspector opened, because clicking Inspect scrolls the inspector into the container. The
+      header is what tells you which surface you are looking at, so it is `shrink-0` and the list below
+      it takes the overflow. In the mobile drawer there is no bounding height, so nothing here scrolls
+      and the drawer scrolls as before.
+    */
+    <div className="flex flex-col min-h-0 rounded-lg border border-border/60 bg-card overflow-hidden">
       {/*
         Two sibling buttons in a row, not one nested inside the other.
 
@@ -49,7 +70,7 @@ function TokenVault() {
         keyboard and assistive-technology behaviour is undefined. `e.stopPropagation()` patched the mouse
         click and nothing else. This is the sidebar header, so it was on every one of the 20 routes.
       */}
-      <div className="flex items-stretch">
+      <div className="flex items-stretch shrink-0">
         <button
           onClick={() => setExpanded(!expanded)}
           aria-expanded={expanded}
@@ -104,7 +125,7 @@ function TokenVault() {
       />
 
       {expanded && (
-        <div className="px-3 pb-3 space-y-2">
+        <div className="px-3 pb-3 space-y-2 min-h-0 overflow-y-auto">
           {!hasTokens ? (
             <p className="text-2xs text-muted-foreground text-center py-3">
               No tokens yet. Run an authorization flow to get started.

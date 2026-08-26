@@ -27,6 +27,21 @@ const KEYS = {
    * not a request to skip the introduction; ticking the box is.
    */
   skipLanding: 'oauth_debugger_skip_landing',
+
+  /**
+   * The evidence rail: whether it is open, which tab is showing, how wide it is.
+   *
+   * `railOpen` stores **both** `'true'` and `'false'`, which is the opposite of what `skipLanding` does
+   * two entries up — and the exception is principled rather than sloppy. That rule exists because a
+   * stale `'false'` outlives a change to what the default *means*, and it holds whenever the default is
+   * a constant. This default is not: the rail opens by itself on a display wide enough to spare the
+   * room and stays shut on one that is not (see `EvidenceRail`). So "never chosen" and "chosen closed"
+   * are genuinely different states, and collapsing them would re-open the rail on every visit for
+   * somebody who closed it on a 1440px screen.
+   */
+  railOpen: 'oauth_debugger_rail_open',
+  railTab: 'oauth_debugger_rail_tab',
+  railWidth: 'oauth_debugger_rail_width',
 } as const;
 
 function read(key: string): string | null {
@@ -63,6 +78,56 @@ export function setSkipLanding(skip: boolean): void {
   // the same state is how a stale `'false'` outlives a change to what the default means. The same
   // write-with-no-else-branch lesson as `session-keys.ts`, in the other direction.
   else remove(KEYS.skipLanding);
+}
+
+/** The three surfaces the evidence rail can show. */
+export type RailTab = 'tokens' | 'trace' | 'inspect';
+
+const RAIL_TABS: readonly RailTab[] = ['tokens', 'trace', 'inspect'];
+
+/** `null` means the reader has never expressed a preference, which is not the same as "closed". */
+export function readRailOpen(): boolean | null {
+  const stored = read(KEYS.railOpen);
+  return stored === 'true' ? true : stored === 'false' ? false : null;
+}
+
+export function setRailOpen(open: boolean): void {
+  write(KEYS.railOpen, open ? 'true' : 'false');
+}
+
+/**
+ * Validated against the list rather than cast.
+ *
+ * A tab that is renamed or removed leaves a value in storage that no longer exists, and a bare cast
+ * would hand the rail a tab it cannot render — a blank pane with no way to tell why. Falling back to
+ * the first tab is a legible wrong answer.
+ */
+export function readRailTab(): RailTab {
+  const stored = read(KEYS.railTab);
+  return RAIL_TABS.find((tab) => tab === stored) ?? 'tokens';
+}
+
+export function setRailTab(tab: RailTab): void {
+  write(KEYS.railTab, tab);
+}
+
+/** The rail's width in CSS pixels, clamped to what is actually usable. */
+export const RAIL_WIDTH = { min: 300, max: 640, default: 380 } as const;
+
+export function readRailWidth(): number {
+  const parsed = Number.parseInt(read(KEYS.railWidth) ?? '', 10);
+  // `Number.isNaN` before the clamp: clamping NaN silently yields a bound, so a corrupt value would
+  // present as a deliberate choice of 300px.
+  if (Number.isNaN(parsed)) return RAIL_WIDTH.default;
+  return clampRailWidth(parsed);
+}
+
+export function setRailWidth(px: number): void {
+  write(KEYS.railWidth, String(Math.round(clampRailWidth(px))));
+}
+
+export function clampRailWidth(px: number): number {
+  return Math.min(RAIL_WIDTH.max, Math.max(RAIL_WIDTH.min, px));
 }
 
 /** Exported for tests and for anything that needs to clear the slate. */
