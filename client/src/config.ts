@@ -1,4 +1,24 @@
-export const API_BASE_URL = getEnvVar('VITE_API_BASE_URL', 'http://localhost:3000');
+/**
+ * The base that every endpoint constant below is concatenated onto, with any trailing slash removed.
+ *
+ * **One character in a deploy manifest 404s the whole app.** `render.yaml` sets
+ * `VITE_API_BASE_URL=https://oauth2-0-ekh2.onrender.com/`, and the 62 constants below are all built as
+ * `${API_BASE_URL}/api/...`. The trailing slash therefore produced `...onrender.com//api/authorization`.
+ * `new URL()` preserves that doubled slash rather than collapsing it, and Express 5 answers **404** for
+ * `//api/authorization` — measured, not assumed.
+ *
+ * **Nothing in the repo could see it.** `scripts/check-client-server-contract.mjs` matches the literal
+ * template `${API_BASE_URL}(path)` and captures only the path, so it never evaluates the base; typecheck,
+ * lint, the unit suite, the build and the Playwright pass have no opinion about a hostname. The check now
+ * asserts the manifest value too, because the instance is worth less than the class.
+ *
+ * `mcp.service.ts` already strips a trailing slash at three call sites (lines 13, 28, 46) because a
+ * user-typed issuer routinely carries one. This applies the same rule to the app's *own* base, once, at
+ * the boundary that owns it — so none of the 62 constants below needs a defence of its own.
+ */
+export const API_BASE_URL = stripTrailingSlash(
+  getEnvVar('VITE_API_BASE_URL', 'http://localhost:3000'),
+);
 
 export const CLIENT_ID = getEnvVar('VITE_CLIENT_ID', 'your_client_id');
 
@@ -137,7 +157,7 @@ export const DEV_SERVER = {
 };
 
 export const PROD_CONFIG = {
-  apiBaseUrl: getEnvVar('VITE_PROD_API_BASE_URL', API_BASE_URL),
+  apiBaseUrl: stripTrailingSlash(getEnvVar('VITE_PROD_API_BASE_URL', API_BASE_URL)),
   redirectUri: getEnvVar('VITE_PROD_REDIRECT_URI', REDIRECT_URI),
 };
 
@@ -152,6 +172,21 @@ export const PROD_CONFIG = {
 function getEnvVar(key: string, defaultValue: string): string {
   const value = import.meta.env[key];
   return value === undefined || value === null ? defaultValue : String(value);
+}
+
+/**
+ * Strip trailing slashes from a URL that is used as a concatenation base.
+ *
+ * A function declaration rather than an arrow const, deliberately: `API_BASE_URL` is the *first* line of
+ * this file and hoisting is what lets the normalisation live next to `getEnvVar`, which it mirrors.
+ *
+ * **Deliberately NOT applied to `REDIRECT_URI` or `PROD_CONFIG.redirectUri`.** A `redirect_uri` is
+ * compared against the client's registered value by simple string comparison (RFC 6749 section 3.1.2.3),
+ * so `https://app.example/callback/` and `https://app.example/callback` are two different URIs. Rewriting
+ * one here would trade a visible 404 for an `invalid_request` that names neither the cause nor this file.
+ */
+export function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
 }
 
 export const isDevelopment = import.meta.env.DEV;
