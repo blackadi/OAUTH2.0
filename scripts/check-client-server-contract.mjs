@@ -279,6 +279,53 @@ if (review.length) {
   console.log('  2026-08-22 dead flows looked exactly like this.');
 }
 
+/**
+ * ---------------------------------------------------------------- concatenation-safe base
+ *
+ * The base URL every endpoint above is concatenated onto must not end in a slash.
+ *
+ * **This check exists because the resolution check above cannot see the defect.** The regex that harvests
+ * endpoints captures only the *path* half of `${API_BASE_URL}/api/...`, so `VITE_API_BASE_URL` could be
+ * anything at all and every endpoint would still "resolve". On 2026-08-27 `render.yaml` was setting it to
+ * `https://oauth2-0-ekh2.onrender.com/`, which makes every endpoint `...onrender.com//api/...`. `new URL()`
+ * preserves the doubled slash — it does not collapse it — and Express 5 answers **404** for
+ * `//api/authorization`. So the deployed SPA could reach nothing, while typecheck, lint, 20+ checks, the
+ * unit suites, the build and the Playwright pass were all green. A hostname was simply nobody's job.
+ *
+ * `config.ts` now normalises the value too. Both layers are kept for the reason `render.yaml` gives for
+ * pinning `NODE_ENV` and `NODE_VERSION`: neither is load-bearing alone, and the manifest being *right* is
+ * worth more than the code being *forgiving* — a reader copying the manifest into another deployment gets
+ * a correct value rather than one that happens to be survivable here.
+ */
+const BASE_URL_KEYS = ['VITE_API_BASE_URL', 'VITE_PROD_API_BASE_URL'];
+const MANIFESTS = ['render.yaml', 'client/.env.example'];
+const baseUrlOffenders = [];
+
+for (const rel of MANIFESTS) {
+  let src;
+  try {
+    src = readFileSync(join(REPO, rel), 'utf8');
+  } catch {
+    continue; // an absent manifest is not this check's business
+  }
+  for (const key of BASE_URL_KEYS) {
+    // `render.yaml`: `- key: X` / `value: Y`.  `.env.example`: `X=Y`.  Comments are skipped by both.
+    const yaml = new RegExp(`key:\\s*${key}\\b[\\s\\S]{0,400}?^\\s*value:\\s*(\\S+)`, 'm');
+    const dotenv = new RegExp(`^\\s*${key}\\s*=\\s*(\\S+)`, 'm');
+    for (const m of [src.match(yaml), src.match(dotenv)]) {
+      if (m && /\/$/.test(m[1])) baseUrlOffenders.push(`${rel}  ${key}=${m[1]}`);
+    }
+  }
+}
+
+if (baseUrlOffenders.length) {
+  console.error(`\n✗ ${baseUrlOffenders.length} base URL(s) end in a slash:`);
+  for (const o of baseUrlOffenders) console.error(`    ${o}`);
+  console.error('  config.ts concatenates `${API_BASE_URL}/api/...`, so a trailing slash produces');
+  console.error('  `host//api/...`. new URL() preserves that and Express 5 returns 404 — every API call');
+  console.error('  in the SPA. Drop the slash.');
+}
+
 if (rogue.length) {
   console.error(`\n✗ ${rogue.length} endpoint(s) built inside a service instead of declared in config.ts:`);
   for (const r of rogue) console.error(`    ${r}`);
@@ -287,9 +334,10 @@ if (rogue.length) {
   console.error('  exists because JAR broke.');
 }
 
-if (unresolved.length === 0 && rogue.length === 0) {
+if (unresolved.length === 0 && rogue.length === 0 && baseUrlOffenders.length === 0) {
   console.log(`\n✓ all ${endpoints.length} client endpoints resolve to a mounted server route,`);
-  console.log('  and no service assembles one of its own');
+  console.log('  no service assembles one of its own,');
+  console.log(`  and every declared base URL is concatenation-safe (${MANIFESTS.join(', ')})`);
   process.exit(0);
 }
 if (unresolved.length === 0) process.exit(1);

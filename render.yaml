@@ -68,8 +68,12 @@ services:
         source: /*
         destination: /index.html
     envVars:
+      # NO trailing slash. `config.ts` builds 62 endpoints as `${API_BASE_URL}/api/...`, so a trailing
+      # slash yields `...onrender.com//api/authorization`, which `new URL()` preserves and Express 5
+      # answers 404 for — i.e. every API call in the SPA, invisible to every gate in the repo. The value
+      # is normalised in `config.ts` as well; neither layer is load-bearing alone, same as NODE_ENV above.
       - key: VITE_API_BASE_URL
-        value: https://oauth2-0-ekh2.onrender.com/
+        value: https://oauth2-0-ekh2.onrender.com
       - key: VITE_REDIRECT_URI
         sync: false
       - key: VITE_SCOPES
