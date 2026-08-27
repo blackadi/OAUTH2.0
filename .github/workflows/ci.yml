@@ -64,6 +64,24 @@ jobs:
       - name: Check route coverage (no new untested endpoints)
         run: node scripts/check-route-coverage.mjs
 
+      # Added 2026-08-27, and — like `npm run lint` on the client — it had never run. The script has
+      # existed since the 2026-08-22 audit that found four dead client flows, was listed in AGENTS.md's
+      # manual check list, and was referenced by no workflow: the check written *because* four flows
+      # silently died was itself ungated, so the defect class it covers could regress on a green PR.
+      #
+      # It asserts three things, all offline and with no `npm install` (node:fs only): every SPA endpoint
+      # constant resolves to a mounted server route, no service assembles a URL of its own, and every
+      # base URL declared in `render.yaml` / `client/.env.example` is concatenation-safe. That last one
+      # was added with this step, because `VITE_API_BASE_URL` carried a trailing slash and `config.ts`
+      # concatenates `${API_BASE_URL}/api/...` — so all 62 endpoints addressed `host//api/...`, which
+      # Express 5 answers 404 for. No other gate in this repo evaluates a hostname.
+      #
+      # The auth-posture section it also prints is ADVISORY and does not affect the exit code: it reads
+      # for the *word* "credential", not for correctness. Only unresolved endpoints, a service-assembled
+      # URL, or a slash-terminated base URL fail the build.
+      - name: Check client/server contract (endpoints resolve, base URLs concatenation-safe)
+        run: node scripts/check-client-server-contract.mjs
+
       # Added 2026-08-17 (§7.3). Offline every push: the baseline must stay sorted, duplicate-free and
       # consistent with the claim mapping. Live only on the weekly schedule, for the same reason
       # `--links` is weekly — an Authlete configuration change is somebody else's action, not a reason
