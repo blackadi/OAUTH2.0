@@ -12,17 +12,18 @@ import {
 import {
   generateSigningKeyPair,
   createClientAssertion,
+  createRequestObject,
   type SigningKeyPair,
 } from '@/services/client-assertion.service';
 import { useToken } from '@/context/TokenContext';
 import {
-  CLIENT_ID,
-  DEFAULT_SCOPES,
+  FAPI_CLIENT_ID,
+  FAPI_REDIRECT_URI,
+  FAPI_SCOPES,
+  ISSUER,
   PAR_ENDPOINT,
   AUTHORIZATION_ENDPOINT,
   USERINFO_ENDPOINT,
-  TOKEN_ENDPOINT,
-  getRedirectUri,
 } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { SESSION_KEYS, writeKey } from '@/services/session-keys';
@@ -45,9 +46,13 @@ import { navigateTo } from '@/services/trace-store';
  */
 export function useFapiFlow() {
   const { getAccessToken } = useToken();
-  const [wizClientId, setWizClientId] = useState(CLIENT_ID);
-  const [wizRedirectUri, setWizRedirectUri] = useState(getRedirectUri());
-  const [wizScopes, setWizScopes] = useState(DEFAULT_SCOPES);
+  // The FAPI client and scope, not the SPA's general-purpose ones — see `FAPI_CLIENT_ID` in config.
+  // Both stay editable: demonstrating that a public client is refused is a legitimate thing to do here.
+  const [wizClientId, setWizClientId] = useState(FAPI_CLIENT_ID);
+  // Not `getRedirectUri()`: that is the SPA's dev callback over http, which FAPI 2.0 §5.3.2.2
+  // forbids and this service refuses. See `FAPI_REDIRECT_URI`.
+  const [wizRedirectUri, setWizRedirectUri] = useState(FAPI_REDIRECT_URI);
+  const [wizScopes, setWizScopes] = useState(FAPI_SCOPES);
   const [wizDpopKeyPair, setWizDpopKeyPair] = useState<DPoPKeyPair | null>(null);
   const [wizSigningKey, setWizSigningKey] = useState<SigningKeyPair | null>(null);
   /**
@@ -104,20 +109,42 @@ export function useFapiFlow() {
       const state = crypto.randomUUID();
       writeKey(SESSION_KEYS.oauthState, state);
 
+      // `ISSUER`, not the token endpoint: FAPI 2.0 §5.3.2.1 permits only the issuer identifier in
+      // `aud`, and this service enforces it. See `createClientAssertion`.
       const clientAssertion = await createClientAssertion(
         wizSigningKey.privateKey,
         wizClientId,
-        TOKEN_ENDPOINT,
+        ISSUER,
+      );
+
+      /**
+       * The authorization parameters travel as a signed request object (JAR, RFC 9101), which the
+       * Message Signing Profile requires — bare parameters earn `400 invalid_request` from a client
+       * with `requestObjectRequired`, or from any request carrying a scope tagged `fapi2: ms-authreq`.
+       *
+       * `client_id` is sent BOTH inside the object and beside it. RFC 9126 §3 needs the outer copy to
+       * find the client and its keys before it can verify the signature; the inner copy is what the
+       * verified request actually says. The client assertion stays outside too — it authenticates the
+       * PAR call itself, and is not part of the authorization request being signed.
+       */
+      const requestObject = await createRequestObject(
+        wizSigningKey.privateKey,
+        wizClientId,
+        ISSUER,
+        {
+          response_type: 'code',
+          client_id: wizClientId,
+          redirect_uri: wizRedirectUri,
+          scope: wizScopes,
+          code_challenge: pkce.codeChallenge,
+          code_challenge_method: 'S256',
+          state,
+        },
       );
 
       const params = new URLSearchParams({
-        response_type: 'code',
         client_id: wizClientId,
-        redirect_uri: wizRedirectUri,
-        scope: wizScopes,
-        code_challenge: pkce.codeChallenge,
-        code_challenge_method: 'S256',
-        state,
+        request: requestObject,
         client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
         client_assertion: clientAssertion,
       });

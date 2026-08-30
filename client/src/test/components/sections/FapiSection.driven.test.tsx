@@ -34,6 +34,15 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+/**
+ * Decode a JWS segment. The FAPI wizard now signs its authorization parameters into a request
+ * object, so asserting on them means opening the JWT rather than reading a form field.
+ */
+const decodeB64Url = (segment: string): string =>
+  new TextDecoder().decode(
+    Uint8Array.from(atob(segment.replace(/-/g, '+').replace(/_/g, '/')), (ch) => ch.charCodeAt(0)),
+  );
+
 /** `GET /api/fapi/config`, read live from the Authlete service — the live values on this deployment. */
 const CONFIG = {
   mode: 'disabled',
@@ -120,7 +129,7 @@ describe('FapiSection — the test flow wizard', () => {
     expect(screen.getByRole('button', { name: /Push PAR/i })).toBeEnabled();
   });
 
-  it('pushes a request carrying private_key_jwt, PKCE S256 and a state', async () => {
+  it('pushes a SIGNED REQUEST OBJECT carrying private_key_jwt, PKCE S256 and a state', async () => {
     const spy = vi
       .spyOn(parService, 'pushedAuthorizationWithDpop')
       .mockResolvedValue({ data: PAR_201 });
@@ -132,16 +141,41 @@ describe('FapiSection — the test flow wizard', () => {
 
     const [body, proofFactory] = args as [{ parameters: string }, unknown];
     const params = new URLSearchParams(body.parameters);
+
     // FAPI 2.0 §5.3.1.2 permits mTLS or `private_key_jwt`; this deployment has no mTLS, so the
-    // assertion is the client authentication and its absence is a 401.
+    // assertion is the client authentication and its absence is a 401. It stays OUTSIDE the request
+    // object on purpose: it authenticates the PAR call itself and is not part of the authorization
+    // request being signed.
     expect(params.get('client_assertion_type')).toBe(
       'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
     );
     expect(params.get('client_assertion'), 'the signed assertion is the credential').toBeTruthy();
-    expect(params.get('code_challenge_method')).toBe('S256');
-    expect(params.get('code_challenge')).toBeTruthy();
-    expect(params.get('state'), 'RFC 9207 mix-up defence needs one').toBeTruthy();
-    expect(params.get('response_type')).toBe('code');
+
+    // The Message Signing Profile carries the authorization parameters as a signed request object
+    // (JAR, RFC 9101), so they now sit one layer in. This assertion used to read them off the
+    // top-level form, which is exactly the shape Authlete refuses with `400 invalid_request` once
+    // the client sets `requestObjectRequired` or the scope carries `fapi2: ms-authreq`.
+    const requestObject = params.get('request');
+    expect(requestObject, 'Message Signing requires a signed request object').toBeTruthy();
+    // `client_id` is the one parameter that appears in BOTH places — RFC 9126 §3 needs the outer
+    // copy to find the client and its keys before it can verify the inner one.
+    expect(params.get('client_id'), 'RFC 9126 §3 needs client_id outside the JWT').toBeTruthy();
+
+    const [rawHeader, rawPayload] = requestObject!.split('.');
+    // Annotated because `JSON.parse` returns `any`, and the lint config rejects member access on it.
+    const header = JSON.parse(decodeB64Url(rawHeader)) as Record<string, unknown>;
+    const claims = JSON.parse(decodeB64Url(rawPayload)) as Record<string, unknown>;
+
+    // FAPI 2.0 §5.4.1 permits PS256, ES256 and EdDSA, and forbids `none` outright.
+    expect(header.alg).toBe('ES256');
+    expect(header.typ, 'RFC 9101 §4 names this media type').toBe('oauth-authz-req+jwt');
+
+    expect(claims.code_challenge_method).toBe('S256');
+    expect(claims.code_challenge).toBeTruthy();
+    expect(claims.state, 'RFC 9207 mix-up defence needs one').toBeTruthy();
+    expect(claims.response_type).toBe('code');
+    expect(claims.nbf, 'the service sets nbfOptional: false').toBeTruthy();
+
     // A proof **factory**, not a proof: `dpopRequest` re-signs on a `use_dpop_nonce` refusal and the
     // nonce lives inside the signature, so a finished string could never be retried.
     expect(typeof proofFactory).toBe('function');

@@ -137,3 +137,47 @@ export async function generateP256KeyPair(extras: Partial<JWK> = {}): Promise<Cr
     kid,
   };
 }
+
+/**
+ * Sign a compact JWS with an ES256 (P-256) private JWK.
+ *
+ * Extracted because this file's consumers were about to hold a **third** copy of the same eight
+ * lines: `dpop.service.ts` signs a proof, `client-assertion.service.ts` signs a `private_key_jwt`,
+ * and `createRequestObject` signs a JAR request object. All three build `b64(header).b64(payload)`,
+ * sign it with ECDSA/SHA-256 and append the raw signature — the only thing that differs is what goes
+ * in the header and payload.
+ *
+ * **The raw signature is the part worth naming.** `crypto.subtle.sign` with ECDSA returns the r‖s
+ * concatenation that JWS requires (RFC 7515 Appendix A.3), *not* the DER-wrapped form
+ * `openssl`/Node's `createSign` produce by default. A verifier handed DER rejects the signature as
+ * malformed, and the error says nothing about encoding — so this is a difference worth having in one
+ * place rather than three.
+ *
+ * `dpop.service.ts` is deliberately left alone: its proof builder carries nonce and `ath` handling
+ * around the signature, and rewriting a working DPoP path was not worth the blast radius here.
+ */
+export async function signEs256Jws(
+  header: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  privateKeyJwk: JWK,
+): Promise<string> {
+  const privateKey = await crypto.subtle.importKey(
+    'jwk',
+    privateKeyJwk,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    true,
+    ['sign'],
+  );
+
+  const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
+  const encodedPayload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const message = new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`);
+
+  const signature = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    privateKey,
+    message,
+  );
+
+  return `${encodedHeader}.${encodedPayload}.${base64UrlEncode(new Uint8Array(signature))}`;
+}

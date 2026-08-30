@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AlertTriangle } from 'lucide-react';
-import { API_BASE_URL, CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, getRedirectUri } from '@/config';
+import {
+  API_BASE_URL,
+  CLIENT_ID,
+  CLIENT_SECRET,
+  ISSUER,
+  TOKEN_ENDPOINT,
+  getRedirectUri,
+} from '@/config';
 import { tokenService } from '@/services';
 import type { TokenResponseWithNonce } from '@/services/token.service';
 import { createProof } from '@/services/dpop.service';
@@ -311,10 +318,13 @@ const CallbackPage = () => {
           // retry inside `dpopRequest` completes the exchange rather than forcing a re-authorization.
           const dpopProof = (nonce?: string) =>
             createProof(dpopPrivateKeyJwk, 'POST', TOKEN_ENDPOINT, undefined, nonce);
+          // `ISSUER`, not `TOKEN_ENDPOINT`. The service sets
+          // `clientAssertionAudRestrictedToIssuer`, so a token-endpoint `aud` is refused with
+          // `401 [A157356]` — this path's private_key_jwt exchange had never succeeded against it.
           const clientAssertion = await createClientAssertion(
             signingPrivateKeyJwk,
             storedClientId,
-            TOKEN_ENDPOINT,
+            ISSUER,
           );
           const request = {
             ...baseRequest,

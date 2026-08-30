@@ -20,7 +20,56 @@ export const API_BASE_URL = stripTrailingSlash(
   getEnvVar('VITE_API_BASE_URL', 'http://localhost:3000'),
 );
 
+/**
+ * The authorization server's **issuer identifier** — the value of `issuer` in its discovery document.
+ *
+ * Separate from {@link API_BASE_URL} on purpose, and the two genuinely differ. In a deployment they
+ * are the same origin; running the SPA against a local server they are not, because the issuer stays
+ * whatever the Authlete service is configured with (`https://oauth2-0-ekh2.onrender.com`) while the
+ * base becomes `http://localhost:3000`. Deriving one from the other would work in production and fail
+ * only on a developer's machine, which is the worst arrangement of the two.
+ *
+ * It matters because a `private_key_jwt` assertion and a JAR request object both put it in `aud`:
+ * FAPI 2.0 §5.3.2.1 requires the server to accept *only* its issuer identifier there, and this
+ * service enforces exactly that (`clientAssertionAudRestrictedToIssuer: true`).
+ */
+export const ISSUER = stripTrailingSlash(getEnvVar('VITE_ISSUER', API_BASE_URL));
+
 export const CLIENT_ID = getEnvVar('VITE_CLIENT_ID', 'your_client_id');
+
+/**
+ * The FAPI wizard's own client and scope, distinct from {@link CLIENT_ID} and {@link DEFAULT_SCOPES}.
+ *
+ * The wizard defaulted to the SPA's general-purpose client, which is **public**
+ * (`tokenAuthMethod: NONE`). FAPI 2.0 §5.3.2.1 says the server *"shall only support confidential
+ * clients"*, so that client cannot complete this flow however well the wizard is written — it fails
+ * at PAR with a message about the redirect URI, which sends the reader somewhere unrelated.
+ *
+ * The scope carries the profile. Authlete selects FAPI 2.0 processing from a `fapi2` attribute on the
+ * requested scope, which is what lets one service host both this flow and the ~20 ordinary OAuth
+ * panels beside it. A FAPI request that forgets the tagged scope is simply not a FAPI request.
+ */
+export const FAPI_CLIENT_ID = getEnvVar('VITE_FAPI_CLIENT_ID', '1241400020');
+export const FAPI_SCOPES = getEnvVar('VITE_FAPI_SCOPES', 'openid myscope');
+
+/**
+ * The FAPI wizard's redirect URI, which cannot be {@link getRedirectUri}'s.
+ *
+ * FAPI 2.0 §5.3.2.2: the server *"shall not allow redirect URIs that use the http scheme except for
+ * native clients that use loopback interface"*. The SPA's development redirect is
+ * `http://localhost:3001/callback`, so it is refused — verified live, PAR answers `400
+ * invalid_request` for exactly that value. Defaulting the wizard to it would make the flow fail on
+ * every developer machine with an error about the redirect URI rather than about the profile.
+ *
+ * The consequence is worth stating plainly rather than hiding behind the default: **the wizard's
+ * browser redirect leg cannot complete against a local dev server**, because there is no https origin
+ * to come back to. PAR and the request object can be exercised locally; the redirect lands on the
+ * deployed origin. That is FAPI 2.0 working as specified, not a defect to route around.
+ */
+export const FAPI_REDIRECT_URI = getEnvVar(
+  'VITE_FAPI_REDIRECT_URI',
+  'https://oauth2-0-1.onrender.com/callback',
+);
 
 /**
  * `your_client_secret` is the value `.env.example` ships to show the *shape* of the setting. It is not a
