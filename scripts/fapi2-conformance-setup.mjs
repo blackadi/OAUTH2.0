@@ -39,11 +39,30 @@ loadEnv({ path: join(serverDir, ".env") });
 
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
+// Rotating a registered key is a deliberate act, not a side effect of re-running the script.
+const ROTATE = args.includes("--rotate-keys");
 const ALIAS = (args[args.indexOf("--alias") + 1] || "").startsWith("--") || args.indexOf("--alias") === -1
   ? "blackadi-fapi2"
   : args[args.indexOf("--alias") + 1];
 
-const CALLBACK = `https://www.certification.openid.net/test/a/${ALIAS}/callback`;
+/**
+ * BOTH callbacks the suite uses, not just the obvious one.
+ *
+ * The Foundation's instructions register two redirect URLs per client:
+ *
+ *   https://www.certification.openid.net/test/a/ALIAS/callback
+ *   https://www.certification.openid.net/test/a/ALIAS/callback?dummy1=lorem&dummy2=ipsum
+ *
+ * The second exists to check that an authorization server matches a redirect URI **exactly**,
+ * query component included, rather than normalising or ignoring it. Register only the first and
+ * those tests fail with an `invalid_request` about the redirect URI — which reads as a defect in
+ * the server rather than a missing registration.
+ */
+const CALLBACKS = [
+  `https://www.certification.openid.net/test/a/${ALIAS}/callback`,
+  `https://www.certification.openid.net/test/a/${ALIAS}/callback?dummy1=lorem&dummy2=ipsum`,
+];
+const CALLBACK = CALLBACKS[0];
 const PRIMARY_CLIENT_ID = process.env.FAPI_CLIENT_ID || "1241400020";
 
 const { AUTHLETE_BEARER_TOKEN, AUTHLETE_BASE_URL, AUTHLETE_SERVICE_ID } = process.env;
@@ -55,6 +74,12 @@ for (const [k, v] of Object.entries({ AUTHLETE_BEARER_TOKEN, AUTHLETE_BASE_URL, 
 }
 const api = new Authlete({ bearer: AUTHLETE_BEARER_TOKEN, serverURL: AUTHLETE_BASE_URL });
 const serviceId = AUTHLETE_SERVICE_ID;
+
+/** The public half of a private JWK: everything except the private scalar. */
+function publicPart(jwk) {
+  const { d, ...pub } = jwk;
+  return pub;
+}
 
 /** EC P-256 / ES256 — the only family this service's JWK Set can verify against, and on 5.4.1's list. */
 function keypair(kid) {
@@ -73,7 +98,7 @@ const primary = await api.client.get({ serviceId, clientId: PRIMARY_CLIENT_ID })
 
 // ── 1. the suite's callback on the primary client ───────────────────────────
 const primaryUris = new Set(primary.redirectUris || []);
-const primaryNeedsCallback = !primaryUris.has(CALLBACK);
+const primaryNeedsCallback = CALLBACKS.some((u) => !primaryUris.has(u));
 console.log(`client ${primary.clientId} (${primary.clientName})`);
 console.log(`  redirect URIs      : ${[...primaryUris].join(", ") || "(none)"}`);
 console.log(`  needs the callback : ${primaryNeedsCallback}`);
@@ -84,23 +109,47 @@ const list = await api.client.list({ serviceId, limit: 50 });
 let second = (list.clients || []).find((c) => c.clientName === SECOND_NAME);
 console.log(`\nsecond client        : ${second ? `exists (${second.clientId})` : "will be created"}`);
 
-const primaryKeys = keypair(`conformance-client1-${ALIAS}`);
-const secondKeys = keypair(`conformance-client2-${ALIAS}`);
+/**
+ * Reuse the keys already in the config unless `--rotate-keys` is passed.
+ *
+ * Re-running this script is the normal way to change the demo credentials or the alias, and the
+ * first version regenerated keys every time — so a credential fix silently invalidated the keys
+ * Authlete had registered, and the next run failed at client authentication with an error that
+ * mentions neither. Rotation is now something you ask for.
+ */
+const existingConfigPath = join(repoRoot, "conformance", "fapi2-config.json");
+const existing = existsSync(existingConfigPath)
+  ? JSON.parse(readFileSync(existingConfigPath, "utf8"))
+  : null;
+const reuse = existing && !ROTATE;
+
+const primaryKeys = reuse
+  ? { priv: existing.client.jwks.keys[0], pub: publicPart(existing.client.jwks.keys[0]) }
+  : keypair(`conformance-client1-${ALIAS}`);
+const secondKeys = reuse
+  ? { priv: existing.client2.jwks.keys[0], pub: publicPart(existing.client2.jwks.keys[0]) }
+  : keypair(`conformance-client2-${ALIAS}`);
+
+if (APPLY) {
+  console.log(`\nkeys                 : ${reuse ? "reused from the existing config" : "freshly generated"}`);
+}
 
 if (!APPLY) {
   console.log("\nDry run — nothing written. Re-run with --apply.");
   process.exit(0);
 }
 
-// Primary: add the callback, and re-key so the config below holds a private key that matches
-// what is registered. Registering a public key you do not hold the private half of is the single
-// most common reason a conformance run fails at the first client-authentication step.
-if (primaryNeedsCallback || true) {
-  primary.redirectUris = [...primaryUris, CALLBACK];
-  primary.jwks = JSON.stringify({ keys: [primaryKeys.pub] });
-  await api.client.update({ serviceId, clientId: String(primary.clientId), client: primary });
-  console.log(`\nupdated client ${primary.clientId}: callback registered, key rotated`);
-}
+// Primary: register the callback, and make sure the registered public key matches the private key
+// this config hands the suite. Registering a public key you do not hold the private half of is the
+// single most common reason a conformance run fails at the first client-authentication step.
+// `add` on the Set, not a spread with the callback appended. Re-running is normal — to change the
+// demo credentials, say — and appending unconditionally sent the callback twice, which Authlete
+// refuses outright: `[A031211] The element at the index '3' of 'redirectUris' is a duplicate.`
+CALLBACKS.forEach((u) => primaryUris.add(u));
+primary.redirectUris = [...primaryUris];
+primary.jwks = JSON.stringify({ keys: [primaryKeys.pub] });
+await api.client.update({ serviceId, clientId: String(primary.clientId), client: primary });
+console.log(`\nupdated client ${primary.clientId}: callback registered, key ${reuse ? "unchanged" : "rotated"}`);
 
 // Second client: same posture as the primary, its own key, its own name.
 const secondBody = {
@@ -109,7 +158,7 @@ const secondBody = {
   clientIdAlias: undefined,
   clientName: SECOND_NAME,
   jwks: JSON.stringify({ keys: [secondKeys.pub] }),
-  redirectUris: [CALLBACK],
+  redirectUris: [...CALLBACKS],
 };
 delete secondBody.number;
 delete secondBody.createdAt;
@@ -145,6 +194,14 @@ const plan = {
     client_id: String(second.clientId),
     scope: "openid myscope",
     jwks: { keys: [secondKeys.priv] },
+  },
+  /**
+   * A protected resource the suite calls with the issued token, to prove the token is actually
+   * sender-constrained rather than merely labelled `DPoP`. UserInfo is the natural choice here: it
+   * is token-protected, returns JSON, and this server already binds the DPoP `ath` on it.
+   */
+  resource: {
+    resourceUrl: `${service.issuer.replace(/\/+$/, "")}/api/userinfo`,
   },
   /**
    * The suite drives the login and consent screens itself. Selectors verified against
