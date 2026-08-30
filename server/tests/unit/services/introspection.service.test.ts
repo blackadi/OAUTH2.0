@@ -83,10 +83,66 @@ describe("IntrospectionService", () => {
 
       expect(mockApi.introspection.standardProcess).toHaveBeenCalledWith(
         expect.objectContaining({
-          standardIntrospectionRequest: { parameters: "token=tok-1" },
+          standardIntrospectionRequest: expect.objectContaining({ parameters: "token=tok-1" }),
         })
       )
       expect(result).toEqual(mockResponse)
+    })
+
+    /**
+     * The JWT branch's signing algorithm, which had no way to be set at all.
+     *
+     * `introspectionSignAlg` was already named in the `excluded` set — recognised as
+     * Authlete-specific and kept out of `parameters` — and then never added to the request. So the
+     * endpoint could not say how to sign, and Authlete's default is RS256.
+     *
+     * That was a live 500 rather than a theoretical gap: this deployment's JWK Set holds one EC
+     * P-256 key, so asking for a JWT introspection response answered `[A405201] The key to sign the
+     * JWS with the algorithm ('RS256') is not available.` RS256 is also not permitted by FAPI 2.0
+     * §5.4.1 (PS256, ES256 and EdDSA only), so the default was non-conformant either way.
+     *
+     * There is nowhere else to set it: the SDK's `Client` model has no introspection signing
+     * property, and `Service` carries only `introspectionSignatureKeyId` — a key, not an algorithm.
+     * Pinning that key ID was tried against the live service and Authlete still asked for RS256.
+     */
+    it("defaults the JWT signing algorithm to ES256 rather than Authlete's RS256", async () => {
+      vi.mocked(mockApi.introspection.standardProcess).mockResolvedValue({ action: "JWT" } as never)
+
+      await service.standardProcess({
+        body: { token: "tok-1" },
+        headers: { accept: "application/token-introspection+jwt" },
+        rawBody: "token=tok-1",
+      } as never)
+
+      const sent = (vi.mocked(mockApi.introspection.standardProcess).mock.calls[0][0] as {
+        standardIntrospectionRequest: Record<string, unknown>
+      }).standardIntrospectionRequest
+      expect(sent.introspectionSignAlg).toBe("ES256")
+    })
+
+    it("lets the caller override the algorithm, and forwards the encryption pair", async () => {
+      vi.mocked(mockApi.introspection.standardProcess).mockResolvedValue({ action: "JWT" } as never)
+
+      await service.standardProcess({
+        body: {
+          token: "tok-1",
+          introspectionSignAlg: "PS256",
+          introspectionEncryptionAlg: "ECDH-ES",
+          introspectionEncryptionEnc: "A128GCM",
+        },
+        headers: {},
+        rawBody: "token=tok-1",
+      } as never)
+
+      const sent = (vi.mocked(mockApi.introspection.standardProcess).mock.calls[0][0] as {
+        standardIntrospectionRequest: Record<string, unknown>
+      }).standardIntrospectionRequest
+      expect(sent.introspectionSignAlg).toBe("PS256")
+      expect(sent.introspectionEncryptionAlg).toBe("ECDH-ES")
+      expect(sent.introspectionEncryptionEnc).toBe("A128GCM")
+      // Still excluded from `parameters`: they configure the response, they are not RFC 7662 request
+      // parameters, and leaking them into the form would make Authlete reject the request.
+      expect(sent.parameters).toBe("token=tok-1")
     })
   })
 

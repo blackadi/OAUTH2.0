@@ -140,6 +140,39 @@ export class IntrospectionService {
       reqBody.withHiddenProperties = Boolean(body.withHiddenProperties);
     }
 
+    /**
+     * The JWT branch's signing algorithm — **the only place it can be set.**
+     *
+     * These three fields were already named in the `excluded` set above, so they were recognised as
+     * Authlete-specific, stripped out of `parameters`, and then **dropped on the floor**: never added
+     * to the request. The endpoint therefore had no way to say how the response should be signed, and
+     * Authlete's default is `RS256`.
+     *
+     * That combination is a live 500, not a theoretical gap. This service's JWK Set holds one EC
+     * P-256 key, so asking for a JWT introspection response answers
+     * `[A405201] The key to sign the JWS with the algorithm ('RS256') is not available.` — measured.
+     * And RS256 would be **non-compliant even if a key existed**: FAPI 2.0 §5.4.1 permits PS256, ES256
+     * and EdDSA only.
+     *
+     * There is nowhere else to fix it. The SDK's `Client` model has no introspection signing property
+     * at all, and `Service` carries only `introspectionSignatureKeyId` — a key, not an algorithm.
+     * Pinning that key ID was tried and changed nothing; Authlete still asked for RS256.
+     *
+     * **ES256 is the default rather than Authlete's**, so the out-of-box behaviour is both working and
+     * FAPI 2.0-conformant. It is tied to this service's EC key: pointed at an RSA-keyed service, a
+     * caller should pass `introspectionSignAlg: "PS256"` explicitly. The override stays available
+     * because this is a debugging server and demonstrating a refused algorithm is a legitimate use —
+     * the endpoint is already behind admin Basic auth, so the caller is privileged either way.
+     */
+    reqBody.introspectionSignAlg =
+      body.introspectionSignAlg !== undefined ? (body.introspectionSignAlg as string) : "ES256";
+    if (body.introspectionEncryptionAlg !== undefined) {
+      reqBody.introspectionEncryptionAlg = body.introspectionEncryptionAlg as string;
+    }
+    if (body.introspectionEncryptionEnc !== undefined) {
+      reqBody.introspectionEncryptionEnc = body.introspectionEncryptionEnc as string;
+    }
+
     const response = await this.authleteApi.introspection.standardProcess({
       serviceId,
       standardIntrospectionRequest: reqBody,
