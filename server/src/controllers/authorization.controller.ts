@@ -10,6 +10,7 @@ import logger from "../utils/logger";
 import consentStore from "../services/consent-store.service";
 import { checkStepUpRequirements } from "../utils/step-up";
 import type { AuthorizationResponse } from "@authlete/typescript-sdk/models";
+import { AUTHORIZATION_REDIRECT_STATUS } from "../utils/http-utils";
 
 const authorizationService = new AuthorizationService();
 
@@ -123,7 +124,7 @@ async function decideWithoutInteraction(
   delete req.session.authorization;
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Pragma", "no-cache");
-  return res.redirect(issueResponse.responseContent ?? "");
+  return res.redirect(AUTHORIZATION_REDIRECT_STATUS, issueResponse.responseContent ?? "");
 }
 
 export const authorizationController = {
@@ -154,7 +155,7 @@ export const authorizationController = {
         case "LOCATION":
           res.setHeader("Cache-Control", "no-store");
           res.setHeader("Pragma", "no-cache");
-          return res.redirect(result.responseContent ?? "");
+          return res.redirect(AUTHORIZATION_REDIRECT_STATUS, result.responseContent ?? "");
 
         case "FORM":
           res.setHeader("Content-Type", "text/html;charset=UTF-8");
@@ -188,7 +189,7 @@ export const authorizationController = {
           );
           const newUrl = `${appConfig.loginUrl}?${searchParams.toString()}`;
           req.logger("Redirecting to login", { url: newUrl });
-          return res.redirect(newUrl);
+          return res.redirect(AUTHORIZATION_REDIRECT_STATUS, newUrl);
         }
 
         default:

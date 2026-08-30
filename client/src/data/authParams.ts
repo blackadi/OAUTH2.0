@@ -90,7 +90,7 @@ export const AUTH_PARAMS: AuthParamSpec[] = [
     requirement: 'REQUIRED',
     threat:
       'Choosing `token` or `id_token` puts credentials in the URL fragment, where they land in browser history, in `Referer` headers and in any script on the page. That is why RFC 9700 §2.1.2 says the implicit grant SHOULD NOT be used, and why `code` — which puts nothing sensitive in front of the browser — replaced it.',
-    note: 'Selects the flow. `code` is the only value this server should be driven with; the implicit and hybrid types exist here so you can watch them be refused. Note that its *presence* also decides how errors come back: with `response_type` set, an invalid request returns a 302 error redirect carrying `error`, `state` and `iss`; without it Authlete answers 400 `[A009301]` as a body, because it cannot determine a response mode.',
+    note: 'Selects the flow. `code` is the only value this server should be driven with; the implicit and hybrid types exist here so you can watch them be refused. Note that its *presence* also decides how errors come back: with `response_type` set, an invalid request returns a 303 error redirect carrying `error`, `state` and `iss`; without it Authlete answers 400 `[A009301]` as a body, because it cannot determine a response mode.',
     kind: 'select',
     options: ['code', 'token', 'id_token', 'code id_token', 'code token', 'id_token token'],
     group: 'core',

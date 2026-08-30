@@ -11,6 +11,7 @@ import { checkStepUpRequirements } from "../utils/step-up";
 import { validateOrThrow, loginSchema } from "../utils/validation";
 import consentStore from "../services/consent-store.service";
 import { claimsFromScopes, claimLabel } from "../utils/scope-claims";
+import { AUTHORIZATION_REDIRECT_STATUS } from "../utils/http-utils";
 
 const loginAttempts = new Map<string, { count: number; banUntil: number }>()
 const MAX_LOGIN_ATTEMPTS = 5
@@ -184,6 +185,7 @@ export function createSessionController(
       const scopes = authz?.authorizationIssueRequest?.scopes?.join(",") || "";
       req.logger("consent scopes", { scopes });
       return res.redirect(
+        AUTHORIZATION_REDIRECT_STATUS,
         appConfig.consentUrl +
           "?clientId=" +
           authz?.clientId +

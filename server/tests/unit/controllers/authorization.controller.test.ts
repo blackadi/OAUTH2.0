@@ -104,7 +104,7 @@ describe("authorizationController.handleAuthorization", () => {
 
     await authorizationController.handleAuthorization(req, res, next)
 
-    expect(res.redirect).toHaveBeenCalledWith("https://rp.example.com/cb")
+    expect(res.redirect).toHaveBeenCalledWith(303, "https://rp.example.com/cb")
   })
 
   it("renders form on FORM action", async () => {
@@ -189,7 +189,7 @@ describe("authorizationController.handleAuthorization", () => {
       await authorizationController.handleAuthorization(req, res, mockNext())
 
       expect(mocks.mockIssue).toHaveBeenCalled()
-      expect(res.redirect).toHaveBeenCalledWith("https://rp.example.com/cb?code=abc")
+      expect(res.redirect).toHaveBeenCalledWith(303, "https://rp.example.com/cb?code=abc")
     })
 
     // The fabrication, from both directions. A session with no recorded authentication event must not be
@@ -257,7 +257,11 @@ describe("authorizationController.handleAuthorization", () => {
     await authorizationController.handleAuthorization(req, res, next)
 
     expect(res.redirect).toHaveBeenCalled()
-    const redirectUrl = (res.redirect as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    // (status, url) since FAPI 2.0 §5.3.2.2 — the URL is the SECOND argument now. Asserting the
+    // status here as well, so a silent revert to Express's default 302 fails a test rather than
+    // only showing up in a conformance run.
+    const [redirectStatus, redirectUrl] = (res.redirect as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(redirectStatus).toBe(303)
     expect(redirectUrl).toContain("/api/session/login")
     expect(redirectUrl).toContain("client_id=42")
     expect(req.session).toBeDefined()
