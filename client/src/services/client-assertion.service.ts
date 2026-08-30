@@ -1,4 +1,4 @@
-import { JWK, CryptoKeyPair, base64UrlEncode, generateP256KeyPair } from './crypto-utils';
+import { JWK, CryptoKeyPair, generateP256KeyPair, signEs256Jws } from './crypto-utils';
 
 export type { JWK };
 
@@ -16,49 +16,90 @@ export async function generateSigningKeyPair(): Promise<SigningKeyPair> {
   return generateP256KeyPair({ alg: 'ES256', use: 'sig' });
 }
 
+/**
+ * A `private_key_jwt` client assertion (OpenID Connect Core §9).
+ *
+ * **`audience` is the authorization server's ISSUER IDENTIFIER, not the token endpoint URL**, and
+ * this parameter used to be named `tokenEndpoint` and be given exactly that. Two independent reasons
+ * it has to be the issuer here:
+ *
+ *   * FAPI 2.0 Security Profile §5.3.2.1 — the server *"shall only accept its issuer identifier
+ *     value … as a string in the aud claim"*.
+ *   * this deployment's Authlete service sets `clientAssertionAudRestrictedToIssuer: true`, so a
+ *     token-endpoint `aud` is refused outright with
+ *     `401 [A157356] The 'aud' claim value in the client assertion does not match the issuer identifier.`
+ *
+ * That was not a FAPI-only problem: `CallbackPage`'s `private_key_jwt` token exchange calls this too,
+ * so every assertion this SPA has ever produced was rejected by this service. Measured, not inferred.
+ *
+ * **`nbf` is present because the service requires it** (`nbfOptional: false`). RFC 7523 §3 lists it as
+ * optional, so its absence is legal in general and fatal here — the kind of gap that reads as a
+ * signature problem when it is a claims problem.
+ */
 export async function createClientAssertion(
   privateKeyJwk: JWK,
   clientId: string,
-  tokenEndpoint: string,
+  audience: string,
 ): Promise<string> {
-  const privateKey = await crypto.subtle.importKey(
-    'jwk',
-    // No cast: `JWK`'s members are all optional strings and structurally assignable to `JsonWebKey`.
-    // This was `privateKeyJwk as any` with an eslint-disable, which turned a value the compiler could
-    // check into one it could not — on the argument to a signing key import, of all places.
-    privateKeyJwk,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign'],
-  );
-
   const now = Math.floor(Date.now() / 1000);
 
-  const payload: Record<string, unknown> = {
-    iss: clientId,
-    sub: clientId,
-    aud: tokenEndpoint,
-    exp: now + 300,
-    iat: now,
-    jti: crypto.randomUUID(),
-  };
-
-  const header = { alg: 'ES256', kid: privateKeyJwk.kid, typ: 'JWT' };
-
-  const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
-  const encodedPayload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
-  const message = new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`);
-
-  const signature = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    privateKey,
-    message,
+  return signEs256Jws(
+    { alg: 'ES256', kid: privateKeyJwk.kid, typ: 'JWT' },
+    {
+      iss: clientId,
+      sub: clientId,
+      aud: audience,
+      exp: now + 300,
+      iat: now,
+      nbf: now,
+      jti: crypto.randomUUID(),
+    },
+    privateKeyJwk,
   );
+}
 
-  const rawSignature = new Uint8Array(signature);
-  const encodedSignature = base64UrlEncode(rawSignature);
+/**
+ * A signed request object — JAR, RFC 9101 — for the FAPI 2.0 Message Signing Profile.
+ *
+ * The Message Signing Profile requires the authorization request parameters to travel as a JWS rather
+ * than as bare query parameters, and Authlete enforces it per client (`requestObjectRequired`) and per
+ * scope (the `fapi2: ms-authreq` scope attribute). Without one, PAR answers
+ * `400 invalid_request`.
+ *
+ * Three details that are easy to get wrong and each produce a different unhelpful error:
+ *
+ *   * **`typ: 'oauth-authz-req+jwt'`** — RFC 9101 §4 names this media type for a request object, and
+ *     it is how a server tells one apart from any other JWT the client might send.
+ *   * **`client_id` must ALSO travel outside the JWT.** RFC 9126 §3 needs it to find the client and
+ *     its keys *before* it can verify the object, so a PAR body carrying only `request` cannot be
+ *     authenticated. `use-fapi-flow.ts` sends both; this function only builds the JWT.
+ *   * **`alg` must be PS256, ES256 or EdDSA, never `none`** (FAPI 2.0 §5.4.1). ES256 here, matching
+ *     the client's registered `requestSignAlg` — verified live: RS256 and HS256 are both refused with
+ *     *"Another algorithm expected"*, which is a different error from a bad signature.
+ *
+ * `aud` is the issuer for the same reason the assertion's is.
+ */
+export async function createRequestObject(
+  privateKeyJwk: JWK,
+  clientId: string,
+  audience: string,
+  params: Record<string, string>,
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
 
-  return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
+  return signEs256Jws(
+    { alg: 'ES256', kid: privateKeyJwk.kid, typ: 'oauth-authz-req+jwt' },
+    {
+      ...params,
+      iss: clientId,
+      aud: audience,
+      exp: now + 300,
+      iat: now,
+      nbf: now,
+      jti: crypto.randomUUID(),
+    },
+    privateKeyJwk,
+  );
 }
 
 /**
