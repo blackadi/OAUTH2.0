@@ -64,6 +64,12 @@ The script:
    a `resource.resourceUrl` pointing at UserInfo so the suite can prove the token is genuinely
    sender-constrained rather than merely labelled `DPoP`.
 
+   `resource.resourceUrl` is a **required** field of this plan, not an optional extra — the suite
+   lists it alongside `server.discoveryUrl` and the two clients. Omit it and the run stops at
+   `GetResourceEndpointConfiguration: Couldn't find resource endpoint object in configuration`
+   before making a single OAuth request. Verified live: UserInfo answers `200` with
+   `application/json` to a DPoP-bound token carrying `ath`.
+
 Re-running is safe: keys are **reused**, not regenerated, unless you pass `--rotate-keys`. Changing
 the credentials or alias should not invalidate a key Authlete has already registered.
 
@@ -86,6 +92,7 @@ the credentials or alias should not invalidate a key Authlete has already regist
    | Sender Constrain | `dpop` | the client sets `dpopRequired`; mTLS binding is off |
    | OpenID | `openid_connect` | an `id_token` is returned (optional in FAPI 2.0, supported here) |
    | FAPI Profile | `plain_fapi` | not an Open Banking regional variant |
+   | Authorization Request Type | `simple` | selects RAR vs plain scopes. **Not** about PAR — every FAPI2 test uses PAR regardless. |
    | FAPI Request Method | **`signed_non_repudiation`** | the client sets `requestObjectRequired` — an unsigned request is refused |
    | FAPI Response Mode | **`jarm`** | the scope carries `fapi2: ms-authres` — an unsigned response is refused |
 
@@ -137,6 +144,7 @@ Verified against the live deployment:
 
 | Symptom | Cause |
 |---|---|
+| `Couldn't find resource endpoint object in configuration` | The pasted config has no `resource` object. Re-generate with the setup script and paste the current file — the run stops here before any OAuth request. |
 | Suite cannot fetch the discovery document | It uses `{issuer}/.well-known/openid-configuration` at the **root**. Confirm it returns JSON, not the SPA's HTML. |
 | Every test fails at client authentication | The registered public key does not match the private key in the plan. Re-run the setup with `--apply`. |
 | Login page never advances | Wrong demo credentials. `AUTH_USERS` is set per deployment and is not in this repo; `admin`/`password` is only the local fallback. |
