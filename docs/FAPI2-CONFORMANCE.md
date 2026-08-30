@@ -77,7 +77,18 @@ the credentials or alias should not invalidate a key Authlete has already regist
 
 ---
 
-## Step 2 — create the plan
+## Step 2 — preflight
+
+```bash
+node scripts/fapi2-conformance-preflight.mjs
+```
+
+Replays the suite's configuration checks locally — the same 29 that ran before the last failure,
+plus a live check that the deployment still *enforces* what the variants promise. It exists because
+a run died at step 36 of 39 on a missing config key, after 27 successes and before a single OAuth
+request. Every one of those was checkable offline.
+
+## Step 3 — create the plan
 
 1. Go to <https://www.certification.openid.net/> and sign in with Google or GitLab.
 2. Click **Create a new test plan**.
@@ -101,13 +112,24 @@ the credentials or alias should not invalidate a key Authlete has already regist
    `requestObjectRequired` on the client and drop `ms-authres` from the scope — otherwise the server
    correctly refuses every unsigned request and every test fails.
 
+> ⚠️ **`fapiModes` on the service overrides all of this.** Setting it — even to `FAPI2_SECURITY` —
+> takes precedence over both the per-scope `fapi2` attribute and the per-client
+> `requestObjectRequired`, and *relaxes* the signed-request-object requirement. Measured: with
+> `fapiModes: ["FAPI2_SECURITY"]` every client accepted an unsigned PAR while its own configuration
+> still read `requestObjectRequired: true`. Leave `fapiModes` unset and let the scope attribute
+> select the profile. `scripts/fapi2-conformance-preflight.mjs` checks this behaviourally.
+
+> ⚠️ **`client.scope` must include the `fapi2`-tagged scope** (`myscope` here). Without it the
+> request is not a FAPI request and every FAPI rule is correctly skipped — measured: `openid myscope`
+> is refused an unsigned request object, `openid` alone is accepted.
+
 5. Switch to the **JSON** tab and paste the contents of `conformance/fapi2-config.json`.
    The form and the JSON are two views of the same thing; editing either updates the other.
 6. Click **Create test plan**.
 
 ---
 
-## Step 3 — run it
+## Step 4 — run it
 
 1. Press **Launch Test Plan** to see the module list.
 2. Click **Run New Test** on the first module.
