@@ -232,7 +232,7 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
   A009301: {
     cause:
       'The authorization request had no `response_type`, so Authlete cannot determine a response mode.',
-    fix: 'This is why the error arrives as a **400 body** rather than an error redirect: without `response_type` there is nowhere to redirect to. Add it and the same class of error becomes a 302 carrying `error`, `state` and `iss`.',
+    fix: 'This is why the error arrives as a **400 body** rather than an error redirect: without `response_type` there is nowhere to redirect to. Add it and the same class of error becomes a 303 carrying `error`, `state` and `iss`.',
     spec: 'Verified live 2026-08-04',
     verifiedHere: true,
   },

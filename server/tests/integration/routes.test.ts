@@ -68,7 +68,7 @@ describe("Integration: all API routes", () => {
 
     it("redirects to login on INTERACTION", async () => {
       mockApi.authorization.processRequest.mockResolvedValue(interaction)
-      await request(app).get("/api/authorization?response_type=code&client_id=123&redirect_uri=http://localhost:3000/callback&scope=openid").expect(302)
+      await request(app).get("/api/authorization?response_type=code&client_id=123&redirect_uri=http://localhost:3000/callback&scope=openid").expect(303)
     })
 
     // RFC 9101 §5: only `client_id` accompanies a Request Object on the URL — `response_type`,
@@ -80,7 +80,7 @@ describe("Integration: all API routes", () => {
 
       await request(app)
         .get(`/api/authorization?client_id=123&request=${encodeURIComponent(jwt)}`)
-        .expect(302)
+        .expect(303)
 
       const sent = mockApi.authorization.processRequest.mock.calls[0][0].authorizationRequest
       expect(sent.parameters).toContain("client_id=123")
@@ -90,7 +90,7 @@ describe("Integration: all API routes", () => {
 
     it("forwards a request with no redirect_uri (RFC 6749 §3.1.2.3)", async () => {
       mockApi.authorization.processRequest.mockResolvedValue(interaction)
-      await request(app).get("/api/authorization?response_type=code&client_id=123&scope=openid").expect(302)
+      await request(app).get("/api/authorization?response_type=code&client_id=123&scope=openid").expect(303)
       expect(mockApi.authorization.processRequest).toHaveBeenCalled()
     })
 
@@ -128,7 +128,7 @@ describe("Integration: all API routes", () => {
     const reachLoginPage = async () => {
       mockApi.authorization.processRequest.mockResolvedValue(interaction)
       const agent = request.agent(app)
-      await agent.get(`/api/authorization?${AUTHZ_QUERY}`).expect(302)
+      await agent.get(`/api/authorization?${AUTHZ_QUERY}`).expect(303)
       const page = await agent.get(`/api/session/login?${AUTHZ_QUERY}`).expect(200)
       const csrf = page.text.match(/name="_csrf" value="([a-f0-9]{64})"/)?.[1]
       expect(csrf).toBeDefined()

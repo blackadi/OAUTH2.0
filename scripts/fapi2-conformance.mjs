@@ -53,6 +53,10 @@ const SCOPE = process.env.SCOPE || "openid myscope";
 // Set JAR=1 when the deployment has FAPI2_MESSAGE_SIGNING_AUTH_REQ enabled and the client
 // carries requestObjectRequired=true; plain parameters are refused under that mode.
 const USE_JAR = process.env.JAR === "1";
+// Message Signing's second half: signed authorization responses (JARM). Defaults to whatever JAR is
+// set to, because Authlete's `fapi2: ms-authres` scope attribute makes them required together — a
+// request that omits `response_mode` under that attribute gets an error redirect, not a bare code.
+const USE_JARM = process.env.JARM ? process.env.JARM === "1" : USE_JAR;
 const USERNAME = process.env.FAPI_USERNAME || "admin";
 const PASSWORD = process.env.FAPI_PASSWORD || "password";
 
@@ -139,6 +143,16 @@ async function http(method, url, { headers = {}, body, jar } = {}) {
   return { status: res.status, headers: res.headers, text, json: parsed, location: res.headers.get("location") };
 }
 
+/**
+ * Is this a redirect the flow should follow?
+ *
+ * Deliberately not `=== 302`. FAPI 2.0 §5.3.2.2 asks the server for **303**, and this probe hardcoded
+ * 302 in seven places — so the moment the deployment complied, the probe reported the happy path and
+ * two negative cases as failures. A conformance check that breaks when the server becomes conformant
+ * is worse than no check.
+ */
+const isRedirect = (status) => status === 302 || status === 303;
+
 const form = (o) =>
   Object.entries(o)
     .filter(([, v]) => v !== undefined && v !== null)
@@ -198,11 +212,21 @@ async function parThenAuthorize(paramObj) {
   }
   const r = await http("GET", `${BASE}/api/authorization?${form({ client_id: CLIENT_ID, request_uri: pr.json.request_uri })}`);
   if (r.status >= 400) return { stage: "authorization", status: r.status, detail: `authorize ${r.status}` };
-  if (r.status === 302 && r.location) {
+  if (isRedirect(r.status) && r.location) {
     const loc = new URL(r.location, BASE);
-    const err = loc.searchParams.get("error");
-    if (err) return { stage: "authorization", status: 302, error: err, detail: `authorize 302 error=${err}` };
-    return { stage: "authorization", status: 302, accepted: true, detail: `authorize 302 -> ${loc.pathname} (accepted)` };
+    // Read the outcome through `finalRedirect`, not off the query string. Under JARM the error
+    // lives INSIDE the signed response JWT, so a query-string check sees no `error` and calls a
+    // correctly-refused request "accepted" — which is how two passing negative cases flipped to
+    // failures the moment signed responses were switched on. Same blind spot, second place.
+    const outcome = finalRedirect(r.location);
+    if (outcome?.error) {
+      return { stage: "authorization", status: r.status, error: outcome.error, detail: `authorize ${r.status} error=${outcome.error}` };
+    }
+    // Neither a code nor an error: it never reached the authorization response — the login page.
+    if (!outcome) {
+      return { stage: "authorization", status: r.status, accepted: true, detail: `authorize ${r.status} -> ${loc.pathname} (accepted)` };
+    }
+    return { stage: "authorization", status: r.status, accepted: true, detail: `authorize ${r.status} -> code issued (accepted)` };
   }
   return { stage: "authorization", status: r.status, detail: `authorize ${r.status}` };
 }
@@ -223,10 +247,37 @@ function finalRedirect(location) {
   } catch {
     return null;
   }
+
+  /**
+   * Under JARM the authorization response is a signed JWT in a single `response` parameter — there
+   * is no bare `code` or `iss` to read off the query at all. A probe that only looked for `code`
+   * reported the happy path as failing the moment signed responses were required, which is the
+   * profile working rather than a defect.
+   *
+   * The JWT is not verified here: this asks what the server returned, and the signature is checked
+   * by the dedicated JARM case below, where a failure names the right thing.
+   */
+  const responseJwt = u.searchParams.get("response");
+  if (responseJwt) {
+    let claims = {};
+    try {
+      claims = JSON.parse(Buffer.from(responseJwt.split(".")[1], "base64url").toString());
+    } catch {
+      /* leave empty; the JARM case reports the malformed token */
+    }
+    return {
+      code: claims.code ?? null,
+      error: claims.error ?? null,
+      iss: claims.iss ?? null,
+      jarm: responseJwt,
+      location,
+    };
+  }
+
   const code = u.searchParams.get("code");
   const error = u.searchParams.get("error");
   if (!code && !error) return null;
-  return { code, error, iss: u.searchParams.get("iss"), location };
+  return { code, error, iss: u.searchParams.get("iss"), jarm: null, location };
 }
 
 /**
@@ -243,7 +294,7 @@ const sharedJar = newJar();
 async function authorizeToCode(requestUri, jar = sharedJar) {
   const authUrl = `${BASE}/api/authorization?${form({ client_id: CLIENT_ID, request_uri: requestUri })}`;
   const a = await http("GET", authUrl, { jar });
-  if (a.status !== 302) return { failed: `authorization returned ${a.status}`, res: a };
+  if (!isRedirect(a.status)) return { failed: `authorization returned ${a.status}`, res: a };
   const early = finalRedirect(a.location);
   if (early) return early;
 
@@ -257,7 +308,7 @@ async function authorizeToCode(requestUri, jar = sharedJar) {
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: form({ _csrf: csrf, username: USERNAME, password: PASSWORD, login: "submit" }),
   });
-  if (login.status !== 302) {
+  if (!isRedirect(login.status)) {
     // A 200 here means the login page re-rendered, which is a rejection wearing a success
     // status. Surface what it said — "login returned 200" names the symptom, not the cause.
     const why =
@@ -282,15 +333,18 @@ async function authorizeToCode(requestUri, jar = sharedJar) {
     // The consent view submits `decision=approve|deny` (views/consent.ejs), not a boolean flag.
     body: form({ _csrf: csrf2, decision: "approve" }),
   });
-  if (consent.status !== 302) return { failed: `consent returned ${consent.status}`, res: consent };
+  if (!isRedirect(consent.status)) return { failed: `consent returned ${consent.status}`, res: consent };
 
-  const loc = new URL(consent.location, BASE);
-  return {
-    code: loc.searchParams.get("code"),
-    iss: loc.searchParams.get("iss"),
-    error: loc.searchParams.get("error"),
-    location: consent.location,
-  };
+  // Through `finalRedirect`, like the two earlier legs. Reading the query string directly here was
+  // the THIRD place this file assumed an unsigned authorization response: under JARM the code lives
+  // inside the `response` JWT, so this returned `{code: null, error: null}` — a failure that reports
+  // as "error=null", which names neither the cause nor the requirement.
+  return (
+    finalRedirect(consent.location) ?? {
+      failed: `consent redirect carried neither a code nor an error: ${consent.location}`,
+      location: consent.location,
+    }
+  );
 }
 
 async function token(bodyObj, { dpop = true, assertion = true, dpopHtuOverride } = {}) {
@@ -358,6 +412,8 @@ async function run() {
         nonce: randomUUID(),
         code_challenge: p.challenge,
         code_challenge_method: "S256",
+        // Required, not decorative, once the scope carries `fapi2: ms-authres`.
+        ...(USE_JARM ? { response_mode: "jwt" } : {}),
       },
     };
   };
@@ -384,8 +440,11 @@ async function run() {
   );
 
   let code, issParam;
+  // Hoisted: the JARM case below reads the same authorization result.
+  let authzResult = null;
   if (requestUri) {
     const authz = await authorizeToCode(requestUri);
+    authzResult = authz;
     code = authz.code;
     issParam = authz.iss;
     record(
@@ -406,6 +465,53 @@ async function run() {
   } else {
     record("Authorization code flow completes via request_uri", "5.3.2.2", "code", "skipped — no request_uri", null);
     record("iss returned in authorization response (RFC 9207)", "5.3.2.2", "iss", "skipped", null);
+  }
+
+  // ── Message Signing: signed authorization responses (JARM) ────────────────
+  if (USE_JARM) {
+    if (authzResult?.jarm) {
+      let head = {};
+      let claims = {};
+      try {
+        head = JSON.parse(Buffer.from(authzResult.jarm.split(".")[0], "base64url").toString());
+        claims = JSON.parse(Buffer.from(authzResult.jarm.split(".")[1], "base64url").toString());
+      } catch {
+        /* reported below as a malformed token */
+      }
+      const algOk = ["PS256", "ES256", "EdDSA"].includes(head.alg);
+      // JARM §4.1 requires iss, aud and exp in the response JWT; §5.4.1 constrains the algorithm.
+      const claimsOk = claims.iss === ISSUER && !!claims.aud && !!claims.exp;
+      record(
+        "Authorization response is signed (JARM)",
+        "Message Signing — signed authorization responses",
+        "JWS PS256|ES256|EdDSA",
+        `alg=${head.alg} iss=${claims.iss === ISSUER ? "ok" : claims.iss} aud=${claims.aud ? "ok" : "MISSING"} exp=${claims.exp ? "ok" : "MISSING"}`,
+        algOk && claimsOk,
+        !algOk && head.alg ? `${head.alg} is not permitted by 5.4.1` : undefined,
+      );
+    } else {
+      record(
+        "Authorization response is signed (JARM)",
+        "Message Signing — signed authorization responses",
+        "JWS",
+        authzResult ? "unsigned response returned" : "skipped — no authorization result",
+        authzResult ? false : null,
+        authzResult ? "the response came back as bare query parameters" : undefined,
+      );
+    }
+
+    // "shall support, REQUIRE USE OF, and issue" — an unsigned response mode must not be honoured.
+    const { req: plainModeReq } = base();
+    plainModeReq.response_mode = "query";
+    const v = await parThenAuthorize(plainModeReq);
+    record(
+      "Unsigned response_mode=query is refused",
+      "Message Signing — signed authorization responses required",
+      "refused",
+      v.detail,
+      !v.accepted,
+      v.accepted ? "an unsigned authorization response was accepted" : undefined,
+    );
   }
 
   let accessToken, tokenType, idToken;
@@ -506,15 +612,15 @@ async function run() {
     // redirect to the login page — the last means the request was ACCEPTED and PAR is not enforced.
     let detail = String(r.status);
     let refused = r.status >= 400;
-    if (r.status === 302 && r.location) {
+    if (isRedirect(r.status) && r.location) {
       const loc = new URL(r.location, BASE);
       const errCode = loc.searchParams.get("error");
       if (errCode) {
         refused = true;
-        detail = `302 error=${errCode}`;
+        detail = `${r.status} error=${errCode}`;
       } else {
         refused = false;
-        detail = `302 -> ${loc.pathname} (accepted)`;
+        detail = `${r.status} -> ${loc.pathname} (accepted)`;
       }
     }
     record(

@@ -43,14 +43,14 @@ describe("sendAuthorizationFailResponse", () => {
     } as any);
 
     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
-    expect(res.redirect).toHaveBeenCalledWith("http://example.com/error");
+    expect(res.redirect).toHaveBeenCalledWith(303, "http://example.com/error");
   });
 
   it("redirects to empty string for LOCATION with null content", () => {
     const res = mockResponse();
     sendAuthorizationFailResponse(res, { action: "LOCATION", responseContent: null } as any);
 
-    expect(res.redirect).toHaveBeenCalledWith("");
+    expect(res.redirect).toHaveBeenCalledWith(303, "");
   });
 
   it("returns 200 with HTML content-type for FORM", () => {

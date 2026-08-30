@@ -52,3 +52,25 @@ export function sendSpecBody(
   }
   res.status(status).json(result);
 }
+
+/**
+ * The status code for every redirect in the authorization flow.
+ *
+ * FAPI 2.0 Security Profile §5.3.2.2: the authorization server *"shall not use the HTTP 307 status
+ * code when redirecting a request to a different endpoint … should use the HTTP 303 status code"*.
+ *
+ * **The reason is method preservation, not the number.** A 307 keeps the method *and the body* on
+ * the redirected request, so credentials POSTed to the login or consent endpoint would be replayed
+ * verbatim to whatever the `Location` names. A 303 requires the user agent to switch to GET and drop
+ * the body, which is the property the profile is actually buying. 302 was never 307 — the `shall not`
+ * was already satisfied — but its behaviour after a POST is historically ambiguous, which is why
+ * §5.3.2.2 names 303 rather than "anything but 307".
+ *
+ * A named constant rather than a literal at each of the six call sites: the value is a compliance
+ * requirement with a citation, and a seventh redirect added later should not have to rediscover it.
+ *
+ * **Not applied to RP-initiated logout** (`logout.service.ts`). That redirect is OpenID Connect
+ * RP-Initiated Logout, not the authorization response §5.3.2.2 governs, so changing it would be
+ * churn without a compliance argument.
+ */
+export const AUTHORIZATION_REDIRECT_STATUS = 303;

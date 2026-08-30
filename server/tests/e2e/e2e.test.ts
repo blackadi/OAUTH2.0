@@ -270,7 +270,7 @@ if (!hasRealAuthleteCreds) {
             state: stateParam,
           })
           .redirects(0)
-        expect(res.status).toBe(302)
+        expect(res.status).toBe(303)
         state.loginUrl = res.headers.location as string
       })
 
@@ -282,7 +282,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${csrf}&username=admin&password=password&login=submit`)
           .redirects(0)
-        expect(res.status).toBe(302)
+        expect(res.status).toBe(303)
         expect(res.headers.location).toContain("/api/session/consent")
         state.consentUrl = res.headers.location as string
       })
@@ -295,7 +295,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${csrf}&decision=approve`)
           .redirects(0)
-        expect(res.status).toBe(302)
+        expect(res.status).toBe(303)
         const location = res.headers.location as string
         expect(location).toContain("code=")
         code = new URL(location).searchParams.get("code") || ""
@@ -350,7 +350,7 @@ if (!hasRealAuthleteCreds) {
             prompt: "consent",
           })
           .redirects(0)
-        expect(authRes.status).toBe(302)
+        expect(authRes.status).toBe(303)
         const loginUrl = authRes.headers.location as string
         const csrf = await getCsrfToken(denyAgent, loginUrl)
         const loginRes = await denyAgent
@@ -358,7 +358,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${csrf}&username=admin&password=password&login=submit`)
           .redirects(0)
-        expect(loginRes.status).toBe(302)
+        expect(loginRes.status).toBe(303)
         const consentUrl = loginRes.headers.location as string
         const consentCsrf = await getCsrfToken(denyAgent, consentUrl)
         const res = await denyAgent
@@ -366,7 +366,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${consentCsrf}&decision=deny`)
           .redirects(0)
-        expect(res.status).toBe(302)
+        expect(res.status).toBe(303)
         const location = res.headers.location as string
         expect(location).toContain("error=")
         expect(location).toContain(`state=${denyState}`)
@@ -535,7 +535,7 @@ if (!hasRealAuthleteCreds) {
             code_challenge_method: "S256",
           })
           .redirects(0)
-        expect(authRes.status).toBe(302)
+        expect(authRes.status).toBe(303)
         const pkceLoginUrl = authRes.headers.location as string
 
         const loginCsrf = await getCsrfToken(pkceAgent, pkceLoginUrl)
@@ -544,7 +544,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${loginCsrf}&username=admin&password=password&login=submit`)
           .redirects(0)
-        expect(loginRes.status).toBe(302)
+        expect(loginRes.status).toBe(303)
         expect(loginRes.headers.location).toContain("/api/session/consent")
         const pkceConsentUrl = loginRes.headers.location as string
 
@@ -554,7 +554,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${consentCsrf}&decision=approve`)
           .redirects(0)
-        expect(consentRes.status).toBe(302)
+        expect(consentRes.status).toBe(303)
         const location = consentRes.headers.location as string
         expect(location).toContain("code=")
         const pkceCode = new URL(location).searchParams.get("code") || ""
@@ -599,7 +599,7 @@ if (!hasRealAuthleteCreds) {
           })
           .redirects(0)
         // Server forwards claims to Authlete and redirects to login
-        expect(res.status).toBe(302)
+        expect(res.status).toBe(303)
         expect(res.headers.location).toContain("/login")
       })
     })
@@ -683,7 +683,7 @@ if (!hasRealAuthleteCreds) {
           })
           .redirects(0)
         // Authlete verifies the request object signature and redirects to login
-        expect(authRes.status).toBe(302)
+        expect(authRes.status).toBe(303)
         expect(authRes.headers.location).toContain("/login")
       })
     })
@@ -706,7 +706,7 @@ if (!hasRealAuthleteCreds) {
             resource: resourceUri,
           })
           .redirects(0)
-        expect(res.status).toBe(302)
+        expect(res.status).toBe(303)
         expect(res.headers.location).toContain("/login")
       })
 
@@ -1880,7 +1880,7 @@ if (!hasRealAuthleteCreds) {
             request_uri: requestUri,
           })
           .redirects(0)
-        expect(authRes.status).toBe(302)
+        expect(authRes.status).toBe(303)
         const loginUrl = authRes.headers.location as string
 
         const csrf = await getCsrfToken(parAgent, loginUrl)
@@ -1889,7 +1889,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${csrf}&username=admin&password=password&login=submit`)
           .redirects(0)
-        expect(loginRes.status).toBe(302)
+        expect(loginRes.status).toBe(303)
         const consentUrl = loginRes.headers.location as string
         expect(consentUrl).toContain("/api/session/consent")
 
@@ -1899,7 +1899,7 @@ if (!hasRealAuthleteCreds) {
           .type("form")
           .send(`_csrf=${consentCsrf}&decision=approve`)
           .redirects(0)
-        expect(consentRes.status).toBe(302)
+        expect(consentRes.status).toBe(303)
         const location = consentRes.headers.location as string
         expect(location).toContain("code=")
         const code = new URL(location).searchParams.get("code") || ""
