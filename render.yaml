@@ -45,8 +45,17 @@ services:
         sync: false
       - key: AUTHLETE_SERVICE_ID
         sync: false
+      # Pinned, not `sync: false`, for the same reason as NODE_ENV above — and found the same way.
+      # The dashboard held `https://eu.authlete.com` while service 2147478188 lives on **us**, so the
+      # SDK authenticated against the wrong region and Authlete answered `A458101 The access token
+      # presented is not valid` to every call. `/api/health` still returned 200, so the deployment
+      # looked alive while discovery, PAR, authorization, token and introspection were all 403 —
+      # invisible to every gate in the repo, because no check reaches a third party.
+      #
+      # The region is a property of the service, not of the environment, so it does not belong in
+      # unversioned dashboard config. Changing service means changing this line.
       - key: AUTHLETE_BASE_URL
-        sync: false
+        value: https://us.authlete.com
       - key: AUTHLETE_BEARER_TOKEN
         sync: false
     region: frankfurt
