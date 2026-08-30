@@ -15,7 +15,7 @@ import introspectionRoutes from "./routes/introspection.routes";
 import revocationRoutes from "./routes/revocation.routes";
 import sessionRoutes from "./routes/session.routes";
 import jwksRoutes from "./routes/jwks.routes";
-import discoveryRoutes from "./routes/discovery.routes";
+import discoveryRoutes, { rootRouter as discoveryRootRouter } from "./routes/discovery.routes";
 import logoutRoutes from "./routes/logout.routes";
 import clientRoutes from "./routes/client.routes";
 import grantManagementRoutes from "./routes/grant-management.routes";
@@ -151,6 +151,10 @@ export function createApp() {
   app.use(routerURL, sessionRoutes);
   app.use(routerURL, jwksRoutes);
   app.use(routerURL, discoveryRoutes);
+  // .well-known/openid-configuration at root, where the issuer identifier says it lives
+  // (OIDC Discovery §4, FAPI 2.0 §5.3.2.1). See the note in discovery.routes.ts for why this is a
+  // separate router rather than a second mount of the one above.
+  app.use("/", discoveryRootRouter);
   app.use(routerURL, logoutRoutes);
   app.use(routerURL, clientRoutes);
   app.use(routerURL, grantManagementRoutes);
