@@ -778,6 +778,49 @@ describe("Integration: all API routes", () => {
     })
   })
 
+  /**
+   * The CORS preflight, which is the only thing standing between the SPA and every DPoP endpoint.
+   *
+   * The five tests below prove the server *forwards* a DPoP header and *returns* a DPoP-Nonce, and
+   * all five passed while no browser could do either: `allowedHeaders` was
+   * `["Content-Type", "Authorization"]`, so a preflight asking for `content-type,dpop` was answered
+   * without `dpop` and Firefox refused to send the request. It surfaced as "NetworkError when
+   * attempting to fetch resource" — no response, no server log, nothing to grep for.
+   *
+   * Supertest talks to the app directly and is no more subject to CORS than curl is, so nothing in
+   * this file could see it. These two tests assert the header *contract* rather than the transport,
+   * which is the part supertest can still check.
+   */
+  describe("CORS preflight for DPoP", () => {
+    it("allows the DPoP request header, so a browser can send a proof", async () => {
+      const res = await request(app)
+        .options("/api/par")
+        .set("Origin", "http://localhost:3001")
+        .set("Access-Control-Request-Method", "POST")
+        .set("Access-Control-Request-Headers", "content-type,dpop")
+        .expect(204)
+
+      const allowed = String(res.headers["access-control-allow-headers"] ?? "").toLowerCase()
+      expect(allowed).toContain("dpop")
+      expect(allowed).toContain("content-type")
+    })
+
+    it("exposes DPoP-Nonce, so the RFC 9449 nonce retry can read it", async () => {
+      const res = await request(app)
+        .options("/api/token")
+        .set("Origin", "http://localhost:3001")
+        .set("Access-Control-Request-Method", "POST")
+        .set("Access-Control-Request-Headers", "content-type,dpop")
+        .expect(204)
+
+      // A cross-origin response exposes only the safelisted headers unless it names more. Without
+      // this, `dpop-fetch.ts` reads null from `headers.get('dpop-nonce')` and the retry never starts.
+      const exposed = String(res.headers["access-control-expose-headers"] ?? "").toLowerCase()
+      expect(exposed).toContain("dpop-nonce")
+      expect(exposed).toContain("www-authenticate")
+    })
+  })
+
   describe("DPoP header forwarding", () => {
     it("forwards DPoP header on PAR and returns DPoP-Nonce", async () => {
       mockApi.pushedAuthorization.create.mockResolvedValue({

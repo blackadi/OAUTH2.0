@@ -84,7 +84,42 @@ export function createApp() {
       origin: allowedOrigins,
       credentials: true,
       methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      /**
+       * Every custom request header this server actually reads. `DPoP` was missing, and the
+       * consequence was total: the SPA is a DPoP debugger, the server accepts DPoP proofs at PAR,
+       * token and userinfo — and the browser could never send one. The preflight answered
+       * `Access-Control-Allow-Headers: Content-Type,Authorization` to a request asking for
+       * `content-type,dpop`, so Firefox refused to send the POST at all.
+       *
+       * It surfaces as *"NetworkError when attempting to fetch resource"* with **no response and no
+       * server log**, because the request never leaves the browser. curl is not subject to CORS, so
+       * every curl-based check in this repo — and the whole `fapi2-conformance.mjs` suite, which is
+       * a Node script — passed against an endpoint no browser could reach. A green gate said nothing
+       * about the one caller that matters.
+       *
+       * Keep this list in step with `req.headers[...]` reads in the services.
+       */
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "DPoP",
+        "OAuth-Client-Attestation",
+        "OAuth-Client-Attestation-PoP",
+      ],
+      /**
+       * The mirror-image bug, and it silently disabled a fix that is already in the tree.
+       *
+       * A cross-origin response exposes only the CORS-safelisted headers unless it names more, so
+       * `DPoP-Nonce` and `WWW-Authenticate` were unreadable from the SPA. RFC 9449 §8 drives the
+       * nonce dance off exactly that header — the server answers `use_dpop_nonce` and hands back
+       * `DPoP-Nonce`, the client re-signs the proof with it. `services/dpop-fetch.ts` implements
+       * that retry correctly (DR-20), and `response.headers.get('dpop-nonce')` returned `null`
+       * regardless, because the browser stripped it before the client ever saw it.
+       *
+       * `X-Request-Id` is exposed as well: `request-id.ts` sets it on every response, and correlating
+       * a browser call to a server log is the whole point of a debugging tool.
+       */
+      exposedHeaders: ["DPoP-Nonce", "WWW-Authenticate", "X-Request-Id"],
       maxAge: 86400,
     })
   );
