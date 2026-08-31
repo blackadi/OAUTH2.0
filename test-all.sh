@@ -8,7 +8,7 @@
 #  Configure via environment variables:
 #    export BASE="https://your-server.com"
 #    export CID="4288007124"           # confidential client ID
-#    export SEC="FGpSN50T6SK7s..."     # confidential client secret
+#    export SEC="your_client_secret"  # confidential client secret — REQUIRED, no default
 #    export PUB_CID="3322138582"        # public client ID
 #    export REDIR="http://localhost:3000"
 #    export VERBOSE=1                  # show full raw responses
@@ -23,7 +23,10 @@ set -euo pipefail
 
 BASE="${BASE:-http://localhost:3000}"
 CID="${CID:-4288007124}"
-SEC="${SEC:-FGpSN50T6SK7shEuzzwUNAaXsbfFXfqRJmI1VsncPPsUBgEnPsQ7UG7hc6o-NNnjeIScun5_MRnPc-24JGVPRA}"
+# No default. A real client secret was hardcoded here until 2026-08-31, which `AGENTS.md`
+# forbids ("never commit real Authlete credentials ... redact them in docs and examples").
+# Unset means the confidential-client tests skip themselves, which the script already handles.
+SEC="${SEC:-}"
 PUB_CID="${PUB_CID:-3322138582}"
 REDIR="${REDIR:-http://localhost:3000}"
 VERBOSE="${VERBOSE:-0}"
