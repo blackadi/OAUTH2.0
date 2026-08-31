@@ -94,10 +94,11 @@ anchors). **All drift found from here on is semantic, not mechanical.**
 
 ## 3. Endpoint → file map
 
-Mounting order is `server/src/app.ts:144-175`. Global middleware precedes it at `app.ts:52-131`
+Mounting order is `server/src/app.ts:183-217`. Global middleware precedes it at `app.ts:50-180`
 (static, security headers, CORS, request-id, per-request logger, morgan, metrics, audit, body
-parsers, cookie parser, session). Error handler last at `app.ts:178`.
-`app.use("/api", requestTimeout(30000))` at `app.ts:143` covers every `/api` path including the
+parsers, session — **no cookie parser**, removed 2026-08-31 as nothing read `req.cookies`). Error
+handler last at `app.ts:245`.
+`app.use("/api", requestTimeout(30000))` at `app.ts:182` covers every `/api` path including the
 `/api/device/*` routes declared inside the root-mounted device router.
 
 ### 3.1 True root
@@ -170,8 +171,8 @@ page) and `POST /api/logout` (`routes/logout.routes.ts:22` → `controllers/logo
 
 Ops: `GET /api/health{,/all,/authlete}` (`routes/health.routes.ts:6-8`), `GET /api/metrics`,
 `GET /api/fapi/{config,status}` (`routes/fapi.routes.ts:6,7` — **no auth**),
-`GET /api/openapi.json` (`routes/openapi.routes.ts:1973`), `GET /api/routes{,.json}`
-(`routes/routes-list.routes.ts:516,521`).
+`GET /api/openapi.json` (`routes/openapi.routes.ts:17`, serving `routes/openapi.json`),
+`GET /api/routes{,.json}` (`routes/routes-list.routes.ts:76,81`, derived from that same document).
 
 ---
 
@@ -295,11 +296,11 @@ response with 200 regardless of `action`**, `controllers/protected-resource-meta
 | `logout_token`, back-channel event URI | `controllers/logout.controller.ts:42,45,59`; `services/backchannel-logout.service.ts:95` |
 | `grantId` / `gmAction` (`"QUERY"`/`"REVOKE"`) | `services/grant-management.service.ts:20-21,38-39`; `middleware/require-grant-ownership.ts:44,112-115` |
 
-### Documentation-only (present in `openapi.routes.ts` / `routes-list.routes.ts`, not in a code path)
+### Documentation-only (present in `routes/openapi.json`, not in a code path)
 
-`code_challenge`, `code_challenge_method`, `code_verifier` (`routes/openapi.routes.ts:78,84,143`;
-`routes/routes-list.routes.ts:24,194`) — **no PKCE parameter is read, validated or forwarded by
-hand**; it rides inside the opaque `parameters` string. Also `subject_token`, `subject_token_type`
+`code_challenge`, `code_challenge_method`, `code_verifier` (`routes/openapi.json`; `routes-list.routes.ts`
+derives its list from that document rather than repeating it) — **no PKCE parameter is read, validated or
+forwarded by hand**; it rides inside the opaque `parameters` string. Also `subject_token`, `subject_token_type`
 (`:147-148`), the three grant-type URNs in the OpenAPI `enum` only (`:133,135,136`), and `assertion`,
 `auth_req_id`, `device_code`, `resource` as token params (`:150-153`).
 
@@ -408,7 +409,8 @@ Controllers with **no unit test**: `client.management`, `device-session`, `disco
 Services with no unit test: `federation.service.ts`, `native-sso.service.ts`.
 
 Zod schemas with no test: `federationRegistrationSchema`, `nativeSsoProcessSchema`,
-`nativeSsoLogoutSchema` (`server/src/utils/validation.ts:110,118,129`).
+`nativeSsoLogoutSchema` (`server/src/utils/validation.ts:95,103,114` — re-resolved 2026-08-31, after
+three untested schemas that *nothing* referenced were deleted).
 
 ### Characterization test that locks deliberate behaviour
 

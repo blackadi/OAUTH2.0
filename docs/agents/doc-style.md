@@ -23,3 +23,25 @@ All documentation in `docs/` follows a clear, highly visual, step-by-step, and b
 - Bold key terms on first use
 - Tables for quick reference
 - Code blocks with comments explaining each line
+
+---
+
+## Writing `AGENTS.md` and `docs/agents/` — the counter-example rule
+
+The style above is for the tutorials. The agent docs are a different genre: they are rules, and the
+question that decides what stays is **not** "is this history?" but **"is the wrong version still
+tempting?"**
+
+- **Cut narrative that records a closed sequence.** A fix that shipped, was reviewed and can no longer
+  be reintroduced does not need its story retold. Cross-reference `audit/` and move on.
+- **Keep the counter-example when someone could plausibly write the wrong thing again**, and keep it
+  *attached to the rule it protects* — "X, not Y" beats "X" alone, because the reader who was about to
+  write Y is the only reader who needed the line. Three that must survive any trim:
+  `kid` vs `jkt`, `requestUri` vs `request_uri`, and prefix-matching a `post_logout_redirect_uri`.
+- **Provenance is one parenthetical, not a paragraph** — `(fixed 2026-08-11; utils/verify-id-token-hint.ts)`
+  and then the rule.
+
+Measured 2026-08-31 across the eight area files: every dated clause that survives is a counter-example
+of exactly this shape, and the imperative-to-date ratio runs 3:1 or better. **This rule lived in an
+untracked scratch file at the repo root until it was promoted here** — where `AGENTS.md`'s router
+actually points, so it is read rather than rediscovered.

@@ -11,8 +11,8 @@
 > - **9700-W2** ✅ — `grep -rn 'body: parameters\|body: req.body' server/src` returns nothing. The
 >   prohibition is recorded in **two** places, per the item's acceptance criteria: the code comments above,
 >   and a new `AGENTS.md` **Quirks & gotchas** bullet (*"Never log a request body — log its length"*).
-> - **The test** is `tests/unit/services/credential-logging.test.ts` — a spy logger shaped as
->   `CallableLogger`, driven by ROPC, `authorization_code` + PKCE, `refresh_token`, `jwt-bearer`, token
+> - **The test** is `tests/unit/services/credential-logging.test.ts` — a Winston-shaped spy logger
+>   (`CallableLogger` until 2026-08-31, when the shim was removed), driven by ROPC, `authorization_code` + PKCE, `refresh_token`, `jwt-bearer`, token
 >   exchange, the `rawBody`-absent fallback rebuild, and both client-auth channels; for revocation the
 >   revoked token in all three shapes. It asserts on distinctive **values** rather than parameter names
 >   (asserting `code` would false-positive on *"URL-en**code**d"* and *"de**code**d Basic auth"*), plus the
@@ -118,8 +118,10 @@ log("TokenService: URL-encoded parameters (length), body", {
 });
 ```
 
-`parameters` is preferentially the **raw, unmodified request body**, captured by body-parser's verify
-hook and read at `:42` (`(req as any).rawBody`). The exclusion list at `:47` that strips
+`parameters` is preferentially the **raw, unmodified request body**, captured by the `verify` hook on
+`express.urlencoded` in `app.ts` and read at `:42` (`(req as any).rawBody`). *(The hook was on the
+`body-parser` package until 2026-08-31; Express 5 re-exports the same function, so the mechanism is
+unchanged and the direct dependency is gone.)* The exclusion list at `:47` that strips
 `client_secret` applies **only to the fallback rebuild path**, which does not run when `rawBody` is
 present — i.e. it does not run in normal operation.
 

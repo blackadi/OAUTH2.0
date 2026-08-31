@@ -113,7 +113,7 @@ all, is in `RFC8693-token-exchange.md` F-1.
 - SDK 1.0.0: `models/tokenresponse.ts:172-179`, `models/tokencreaterequest.ts:133`, `models/introspectionrequest.ts`
 - Live evidence: `modules/04…/lab.md` Exercise 4 transcripts (this deployment); live probe 2 for `accessTokenType = Bearer`
 - Code: `services/introspection.service.ts:33-37`, `services/token.operations.service.ts:80-84`, `controllers/token-exchange-response.handler.ts:47-52`
-- Grep: `resource` as a request parameter appears in `server/src` only as documentation strings (`routes/openapi.routes.ts:153`) — correct, it rides inside `parameters`
+- Grep: `resource` as a request parameter appears in `server/src` only as documentation strings (`routes/openapi.json`) — correct, it rides inside `parameters`
 
 ## Proposed work items
 

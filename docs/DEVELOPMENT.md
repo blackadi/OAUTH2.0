@@ -193,7 +193,7 @@ flowchart LR
 
 ### Client Config
 
-Client env vars are prefixed with `VITE_` and accessed via `import.meta.env` at build time. The `config.ts` module provides `getApiBaseUrl()` and `getRedirectUri()` which respect per-environment overrides defined in `PROD_CONFIG`.
+Client env vars are prefixed with `VITE_` and accessed via `import.meta.env` at build time. The `config.ts` module exports `API_BASE_URL` directly and `getRedirectUri()`, which respects the per-environment override in `PROD_CONFIG`. There was a matching `getApiBaseUrl()`; it had no callers and was removed — read `API_BASE_URL`.
 
 ---
 
@@ -512,7 +512,7 @@ There's a bug in Supertest 7.2.2: `_attachCookies` throws `Invalid URL` on relat
 
 ### Loggers
 
-All logging uses `const log = req.logger || logger;`. `CallableLogger` is both callable (for info-level) and has `.error()`, `.warn()`, `.child()` methods.
+All logging uses `const log = req.logger || logger;`, and `log` is a plain Winston `Logger` — `.info()`, `.warn()`, `.error()`, `.child()`. It used to be a `CallableLogger` shim that was *also* callable as `log("msg")` for info level; that gave one job two idioms and is gone.
 
 ### Login Page
 

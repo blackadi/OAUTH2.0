@@ -383,7 +383,7 @@ flowchart LR
     CONF --> SESSION["session.ts<br/>SECRET, REDIS_URL"]
     
     VITE_ENV["VITE_* vars"] --> VITE["import.meta.env"]
-    VITE --> CONF_CLIENT["config.ts<br/>getApiBaseUrl(), etc."]
+    VITE --> CONF_CLIENT["config.ts<br/>API_BASE_URL, getRedirectUri(), etc."]
     
     style ENV fill:#f59e0b,color:#fff
     style DOT fill:#f59e0b,color:#fff

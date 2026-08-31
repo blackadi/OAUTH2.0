@@ -14,15 +14,15 @@
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 70 files across 7 categories (828 tests). **Counts are re-measured, not carried** — they read 62/662 until 2026-08-18, four months of growth behind the actual tree:
+- **Unit tests**: 70 files across 7 categories (826 tests, measured 2026-08-31). **Counts are re-measured, not carried** — they read 62/662 until 2026-08-18, four months of growth behind the actual tree:
   - `tests/unit/services/` — 27 files, each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo). One file is a cross-service invariant rather than a service: `credential-logging.test.ts` asserts no request body reaches a log line (see **Quirks & gotchas**)
   - `tests/unit/controllers/` — 14 files, token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci/native-sso-response and others
-  - `tests/unit/middleware/` — 6 files, error handler, session, audit-log, csrf, require-basic-auth, require-grant-ownership (plus `development-only.ts`, covered via `tests/unit/routes/device.routes.test.ts`)
+  - `tests/unit/middleware/` — 7 files, error handler, session, audit-log, csrf, request-id, require-basic-auth, require-grant-ownership (plus `development-only.ts`, covered via `tests/unit/routes/device.routes.test.ts`)
   - `tests/unit/utils/` — 12 files, basic-auth/createLocalJWT/jwksClient/properties/validate/validation/dpop/verify-id-token-hint/step-up/session-store and others
   - `tests/unit/routes/` — 7 files, fapi + metrics + openapi + protected-resource-metadata + device + introspection + logout routes
   - `tests/unit/config/` — 1 file, `app.config.test.ts`, which asserts **the default itself** (`NODE_ENV` absent ⇒ `production`) — the `development-only` tests mock the config module and so can never see it
   - `tests/unit/views/` — 2 files, `consent-rar.test.ts` and `login.test.ts`. Both render the **real** `.ejs` file, which is the only kind of test here that can see a template throw or silently drop what a controller passed it
-- **Integration tests**: 7 files (302 tests) — full Express stack with mocked SDK, via `createApp()`. `routes.test.ts` is the general one; the other six were written to drain the route-coverage backlog and each drives one module's routes **through its middleware chain**, asserting the auth posture first: `client.routes.test.ts` (16 routes), `admin-surfaces.routes.test.ts` (token/HSK/federation/JAR/device-consent/health/route-index, 16), `vci.routes.test.ts` (10), `backchannel-logout.routes.test.ts` (4), `native-sso.routes.test.ts` (2), `root.routes.test.ts` (2). **Prefer adding to these over a new controller test** when the thing under test is a gate, a status mapping or a route parameter — a controller test calls the handler directly and cannot see any of it
+- **Integration tests**: 7 files (304 tests, measured 2026-08-31) — full Express stack with mocked SDK, via `createApp()`. `routes.test.ts` is the general one; the other six were written to drain the route-coverage backlog and each drives one module's routes **through its middleware chain**, asserting the auth posture first: `client.routes.test.ts` (16 routes), `admin-surfaces.routes.test.ts` (token/HSK/federation/JAR/device-consent/health/route-index, 16), `vci.routes.test.ts` (10), `backchannel-logout.routes.test.ts` (4), `native-sso.routes.test.ts` (2), `root.routes.test.ts` (2). **Prefer adding to these over a new controller test** when the thing under test is a gate, a status mapping or a route parameter — a controller test calls the handler directly and cannot see any of it
 - **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (**101 tests: 99 pass, 2 skipped outside development**) —
   real Authlete API, 26 section headers fixed for sequential numbering. The two skips are the device-flow
   approval chain, which drives the development-only `POST /api/device/complete`.
@@ -42,7 +42,7 @@
   > It also hid a genuine test bug for far longer: the DCR update had **never** sent a conformant RFC 7592
   > §2.2 request — the metadata document must contain `client_id`, and sending only the changed field earns
   > `[A214301]`.
-- Run with `npm --prefix server run test` — **1130 tests across 77 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — **1117 tests across 81 files** (measured 2026-08-23), plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
+- Run with `npm --prefix server run test` — **1130 tests across 77 files**, completes in ~3s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — **1215 tests across 87 files** (measured 2026-08-31), plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 

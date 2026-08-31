@@ -11,97 +11,61 @@
 
 ## Server Tests
 
-```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryTextColor': '#e2e8f0', 'primaryBorderColor': '#475569', 'lineColor': '#475569', 'secondaryColor': '#0f172a', 'tertiaryColor': '#334155', 'fontFamily': 'Inter'}}}%%
-flowchart TB
-    subgraph ServerTests["Server — 38 files, 246 tests, ~2s"]
-        UNIT["Unit Tests<br/>37 files, 223 tests"]
-        INTEGRATION["Integration Tests<br/>1 file, 23 tests"]
-        E2E["E2E Tests<br/>1 file, 100 tests"]
-    end
-    
-    subgraph Unit["Unit (223 tests)"]
-        SERVICES["Services<br/>21 files, 78 tests"]
-        CONTROLLERS["Controllers<br/>6 files, 60 tests"]
-        MIDDLEWARE["Middleware<br/>4 files, 28 tests"]
-        UTILS["Utils<br/>4 files, 22 tests"]
-        ROUTES["Routes<br/>2 files, 24 tests"]
-    end
-    
-    subgraph Controllers["Controller Tests (60)"]
-        TOKEN_CT["token.controller.test.ts"]
-        AUTH_CT["authorization.controller.test.ts"]
-        AUTH_FAIL["authorization-fail-response.handler.test.ts"]
-        DCR_CT["dcr.controller.test.ts"]
-        BACKCH_CT["backchannel-logout.controller.test.ts"]
-        DEVICE_CT["device.controller.test.ts"]
-    end
-    
-    subgraph Middleware["Middleware Tests (28)"]
-        CSRF["csrf.test.ts<br/>6 tests"]
-        SESSION["session.test.ts"]
-        AUDIT["audit-log.test.ts"]
-        ERROR["errorHandler.test.ts"]
-    end
-    
-    UNIT --> SERVICES
-    UNIT --> CONTROLLERS
-    UNIT --> MIDDLEWARE
-    UNIT --> UTILS
-    UNIT --> ROUTES
-    CONTROLLERS --> TOKEN_CT
-    CONTROLLERS --> AUTH_CT
-    CONTROLLERS --> AUTH_FAIL
-    CONTROLLERS --> DCR_CT
-    CONTROLLERS --> BACKCH_CT
-    CONTROLLERS --> DEVICE_CT
-    MIDDLEWARE --> CSRF
-    MIDDLEWARE --> SESSION
-    MIDDLEWARE --> AUDIT
-    MIDDLEWARE --> ERROR
-    INTEGRATION --> ROUTES_INT["routes.test.ts"]
-    E2E --> E2E_FILE["e2e.test.ts<br/>26 section blocks"]
-```
+> **The per-category breakdown lives in
+> [`docs/agents/testing-and-checks.md`](agents/testing-and-checks.md), and only there.** This section
+> carried a second copy for months and every number in it was wrong by roughly 5x — it read *38 files,
+> 246 tests* against an actual 77 and 1130, and named six controller tests out of fourteen. A hand-kept
+> inventory in two places is one that drifts in at least one of them. What is left here is the shape and
+> the totals; re-measure before quoting either.
 
-### Categories
+**Measured 2026-08-31** — `npm --prefix server run test`:
 
-| Category | Files | Tests | What's tested |
-|----------|-------|-------|---------------|
-| **Services** | 20 | 78 | Each service in isolation with mocked `authleteApi`. Includes `consent-store`, `device`, `metrics`, `par` |
-| **Controllers** | 6 | 60 | Token, authorization, fail-response, DCR, backchannel-logout, device. Uses `vi.hoisted()` for mutable mocks |
-| **Middleware** | 4 | 28 | Error handler, session, audit-log, CSRF (6 tests: template renders token, missing/wrong → 403, valid passes, consumed token reused → 403) |
-| **Utils** | 4 | 22 | `createLocalJWT`, `jwksClient`, `validate`, `validation` |
-| **Routes** | 2 | 24 | Metrics routes + OpenAPI routes |
+| Layer | Files | Tests | What it can see |
+|-------|-------|-------|-----------------|
+| Unit | 70 | 826 | One module with its collaborators mocked. **A controller test calls the handler directly and never touches the middleware chain**, so it cannot see an auth gate at all |
+| Integration | 7 | 304 | The full Express stack via `createApp()` + Supertest, mocked SDK. This is the layer that sees gates, status mappings and route parameters |
+| **Total** | **77** | **1130** | ~3s |
 
-### Integration Tests
+Unit tests are split across `services/` (27 files), `controllers/` (14), `utils/` (12), `middleware/` (7),
+`routes/` (7), `views/` (2) and `config/` (1).
 
-- **File:** `tests/integration/routes.test.ts` (23 tests)
-- Full Express stack with mocked SDK via `vi.hoisted()` + `vi.mock()`
-- Uses `createApp()` factory — tests build fresh app instances without `listen()`
-- Supertest for HTTP assertions
+**Prefer adding to an integration test over a new controller test** when the thing under test is a gate,
+a status mapping or a route parameter.
 
 ### E2E Tests
 
-- **File:** `tests/e2e/e2e.test.ts` (100 tests)
-- Requires real Authlete credentials (skips conditionally based on env vars)
-- 26 sequentially-numbered section blocks
-- Tests: authorization code, PKCE, DCR, CIBA, PAR, device flow, token management, backchannel logout, discovery, introspection, revocation
-- Guards: `CID`/`SEC` (confidential client), `PUB_CID` (public client), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
-- Authlete rate limit (~15+ token calls in short window → 429) handled as valid response
-- Request object E2E test creates ephemeral DCR client (deleted in `afterAll`), guarded by `hasManagement`
+- **File:** `tests/e2e/e2e.test.ts` — **101 tests: 99 exercised, 2 permanently skipped.** The two are the
+  device-flow completion pair behind `itInDevelopment`; Vitest sets `NODE_ENV=test` and the suite also
+  asserts the other side of that gate, so they cannot both run in one pass. See `AGENTS.md`.
+- **Never run this without being asked.** It spends real Authlete API quota and trips the ~15-call rate
+  limit. It is deliberately absent from `ci.yml`, which means *nothing* runs it and a green `npm test`
+  says nothing about it. `node scripts/check-e2e-staleness.mjs` reports which behaviour-deciding server
+  files have changed since the suite was last revised.
+- Requires real Authlete credentials; skips conditionally on env vars.
+- Guards: `CID`/`SEC` (confidential client), `PUB_CID` (public client),
+  `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
+- Authlete rate limit (~15+ token calls in a short window → 429) is handled as a valid response
+- The request-object test creates an ephemeral DCR client, deleted in `afterAll`, guarded by
+  `hasManagement`
 
 ---
 
 ## Client Tests
 
-**16 test files** (+ 1 setup) across 4 groups:
+**Measured 2026-08-31**: **1215 tests across 87 files**, plus a Playwright pass (`npm --prefix client
+run test:visual`) that runs Chromium and Firefox against the real build.
 
-| Group | Directory | Content |
-|-------|-----------|---------|
-| UI Components | `test/components/ui/` | `Badge`, `Button`, `JsonBlock` |
-| Hooks | `test/hooks/` | `useClipboard` |
-| Services | `test/services/` | `admin`, `backchannel-logout`, `ciba`, `client`, `dcr`, `device`, `grant`, `health`, `http`, `par`, `token` |
-| Utils | `test/utils/` | `cn` (Tailwind class merging) |
+| Group | Directory | Files |
+|-------|-----------|-------|
+| Components | `test/components/` | 42 — includes a **driven** test per section (`sections/*.driven.test.tsx`) that presses the control and asserts what reached the service |
+| Services | `test/services/` | 26 |
+| Utils | `test/utils/` | 9 |
+| Hooks | `test/hooks/` | 7 |
+| Context | `test/context/` | 1 |
+| Routing / smoke | `test/*.test.tsx` | 2 |
+
+`test/helpers/drive-section.tsx` holds the driving harness; read its header for the layer boundary and
+the four dead flows that motivated it.
 
 Run with `npm --prefix client run test`.
 
