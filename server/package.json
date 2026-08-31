@@ -43,7 +43,7 @@
     "@types/express-session": "^1.17.7",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.8.1",
