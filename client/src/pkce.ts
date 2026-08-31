@@ -1,13 +1,7 @@
-// Simple PKCE utilities using browser crypto
-
-function base64UrlEncode(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i += 1) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
+// Simple PKCE utilities using browser crypto.
+// `base64UrlEncode` comes from `services/crypto-utils`, where the DPoP and client-assertion code
+// already uses it — this file had a byte-identical private copy.
+import { base64UrlEncode } from '@/services/crypto-utils';
 
 export async function generateCodeVerifier(length = 64): Promise<string> {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';

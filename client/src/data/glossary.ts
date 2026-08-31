@@ -233,10 +233,6 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
 ];
 
-export const GLOSSARY_BY_TERM: Record<string, GlossaryEntry> = Object.fromEntries(
-  GLOSSARY.map((e) => [e.term, e]),
-);
-
 /** A URL-safe fragment for deep-linking a single entry. */
 export function glossarySlug(term: string): string {
   return term

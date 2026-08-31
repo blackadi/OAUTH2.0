@@ -158,7 +158,7 @@ export async function opBackchannelLogout(req: Request, res: Response, _next: Ne
         // what we can act on, not a reason to reject a conformant token.
         if (subject) {
             const destroyed = await destroySessionsForSubject(req.sessionStore, subject, log);
-            log("Back-channel logout: terminated sessions for subject", { subject, destroyed });
+            log.info("Back-channel logout: terminated sessions for subject", { subject, destroyed });
         } else {
             log.error("Back-channel logout: token carries only `sid`, which this OP does not issue", { sid });
         }

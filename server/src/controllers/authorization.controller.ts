@@ -96,7 +96,7 @@ async function decideWithoutInteraction(
   const requiredScopes = result.scopes?.map((scope: Scope) => scope.name as string) ?? [];
 
   const fail = async (reason: "NOT_LOGGED_IN" | "CONSENT_REQUIRED" | "ACR_NOT_SATISFIED" | "EXCEEDS_MAX_AGE") => {
-    log("prompt=none cannot be satisfied silently", { reason, clientId, hasSubject: !!subject });
+    log.info("prompt=none cannot be satisfied silently", { reason, clientId, hasSubject: !!subject });
     const failResponse = await authorizationService.fail(ticket, reason);
     delete req.session.authorization;
     return sendAuthorizationFailResponse(res, failResponse);
@@ -119,7 +119,7 @@ async function decideWithoutInteraction(
   );
   if (stepUpFailure) return fail(stepUpFailure);
 
-  log("prompt=none satisfied silently, issuing", { clientId, subject });
+  log.info("prompt=none satisfied silently, issuing", { clientId, subject });
   const issueResponse = await authorizationService.issue(req);
   delete req.session.authorization;
   res.setHeader("Cache-Control", "no-store");
@@ -188,7 +188,7 @@ export const authorizationController = {
             currentQueryParams as Record<string, string>
           );
           const newUrl = `${appConfig.loginUrl}?${searchParams.toString()}`;
-          req.logger("Redirecting to login", { url: newUrl });
+          req.logger.info("Redirecting to login", { url: newUrl });
           return res.redirect(AUTHORIZATION_REDIRECT_STATUS, newUrl);
         }
 

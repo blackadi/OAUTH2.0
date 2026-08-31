@@ -15,7 +15,7 @@ export class DcrService {
       throw new AppError("Missing required body field: json", 400);
     }
 
-    log("DcrRegisterService: calling Authlete DCR register endpoint");
+    log.info("DcrRegisterService: calling Authlete DCR register endpoint");
 
     const response = await this.authleteApi.dynamicClientRegistration.register({
       serviceId,
@@ -37,7 +37,7 @@ export class DcrService {
       throw new AppError("Missing required body field: clientId", 400);
     }
 
-    log("DcrGetService: calling Authlete DCR get endpoint", { clientId });
+    log.info("DcrGetService: calling Authlete DCR get endpoint", { clientId });
 
     const response = await this.authleteApi.dynamicClientRegistration.get({
       serviceId,
@@ -63,7 +63,7 @@ export class DcrService {
       throw new AppError("Missing required body field: clientId", 400);
     }
 
-    log("DcrUpdateService: calling Authlete DCR update endpoint", { clientId });
+    log.info("DcrUpdateService: calling Authlete DCR update endpoint", { clientId });
 
     const response = await this.authleteApi.dynamicClientRegistration.update({
       serviceId,
@@ -85,7 +85,7 @@ export class DcrService {
       throw new AppError("Missing required body field: clientId", 400);
     }
 
-    log("DcrDeleteService: calling Authlete DCR delete endpoint", { clientId });
+    log.info("DcrDeleteService: calling Authlete DCR delete endpoint", { clientId });
 
     const response = await this.authleteApi.dynamicClientRegistration.delete({
       serviceId,

@@ -56,7 +56,7 @@ export async function handleNativeSso(
       ...(result.sessionId && { sub: result.subject }),
     };
 
-    logger("handleNativeSso: calling nativeSsoService.process", { accessToken: accessToken.substring(0, 20) + "..." });
+    logger.info("handleNativeSso: calling nativeSsoService.process", { accessToken: accessToken.substring(0, 20) + "..." });
 
     const nativeSsoResponse = await nativeSsoService.process(req);
 

@@ -1310,8 +1310,4 @@ export function getDoc(section: string, key: string): OpDoc | undefined {
   return docs[section]?.[key];
 }
 
-export function getSectionDocs(section: string): Record<string, OpDoc> | undefined {
-  return docs[section];
-}
-
 export default docs;

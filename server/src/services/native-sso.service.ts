@@ -28,7 +28,7 @@ export class NativeSsoService {
       throw new AppError("Missing required field: deviceSecret", 400);
     }
 
-    log("NativeSsoService: calling Authlete /nativesso endpoint");
+    log.info("NativeSsoService: calling Authlete /nativesso endpoint");
 
     const nativeSsoRequest: NativeSsoRequest = {
       accessToken,
@@ -59,7 +59,7 @@ export class NativeSsoService {
       throw new AppError("Missing required field: sessionId", 400);
     }
 
-    log("NativeSsoService: calling Authlete /nativesso/logout endpoint");
+    log.info("NativeSsoService: calling Authlete /nativesso/logout endpoint");
 
     const response = await this.authleteApi.nativeSso.logout({
       serviceId,

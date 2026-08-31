@@ -214,12 +214,3 @@ export const overallHealthSchema = z.looseObject({
     authlete: z.optional(z.unknown()),
   }),
 });
-
-export type TokenResponseBody = z.infer<typeof tokenResponseSchema>;
-export type ParResponseBody = z.infer<typeof parResponseSchema>;
-export type DeviceAuthorizationBody = z.infer<typeof deviceAuthorizationSchema>;
-export type DcrRegistrationBody = z.infer<typeof dcrRegistrationSchema>;
-export type AsMetadataBody = z.infer<typeof asMetadataSchema>;
-export type IntrospectionBody = z.infer<typeof introspectionSchema>;
-export type HealthBody = z.infer<typeof healthSchema>;
-export type OverallHealthBody = z.infer<typeof overallHealthSchema>;

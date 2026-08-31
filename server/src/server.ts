@@ -11,21 +11,21 @@ warnIfManagementCredentialsMissing();
 warnIfDevelopmentEnvironment();
 
 const serverInstance = app.listen(PORT, () => {
-  logger(`Authorization Server running on port ${PORT}`);
+  logger.info(`Authorization Server running on port ${PORT}`);
 });
 
 async function gracefulShutdown(signal: string) {
-  logger(`Received ${signal}. Shutting down gracefully...`);
+  logger.info(`Received ${signal}. Shutting down gracefully...`);
 
   await closeRedis();
-  logger("Redis client closed.");
+  logger.info("Redis client closed.");
 
   serverInstance.close(() => {
-    logger("HTTP server closed.");
+    logger.info("HTTP server closed.");
     process.exit(0);
   });
   setTimeout(() => {
-    logger("Forced shutdown after timeout.");
+    logger.info("Forced shutdown after timeout.");
     process.exit(1);
   }, 10000).unref();
 }

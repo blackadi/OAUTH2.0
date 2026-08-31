@@ -72,7 +72,7 @@ export class VciService {
       throw new AppError("Missing required body field: credentialConfigurationIds", 400);
     }
 
-    log("VciService: calling Authlete VCI offer create API");
+    log.info("VciService: calling Authlete VCI offer create API");
 
     const response = await this.authleteApi.verifiableCredentials.createOffer({
       serviceId,

@@ -1,5 +1,5 @@
 import type { Store, SessionData } from "express-session";
-import type { CallableLogger } from "./logger";
+import type { Logger } from "winston";
 
 /**
  * Destroy every stored session belonging to a subject.
@@ -27,7 +27,7 @@ import type { CallableLogger } from "./logger";
 export async function destroySessionsForSubject(
   store: Store | undefined,
   subject: string,
-  log: CallableLogger,
+  log: Logger,
 ): Promise<number | null> {
   if (!store || typeof store.all !== "function") {
     // Never throw: the logout token was valid, and answering the sending OP with an error would blame it for

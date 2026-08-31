@@ -19,7 +19,7 @@ export class DeviceService {
       throw new AppError("Missing required body field: parameters", 400);
     }
 
-    log("DeviceService: calling Authlete device authorization endpoint");
+    log.info("DeviceService: calling Authlete device authorization endpoint");
 
     const response = await this.authleteApi.deviceFlow.authorization({
       serviceId,

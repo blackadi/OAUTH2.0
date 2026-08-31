@@ -68,13 +68,13 @@ export class IntrospectionService {
       reqBody.targetUri = targetUri;
     }
 
-    log("Introspection parameters", { token: "[redacted]", hasDpop: !!dpopHeader });
+    log.info("Introspection parameters", { token: "[redacted]", hasDpop: !!dpopHeader });
 
     const response = await this.authleteApi.introspection.process({
       serviceId,
       introspectionRequest: reqBody,
     });
-    log("Introspection response received", { action: response.action });
+    log.info("Introspection response received", { action: response.action });
     return response;
   }
 
@@ -82,7 +82,7 @@ export class IntrospectionService {
     const log = req.logger || logger;
     const body = req.body as Record<string, unknown>;
 
-    // Use raw request body captured by body-parser's verify hook.
+    // Use raw request body captured by the `express.urlencoded` verify hook in `app.ts`.
     // This preserves exact encoding and parameter order for RFC 7662.
     let parameters: string | undefined = (req as any).rawBody;
 
@@ -120,7 +120,7 @@ export class IntrospectionService {
     // Deleting it fixes both. A caller that needs to present *client* credentials still can — they belong in
     // the request body, where `rawBody` carries them verbatim and the fallback rebuild above passes through
     // every key not on the Authlete-specific exclusion list. One header, one meaning.
-    log("StandardIntrospectionService: URL-encoded parameters length", {
+    log.info("StandardIntrospectionService: URL-encoded parameters length", {
       length: parameters.length,
     });
 

@@ -30,7 +30,7 @@ function mockReq(overrides: Partial<Request> = {}): Request {
     method: "GET",
     query: {},
     body: {},
-    logger: Object.assign(vi.fn(), { error: vi.fn() }),
+    logger: { info: vi.fn(), error: vi.fn() },
     session: {},
     ...overrides,
   } as unknown as Request

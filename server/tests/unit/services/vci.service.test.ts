@@ -65,7 +65,7 @@ describe("VciService", () => {
           subject: "user123",
           duration: 3600,
         },
-        logger: vi.fn(),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       } as any
 
       const result = await service.createOffer(req)
@@ -83,12 +83,12 @@ describe("VciService", () => {
     })
 
     it("throws when credentialConfigurationIds is missing", async () => {
-      const req = { body: {}, logger: vi.fn() } as any
+      const req = { body: {}, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } } as any
       await expect(service.createOffer(req)).rejects.toThrow("Missing required body field: credentialConfigurationIds")
     })
 
     it("throws when credentialConfigurationIds is empty", async () => {
-      const req = { body: { credentialConfigurationIds: [] }, logger: vi.fn() } as any
+      const req = { body: { credentialConfigurationIds: [] }, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } } as any
       await expect(service.createOffer(req)).rejects.toThrow("Missing required body field: credentialConfigurationIds")
     })
   })

@@ -8,14 +8,7 @@ vi.mock("../../../src/config/app.config", () => ({
 }))
 
 vi.mock("../../../src/utils/logger", () => ({
-  default: Object.assign(
-    (_msg: string) => {},
-    { error: vi.fn(), child: () => ({ error: vi.fn() }) }
-  ),
-  createCallableLogger: () => Object.assign(
-    (_msg: string) => {},
-    { error: vi.fn(), child: () => ({ error: vi.fn() }) }
-  ),
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
   baseLogger: {} as any,
 }))
 

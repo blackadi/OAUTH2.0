@@ -1,4 +1,4 @@
-import { createLogger, format, transports, Logger } from "winston";
+import { createLogger, format, transports } from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 import { server } from "../config/app.config";
 
@@ -38,25 +38,18 @@ const baseLogger = createLogger({
   exitOnError: false,
 });
 
-export interface CallableLogger {
-  (msg: string, meta?: Record<string, unknown>): void;
-  error: (msg: string, meta?: Record<string, unknown>) => void;
-  warn: (msg: string, meta?: Record<string, unknown>) => void;
-  child: (opts: { reqId?: string }) => CallableLogger;
-}
-
-export function createCallableLogger(winstonLogger: Logger): CallableLogger {
-  const fn: CallableLogger = (msg: string, meta?: Record<string, unknown>) => {
-    const level = server.logLevel === "debug" ? "debug" : "info";
-    winstonLogger.log(level, msg, meta);
-  };
-  fn.error = winstonLogger.error.bind(winstonLogger);
-  fn.warn = winstonLogger.warn.bind(winstonLogger);
-  fn.child = (opts: { reqId?: string }) => createCallableLogger(winstonLogger.child(opts));
-  return fn;
-}
-
-const defaultLogger = createCallableLogger(baseLogger);
-
+/**
+ * Exported as the plain Winston logger — there is no callable wrapper any more.
+ *
+ * `CallableLogger` let a call site write `log("msg")` as a shorthand for `log.info("msg")`, and the
+ * result was two idioms for one thing, split almost evenly across the codebase (83 calls one way, 88
+ * the other). Winston already ships `.info` / `.warn` / `.error` / `.child`, so the shim was an
+ * interface with one implementation wrapping an API that needed no wrapping.
+ *
+ * **One visible difference, in log output only.** The shim tagged its messages `debug` when
+ * `LOG_LEVEL=debug` and `info` otherwise; they are now always tagged `info`. The same lines are
+ * emitted either way — the logger's own level decides that — so this changes a label, not what is
+ * recorded.
+ */
 export { baseLogger };
-export default defaultLogger;
+export default baseLogger;

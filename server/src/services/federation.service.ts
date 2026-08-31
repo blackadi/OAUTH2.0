@@ -9,7 +9,7 @@ export class FederationService {
 
   async configuration(req: Request): Promise<any> {
     const log = req.logger || logger;
-    log("FederationService.configuration: calling Authlete federation configuration API");
+    log.info("FederationService.configuration: calling Authlete federation configuration API");
 
     // `requestBody` is optional in the SDK type and mandatory in practice. Omitting it makes the SDK send
     // no `Content-Type`, and Authlete answers `400 [A258201] … Content-Type header is not specified.` The
@@ -39,7 +39,7 @@ export class FederationService {
       throw new AppError("Missing required body field: entityConfiguration or trustChain", 400);
     }
 
-    log("FederationService.registration: calling Authlete federation registration API");
+    log.info("FederationService.registration: calling Authlete federation registration API");
 
     const response = await this.authleteApi.federation.registration({
       serviceId,

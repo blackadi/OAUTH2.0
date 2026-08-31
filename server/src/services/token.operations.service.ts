@@ -136,7 +136,7 @@ export class TokenManagementService {
         : [String(body.resources)];
     }
 
-    log("TokenCreateService: calling Authlete token management endpoint", {
+    log.info("TokenCreateService: calling Authlete token management endpoint", {
       grantType: reqBody.grantType,
       clientId: reqBody.clientId,
       hasSubject: !!reqBody.subject,
@@ -182,7 +182,7 @@ export class TokenManagementService {
     }
     if (body.tokenId !== undefined) reqBody.tokenId = body.tokenId as string;
 
-    log("TokenUpdateService: calling Authlete token management endpoint", {
+    log.info("TokenUpdateService: calling Authlete token management endpoint", {
       hasAccessToken: !!reqBody.accessToken,
     });
 
@@ -204,7 +204,7 @@ export class TokenManagementService {
   }
 
   async list(): Promise<TokenGetListResponse> {
-    logger("TokenListService: calling Authlete token management endpoint");
+    logger.info("TokenListService: calling Authlete token management endpoint");
 
     const response = await this.authleteApi.token.management.list({
       serviceId,
@@ -237,7 +237,7 @@ export class TokenManagementService {
         idtHeaderParams?: string;
         idTokenAudType?: string;
       };
-    logger(
+    logger.info(
       "TokenReissueIdTokenService: calling Authlete token management endpoint",
       { hasAccessToken: !!accessToken, hasRefreshToken: !!refreshToken }
     );
@@ -256,7 +256,7 @@ export class TokenManagementService {
 
   async revoke(req: Request | any): Promise<TokenRevokeResponse> {
     const { accessTokenIdentifier, refreshTokenIdentifier, clientIdentifier, subject } = req.body;
-    logger(
+    logger.info(
       "TokenDeleteService: calling Authlete token management endpoint",
       { accessTokenIdentifier, hasRefreshTokenIdentifier: !!refreshTokenIdentifier }
     );

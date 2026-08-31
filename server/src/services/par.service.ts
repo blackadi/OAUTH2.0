@@ -65,7 +65,7 @@ export class ParService {
       requestBody.htu = dpopHttpTarget(req).htu;
     }
 
-    log("ParService: calling Authlete pushed authorization endpoint", {
+    log.info("ParService: calling Authlete pushed authorization endpoint", {
       hasDpop: !!dpopHeader,
       clientAuth: basic ? "basic" : clientSecret ? "post" : clientId ? "none" : "absent",
     });

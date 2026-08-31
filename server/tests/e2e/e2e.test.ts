@@ -1265,7 +1265,7 @@ if (!hasRealAuthleteCreds) {
         })
         if (!updateRes.ok) {
           const log = console.warn || console.log
-          log(`JWK registration for JWT Bearer test failed: ${updateRes.status}`)
+          log.info(`JWK registration for JWT Bearer test failed: ${updateRes.status}`)
         }
 
         // Create signed JWT assertion

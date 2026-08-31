@@ -393,7 +393,3 @@ export const AUTH_PARAMS: AuthParamSpec[] = [
     defaultOn: false,
   },
 ];
-
-export const PARAM_BY_NAME: Record<string, AuthParamSpec> = Object.fromEntries(
-  AUTH_PARAMS.map((p) => [p.name, p]),
-);

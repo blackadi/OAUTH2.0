@@ -24,7 +24,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     const token = req.body?._csrf;
     if (!token || token !== req.session.csrfToken) {
       const log = req.logger;
-      if (log) log("CSRF validation failed", { method: req.method, path: req.path });
+      if (log) log.info("CSRF validation failed", { method: req.method, path: req.path });
       return res.status(403).json({ error: "invalid_request", message: "CSRF token mismatch" });
     }
     req.session.csrfToken = generateToken();

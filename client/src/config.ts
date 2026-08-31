@@ -200,13 +200,7 @@ export const HEALTH_ENDPOINT = `${API_BASE_URL}/api/health`;
 export const HEALTH_ALL_ENDPOINT = `${API_BASE_URL}/api/health/all`;
 export const HEALTH_AUTHLETE_ENDPOINT = `${API_BASE_URL}/api/health/authlete`;
 
-export const DEV_SERVER = {
-  port: parseInt(getEnvVar('VITE_DEV_CLIENT_PORT', '3001')),
-  host: getEnvVar('VITE_DEV_CLIENT_HOST', 'localhost'),
-};
-
 export const PROD_CONFIG = {
-  apiBaseUrl: stripTrailingSlash(getEnvVar('VITE_PROD_API_BASE_URL', API_BASE_URL)),
   redirectUri: getEnvVar('VITE_PROD_REDIRECT_URI', REDIRECT_URI),
 };
 
@@ -238,15 +232,7 @@ export function stripTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-export const isDevelopment = import.meta.env.DEV;
 export const isProduction = import.meta.env.PROD;
-
-export function getApiBaseUrl(): string {
-  if (isProduction && PROD_CONFIG.apiBaseUrl !== API_BASE_URL) {
-    return PROD_CONFIG.apiBaseUrl;
-  }
-  return API_BASE_URL;
-}
 
 export function getRedirectUri(): string {
   if (isProduction && PROD_CONFIG.redirectUri !== REDIRECT_URI) {

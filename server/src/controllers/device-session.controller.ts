@@ -88,7 +88,7 @@ export const deviceSessionController = {
       const user = await loginService.validateUser(username, password);
       if (!user) {
         const log = req.logger || logger;
-        log("Device login failed", { username });
+        log.info("Device login failed", { username });
         return res.status(401).send("Invalid credentials.");
       }
 

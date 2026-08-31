@@ -29,7 +29,7 @@ export class ClientManagementService {
     const end = Number(body?.end ?? query.end ?? 20);
     const developer = (body?.developer as string) || (query.developer as string) || undefined;
 
-    log("ClientListService: calling Authlete client list endpoint", { start, end, developer });
+    log.info("ClientListService: calling Authlete client list endpoint", { start, end, developer });
 
     const response = await this.authleteApi.client.list({
       serviceId,
@@ -49,7 +49,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientGetService: calling Authlete client get endpoint", { clientId });
+    log.info("ClientGetService: calling Authlete client get endpoint", { clientId });
 
     const response = await this.authleteApi.client.get({
       serviceId,
@@ -70,7 +70,7 @@ export class ClientManagementService {
 
     const clientInput: ClientInput = this.buildClientInput(clientPayload);
 
-    log("ClientCreateService: calling Authlete client create endpoint", {
+    log.info("ClientCreateService: calling Authlete client create endpoint", {
       clientName: clientInput.clientName,
       grantTypes: clientInput.grantTypes,
     });
@@ -116,7 +116,7 @@ export class ClientManagementService {
     const changes: ClientInput = this.buildClientInput(clientPayload || body);
     const clientInput: ClientInput = { ...current, ...changes };
 
-    log("ClientUpdateService: calling Authlete client update endpoint", {
+    log.info("ClientUpdateService: calling Authlete client update endpoint", {
       clientId,
       changedFields: Object.keys(changes),
     });
@@ -138,7 +138,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientDeleteService: calling Authlete client delete endpoint", { clientId });
+    log.info("ClientDeleteService: calling Authlete client delete endpoint", { clientId });
 
     const response = await this.authleteApi.client.delete({
       serviceId,
@@ -159,7 +159,7 @@ export class ClientManagementService {
 
     const clientLocked = body.clientLocked === true || body.clientLocked === "true";
 
-    log("ClientLockFlagService: calling Authlete client lock flag update endpoint", {
+    log.info("ClientLockFlagService: calling Authlete client lock flag update endpoint", {
       clientIdentifier,
       clientLocked,
     });
@@ -181,7 +181,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientSecretRefreshService: calling Authlete client secret refresh endpoint", {
+    log.info("ClientSecretRefreshService: calling Authlete client secret refresh endpoint", {
       clientIdentifier,
     });
 
@@ -207,7 +207,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientSecretUpdateService: calling Authlete client secret update endpoint", {
+    log.info("ClientSecretUpdateService: calling Authlete client secret update endpoint", {
       clientIdentifier,
     });
 
@@ -234,7 +234,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientListAuthorizationsService: calling Authlete", { subject, start, end });
+    log.info("ClientListAuthorizationsService: calling Authlete", { subject, start, end });
 
     const response = await this.authleteApi.client.management.listAuthorizations({
       serviceId,
@@ -267,7 +267,7 @@ export class ClientManagementService {
         ? scopes.split(/[\s,]+/).filter(Boolean)
         : undefined;
 
-    log("ClientUpdateAuthorizationsService: calling Authlete", { clientId, subject });
+    log.info("ClientUpdateAuthorizationsService: calling Authlete", { clientId, subject });
 
     const response = await this.authleteApi.client.management.updateAuthorizations({
       serviceId,
@@ -290,7 +290,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientDeleteAuthorizationsService: calling Authlete", { clientId, subject });
+    log.info("ClientDeleteAuthorizationsService: calling Authlete", { clientId, subject });
 
     const response = await this.authleteApi.client.management.deleteAuthorizations({
       serviceId,
@@ -313,7 +313,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientGetGrantedScopesService: calling Authlete", { clientId, subject });
+    log.info("ClientGetGrantedScopesService: calling Authlete", { clientId, subject });
 
     const response = await this.authleteApi.client.management.getGrantedScopes({
       serviceId,
@@ -336,7 +336,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientDeleteGrantedScopesService: calling Authlete", { clientId, subject });
+    log.info("ClientDeleteGrantedScopesService: calling Authlete", { clientId, subject });
 
     const response = await this.authleteApi.client.management.deleteGrantedScopes({
       serviceId,
@@ -355,7 +355,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientGetRequestableScopesService: calling Authlete", { clientId });
+    log.info("ClientGetRequestableScopesService: calling Authlete", { clientId });
 
     const response = await this.authleteApi.client.management.getRequestableScopes({
       serviceId,
@@ -381,7 +381,7 @@ export class ClientManagementService {
         ? scopes.split(/[\s,]+/).filter(Boolean)
         : undefined;
 
-    log("ClientUpdateRequestableScopesService: calling Authlete", { clientId });
+    log.info("ClientUpdateRequestableScopesService: calling Authlete", { clientId });
 
     const response = await this.authleteApi.client.management.updateRequestableScopes({
       serviceId,
@@ -400,7 +400,7 @@ export class ClientManagementService {
       throw new AppError("", 400);
     }
 
-    log("ClientDeleteRequestableScopesService: calling Authlete", { clientId });
+    log.info("ClientDeleteRequestableScopesService: calling Authlete", { clientId });
 
     const response = await this.authleteApi.client.management.deleteRequestableScopes({
       serviceId,

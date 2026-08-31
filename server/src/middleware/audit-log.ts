@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { auditLogger } from "../utils/audit-logger";
+import { parseBasicAuth } from "../utils/basic-auth";
 import session from "express-session";
 
 export function auditMiddleware(req: Request, res: Response, next: NextFunction): void {
@@ -25,16 +26,16 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
       entry.user = sess.user;
     }
 
-    if (req.headers.authorization) {
-      if (req.headers.authorization.startsWith("Basic ")) {
-        const decoded = Buffer.from(req.headers.authorization.slice(6), "base64").toString("utf-8");
-        const colonIdx = decoded.indexOf(":");
-        if (colonIdx > 0) {
-          entry.clientId = decoded.slice(0, colonIdx);
-        }
-      } else if (req.headers.authorization.startsWith("Bearer ")) {
-        entry.authType = "bearer";
-      }
+    // `parseBasicAuth` rather than a local decode. The local copy got the split right — first colon, so a
+    // secret containing one stayed intact — but matched the scheme with a case-*sensitive* `startsWith`,
+    // and RFC 9110 §11.1 makes auth-scheme case-insensitive. `authorization: basic …` was therefore logged
+    // with no client id. One decoder for the whole server is also the rule `AGENTS.md` states, after this
+    // repo accumulated two of them.
+    const basic = parseBasicAuth(req.headers.authorization);
+    if (basic) {
+      entry.clientId = basic.clientId;
+    } else if (/^bearer /i.test(req.headers.authorization ?? "")) {
+      entry.authType = "bearer";
     }
 
     auditLogger.info("", entry);
