@@ -11,7 +11,7 @@ const mockDeviceService = {
 const { authorization, verification, complete } = createDeviceControllers(mockDeviceService as any)
 
 function mockReq(overrides: Partial<Request> = {}): Request {
-  return { body: {}, headers: {}, logger: Object.assign(vi.fn(), { error: vi.fn() }), ...overrides } as unknown as Request
+  return { body: {}, headers: {}, logger: { info: vi.fn(), error: vi.fn() }, ...overrides } as unknown as Request
 }
 
 function mockRes(): Response {

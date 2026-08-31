@@ -175,12 +175,11 @@ flowchart LR
 | Security Headers | `app.ts` (inline) | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS (prod only) |
 | CORS | `app.ts` (inline) | Restricts origins to `ALLOWED_ORIGINS` env var |
 | Request ID | `src/middleware/request-id.ts` | **UUID v4** on `req.id`; inbound `X-Request-Id` accepted only if a valid UUID |
-| Request Logger | `app.ts` (inline) | Winston child logger on `req.logger` |
+| Request Logger | `app.ts` (inline) | Winston child logger on `req.logger`, carrying `reqId` |
 | Morgan | `app.ts` (inline) | HTTP access logs via Winston stream |
 | Metrics | `src/middleware/metrics.ts` | Prometheus duration histogram + request counter |
 | Audit Log | `src/middleware/audit-log.ts` | Winston daily-rotate-file at `logs/audit-*.log`, 90-day retention |
-| Body Parsers | `app.ts` (inline) | `urlencoded({ extended: true })` + `json()`, captures `req.rawBody` |
-| Cookie Parser | `app.ts` (inline) | `cookie-parser` |
+| Body Parsers | `app.ts` (inline) | `express.urlencoded({ extended: true })` + `express.json()`, captures `req.rawBody` via the `verify` hook |
 | Session | `src/middleware/session.ts` | `express-session`, 30-min expiry, in-memory or Redis |
 | CSRF | `src/middleware/csrf.ts` | 32-byte hex token on GET, validated on POST/PUT/PATCH/DELETE |
 | Request Timeout | `src/middleware/request-timeout.ts` | 30s abort on `/api/*` routes |
@@ -291,19 +290,29 @@ flowchart TB
 
 ## React Hooks
 
+> **Re-read `client/src/hooks/` rather than trusting this table.** It listed `useApi` and
+> `useLocalStorage` for months after both were deleted, and omitted six that exist — which is what an
+> inventory maintained by hand does. Corrected 2026-08-31.
+
 | Hook | File | Purpose |
 |------|------|---------|
-| `useApi` | `hooks/useApi.ts` | Generic API call with loading/error/data states |
-| `useAsyncCall` | `hooks/useAsyncCall.ts` | Async function wrapper with state |
-| `useClipboard` | `hooks/useClipboard.ts` | Copy-to-clipboard with feedback |
-| `useLocalStorage` | `hooks/useLocalStorage.ts` | Persistent state in localStorage |
-| `useServerStatus` | `hooks/useServerStatus.ts` | Polls `/api/health` every 30s, returns `{ status, uptime, lastCheck }` |
+| `useAsyncCall` | `hooks/useAsyncCall.ts` | Async function wrapper with loading/error/data state |
+| `useClipboard` | `hooks/useClipboard.ts` | Copy to clipboard, with the "Copied" flag from `useCopyFeedback` |
+| `useConfirmedAction` | `hooks/useConfirmedAction.tsx` | Two-step confirm for a destructive action |
+| `useCopyFeedback` | `hooks/useCopyFeedback.ts` | The "Copied" flag and a timer that does not outlive the component |
+| `useHashScroll` | `hooks/useHashScroll.ts` | Scrolls to the `#fragment` a deep link names |
+| `useMediaQuery` | `hooks/useMediaQuery.ts` | A media query as React state, via `useSyncExternalStore`. **For the one case CSS cannot express** — see `docs/agents/client-spa.md` |
+| `useServerStatus` | `hooks/useServerStatus.ts` | Polls `/api/health`, 30s when connected and 10s when not |
+| `useTheme` | `hooks/useTheme.ts` | Light/dark selection and the `data-theme` attribute |
+| `useTraces` | `hooks/useTraces.ts` | Subscribes to `services/trace-store.ts` |
+| `useUrlState` | `hooks/useUrlState.ts` | A piece of UI state in the query string; `replace`, not `push` |
 
 ---
 
 ## React Services
 
-All exported from `services/index.ts`:
+All seventeen are re-exported from `services/index.ts`, though most call sites import the file
+directly. **Re-read the directory rather than trusting this table.**
 
 | Service | File | Endpoints |
 |---------|------|-----------|
@@ -313,13 +322,26 @@ All exported from `services/index.ts`:
 | `dcrService` | `dcr.service.ts` | Dynamic client registration |
 | `cibaService` | `ciba.service.ts` | CIBA operations |
 | `parService` | `par.service.ts` | Pushed authorization requests |
+| `rarService` | `rar.service.ts` | Rich Authorization Requests, pushed with or without DPoP |
 | `deviceService` | `device.service.ts` | Device flow |
 | `grantService` | `grant.service.ts` | Grant management |
 | `backchannelLogoutService` | `backchannel-logout.service.ts` | Backchannel logout |
 | `healthService` | `health.service.ts` | Health checks |
+| `federationService` | `federation.service.ts` | OpenID Federation configuration and registration |
+| `fapiService` | `fapi.service.ts` | FAPI config and status |
+| `mcpService` | `mcp.service.ts` | MCP client-metadata discovery and the wizard's exchange |
+| `tokenExchangeService` | `token-exchange.service.ts` | RFC 8693, at the ordinary token endpoint |
+| `processJar` | `jar.service.ts` | JAR request-object processing |
 | `vciService` | `vci.service.ts` | Verifiable Credential Issuance (8 operations: metadata, jwtissuer, jwks, well-known, offer create/info, credential issue, batch issue, deferred issue) |
 
-Shared HTTP utilities in `services/http.ts`.
+**Do not inline the one-line services into their sections.** `scripts/check-client-server-contract.mjs`
+reads this directory to map endpoint constants to callers; a flow that calls the server from a
+component is a flow that check cannot see. See `docs/agents/client-spa.md`.
+
+Beneath them: `transport.ts` is the one place a request leaves the app, `http.ts` the request shapes
+over it, `schemas.ts` what a response must look like. Also `crypto-utils.ts`, `dpop.service.ts`,
+`dpop-fetch.ts`, `client-assertion.service.ts`, `session-keys.ts`, `preferences.ts`, `run-file.ts`,
+`trace-store.ts` and `announcer.ts`.
 
 ---
 

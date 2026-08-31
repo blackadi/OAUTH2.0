@@ -12,7 +12,7 @@ function mockReq(overrides: Partial<Request> = {}): Request {
     headers: {},
     method: "GET",
     originalUrl: "/api/client/list",
-    logger: Object.assign(vi.fn(), { error: vi.fn(), warn: vi.fn(), child: vi.fn() }),
+    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), child: vi.fn() },
     ...overrides,
   } as unknown as Request;
 }

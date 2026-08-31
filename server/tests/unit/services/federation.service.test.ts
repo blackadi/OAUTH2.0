@@ -6,7 +6,7 @@ import { Authlete } from "@authlete/typescript-sdk"
 function mockReq(body: Record<string, unknown> = {}) {
   return {
     body,
-    logger: Object.assign(vi.fn(), { error: vi.fn(), warn: vi.fn(), child: vi.fn() }),
+    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), child: vi.fn() },
   } as never
 }
 

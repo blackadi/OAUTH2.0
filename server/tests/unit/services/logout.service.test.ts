@@ -355,7 +355,7 @@ describe("rpInitiatedLogoutService", () => {
       const req = {
         session: { destroy: vi.fn((cb: (e: unknown) => void) => cb(null)) },
         query: { backchannel: "true", id_token_hint: genuineHint() },
-        logger: Object.assign(vi.fn(), { error: vi.fn(), warn: vi.fn(), child: vi.fn() }),
+        logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), child: vi.fn() },
       } as any
       const res = { clearCookie: vi.fn(), render: vi.fn(), redirect: vi.fn() } as any
 

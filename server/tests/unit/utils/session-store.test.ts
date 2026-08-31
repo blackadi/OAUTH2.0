@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest"
 import expressSession, { type Store } from "express-session"
 import { destroySessionsForSubject } from "../../../src/utils/session-store"
-import type { CallableLogger } from "../../../src/utils/logger"
+import type { Logger } from "winston"
 
 const mockLog = () =>
-  Object.assign(vi.fn(), { error: vi.fn(), warn: vi.fn(), child: vi.fn() }) as unknown as CallableLogger
+  ({ info: vi.fn(), error: vi.fn(), warn: vi.fn(), child: vi.fn() }) as unknown as Logger
 
 /**
  * The two supported stores return different shapes from `all()`. express-session's MemoryStore builds an

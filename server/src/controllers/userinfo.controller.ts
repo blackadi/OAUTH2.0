@@ -108,7 +108,7 @@ export const userinfoController = {
             }
           }
 
-          logger("Prepared userinfo claims", { subject, claims });
+          logger.info("Prepared userinfo claims", { subject, claims });
 
           // Same parser the service used, so the two calls can never disagree about what the token
           // is. This previously stripped only `Bearer`, which meant a DPoP-scheme request that
@@ -152,7 +152,7 @@ export const userinfoController = {
         // The client's way of presenting the token was unacceptable (RFC 6750 §2/§3, RFC 9449 §7).
         // Authlete was never called, so build the challenge here.
         const log = req.logger || logger;
-        log("Userinfo token presentation rejected", {
+        log.info("Userinfo token presentation rejected", {
           status: err.status,
           code: err.code ?? "(none)",
         });

@@ -65,7 +65,7 @@ function mockReq(body: Record<string, unknown>): Request {
   return {
     body,
     sessionStore: { all: vi.fn(), destroy: vi.fn() },
-    logger: Object.assign(vi.fn(), { error: vi.fn(), warn: vi.fn(), child: vi.fn() }),
+    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), child: vi.fn() },
   } as unknown as Request
 }
 

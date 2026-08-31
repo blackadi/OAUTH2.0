@@ -8,7 +8,7 @@ export class DiscoveryService {
 
   async getConfiguration(req: Request) {
     const log = req.logger || logger;
-    log("Discovery parameters", { serviceId });
+    log.info("Discovery parameters", { serviceId });
 
     const response = await this.authleteApi.service.getConfiguration({
       serviceId,

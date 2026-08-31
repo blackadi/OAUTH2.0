@@ -24,7 +24,7 @@ function mockReq(overrides: Partial<Request> = {}): Request {
   return {
     body: { token: "test-token" },
     headers: { authorization: ADMIN_HEADER },
-    logger: vi.fn(),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     ...overrides,
   } as unknown as Request
 }

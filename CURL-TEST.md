@@ -7,7 +7,7 @@ Copy-paste these commands to verify every endpoint. Replace `<BASE>` with your s
 ```bash
 BASE="http://localhost:3000"
 CID="4288007124"                                    # ← REPLACE with your confidential client ID
-SEC="FGpSN50T6SK7shEuzzwUNAaXsbfFXfqRJmI1VsncPPsUBgEnPsQ7UG7hc6o-NNnjeIScun5_MRnPc-24JGVPRA"  # ← REPLACE
+SEC="your_client_secret"                            # ← REPLACE with its secret
 PUB_CID="3322138582"                                # ← REPLACE with your public client ID
 REDIR="http://localhost:3000"
 ```

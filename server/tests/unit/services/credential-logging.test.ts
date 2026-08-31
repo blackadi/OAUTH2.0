@@ -3,7 +3,7 @@ import { createMockAuthlete } from "../../helpers/mock-authlete"
 import { TokenService } from "../../../src/services/token.service"
 import { RevocationService } from "../../../src/services/revocation.service"
 import { Authlete } from "@authlete/typescript-sdk"
-import type { CallableLogger } from "../../../src/utils/logger"
+import type { Logger } from "winston"
 
 // RFC 9700 §4.2.4 — 9700-W1 / 9700-W2.
 //
@@ -45,16 +45,18 @@ const CREDENTIAL_PARAMS = [
   "token=",
 ]
 
-/** A CallableLogger-shaped spy: callable, plus .error/.warn/.child, all capturing. */
+/** A Winston-shaped spy: .info/.error/.warn/.child, all capturing into one buffer. */
 function spyLogger() {
   const lines: string[] = []
   const capture = (msg: string, meta?: Record<string, unknown>) => {
     lines.push(`${msg} ${JSON.stringify(meta ?? {})}`)
   }
-  const log = vi.fn(capture) as unknown as CallableLogger
-  log.error = vi.fn(capture)
-  log.warn = vi.fn(capture)
-  log.child = vi.fn(() => log)
+  const log = {
+    info: vi.fn(capture),
+    error: vi.fn(capture),
+    warn: vi.fn(capture),
+    child: vi.fn(() => log),
+  } as unknown as Logger
   return { log, lines }
 }
 
@@ -70,8 +72,8 @@ function expectNoCredentialLogged(lines: string[]) {
   }
 }
 
-/** What body-parser hands the service: the raw string plus its parsed form. */
-const requestFor = (rawBody: string | undefined, log: CallableLogger, headers: Record<string, string> = {}) =>
+/** What `express.urlencoded` hands the service: the raw string plus its parsed form. */
+const requestFor = (rawBody: string | undefined, log: Logger, headers: Record<string, string> = {}) =>
   ({
     headers,
     body: rawBody ? Object.fromEntries(new URLSearchParams(rawBody)) : {},

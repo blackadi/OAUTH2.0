@@ -23,7 +23,7 @@ async function initStore(): Promise<void> {
     const client = redis.createClient({ url: server.redisUrl });
     client.on("error", (err: Error) => logger.error("Redis connection error", { message: err.message }));
     client.connect().catch((err: Error) => logger.error("Redis connect failed", { message: err.message }));
-    logger("Session store: Redis");
+    logger.info("Session store: Redis");
     redisClient = client;
     store = new RedisStore({ client });
   } catch {
@@ -37,7 +37,7 @@ export async function closeRedis(): Promise<void> {
   if (redisClient) {
     try {
       await redisClient.quit();
-      logger("Redis client closed");
+      logger.info("Redis client closed");
     } catch (err) {
       logger.error("Error closing Redis", { message: err instanceof Error ? err.message : String(err) });
     }

@@ -90,14 +90,14 @@ export function createSessionController(
       const loginDecision = req.body.login; // "submit" or "cancel"
       if (loginDecision === "cancel") {
         const log = req.logger || logger;
-        log("Login canceled for ticket", {
+        log.info("Login canceled for ticket", {
           ticket: authz?.authorizationIssueRequest?.ticket,
         });
         const response = await authorizationServiceInstance.fail(
           authz?.authorizationIssueRequest?.ticket ?? "",
           "NOT_LOGGED_IN"
         );
-        req.logger("Login fail response", {
+        req.logger.info("Login fail response", {
           content: response.responseContent,
         });
         return sendAuthorizationFailResponse(res, response);
@@ -140,7 +140,7 @@ export function createSessionController(
         authTimeNow
       );
       if (stepUpFailure) {
-        req.logger("RFC 9470: step-up requirements not satisfied at login", {
+        req.logger.info("RFC 9470: step-up requirements not satisfied at login", {
           reason: stepUpFailure,
           requested: authz?.acrs,
           satisfied: satisfiedAcr,
@@ -171,7 +171,7 @@ export function createSessionController(
         prompt !== "consent" &&
         consentStore.isConsentGranted(clientId, user.subject, requiredScopes)
       ) {
-        req.logger("Persistent consent found, auto-approving", {
+        req.logger.info("Persistent consent found, auto-approving", {
           clientId,
           subject: user.subject,
           scopes: requiredScopes,
@@ -183,7 +183,7 @@ export function createSessionController(
 
       // After login, show consent page
       const scopes = authz?.authorizationIssueRequest?.scopes?.join(",") || "";
-      req.logger("consent scopes", { scopes });
+      req.logger.info("consent scopes", { scopes });
       return res.redirect(
         AUTHORIZATION_REDIRECT_STATUS,
         appConfig.consentUrl +
@@ -246,7 +246,7 @@ export function createSessionController(
       if (decision === "approve") {
         // Call Authlete /authorization/issue API
         const log = req.logger || logger;
-        log("Issuing authorization", {
+        log.info("Issuing authorization", {
           ticket,
           user: req.session.user,
           clientId: req.session.authorization.clientId,
@@ -254,7 +254,7 @@ export function createSessionController(
           clientName: req.session.authorization.clientName,
         });
         const response = await authorizationServiceInstance.issue(req);
-        log("Authorization issue response", { response });
+        log.info("Authorization issue response", { response });
 
         // Store persistent consent
         const subject = req.session.user
@@ -278,7 +278,7 @@ export function createSessionController(
           "CONSENT_REQUIRED"
         ); // https://docs.authlete.com/en/shared/latest#post-/api/-serviceId-/auth/authorization
 
-        req.logger("Authorization fail response", {
+        req.logger.info("Authorization fail response", {
           content: response.responseContent,
         });
         delete req.session.authorization;

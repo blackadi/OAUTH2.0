@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import express from "express";
-import bodyParser from "body-parser";
 
 const mockProcess = vi.fn();
 const mockStandardProcess = vi.fn();
@@ -60,8 +59,8 @@ describe("introspection routes — the §2.1 authorisation gate", () => {
     mockStandardProcess.mockResolvedValue({ action: "OK", responseContent: '{"active":true}' });
 
     app = express();
-    app.use(bodyParser.urlencoded({ extended: true }));
-    app.use(bodyParser.json());
+    app.use(express.urlencoded({ extended: true }));
+    app.use(express.json());
     app.use("/api", introspectionRoutes);
   });
 

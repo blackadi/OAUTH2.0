@@ -24,7 +24,7 @@ export class HskService {
       throw new AppError("Missing required body field: hsmName", 400);
     }
 
-    log("HskService: calling Authlete hardware security key create API");
+    log.info("HskService: calling Authlete hardware security key create API");
 
     const response = await this.authleteApi.hardwareSecurityKeys.create({
       serviceId,

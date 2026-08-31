@@ -1,12 +1,10 @@
 import express from "express";
 import path from "path";
 import cors from "cors";
-import bodyParser from "body-parser";
-import cookieParser from "cookie-parser";
 import { sessionMiddleware } from "./middleware/session";
 import { requestId } from "./middleware/request-id";
 import morgan from "morgan";
-import logger, { createCallableLogger, baseLogger } from "./utils/logger";
+import logger, { baseLogger } from "./utils/logger";
 
 import authorizationRoutes from "./routes/authorization.routes";
 import tokenRoutes from "./routes/token.routes";
@@ -130,14 +128,14 @@ export function createApp() {
   // attach a per-request logger (req.logger)
   app.use((req, _res, next) => {
     // create a child logger with request id
-    req.logger = createCallableLogger(baseLogger.child({ reqId: req.id }));
+    req.logger = baseLogger.child({ reqId: req.id });
     next();
   });
 
   // HTTP access logging with morgan, streaming into Winston
   app.use(
     morgan(server.morganFormat, {
-      stream: { write: (msg: string) => logger(msg.trim()) },
+      stream: { write: (msg: string) => logger.info(msg.trim()) },
     })
   );
 
@@ -147,8 +145,12 @@ export function createApp() {
   // Structured audit logging
   app.use(auditMiddleware);
   // Capture the raw request body for application/x-www-form-urlencoded
+  //
+  // `express.urlencoded` / `express.json` rather than the `body-parser` package: Express 5 bundles
+  // body-parser and re-exports these two functions from it, `verify` hook included, so the direct
+  // dependency was a second copy of code already installed.
   app.use(
-    bodyParser.urlencoded({
+    express.urlencoded({
       extended: true,
       verify: (req: any, _res, buf: Buffer, encoding: string) => {
         const ct = (req.headers && req.headers["content-type"]) || "";
@@ -161,9 +163,10 @@ export function createApp() {
       },
     })
   );
-  app.use(bodyParser.json());
+  app.use(express.json());
   app.set("trust proxy", 1); // Trust first proxy (e.g. Render, Heroku, nginx)
-  app.use(cookieParser());
+  // No `cookie-parser`: nothing here reads `req.cookies` or `req.signedCookies`, and `express-session`
+  // has parsed its own cookie since 1.5. It was middleware on every request for an unused property.
   app.use(
     sessionMiddleware({
       secret: server.sessionSecret,

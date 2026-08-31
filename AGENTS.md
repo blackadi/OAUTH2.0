@@ -37,8 +37,8 @@ npm --prefix server run build && npm --prefix server run start
 npm --prefix server run test              # unit + integration (1130 tests, 77 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (828 tests, 70 files)
-npm --prefix server run test:integration  # integration tests only (302 tests, 7 files)
+npm --prefix server run test:unit         # unit tests only (826 tests, 70 files)
+npm --prefix server run test:integration  # integration tests only (304 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
 npm --prefix server run test:e2e          # E2E (101 tests, requires real Authlete creds)
@@ -106,7 +106,7 @@ security defect or a broken lab.
 | [`docs/agents/testing-and-checks.md`](docs/agents/testing-and-checks.md) | Adding or changing a test, or wondering why a gate passed something it should not have |
 | [`docs/agents/curriculum-contract.md`](docs/agents/curriculum-contract.md) | **Before** changing server behaviour or Authlete configuration — see the warning below |
 | [`docs/agents/authlete-service-config.md`](docs/agents/authlete-service-config.md) | Changing a service flag, or needing to know why one is set as it is |
-| [`docs/agents/doc-style.md`](docs/agents/doc-style.md) | Writing anything under `docs/` |
+| [`docs/agents/doc-style.md`](docs/agents/doc-style.md) | Writing anything under `docs/` — **including editing this file or another `docs/agents/` file**, which has its own rule: keep the counter-example, cut the closed sequence |
 
 **About 45 files elsewhere say "see `AGENTS.md`" for something now in `docs/agents/`** — source comments,
 tutorials, module labs. They were deliberately **not** rewritten to name the new files. Two reasons: the

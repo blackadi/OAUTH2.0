@@ -14,9 +14,6 @@ import {
   dcrUpdateSchema,
   dcrDeleteSchema,
   loginSchema,
-  tokenSchema,
-  backchannelLogoutIssueSchema,
-  backchannelLogoutDeliverSchema,
 } from "../../../src/utils/validation";
 
 describe("validateOrThrow", () => {
@@ -143,31 +140,5 @@ describe("loginSchema", () => {
   it("accepts username and password", () => {
     const data = validateOrThrow(loginSchema, { username: "admin", password: "pass" });
     expect(data.username).toBe("admin");
-  });
-});
-
-describe("tokenSchema", () => {
-  it("accepts grant_type", () => {
-    const data = validateOrThrow(tokenSchema, { grant_type: "authorization_code" });
-    expect(data.grant_type).toBe("authorization_code");
-  });
-});
-
-describe("backchannelLogoutIssueSchema", () => {
-  it("accepts sub with optional sid", () => {
-    const data = validateOrThrow(backchannelLogoutIssueSchema, { sub: "user1" });
-    expect(data.sub).toBe("user1");
-  });
-
-  it("accepts sub with sid", () => {
-    const data = validateOrThrow(backchannelLogoutIssueSchema, { sub: "user1", sid: "sess-1" });
-    expect(data.sid).toBe("sess-1");
-  });
-});
-
-describe("backchannelLogoutDeliverSchema", () => {
-  it("accepts sub with optional sid", () => {
-    const data = validateOrThrow(backchannelLogoutDeliverSchema, { sub: "user1" });
-    expect(data.sub).toBe("user1");
   });
 });

@@ -36,7 +36,7 @@ function mockReq(): Request {
   return {
     body: {},
     headers: {},
-    logger: Object.assign(vi.fn(), { error: vi.fn() }),
+    logger: { info: vi.fn(), error: vi.fn() },
   } as unknown as Request
 }
 

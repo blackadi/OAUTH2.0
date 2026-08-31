@@ -18,7 +18,7 @@ import {
 } from "../../../src/controllers/backchannel-logout.controller"
 
 function mockReq(overrides: Partial<Request> = {}): Request {
-  return { body: {}, headers: {}, logger: Object.assign(vi.fn(), { error: vi.fn() }), ...overrides } as unknown as Request
+  return { body: {}, headers: {}, logger: { info: vi.fn(), error: vi.fn() }, ...overrides } as unknown as Request
 }
 
 function mockRes(): Response {

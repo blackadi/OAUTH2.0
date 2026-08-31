@@ -15,7 +15,7 @@ function mockReq(overrides: Record<string, unknown> = {}): Request {
   return {
     body: { request: "eyJhbGciOiJFUzI1NiJ9.e30.sig", clientId: "c-1" },
     headers: { authorization: basic },
-    logger: Object.assign(vi.fn(), { error: vi.fn() }),
+    logger: { info: vi.fn(), error: vi.fn() },
     ...overrides,
   } as unknown as Request
 }

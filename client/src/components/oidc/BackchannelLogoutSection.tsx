@@ -11,14 +11,18 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { useCredentials } from '@/context/CredentialContext';
 import { AdminAuth } from '@/components/layout/AdminAuth';
+import { decodeJwt } from '@/utils/jwt';
 
+/**
+ * The logout token's payload, or a message to render in its place.
+ *
+ * Delegates to the shared `decodeJwt` rather than decoding here. The local copy omitted base64
+ * padding and never checked that the segment decoded to an object, so it was the same helper minus
+ * two correctness properties — and `utils/jwt.ts` is where this app's JWT decoding lives.
+ */
 function decodeJwtPayload(token: string): Record<string, unknown> | string {
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return 'Invalid JWT: expected 3 parts';
-    const payload = parts[1];
-    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    return json;
+    return decodeJwt(token).payload;
   } catch (e) {
     return `Failed to decode: ${e instanceof Error ? e.message : String(e)}`;
   }

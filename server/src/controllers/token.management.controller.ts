@@ -60,7 +60,7 @@ export const tokenDeleteController = {
       if (!checkAuth(req, res)) return;
       const accessTokenIdentifier = req.params.accessTokenIdentifier as string;
       const log = req.logger || logger;
-      log("TokenDeleteService: calling Authlete token management endpoint", {
+      log.info("TokenDeleteService: calling Authlete token management endpoint", {
         accessTokenIdentifier,
       });
 
@@ -273,7 +273,7 @@ export const localSignedToken = {
       // the endpoint exists. This is an admin route and was previously the only one with no auth check.
       if (!checkAuth(req, res)) return;
       const { ...reqBody } = req.query;
-      logger("Local Signed Token parameters", { reqBody });
+      logger.info("Local Signed Token parameters", { reqBody });
       //read iss parameter from env if not provided
       if (!reqBody.iss) {
         reqBody.iss = jwt.issuer;
@@ -295,7 +295,7 @@ export const localSignedToken = {
           .split(/\s+/)
           .filter(Boolean) ?? [];
 
-      logger("Local Signed Token parameters", { reqBody });
+      logger.info("Local Signed Token parameters", { reqBody });
 
       const result = tokenManagementService.localSignedToken(
         (reqBody.iss as string) ?? "",

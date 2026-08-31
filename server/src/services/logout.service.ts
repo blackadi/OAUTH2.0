@@ -183,14 +183,14 @@ export class rpInitiatedLogoutService {
           // The session still wins for delivery: it is this OP's own record of who is signed in here.
           if (!subject) subject = result.subject;
           if (!clientId) clientId = result.audience;
-          log("Logout: verified id_token_hint", {
+          log.info("Logout: verified id_token_hint", {
             subjectFromHint: !req.session.user,
             clientFromHint: !client_id && !!result.audience,
             audiencePinned: !!client_id,
             hintExpired: !!result.expired,
           });
         } else {
-          log("Logout: id_token_hint rejected, continuing without a subject", {
+          log.info("Logout: id_token_hint rejected, continuing without a subject", {
             reason: result.reason,
           });
         }
@@ -202,7 +202,7 @@ export class rpInitiatedLogoutService {
       }
     }
 
-    log("RP-Initiated Logout", {
+    log.info("RP-Initiated Logout", {
       subject,
       hasPostLogoutRedirectUri: !!post_logout_redirect_uri,
       clientId,
@@ -215,7 +215,7 @@ export class rpInitiatedLogoutService {
     if (backchannel === "true" && subject) {
       try {
         backchannelResults = await this.backchannelLogoutService.issueAndDeliverToAll(subject);
-        log("Backchannel logout deliver-all completed", { subject });
+        log.info("Backchannel logout deliver-all completed", { subject });
       } catch (err) {
         log.error("Backchannel logout deliver-all failed", {
           error: err instanceof Error ? err.message : String(err),
@@ -244,13 +244,13 @@ export class rpInitiatedLogoutService {
           ? `${post_logout_redirect_uri}${separator}state=${encodeURIComponent(state)}`
           : post_logout_redirect_uri;
 
-        log("Logout: redirecting to post_logout_redirect_uri", { redirectUrl });
+        log.info("Logout: redirecting to post_logout_redirect_uri", { redirectUrl });
         return res.redirect(redirectUrl);
       }
 
       // No client ⇒ no registered set ⇒ no redirect, which is §3's answer rather than a failure. Logged
       // distinctly from "registered, but not this URI" because the two need different fixes.
-      log("Logout: post_logout_redirect_uri not allowed, rendering page", {
+      log.info("Logout: post_logout_redirect_uri not allowed, rendering page", {
         post_logout_redirect_uri,
         clientId,
         clientIdentified: !!clientId,
@@ -307,7 +307,7 @@ export class rpInitiatedLogoutService {
         ? params.post_logout_redirect_uri
         : null;
 
-    log("Logout: rendering the confirmation page", {
+    log.info("Logout: rendering the confirmation page", {
       subject: req.session.user,
       hasPostLogoutRedirectUri: !!params.post_logout_redirect_uri,
       redirectShown: !!redirectShown,

@@ -45,7 +45,7 @@ export class AuthorizationService {
     const reqBody =
       req.method === "GET" ? req.query : req.body;
     const log = req.logger || logger;
-    log("Authorization request parameters", { params: reqBody });
+    log.info("Authorization request parameters", { params: reqBody });
 
     const params = new URLSearchParams();
 
@@ -112,7 +112,7 @@ export class AuthorizationService {
     // returned in /auth/userinfo and /auth/introspection responses.
     if (req.session.authorization?.consentedClaims) {
       reqBody.consentedClaims = req.session.authorization.consentedClaims;
-      log("Passing consented claims to Authlete", {
+      log.info("Passing consented claims to Authlete", {
         consentedClaims: reqBody.consentedClaims,
       });
     }
@@ -123,7 +123,7 @@ export class AuthorizationService {
     if (req.session.stepUp) {
       if (req.session.stepUp.acr !== undefined) reqBody.acr = req.session.stepUp.acr;
       if (req.session.stepUp.authTime !== undefined) reqBody.authTime = req.session.stepUp.authTime;
-      log("RFC 9470: binding step-up auth context to tokens", {
+      log.info("RFC 9470: binding step-up auth context to tokens", {
         acr: req.session.stepUp.acr,
         authTime: req.session.stepUp.authTime,
       });
@@ -134,10 +134,10 @@ export class AuthorizationService {
     if (req.session.authorization?.nativeSsoRequested) {
       const sessionId = crypto.randomUUID();
       reqBody.sessionId = sessionId;
-      log("Native SSO: generated sessionId for authorization issue", { sessionId });
+      log.info("Native SSO: generated sessionId for authorization issue", { sessionId });
     }
 
-    log("Issue authorization request parameters", { params: reqBody });
+    log.info("Issue authorization request parameters", { params: reqBody });
 
     const response = await this.authleteApi.authorization.issue({
       serviceId,

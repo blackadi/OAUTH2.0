@@ -63,7 +63,7 @@ export class CibaService {
       ]);
     }
 
-    log("CibaService: calling Authlete backchannel authentication endpoint", {
+    log.info("CibaService: calling Authlete backchannel authentication endpoint", {
       clientAuth: basic ? "basic" : clientSecret ? "post" : clientId ? "none" : "absent",
     });
 

@@ -48,7 +48,7 @@ export class GrantManagementService {
       gMRequest.htu = dpopHttpTarget(req).htu;
     }
 
-    log(`GrantManagement: ${gmAction.toLowerCase()} grant`, {
+    log.info(`GrantManagement: ${gmAction.toLowerCase()} grant`, {
       grantId,
       scheme: presented?.scheme,
     });

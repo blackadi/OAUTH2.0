@@ -51,7 +51,7 @@ function mockReq(query: Record<string, unknown>): Request {
   return {
     query,
     headers: { authorization: `Basic ${Buffer.from("id:secret").toString("base64")}` },
-    logger: Object.assign(vi.fn(), { error: vi.fn() }),
+    logger: { info: vi.fn(), error: vi.fn() },
   } as unknown as Request
 }
 

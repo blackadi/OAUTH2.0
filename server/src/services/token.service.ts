@@ -33,12 +33,12 @@ export class TokenService {
     if (basic) {
       clientId = basic.clientId;
       clientSecret = basic.clientSecret;
-      log("TokenService: decoded Basic auth", { clientId });
+      log.info("TokenService: decoded Basic auth", { clientId });
     }
 
-    log("TokenService: received body", { clientId });
+    log.info("TokenService: received body", { clientId });
 
-    // Prefer raw request body captured by body-parser's verify hook.
+    // Prefer raw request body captured by the `express.urlencoded` verify hook in `app.ts`.
     // This preserves exact encoding and parameter order for Authlete.
     let parameters: string | undefined = (req as any).rawBody;
 
@@ -58,7 +58,7 @@ export class TokenService {
     // Length only. Logging `parameters` writes the raw request body — client_secret, password, code,
     // code_verifier, refresh_token, assertion, subject_token, actor_token — to logs/app-*.log at info
     // level (RFC 9700 §4.2.4). Never log the value; see tests/unit/services/credential-logging.test.ts.
-    log("TokenService: URL-encoded parameters length", { length: parameters.length });
+    log.info("TokenService: URL-encoded parameters length", { length: parameters.length });
 
     // Build Authlete TokenRequest — only send what's needed
     const reqBody: TokenRequest = {
@@ -89,7 +89,7 @@ export class TokenService {
     if (attJkt) reqBody.oauthClientAttestation = attJkt;
     if (attPop) reqBody.oauthClientAttestationPop = attPop;
 
-    log("TokenService: calling Authlete token endpoint", {
+    log.info("TokenService: calling Authlete token endpoint", {
       clientId,
       hasDpop: !!dpopHeader,
       parametersLength: parameters.length,

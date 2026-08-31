@@ -53,7 +53,7 @@
 | Pre-flight parameter validation | **This server** | `utils/validate.ts:39-55` |
 | `INVALID_CLIENT` → 401-vs-400 decision | **This server** | `controllers/token.controller.ts:54-64` |
 | §4.1.2.1 redirect-vs-body error channel | **Authlete** | splits on `response_type` presence |
-| Raw-body fidelity (parameter order and encoding) | **This server** | `token.service.ts:42` uses body-parser's `rawBody` |
+| Raw-body fidelity (parameter order and encoding) | **This server** | `token.service.ts:42` uses the `rawBody` captured in `app.ts` |
 
 ## What is correct, and why it is worth recording
 

@@ -1,9 +1,9 @@
-import type { CallableLogger } from "../utils/logger";
+import type { Logger } from "winston";
 
 declare module "express-serve-static-core" {
   interface Request {
     id?: string;
-    logger: CallableLogger;
+    logger: Logger;
     rawBody?: string;
   }
 }

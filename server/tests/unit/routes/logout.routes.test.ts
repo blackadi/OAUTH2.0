@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import express from "express";
-import bodyParser from "body-parser";
 import session from "express-session";
 import path from "node:path";
 
@@ -31,7 +30,7 @@ describe("logout routes — the §2 confirmation step", () => {
     app = express();
     app.set("view engine", "ejs");
     app.set("views", path.resolve(__dirname, "../../../src/views"));
-    app.use(bodyParser.urlencoded({ extended: true }));
+    app.use(express.urlencoded({ extended: true }));
     app.use(
       session({ secret: "test-secret", resave: false, saveUninitialized: false })
     );

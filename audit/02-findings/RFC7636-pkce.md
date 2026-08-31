@@ -55,7 +55,7 @@
    `Service.pkceRequired` and `Service.pkceS256Required`, plus the same two as client metadata. The
    client half (generating the verifier and challenge) is in the SPA.
 3. Code: confirmed by grep — `code_challenge`, `code_challenge_method` and `code_verifier` appear in
-   `server/src` **only** in `routes/openapi.routes.ts:78,84,143` and `routes/routes-list.routes.ts:24,194`,
+   `server/src` **only** in `routes/openapi.json` (the OpenAPI document moved to `routes/openapi.json` on 2026-08-31, and `routes-list.routes.ts` now derives its list from it — one inventory, so one grep target),
    i.e. documentation strings. No executable path touches them. That is correct architecture, not a gap.
 4. Docs: `PKCE-TUTORIAL.md` and Module 03 teach it in depth, including the downgrade attack in both
    directions and the §4.1 charset bounds. `SPEC-INVENTORY.md:92` says "enforced by Authlete", which is
@@ -94,7 +94,7 @@ this spec's verdict turns entirely on configuration rather than code.
 | **Reporting** the posture | **This server** | `controllers/fapi.controller.ts:41,77` — broken, see F-1 |
 
 Confirmed by grep: `code_challenge`, `code_challenge_method`, `code_verifier` appear in `server/src` only
-as documentation strings (`routes/openapi.routes.ts:78,84,143`; `routes/routes-list.routes.ts:24,194`).
+as documentation strings (`routes/openapi.json` — three occurrences, re-measured 2026-08-31).
 No executable path reads them. Correct by design.
 
 ## RESOLVED BY LIVE PROBE — the posture is now known, and it is off
@@ -173,7 +173,7 @@ could downgrade a request to `plain`.
 - RFC 7636 §§4.1, 4.2, 4.3–4.4, 4.5–4.6, 7.2 — `https://www.rfc-editor.org/rfc/rfc7636.html`
 - RFC 9700 §2.1.1 (MUST support PKCE; MUST enforce the verifier) — `https://www.rfc-editor.org/rfc/rfc9700.html`
 - Authlete PKCE page — `https://developers.authlete.com/protocols-and-flows/protocol-extensions/proof-key-for-code-exchange-pkce.md` *(listed in `llms.txt`; the requiring/S256 flags are documented on the two dedicated `requiring-clients-to-…` pages, not fetched — see below)*
-- Code: `controllers/fapi.controller.ts:41,77`, `services/client.management.service.ts:423-424`, `routes/openapi.routes.ts:78,84,143`
+- Code: `controllers/fapi.controller.ts:41,77`, `services/client.management.service.ts:423-424`, `routes/openapi.json`
 - SDK 1.0.0: `models/clientauthmethod.ts`, `models/service.ts`
 
 ## Named next action to reach `VERIFIED`

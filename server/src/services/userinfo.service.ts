@@ -73,7 +73,7 @@ export class UserInfoService {
     }
 
     const log = req.logger || logger;
-    log("Userinfo parameters", { scheme: presented.scheme, hasDpop: !!dpopHeader });
+    log.info("Userinfo parameters", { scheme: presented.scheme, hasDpop: !!dpopHeader });
 
     // Call Authlete /userinfo API
     const response = await this.authleteApi.userinfo.process({
