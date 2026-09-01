@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { claimValuesFor, requestedIdTokenClaimNames } from "../../../src/utils/demo-claims"
+import {
+  claimValuesFor,
+  requestedIdTokenClaimNames,
+  SERVED_CLAIMS,
+  IDENTITY_CLAIMS,
+} from "../../../src/utils/demo-claims"
 
 /**
  * The two halves of the id_token claims defect (fixed 2026-09-01).
@@ -38,6 +43,46 @@ describe("requestedIdTokenClaimNames", () => {
     ["a bare string", '"name"'],
   ])("returns nothing when the request is %s", (_label, input) => {
     expect(requestedIdTokenClaimNames(input as string | null | undefined)).toEqual([])
+  })
+})
+
+/**
+ * `SERVED_CLAIMS` is read by three things that must agree: `claimValuesFor` below, the consent screen
+ * in `session.controller.ts`, and — via a source parse — `fapi2-align-supported-claims.mjs`, which
+ * writes the Authlete service's `supportedClaims`.
+ *
+ * The service advertised 20 claims while the server could serve 11. Nothing tied the two together, so
+ * the gap survived every gate here and was found by a conformance run. These pin the half that *can*
+ * be checked offline: the list and the code that honours it.
+ */
+describe("SERVED_CLAIMS", () => {
+  it("names exactly the claims claimValuesFor can produce, plus sub", () => {
+    const produced = Object.keys(claimValuesFor("admin", SERVED_CLAIMS))
+
+    // `sub` is served on every response but is not supplied as a claim value — Authlete emits it from
+    // the issue request's `subject`, and userinfo.controller.ts sets it directly.
+    expect(produced.sort()).toEqual([...IDENTITY_CLAIMS].sort())
+    expect(SERVED_CLAIMS).toContain("sub")
+    expect(produced).not.toContain("sub")
+  })
+
+  it("has no claim that claimValuesFor silently drops", () => {
+    // The failure this catches: adding a name to SERVED_CLAIMS without a `case` for it. The service
+    // would then advertise a claim nothing produces — the exact defect, reintroduced.
+    for (const name of IDENTITY_CLAIMS) {
+      const values = claimValuesFor("admin", [name])
+      expect(Object.keys(values), `SERVED_CLAIMS lists "${name}" but claimValuesFor produces nothing for it`)
+        .toEqual([name])
+    }
+  })
+
+  it("does not list a claim this deployment has never served", () => {
+    for (const name of [
+      "address", "birthdate", "gender", "middle_name", "phone_number",
+      "phone_number_verified", "picture", "profile", "website",
+    ]) {
+      expect(SERVED_CLAIMS as readonly string[]).not.toContain(name)
+    }
   })
 })
 

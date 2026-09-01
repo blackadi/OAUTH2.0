@@ -36,6 +36,34 @@ The Authlete service (configured via the [Authlete web console](https://console.
 | `requestObjectEncryptionAlgMatchRequired` | `true` | Enforce `alg` match in encrypted request objects |
 | `requestObjectEncryptionEncMatchRequired` | `true` | Enforce `enc` match in encrypted request objects |
 
+### `supportedClaims` must match what the server can produce
+
+`supportedClaims` becomes `claims_supported` in the discovery document, and a client reads it to decide
+what to ask for. It listed **20** claims on service `2147478188` while the server could produce **11**,
+so nine were advertised and served by nothing: `address`, `birthdate`, `gender`, `middle_name`,
+`phone_number`, `phone_number_verified`, `picture`, `profile`, `website`.
+
+Trimmed to the truth on 2026-09-01. **Omitting a claim you have no value for is correct** — OIDC Core
+§5.1, *"If a Claim is not returned, that Claim Name SHOULD be omitted"* — so the responses were right
+all along; the advertisement was not.
+
+| | where |
+|---|---|
+| the list | `SERVED_CLAIMS` in `server/src/utils/demo-claims.ts` |
+| aligning the service to it | `node scripts/fapi2-align-supported-claims.mjs --apply` |
+| catching drift either way | `node scripts/check-claims-supported.mjs` |
+
+**Adding a claim is three edits, in order:** a `case` in `claimValuesFor`, the name in `SERVED_CLAIMS`,
+then the align script. Stop after one and `demo-claims.test.ts` fails; stop after two and
+`check-claims-supported.mjs` reports it. Nothing catches the reverse — a claim removed in the Authlete
+console — until that check is run, which is why it reads the live document rather than a baseline.
+
+**How this was found, and why no gate saw it.** A configuration change has no error string, so the
+grep `curriculum-contract.md` prescribes finds nothing. It took a conformance run:
+`fapi2-security-profile-final-test-claims-parameter-identity-claims` warned that *"the server did not
+return all the requested claims … As the server listed the claims in `claims_supported`, it should have
+returned them"*. The check now measures the two sides against each other instead of waiting for that.
+
 ### Token endpoint action coverage
 
 The token controller (`src/controllers/token.controller.ts`) handles every Authlete action value.
