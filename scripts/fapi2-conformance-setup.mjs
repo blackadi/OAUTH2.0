@@ -131,6 +131,8 @@ console.log(`\nsecond client        : ${second ? `exists (${second.clientId})` :
  * Authlete had registered, and the next run failed at client authentication with an error that
  * mentions neither. Rotation is now something you ask for.
  */
+// Always the automated config, even in manual mode: it is the one that holds the keys Authlete has
+// registered, and reading the manual copy would let the two drift apart.
 const existingConfigPath = join(repoRoot, "conformance", "fapi2-config.json");
 const existing = existsSync(existingConfigPath)
   ? JSON.parse(readFileSync(existingConfigPath, "utf8"))
@@ -255,14 +257,25 @@ const plan = {
   ] }),
 };
 
-const planPath = join(outDir, "fapi2-config.json");
+/**
+ * Two files, not one overwritten.
+ *
+ * `--manual-browser` writes a SEPARATE config, so the automated plan's input survives. The first
+ * version overwrote `fapi2-config.json` and needed a warning telling you to re-run without the flag
+ * before rebuilding the automated plan — a footgun with a note attached, which is still a footgun.
+ * Both configs read the same reused keys, so they stay in step.
+ */
+const planPath = join(outDir, MANUAL_BROWSER ? "fapi2-config-manual.json" : "fapi2-config.json");
 writeFileSync(planPath, JSON.stringify(plan, null, 2));
 console.log(`\nwrote ${planPath}`);
 if (MANUAL_BROWSER) {
   console.log("  NO browser automation — you drive the login screen yourself.");
-  console.log("  Use this for fapi2-security-profile-final-user-rejects-authentication:");
-  console.log("  create a separate plan with the same variants, then press Cancel by hand.");
-  console.log("  Clear cookies for the deployment first, as the test instructs.");
+  console.log("  fapi2-config.json is untouched, so the automated plan's input still stands.");
+  console.log("");
+  console.log("  Create a SEPARATE plan from this file, with the same variants under");
+  console.log("  FAPI2 Message Signing, and run only the modules that need a human:");
+  console.log("    fapi2-security-profile-final-user-rejects-authentication");
+  console.log("  Clear cookies for the deployment first, or there is nothing to refuse.");
 }
 
 // Guard: these files hold private keys. Refuse to leave them in a tracked directory silently.

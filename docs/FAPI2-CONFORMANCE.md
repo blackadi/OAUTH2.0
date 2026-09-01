@@ -188,14 +188,19 @@ So build a second plan with no automation at all:
 node scripts/fapi2-conformance-setup.mjs --apply --manual-browser
 ```
 
-That writes `conformance/fapi2-config.json` with the `browser` block omitted and everything else
-identical — same clients, same reused keys, same `resource`. Create a second plan from it with **the
-same variants** under **FAPI2 Message Signing**, then run only the interactive negative modules there,
-clicking Cancel or Deny yourself.
+That writes a **separate** file, `conformance/fapi2-config-manual.json`, with the `browser` block
+omitted and everything else identical — same clients, same reused keys, same `resource`.
+`fapi2-config.json` is left alone, so the automated plan's input still stands and the two configs cannot
+drift: both read their keys from the automated one.
 
-> ⚠️ **It overwrites the same config file.** Re-run without `--manual-browser` before rebuilding the
-> automated plan, or you will paste an automation-free config into it and hand-drive all 39 modules.
-> Keys are reused either way, so switching back and forth costs nothing at Authlete.
+Create a second plan from the manual file, with **the same variants** under **FAPI2 Message Signing**,
+and run only the interactive negative modules there, clicking Cancel or Deny yourself.
+
+> **A new plan is the whole point, and re-running the module on the automated plan will not work.**
+> Variants and config are fixed when a plan is created, so the automation stays with plan
+> `NOCwqBMX07XXa` however many times you press Run. Measured twice: runs `UTqf2OqbCObK33G` and
+> `ElMazWSAYCoE64d`, both on that plan, both with the same two failures, both with redirect and callback
+> **5 and 7 seconds apart** — the automation signing in, not a human refusing.
 
 **Clear cookies for the deployment before running it**, as the test's own instructions say. With a live
 session the server has nothing to ask, so you are never offered the chance to refuse.
