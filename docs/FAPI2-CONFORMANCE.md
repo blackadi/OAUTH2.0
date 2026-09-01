@@ -169,12 +169,27 @@ OAuth request. Every one of those was checkable offline.
 
 ## Step 5 — the tests a human has to drive, which need a SECOND plan
 
-`fapi2-security-profile-final-user-rejects-authentication` requires the tester to press **Cancel** on
-the login screen, or **Deny** on the consent screen, so the server returns `access_denied`. The browser
-automation from Step 1 always presses **Sign in** and **Approve** — correct for every other module, and
-fatal here: it approves on your behalf and the test fails with *"Authorization server was expected to
-return an error but did not"*. The tell is the timing. In run `UTqf2OqbCObK33G` the redirect and the
-callback were **five seconds apart**, which is not a human logging in.
+**Two modules need a human, and both fail the same way if the automation runs.** It always presses
+**Sign in** and **Approve** — correct for every other module, and fatal for these two.
+
+| Module | What the human must do | How it fails under automation |
+|---|---|---|
+| `…-user-rejects-authentication` | press **Cancel**, or **Deny** on the consent screen | *"Authorization server was expected to return an error but did not"* — it approved on your behalf |
+| `…-par-ensure-reused-request-uri-prior-to-auth-completion-succeeds` | visit the authorization endpoint, **do not log in**, then let the second visit proceed | *"The user was authenticated on the initial visit to login page"* — it signed in when the first visit was only meant to display the page |
+
+**The tell is the timing.** In `UTqf2OqbCObK33G` the redirect and the callback were **five seconds
+apart**; in `ZK5TwJPszX8r9ZX` the first visit was at `20:23:15` and a callback had arrived by
+`20:23:19`. Neither is a human.
+
+The reused-`request_uri` module also carries a `REVIEW: IMAGE REQUIRED — ExpectLoginPage` step, so a
+screenshot has to be uploaded by hand. It could never have been automated even in principle.
+
+> **Neither of these is a server defect, and both were verified so before blaming the automation.**
+> Cancel returns `access_denied` `[A060306]` (fixed 2026-09-01). And the `request_uri` behaviour that
+> the second module tests is already correct — measured against service `2147478188`: two visits
+> without logging in both reach the login page, and a visit *after* authorization completes earns
+> `400 invalid_request_uri [A008303]`. That is exactly FAPI 2.0 §5.3.2.2 Note 3 — one-time use enforced
+> at **completion**, not at first sight of the endpoint.
 
 **One plan cannot cover both, and this is a limit of the suite rather than of this deployment.** A
 browser entry accepts only `match` and `tasks`; a task accepts only `task`, `match`, `optional` and
@@ -240,6 +255,7 @@ Verified against the live deployment:
 | Symptom | Cause |
 |---|---|
 | `Couldn't find resource endpoint object in configuration` | The pasted config has no `resource` object. Re-generate with the setup script and paste the current file — the run stops here before any OAuth request. |
+| *"The user was authenticated on the initial visit to login page"* | The browser automation signed in when the first visit was only meant to show the login page. That module needs the hand-driven plan — see Step 5. The server's `request_uri` handling is correct and was measured; do not go looking for a defect in it. |
 | `EnsureErrorFromAuthorizationEndpointResponse` — *"expected to return an error but did not"* | The browser automation pressed Sign in for you. That module needs a hand-driven plan — see Step 5. If the redirect and callback are seconds apart, it was the automation. |
 | A refusal comes back as `login_required` or `consent_required` instead of `access_denied` | Fixed 2026-09-01; the deployment predates it. `session.controller.ts` sent `NOT_LOGGED_IN` / `CONSENT_REQUIRED` where RFC 6749 §4.1.2.1 wants `DENIED`. |
 | Suite cannot fetch the discovery document | It uses `{issuer}/.well-known/openid-configuration` at the **root**. Confirm it returns JSON, not the SPA's HTML. |
