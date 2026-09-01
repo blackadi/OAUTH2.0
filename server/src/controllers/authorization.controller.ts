@@ -11,6 +11,7 @@ import consentStore from "../services/consent-store.service";
 import { checkStepUpRequirements } from "../utils/step-up";
 import type { AuthorizationResponse } from "@authlete/typescript-sdk/models";
 import { AUTHORIZATION_REDIRECT_STATUS } from "../utils/http-utils";
+import { requestedIdTokenClaimNames } from "../utils/demo-claims";
 
 const authorizationService = new AuthorizationService();
 
@@ -73,7 +74,6 @@ function buildAuthorizationContext(
       scopes: result.scopes?.map((scope: Scope) => scope.name as string) ?? [],
       subject: req.session.user ?? "",
       authorizationDetails: result.authorizationDetails,
-      claims: result.idTokenClaims,
       ...(storedProperties ? { properties: storedProperties } : {}),
     },
     nativeSsoRequested: result.nativeSsoRequested ?? false,
@@ -81,6 +81,21 @@ function buildAuthorizationContext(
     acrs: result.acrs,
     acrEssential: result.acrEssential,
     maxAge: result.maxAge,
+    /**
+     * The claim **names** the client asked to have in the ID token — not the claims request itself.
+     *
+     * `authorizationIssueRequest.claims` used to be set to `result.idTokenClaims` here, and that is the
+     * defect: `idTokenClaims` is the OIDC claims *request* JSON (`{"name":null,…}`, where `null` means
+     * "no special requirements"), while `AuthorizationIssueRequest.claims` is the claim *values*. Every
+     * id_token therefore carried `"name": null`. `authorization.service.issue()` now builds the values
+     * from these names via `claimValuesFor`.
+     *
+     * Deliberately derived from `idTokenClaims` rather than `result.claims`. `result.claims` also
+     * includes claims expanded from the `profile`/`email`/`address`/`phone` scopes, and OIDC Core §5.4
+     * returns those *"from the UserInfo Endpoint"* for a flow that issues an access token. Using it
+     * would start putting end-user identity into ordinary id_tokens that never asked for it.
+     */
+    idTokenClaimNames: requestedIdTokenClaimNames(result.idTokenClaims),
   };
 }
 
