@@ -54,6 +54,26 @@ export function requestedIdTokenClaimNames(idTokenClaims?: string | null): strin
   }
 }
 
+/**
+ * `updated_at` is a **fixed point, not a clock read** (2026-09-01).
+ *
+ * OIDC Core §5.1 defines it as *"Time the End-User's information was last updated"*. These demo
+ * profiles come from static `AUTH_USERS` configuration and are never updated, so the honest answer is
+ * a constant — and it has to be, because this function is now called twice for one authorization: once
+ * building the id_token's claims and again when userinfo is called. `Math.floor(Date.now() / 1000)`
+ * gave two different answers, and the conformance suite compares them:
+ *
+ *   FAILURE  AddIdentityClaimsFromUserInfo: Value of updated_at differs between id_token and userinfo
+ *
+ * Measured: 33 seconds apart in run `tAi3boZk2jgw0xd` — the id_token is minted at the token endpoint
+ * and userinfo is called after. The clock read was always wrong for a static profile; nothing compared
+ * the two values until the id_token started carrying them, so it was never observable.
+ *
+ * A literal rather than a module-load constant: those differ across a restart or a second instance, so
+ * an id_token issued before a redeploy would disagree with a userinfo call after it.
+ */
+const PROFILE_UPDATED_AT = 1735689600; // 2025-01-01T00:00:00Z
+
 export function claimValuesFor(
   subject: string,
   names: readonly string[],
@@ -82,7 +102,7 @@ export function claimValuesFor(
         claims[name] = "en-US";
         break;
       case "updated_at":
-        claims[name] = Math.floor(Date.now() / 1000);
+        claims[name] = PROFILE_UPDATED_AT;
         break;
       default:
         // No value for this claim. Leave it out — see §5.1 above.

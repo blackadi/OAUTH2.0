@@ -843,8 +843,14 @@ node /tmp/spend.mjs /tmp/dpopkey-oidc.json
 ```
 HTTP/1.1 200 OK
 {"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","nickname":"admin",
- "preferred_username":"admin","zoneinfo":"UTC","locale":"en-US","updated_at":1787199702}
+ "preferred_username":"admin","zoneinfo":"UTC","locale":"en-US","updated_at":1735689600}
 ```
+
+> `updated_at` is now a **fixed** `1735689600` (2025-01-01Z) rather than the moment of the call, so this
+> transcript reproduces exactly. It used to be `Date.now()`, which was wrong for a profile that comes from
+> static `AUTH_USERS` config — and became visible on 2026-09-01 when the id_token started carrying claim
+> values too: the two calls happen seconds apart, so the conformance suite saw one claim disagree with
+> itself. See `utils/demo-claims.ts`.
 
 **You just spent a sender-constrained token.** Five things had to line up, and it is worth naming them before
 you break them one at a time: the token exists and has not expired; it covers `openid`; the scheme is `DPoP`;
