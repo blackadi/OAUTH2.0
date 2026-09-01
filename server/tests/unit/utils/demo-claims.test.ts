@@ -66,8 +66,26 @@ describe("claimValuesFor", () => {
       zoneinfo: "UTC",
       locale: "en-US",
     })
-    expect(typeof values.updated_at).toBe("number")
     expect(Object.keys(values).sort()).toEqual([...names].sort())
+  })
+
+  /**
+   * `updated_at` must be **stable**, not `Date.now()`.
+   *
+   * This function is called twice for one authorization — once for the id_token's claims and again
+   * when userinfo is called, seconds or minutes apart — and the conformance suite compares the two:
+   * "AddIdentityClaimsFromUserInfo: Value of updated_at differs between id_token and userinfo". A
+   * clock read was always wrong for a profile that comes from static config; it only became visible
+   * once the id_token started carrying claim values at all.
+   */
+  it("returns the same updated_at across separate calls", () => {
+    const first = claimValuesFor("admin", ["updated_at"]).updated_at
+    const second = claimValuesFor("admin", ["updated_at"]).updated_at
+
+    expect(typeof first).toBe("number")
+    expect(first).toBe(second)
+    // Not a clock read: a value minted now would sit within a second or two of `Date.now()`.
+    expect(Math.abs((first as number) - Math.floor(Date.now() / 1000))).toBeGreaterThan(60)
   })
 
   /**
