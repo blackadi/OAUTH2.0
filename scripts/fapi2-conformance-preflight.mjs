@@ -228,40 +228,79 @@ if (disco?.pushed_authorization_request_endpoint && config.client?.jwks?.keys?.[
       { iss: cid, sub: cid, aud: disco.issuer, jti: randomUUID(), iat: t, nbf: t, exp: t + 120 },
     ),
   });
-  try {
+  const dpopProof = () =>
+    sign(
+      { alg: "ES256", typ: "dpop+jwt", jwk: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y } },
+      { jti: randomUUID(), htm: "POST", htu: parUrl, iat: nowSec() },
+    );
+
+  /** `json` is the SPA's envelope; `form` is RFC 9126 §2.1, which is what the suite sends. */
+  const callPar = async (wire) => {
     const r = await fetch(parUrl, {
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        dpop: sign(
-          { alg: "ES256", typ: "dpop+jwt", jwk: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y } },
-          { jti: randomUUID(), htm: "POST", htu: parUrl, iat: nowSec() },
-        ),
+        "content-type":
+          wire === "form" ? "application/x-www-form-urlencoded" : "application/json",
+        dpop: dpopProof(),
       },
-      body: JSON.stringify({ parameters: body }),
+      body: wire === "form" ? body : JSON.stringify({ parameters: body }),
     });
-    const j = await r.json().catch(() => ({}));
+    return { status: r.status, body: await r.json().catch(() => ({})) };
+  };
+
+  try {
+    const r = await callPar("json");
     check(
       "signed request objects are actually REQUIRED (unsigned PAR refused)",
       r.status >= 400 && r.status < 500,
       r.status === 201
         ? "unsigned PAR was ACCEPTED — either fapiModes is set on the service (it overrides the per-scope and per-client settings) or client.scope omits the fapi2-tagged scope. Set fapi_request_method=unsigned, or fix the service."
-        : `${r.status} ${j.error ?? ""} ${(j.error_description ?? "").slice(0, 60)}`.trim(),
+        : `${r.status} ${r.body.error ?? ""} ${(r.body.error_description ?? "").slice(0, 60)}`.trim(),
     );
   } catch (e) {
     check("signed request objects are actually REQUIRED (unsigned PAR refused)", false, e.message);
   }
+
+  /**
+   * 9126-W1. The check above proves Authlete's *enforcement*, but it sends the SPA's JSON envelope —
+   * so it was blind to the wire format, and passed happily through three conformance runs that all
+   * died at the first PAR. A conformant client sends `application/x-www-form-urlencoded` with the
+   * parameters at the top level and no `parameters` field at all.
+   *
+   * The endpoint must refuse this request **for an OAuth reason** — here, the missing signed request
+   * object. Refusing it because the body has no `parameters` field means the wire format is rejected
+   * before Authlete sees it, which is the regression this exists to catch.
+   */
+  try {
+    const r = await callPar("form");
+    const envelopeComplaint = /required (body )?field: parameters/i.test(
+      r.body.error_description ?? "",
+    );
+    check(
+      "the RFC 9126 §2.1 form-encoded wire format reaches Authlete",
+      !envelopeComplaint,
+      envelopeComplaint
+        ? `the endpoint rejected the form-encoded body itself: "${r.body.error_description}". A conformant client cannot call PAR at all — this is 9126-W1 regressing. See par.service.ts and par.controller.ts.`
+        : `${r.status} ${r.body.error ?? ""} ${(r.body.error_description ?? "").slice(0, 60)}`.trim(),
+    );
+  } catch (e) {
+    check("the RFC 9126 §2.1 form-encoded wire format reaches Authlete", false, e.message);
+  }
 }
 
 // ── the variant settings this deployment forces ─────────────────────────────
-console.log("\nVariants this deployment requires (set these in the plan):");
+console.log("\nSpecification: FAPI2 Message Signing  <- NOT 'FAPI2 Security Profile'");
+console.log("  A Security Profile plan fixes fapi_request_method=unsigned and renders no");
+console.log("  dropdown for it, so it dies at the first PAR against this deployment.");
+console.log("\nVariants to select in the plan:");
 console.log("  client_auth_type           private_key_jwt");
 console.log("  sender_constrain           dpop");
 console.log("  openid                     openid_connect");
 console.log("  fapi_profile               plain_fapi");
 console.log("  authorization_request_type simple");
-console.log("  fapi_request_method        signed_non_repudiation   <- not 'unsigned'");
-console.log("  fapi_response_mode         jarm                     <- not 'plain_response'");
+console.log("\nFixed by the Message Signing family (no dropdown, nothing to set):");
+console.log("  fapi_request_method        signed_non_repudiation");
+console.log("  fapi_response_mode         jarm");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) {

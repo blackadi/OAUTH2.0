@@ -11,23 +11,28 @@
 > `false`, which means PAR is *optional*, not unavailable. Values in the blocks below are *illustrative*
 > except `expires_in`, which is the service's live `pushedAuthReqDuration` — **600**, re-checked 2026-08-14.
 >
-> ### ⚠️ The response is RFC 9126's. The request is not.
+> ### ✅ Both halves are RFC 9126's now. Two request shapes are accepted.
 >
 > | | RFC 9126 requires | This server accepts |
 > |---|---|---|
-> | request | §2 — a **form-encoded** POST whose body is the authorization parameters themselves (`response_type=code&client_id=…`), with client authentication as at the token endpoint | a **JSON** body: `{"parameters": "<url-encoded string>", "clientId": …, "clientSecret": …}` |
+> | request | §2.1 — a **form-encoded** POST whose body is the authorization parameters themselves (`response_type=code&client_id=…`), with client authentication as at the token endpoint | ✅ **exactly that**, since 2026-09-01 (9126-W1) — **and** a **JSON** body, `{"parameters": "<url-encoded string>", "clientId": …, "clientSecret": …}`, which is the shape this tutorial uses |
 > | success response | §2.2 — `{"request_uri": …, "expires_in": …}` | ✅ **exactly that**, since 2026-08-14 (T1-11). Two members, snake_case, no vendor envelope |
 >
-> **So a conformant PAR client cannot call `/api/par`** — it would send §2's form body and get
-> `400 Missing required body field: parameters`. This is an open finding, not a design choice, and it is worth
-> being precise about *why* it is tempting: Part 1 lists "an SPA can call PAR from JavaScript" as a benefit,
-> and that is true here **only because** the endpoint takes JSON. A conformant PAR endpoint requires client
-> authentication, which is exactly what an SPA cannot do — so the convenience and the non-conformance are the
-> same fact. Read that bullet as a description of this deployment, not as advice.
+> **This tutorial's `curl` examples use the JSON shape**, because it lets you see the exact parameter string
+> being pushed — which is the point of a debugging surface. A conformant client should send §2.1's form body;
+> both reach Authlete identically, and the `Content-Type` header is what selects between them.
 >
-> The response half used to be non-conformant too: `requestUri` in camelCase, beside `action` and
-> `resultCode`, with §2.2's body carried as a `responseContent` **string** the caller had to know to parse.
-> If you are reading an older copy of this file, that is what changed.
+> **Part 1 lists "an SPA can call PAR from JavaScript" as a benefit. Read that as a description of this
+> deployment, not as advice.** It is true only because the endpoint also takes JSON, and a conformant PAR
+> endpoint requires client authentication — which is exactly what an SPA cannot do. The convenience and the
+> reason it is unusual are the same fact, and accepting the form shape did not change that.
+>
+> **What this cost before it was fixed.** A conformant client sending §2.1's body got
+> `400 Missing required body field: parameters`, and three OpenID Foundation FAPI 2.0 conformance runs died
+> at their first PAR because of it — each after dozens of passing configuration checks and before a single
+> OAuth request. The response half had its own version of this: `requestUri` in camelCase beside `action`
+> and `resultCode`, with §2.2's body carried as a `responseContent` **string** the caller had to parse.
+> If you are reading an older copy of this file, those are what changed.
 
 ---
 
@@ -428,7 +433,9 @@ The React SPA includes a **PAR** section with a full testing interface.
 ### Common Errors
 
 **"Missing required body field: parameters"**
-→ Ensure your JSON body includes `"parameters": "response_type=code&client_id=..."`
+→ You sent neither shape. Either include `"parameters": "response_type=code&client_id=..."` in a JSON body,
+or send the parameters as a form-encoded body with `Content-Type: application/x-www-form-urlencoded`.
+A form body reaching this error means the `Content-Type` header was wrong — that is what selects the shape.
 
 **"The redirected URI is not registered"**
 → Use a `redirect_uri` registered in Authlete Console for your client
@@ -603,7 +610,7 @@ sequenceDiagram
 
 | Problem | Likely Cause | Solution |
 |---------|-------------|----------|
-| "Missing required body field: parameters" | `parameters` field not in body | Add `"parameters": "response_type=code&client_id=..."` to JSON body |
+| "Missing required body field: parameters" | Neither wire shape recognised — usually a form-encoded body sent with the wrong `Content-Type` | Send `Content-Type: application/x-www-form-urlencoded` for a §2.1 form body, or add `"parameters": "…"` to a JSON body |
 | "The redirected URI is not registered" | `redirect_uri` not in Authlete Console | Register the redirect URI for your client |
 | "unknown_client" | `client_id` not registered | Verify client exists in Authlete Console |
 | "expired_request_uri" | `request_uri` expired (default 10 min) | Push and redirect within the window |

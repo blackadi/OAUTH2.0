@@ -691,6 +691,16 @@ not ship here. All three are `M` effort, all three touch endpoints the SPA and t
 a lab pass. **T2-15 states the gap honestly in the meantime**, which is the pattern `modules/04…/lab.md:340`
 already uses.
 
+> **9126-W1 was un-deferred on 2026-09-01, for PAR alone.** This deferral was ruled with no conformance
+> driver in play; three OpenID Foundation FAPI 2.0 runs then died at the first PAR, before making any OAuth
+> request. **The grouping is what did not survive contact.** "One shared parsing helper" assumed the three
+> endpoints would move together, but only PAR had a driver, and the helper turned out to be four lines
+> reusing an idiom `token.service.ts` already had — so there was nothing to share that was not already
+> shared. CIBA-W1 and 8628-W4 stay open and are now two changes of their own; the lab pass they need is
+> real, and PAR did not need one because the SPA path is unchanged. See
+> `02-findings/RFC9126-pushed-authorization-requests.md` → 9126-W1 for what shipped and what the acceptance
+> criterion had missed.
+
 **RFC 7592's HTTP surface — 7592-W1, 7592-W2.** The registration access token is read from the request body
 rather than an `Authorization: Bearer` header (W1), and there are no RFC 7592-shaped `GET`/`PUT`/`DELETE` methods
 on a client-configuration path (W2) — only the four `POST` aliases this repo defines. W1 is a

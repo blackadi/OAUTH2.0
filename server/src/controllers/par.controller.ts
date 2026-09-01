@@ -24,7 +24,15 @@ export function createParControllers(parServiceInstance = new ParService()) {
   return {
     handle: async (req: Request, res: Response, next: NextFunction) => {
       try {
-        validateOrThrow(parSchema, req.body);
+        // `parSchema` describes the JSON envelope — a `parameters` string plus optional credentials.
+        // A conformant RFC 9126 §2.1 request has no envelope to validate: its parameters *are* the
+        // body, and `app.ts` hands them over as `rawBody`. Validating that shape against the envelope
+        // schema is what answered `400 Missing required field: parameters` to every conformant client.
+        // `token.controller.ts` validates no schema at all for the same reason — Authlete validates
+        // the OAuth parameters themselves, and it is the only thing that can.
+        if (!(req as any).rawBody) {
+          validateOrThrow(parSchema, req.body);
+        }
 
         // RFC 6749 §2.3.1's single-method rule, which RFC 9126 §2 inherits by requiring the same
         // client authentication as the token endpoint. Enforced identically in `token.controller.ts`;
