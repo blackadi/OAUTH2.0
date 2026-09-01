@@ -13,11 +13,26 @@ export class ParService {
 
   async process(req: Request): Promise<any> {
     const log = req.logger || logger;
-    const { parameters, clientId, clientSecret } = req.body as {
-      parameters?: string;
+    const { clientId, clientSecret } = req.body as {
       clientId?: string;
       clientSecret?: string;
     };
+
+    // Two wire formats reach this endpoint, and `rawBody` is what tells them apart.
+    //
+    // RFC 9126 §2.1 defines the request as `application/x-www-form-urlencoded` with the
+    // authorization parameters at the top level — which is what a conformant client, and the OpenID
+    // Foundation conformance suite, sends. The SPA and the labs instead send JSON carrying one
+    // pre-encoded `parameters` string, because a browser cannot do client authentication and the
+    // debugger wants to show the exact string being pushed.
+    //
+    // `app.ts`'s `express.urlencoded` verify hook populates `rawBody` **only** for
+    // `application/x-www-form-urlencoded`, so the content type is the discriminator and the JSON path
+    // is untouched by construction. Same idiom as `token.service.ts`, `introspection.service.ts` and
+    // `revocation.service.ts` — this endpoint was the only one of the four that lacked it, which is
+    // why a conformance run could not get past its first OAuth request (9126-W1, closed 2026-09-01).
+    const rawBody: string | undefined = (req as any).rawBody;
+    const parameters = rawBody || (req.body as { parameters?: string }).parameters;
 
     if (!parameters) {
       throw new AppError("Missing required body field: parameters", 400);
@@ -44,6 +59,11 @@ export class ParService {
       // Server-determined, straight from HTTP context — never from the body.
       requestBody.clientId = basic.clientId;
       requestBody.clientSecret = basic.clientSecret;
+    } else if (rawBody) {
+      // Nothing to merge. A form-encoded body already carries its own `client_id`, and whichever of
+      // `client_secret` / `client_assertion` the client authenticates with, verbatim in `parameters`.
+      // Appending would duplicate the parameter — and RFC 6749 §2.3.1's single-method rule is enforced
+      // ahead of this call in `par.controller.ts`, so the merging branches below must not run here.
     } else if (clientId && clientSecret) {
       requestBody.parameters = appendToParams(parameters, [
         { key: "client_id", value: clientId },
@@ -65,8 +85,14 @@ export class ParService {
       requestBody.htu = dpopHttpTarget(req).htu;
     }
 
+    // `wireFormat` distinguishes the two shapes above; without it a conformant request logs
+    // `clientAuth: "absent"` — its credentials are inside `parameters`, which is never logged.
+    // Length only, never the value: `parameters` carries client_secret, client_assertion and the
+    // PKCE verifier (RFC 9700 §4.2.4). See tests/unit/services/credential-logging.test.ts.
     log.info("ParService: calling Authlete pushed authorization endpoint", {
       hasDpop: !!dpopHeader,
+      wireFormat: rawBody ? "form" : "json",
+      parametersLength: parameters.length,
       clientAuth: basic ? "basic" : clientSecret ? "post" : clientId ? "none" : "absent",
     });
 

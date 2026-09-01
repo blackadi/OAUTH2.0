@@ -83,17 +83,40 @@ the credentials or alias should not invalidate a key Authlete has already regist
 node scripts/fapi2-conformance-preflight.mjs
 ```
 
-Replays the suite's configuration checks locally — the same 29 that ran before the last failure,
-plus a live check that the deployment still *enforces* what the variants promise. It exists because
-a run died at step 36 of 39 on a missing config key, after 27 successes and before a single OAuth
-request. Every one of those was checkable offline.
+Replays the suite's configuration checks locally, plus live checks that the deployment still
+*enforces* what the variants promise **and still accepts the wire format the suite sends**. It exists
+because a run died at step 36 of 39 on a missing config key, after 27 successes and before a single
+OAuth request. Every one of those was checkable offline.
+
+> **Three runs on 2026-09-01, and what each actually proved.** Worth reading before trusting a green
+> configuration section — all three died before any OAuth request, and only the third failure was the
+> server's.
+>
+> | Plan | Died at | Cause |
+> |---|---|---|
+> | `pg9EmudTydDs6` | `GetResourceEndpointConfiguration`, 27 successes | the pasted config had no `resource` object |
+> | `WvEz7ONBGbu7s` | first PAR, 38 successes | a **Security Profile** plan, so `fapi_request_method` was fixed at `unsigned` — see Step 3 |
+> | `NOcwqBMX07XXa` | first PAR, 46 successes | correct plan and variants; **the server rejected the form-encoded body itself** (9126-W1) |
+>
+> The lesson the preflight now encodes: its enforcement check sent the SPA's JSON envelope, so it
+> proved Authlete refuses an unsigned request object while being **blind to whether a conformant
+> client could reach Authlete at all**. A check that exercises a different wire format than the suite
+> does is not a check of the suite's path. Both are now run.
 
 ## Step 3 — create the plan
 
 1. Go to <https://www.certification.openid.net/> and sign in with Google or GitLab.
 2. Click **Create a new test plan**.
-3. Choose **`FAPI2 Security Profile: Authorization server test`**.
-   Do **not** pick a client/RP plan — those test the other side of the exchange.
+3. In **Specification**, choose **`FAPI2 Message Signing`** — *not* `FAPI2 Security Profile`.
+   Then pick the authorization-server plan; do **not** pick a client/RP plan, those test the other
+   side of the exchange.
+
+   **This is the step that decides the run, and picking Security Profile here cannot be corrected
+   later.** The Security Profile plan hard-wires `fapi_request_method=unsigned` and
+   `fapi_response_mode=plain_response` — it renders no dropdown for either, so they appear in the
+   test's variant line as values you never chose. Against this deployment that plan dies at the first
+   PAR with `CheckPAREndpointResponse201WithNoError`, because the server correctly refuses an
+   unsigned request object. Measured twice on 2026-09-01, plans `pg9EmudTydDs6` and `WvEz7ONBGbu7s`.
 4. Set the variants. **These are not free choices** — this deployment requires the signed forms, so
    picking the plain ones will fail:
 
@@ -107,10 +130,12 @@ request. Every one of those was checkable offline.
    | FAPI Request Method | **`signed_non_repudiation`** | the client sets `requestObjectRequired` — an unsigned request is refused |
    | FAPI Response Mode | **`jarm`** | the scope carries `fapi2: ms-authres` — an unsigned response is refused |
 
-   The last two are what make this a **Message Signing** run rather than Security Profile alone. If
-   you want to test the Security Profile *without* Message Signing, you must first relax
-   `requestObjectRequired` on the client and drop `ms-authres` from the scope — otherwise the server
-   correctly refuses every unsigned request and every test fails.
+   **The last two exist only in the `FAPI2 Message Signing` family** — that is what step 3 is for.
+   They are not variants you can add to a Security Profile plan. If you want to test the Security
+   Profile *without* Message Signing, the server is what has to change: relax
+   `requestObjectRequired` on the client and drop `ms-authreq`/`ms-authres` from the scope's `fapi2`
+   attribute. Otherwise the server correctly refuses every unsigned request and every test fails.
+   These are two separate certifications, not two ways of running one plan.
 
 > ⚠️ **`fapiModes` on the service overrides all of this.** Setting it — even to `FAPI2_SECURITY` —
 > takes precedence over both the per-scope `fapi2` attribute and the per-client
@@ -172,7 +197,8 @@ Verified against the live deployment:
 | Login page never advances | Wrong demo credentials. `AUTH_USERS` is set per deployment and is not in this repo; `admin`/`password` is only the local fallback. |
 | Authorization silently cancels | The login form has two buttons named `login` (Sign in and Cancel). The generated plan clicks `id: btn-submit` for this reason; a hand-edited plan using `name: login` can hit Cancel. |
 | `invalid_request` on the redirect URI | The second callback — the one with `?dummy1=lorem&dummy2=ipsum` — is not registered. |
-| Every test fails with `invalid_request` on the request object | The variants are set to the unsigned forms. This deployment requires `signed_non_repudiation` and `jarm`. |
+| `CheckPAREndpointResponse201WithNoError` **with the Message Signing variants already set** | The deployment predates 9126-W1 (fixed 2026-09-01). `POST /api/par` required the JSON envelope's `parameters` field and answered `400 Missing required field: parameters` to any form-encoded body — so no conformant client could call PAR at all. Confirm with `node scripts/fapi2-conformance-preflight.mjs`: *"the RFC 9126 §2.1 form-encoded wire format reaches Authlete"*. If it fails, the running deployment needs the fix — the suite tests Render, not localhost. |
+| `CheckPAREndpointResponse201WithNoError`, or every test fails `invalid_request` on the request object | The plan is a **Security Profile** plan, which fixes `fapi_request_method=unsigned` and offers no dropdown to change it. Create a plan under the `FAPI2 Message Signing` specification instead — see Step 3. |
 | `invalid_request` on a plain authorization request | Expected. The FAPI scope requires PAR and a signed request object. |
 | Non-FAPI panels break after a config change | FAPI enforcement is **per-scope** here (`fapi2` scope attribute), not service-wide. Setting `fapiModes` turns the whole deployment into a FAPI-only server and returns `400` on every ordinary OAuth request. |
 | Runs stall after a few modules | Login is rate-limited to 5/minute and the API to 20/minute. |

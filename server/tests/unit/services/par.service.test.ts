@@ -154,6 +154,96 @@ describe("ParService", () => {
     })
   })
 
+  /**
+   * 9126-W1. `POST /api/par` used to require the JSON envelope's `parameters` field, so a conformant
+   * RFC 9126 §2.1 request — form-encoded, parameters at the top level — earned
+   * `400 Missing required body field: parameters` and never reached Authlete. Three OpenID Foundation
+   * conformance runs died there on 2026-09-01 before making a single OAuth request.
+   *
+   * `rawBody` is set by `app.ts`'s `express.urlencoded` verify hook for
+   * `application/x-www-form-urlencoded` only, which is what keeps the two shapes apart. The JSON cases
+   * above are the compatibility half of this: the SPA and the labs must be unaffected.
+   */
+  describe("RFC 9126 §2.1 wire format", () => {
+    const formReq = (rawBody: string, extra: Record<string, unknown> = {}) =>
+      ({
+        // Express still parses a form body into `req.body`; the service must ignore it and use rawBody.
+        body: Object.fromEntries(new URLSearchParams(rawBody)),
+        rawBody,
+        headers: {},
+        method: "POST",
+        protocol: "https",
+        get: () => "as.example.com",
+        originalUrl: "/api/par",
+        ...extra,
+      }) as any
+
+    const sentRequest = () =>
+      vi.mocked(mockApi.pushedAuthorization.create).mock.calls[0][0].pushedAuthorizationRequest
+
+    beforeEach(() => {
+      vi.mocked(mockApi.pushedAuthorization.create).mockResolvedValue({ action: "CREATED" } as any)
+    })
+
+    it("forwards a form-encoded body verbatim as `parameters`", async () => {
+      const raw =
+        "client_id=1241400020&request=eyJhbGciOiJFUzI1NiJ9.e30.sig" +
+        "&client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer" +
+        "&client_assertion=eyJhbGciOiJFUzI1NiJ9.e30.sig2"
+
+      await service.process(formReq(raw))
+
+      // Verbatim: exact encoding and parameter order are what Authlete and the request object's
+      // signature both depend on.
+      expect(sentRequest().parameters).toBe(raw)
+    })
+
+    it("does not append body credentials when the form body already carries them", async () => {
+      // The regression this guards: `client_id` is a real key in the parsed body, so the
+      // client_secret_post merging branch would have appended a second copy.
+      const raw = "client_id=c-1&client_secret=s-1&response_type=code"
+
+      await service.process(formReq(raw))
+
+      expect(sentRequest().parameters).toBe(raw)
+      expect(sentRequest().parameters.match(/client_id=/g)).toHaveLength(1)
+    })
+
+    it("still lets an Authorization: Basic header own the credential channel", async () => {
+      const raw = "response_type=code&scope=openid"
+      const authorization = `Basic ${Buffer.from("c-1:s-1").toString("base64")}`
+
+      await service.process(formReq(raw, { headers: { authorization } }))
+
+      expect(sentRequest()).toMatchObject({ clientId: "c-1", clientSecret: "s-1" })
+      expect(sentRequest().parameters).toBe(raw)
+    })
+
+    it("carries DPoP through the form path", async () => {
+      await service.process(
+        formReq("client_id=c-1&response_type=code", { headers: { dpop: "proof-jwt" } }),
+      )
+
+      expect(sentRequest()).toMatchObject({
+        dpop: "proof-jwt",
+        htm: "POST",
+        htu: "https://as.example.com/api/par",
+      })
+    })
+
+    it("prefers rawBody over a JSON `parameters` field if somehow both arrive", async () => {
+      await service.process(formReq("from=raw", { body: { parameters: "from=json" } }))
+
+      expect(sentRequest().parameters).toBe("from=raw")
+    })
+
+    it("still rejects a request carrying neither shape", async () => {
+      await expect(service.process({ body: {}, headers: {} } as any)).rejects.toThrow(
+        "Missing required body field: parameters",
+      )
+    })
+  })
+
   describe("DPoP target derivation (RFC 9449 §4.2)", () => {
     it("strips the query string from htu", async () => {
       // PushedAuthorizationRequest has no targetUri member, so htu carries the target alone.
