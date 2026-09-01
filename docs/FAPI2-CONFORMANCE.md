@@ -167,6 +167,49 @@ OAuth request. Every one of those was checkable offline.
 
 ---
 
+## Step 5 — the tests a human has to drive, which need a SECOND plan
+
+`fapi2-security-profile-final-user-rejects-authentication` requires the tester to press **Cancel** on
+the login screen, or **Deny** on the consent screen, so the server returns `access_denied`. The browser
+automation from Step 1 always presses **Sign in** and **Approve** — correct for every other module, and
+fatal here: it approves on your behalf and the test fails with *"Authorization server was expected to
+return an error but did not"*. The tell is the timing. In run `UTqf2OqbCObK33G` the redirect and the
+callback were **five seconds apart**, which is not a human logging in.
+
+**One plan cannot cover both, and this is a limit of the suite rather than of this deployment.** A
+browser entry accepts only `match` and `tasks`; a task accepts only `task`, `match`, `optional` and
+`commands` (suite wiki → `Design/BrowserControl`, consulted 2026-09-01). There is **no per-test-name
+selector**, and every module hits the same `/api/session/login` URL, so no `match` pattern can tell them
+apart.
+
+So build a second plan with no automation at all:
+
+```bash
+node scripts/fapi2-conformance-setup.mjs --apply --manual-browser
+```
+
+That writes `conformance/fapi2-config.json` with the `browser` block omitted and everything else
+identical — same clients, same reused keys, same `resource`. Create a second plan from it with **the
+same variants** under **FAPI2 Message Signing**, then run only the interactive negative modules there,
+clicking Cancel or Deny yourself.
+
+> ⚠️ **It overwrites the same config file.** Re-run without `--manual-browser` before rebuilding the
+> automated plan, or you will paste an automation-free config into it and hand-drive all 39 modules.
+> Keys are reused either way, so switching back and forth costs nothing at Authlete.
+
+**Clear cookies for the deployment before running it**, as the test's own instructions say. With a live
+session the server has nothing to ask, so you are never offered the chance to refuse.
+
+> **This test also found a real defect, on 2026-09-01.** Even driven correctly it could not have passed:
+> the login-screen Cancel branch called Authlete's authorization-fail API with `NOT_LOGGED_IN` and the
+> consent-screen Deny branch with `CONSENT_REQUIRED`, which render as `login_required` and
+> `consent_required`. Both tell the RP to retry with interaction, where RFC 6749 §4.1.2.1 calls for
+> `access_denied`. Both now send `DENIED` → `[A060306] The end-user denied the authorization request.`
+> The E2E suite had asserted only that *some* `error=` came back, which is how it went unnoticed. See
+> `docs/TICKET-PARAMETER.md` → Session Controller for the measured reason→error table.
+
+---
+
 ## What the suite will find already in place
 
 Verified against the live deployment:
@@ -192,6 +235,8 @@ Verified against the live deployment:
 | Symptom | Cause |
 |---|---|
 | `Couldn't find resource endpoint object in configuration` | The pasted config has no `resource` object. Re-generate with the setup script and paste the current file — the run stops here before any OAuth request. |
+| `EnsureErrorFromAuthorizationEndpointResponse` — *"expected to return an error but did not"* | The browser automation pressed Sign in for you. That module needs a hand-driven plan — see Step 5. If the redirect and callback are seconds apart, it was the automation. |
+| A refusal comes back as `login_required` or `consent_required` instead of `access_denied` | Fixed 2026-09-01; the deployment predates it. `session.controller.ts` sent `NOT_LOGGED_IN` / `CONSENT_REQUIRED` where RFC 6749 §4.1.2.1 wants `DENIED`. |
 | Suite cannot fetch the discovery document | It uses `{issuer}/.well-known/openid-configuration` at the **root**. Confirm it returns JSON, not the SPA's HTML. |
 | Every test fails at client authentication | The registered public key does not match the private key in the plan. Re-run the setup with `--apply`. |
 | Login page never advances | Wrong demo credentials. `AUTH_USERS` is set per deployment and is not in this repo; `admin`/`password` is only the local fallback. |

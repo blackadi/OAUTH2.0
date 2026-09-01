@@ -368,7 +368,11 @@ if (!hasRealAuthleteCreds) {
           .redirects(0)
         expect(res.status).toBe(303)
         const location = res.headers.location as string
-        expect(location).toContain("error=")
+        // `toContain("error=")` alone was the assertion here until 2026-09-01, and it is why this test
+        // watched the deny path report `consent_required` for months without noticing. RFC 6749 §4.1.2.1
+        // gives `access_denied` when the resource owner denies the request; `consent_required` says the
+        // server could not *ask*, which is the prompt=none case, not this one.
+        expect(location).toContain("error=access_denied")
         expect(location).toContain(`state=${denyState}`)
       })
 

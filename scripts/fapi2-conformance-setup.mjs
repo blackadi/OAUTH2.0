@@ -41,6 +41,20 @@ const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
 // Rotating a registered key is a deliberate act, not a side effect of re-running the script.
 const ROTATE = args.includes("--rotate-keys");
+/**
+ * `--manual-browser` omits the `browser` block, for the tests a human must drive.
+ *
+ * `fapi2-security-profile-final-user-rejects-authentication` needs the tester to press **Cancel** or
+ * **Deny**. The automation below always presses Sign in and Approve, so with it in place that test
+ * approves on the tester's behalf and fails with *"Authorization server was expected to return an error
+ * but did not"* — measured, five seconds between redirect and callback.
+ *
+ * **One config cannot serve both.** A browser entry has only `match`/`tasks` and a task only
+ * `task`/`match`/`optional`/`commands` (suite wiki, `Design/BrowserControl`, consulted 2026-09-01):
+ * there is no per-test-name selector, and every test hits the same login URL. So the interactive
+ * negative tests need a second plan built from a config with no automation at all.
+ */
+const MANUAL_BROWSER = args.includes("--manual-browser");
 const ALIAS = (args[args.indexOf("--alias") + 1] || "").startsWith("--") || args.indexOf("--alias") === -1
   ? "blackadi-fapi2"
   : args[args.indexOf("--alias") + 1];
@@ -216,7 +230,7 @@ const plan = {
    * when it is unset. Against the Render deployment those return 401 — measured. Override with
    * FAPI_USERNAME / FAPI_PASSWORD before running the plan.
    */
-  browser: [
+  ...(MANUAL_BROWSER ? {} : { browser: [
     {
       match: `${service.issuer.replace(/\/+$/, "")}/api/session/login*`,
       tasks: [
@@ -238,12 +252,18 @@ const plan = {
         },
       ],
     },
-  ],
+  ] }),
 };
 
 const planPath = join(outDir, "fapi2-config.json");
 writeFileSync(planPath, JSON.stringify(plan, null, 2));
 console.log(`\nwrote ${planPath}`);
+if (MANUAL_BROWSER) {
+  console.log("  NO browser automation — you drive the login screen yourself.");
+  console.log("  Use this for fapi2-security-profile-final-user-rejects-authentication:");
+  console.log("  create a separate plan with the same variants, then press Cancel by hand.");
+  console.log("  Clear cookies for the deployment first, as the test instructs.");
+}
 
 // Guard: these files hold private keys. Refuse to leave them in a tracked directory silently.
 const gitignore = join(repoRoot, ".gitignore");

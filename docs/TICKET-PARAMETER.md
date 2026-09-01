@@ -153,8 +153,25 @@ The `issue` API returns `action: LOCATION` with the redirect URI containing the 
 
 | Handler | Lines | Ticket Interaction |
 |---------|-------|--------------------|
-| `handleLogin` | 59-142 | Checks for ticket in session (line 70-72). Calls `fail()` with `NOT_LOGGED_IN` if canceled (line 80-83). Calls `issue()` if persistent consent found (line 122-124). |
-| `handleConsent` | 158-217 | Reads ticket from session (line 169-170). Calls `issue()` if approved (line 182) or `fail()` with `CONSENT_REQUIRED` if denied (line 202-205). Deletes `req.session.authorization` after (lines 194, 210). |
+| `handleLogin` | 59-142 | Checks for ticket in session (line 70-72). Calls `fail()` with **`DENIED`** if canceled. Calls `issue()` if persistent consent found. |
+| `handleConsent` | 158-217 | Reads ticket from session. Calls `issue()` if approved, or `fail()` with **`DENIED`** if denied. Deletes `req.session.authorization` after. |
+
+> **Both refusal branches sent the wrong reason until 2026-09-01** — `NOT_LOGGED_IN` on Cancel and
+> `CONSENT_REQUIRED` on Deny, which Authlete renders as `login_required` and `consent_required`. Both tell
+> the RP to retry with interaction, so a conforming client loops instead of learning the user refused;
+> RFC 6749 §4.1.2.1 gives `access_denied`, and `DENIED` is the reason that produces it. Measured against
+> service `2147478188`:
+>
+> | `reason` | error | description |
+> |---|---|---|
+> | `DENIED` | `access_denied` | `[A060306] The end-user denied the authorization request.` |
+> | `NOT_LOGGED_IN` | `login_required` | `[A060301] …contains prompt=none, but no end-user has logged in…` |
+> | `CONSENT_REQUIRED` | `consent_required` | `[A060311] …cannot obtain consent from the end-user…` |
+> | `ACCESS_DENIED` | `server_error` | `[A060201] …does not contain 'reason'` — the **CIBA** API's value, not this one's |
+>
+> **`NOT_LOGGED_IN` and `CONSENT_REQUIRED` are still correct in `authorization.service.ts`'s
+> `decideWithoutInteraction`** — the `prompt=none` path, where the user is genuinely not logged in and
+> interaction is forbidden. Do not unify the two; see `docs/agents/quirks.md`.
 
 ### Response Handlers
 
