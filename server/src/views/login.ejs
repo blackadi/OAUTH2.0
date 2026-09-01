@@ -29,7 +29,26 @@
       </div>
       <div class="actions">
         <button type="submit" name="login" value="submit" class="primary" id="btn-submit">Sign in</button>
-        <button type="submit" name="login" value="cancel" class="secondary">Cancel</button>
+        <!--
+          `formnovalidate` is load-bearing, and its absence made refusal impossible (fixed 2026-09-01).
+
+          Cancel is a submit button in a form whose username and password are `required`. Clicking a submit
+          button runs interactive form validation, so with the fields empty the browser blocked the POST and
+          showed "Please fill out this field" on the username input. Nothing was sent, no `access_denied`
+          reached the client, and the page simply sat there — the user could not decline at all. Empty fields
+          are exactly the state a fresh session gives you, which is the state a refusal happens in.
+
+          `formnovalidate` exempts this button from that validation. It does not weaken the Sign in path:
+          `handleLogin` still runs `validateOrThrow(loginSchema, req.body)` server-side, and the cancel branch
+          reads no credentials at all — it calls the authorization-fail API with `DENIED` and nothing else.
+
+          Measured in Chromium against the deployment, no cookies: before, clicking Cancel left the URL
+          unchanged with `checkValidity() === false`; after, it redirects to the RP with
+          `error=access_denied`. **No server-side test could see this** — a POST of `login=cancel` bypasses
+          client-side validation entirely, which is why the unit tests, the E2E suite and three live probes
+          all passed while the button did nothing.
+        -->
+        <button type="submit" name="login" value="cancel" class="secondary" formnovalidate>Cancel</button>
       </div>
     </form>
     <div class="foot">Demo users: <code>admin</code> / <code>password</code> (configurable via <code>AUTH_USERS</code> env var)</div>

@@ -30,6 +30,37 @@ describe("login.ejs", () => {
     expect(html).toContain('id="username" name="username" type="text" placeholder="jane@example.com" value=""')
   })
 
+  /**
+   * The Cancel button must be exempt from the form's own validation, or a user cannot refuse.
+   *
+   * `username` and `password` are `required`, and Cancel is a submit button. Clicking a submit button runs
+   * interactive validation, so with empty fields — the state a fresh session gives you — the browser blocked
+   * the POST and showed "Please fill out this field". No `access_denied` was ever sent and the page just sat
+   * there. `fapi2-security-profile-final-user-rejects-authentication` failed on this four times.
+   *
+   * **A server-side test cannot catch the real defect**: posting `login=cancel` bypasses client-side
+   * validation, which is exactly why every unit test, the E2E deny case and three live probes passed while the
+   * button did nothing. So this asserts the attribute's presence in the rendered markup, which is the part
+   * that is checkable here. The behaviour itself was measured in Chromium.
+   */
+  it("exempts Cancel from form validation so a refusal can be submitted", async () => {
+    const html = await renderFile(LOGIN_VIEW, { csrfToken: "csrf-token-value" })
+
+    const cancel = html.match(/<button[^>]*value="cancel"[^>]*>/)?.[0]
+    expect(cancel, "the Cancel button should be rendered").toBeDefined()
+    expect(cancel).toContain("formnovalidate")
+
+    // The premise the attribute exists for. If these ever stop being required, re-check whether it is still
+    // needed — but leaving it costs nothing, and removing it silently breaks refusal again.
+    expect(html).toMatch(/<input id="username"[^>]*\srequired/)
+    expect(html).toMatch(/<input id="password"[^>]*\srequired/)
+
+    // Sign in must NOT be exempt: its validation is what gives the user immediate feedback on an empty form.
+    const submit = html.match(/<button[^>]*value="submit"[^>]*>/)?.[0]
+    expect(submit).toBeDefined()
+    expect(submit).not.toContain("formnovalidate")
+  })
+
   it("names the client and shows the error when both are supplied", async () => {
     const html = await renderFile(LOGIN_VIEW, {
       csrfToken: "csrf-token-value",
