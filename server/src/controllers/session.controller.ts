@@ -93,9 +93,31 @@ export function createSessionController(
         log.info("Login canceled for ticket", {
           ticket: authz?.authorizationIssueRequest?.ticket,
         });
+        // `DENIED`, not `NOT_LOGGED_IN`. RFC 6749 §4.1.2.1 gives `access_denied` for *"The resource
+        // owner or authorization server denied the request"*, and pressing Cancel on a login screen the
+        // user was shown is precisely that. `NOT_LOGGED_IN` was here until 2026-09-01 and produced
+        // `login_required`, which tells the RP to retry with interaction — so a client would loop rather
+        // than learn the user refused. Its canned description made that worse by asserting something
+        // untrue about the request: *"[A060301] The authorization request contains prompt=none, but no
+        // end-user has logged in this service."*
+        //
+        // Measured against service 2147478188, four fresh tickets, because the vendored spec documents
+        // the `action` values but not this mapping:
+        //
+        //   DENIED           -> access_denied     [A060306] The end-user denied the authorization request.
+        //   NOT_LOGGED_IN    -> login_required    [A060301] ...contains prompt=none...
+        //   CONSENT_REQUIRED -> consent_required  [A060311] ...cannot obtain consent...
+        //   ACCESS_DENIED    -> server_error      [A060201] ...does not contain 'reason'
+        //
+        // `ACCESS_DENIED` is a trap: it is the *CIBA* fail API's value, and this API treats it as a
+        // missing `reason` rather than rejecting it.
+        //
+        // `NOT_LOGGED_IN` remains correct in `authorization.service.ts`'s `decideWithoutInteraction` —
+        // there the user genuinely is not logged in and `prompt=none` forbids asking, which is what OIDC
+        // Core §3.1.2.6's `login_required` exists for. Do not unify the two.
         const response = await authorizationServiceInstance.fail(
           authz?.authorizationIssueRequest?.ticket ?? "",
-          "NOT_LOGGED_IN"
+          "DENIED"
         );
         req.logger.info("Login fail response", {
           content: response.responseContent,
@@ -272,10 +294,16 @@ export function createSessionController(
         // authorization-response controller.
         return sendAuthorizationIssueResponse(res, response);
       } else {
-        // Call Authlete /authorization/fail API
+        // Call Authlete /authorization/fail API.
+        //
+        // `DENIED`, not `CONSENT_REQUIRED` — same rule as the Cancel branch above, and the same reason
+        // it was wrong: `consent_required` means *"I would have to ask the user and cannot"*, which is
+        // the `prompt=none` situation. Here the user **was** asked, on this screen, and pressed Deny.
+        // RFC 6749 §4.1.2.1 makes that `access_denied`. Changed 2026-09-01; see the measured mapping
+        // table in the Cancel branch.
         const response = await authorizationServiceInstance.fail(
           ticket ?? "",
-          "CONSENT_REQUIRED"
+          "DENIED"
         ); // https://docs.authlete.com/en/shared/latest#post-/api/-serviceId-/auth/authorization
 
         req.logger.info("Authorization fail response", {

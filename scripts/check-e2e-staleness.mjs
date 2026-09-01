@@ -75,7 +75,20 @@ for (const p of E2E_PATHS) {
   }
 }
 
-const lastE2eSha = git(['log', '-1', '--format=%H', '--', ...E2E_PATHS]);
+/**
+ * `--full-history`, and it is load-bearing (2026-09-01).
+ *
+ * Without it git applies history simplification: at a merge it follows only a parent whose tree for
+ * these paths is TREESAME, so a commit whose *net* effect on the path was a revert gets skipped
+ * entirely. Measured on this repo — `9d2e45d` ("restore the one E2E line the logger rewrite should not
+ * have touched") edits `server/tests/e2e/e2e.test.ts`, `git show --stat` proves it, and plain
+ * `git log -1 -- server/tests/e2e` still answered `56fc14a`, a day earlier. The baseline was wrong by
+ * one commit and the report listed **36** changed files instead of the true handful.
+ *
+ * Over-reporting is the safe direction — a false positive costs a diff — but a baseline that names the
+ * wrong commit undermines the one thing this script exists to tell you.
+ */
+const lastE2eSha = git(['log', '-1', '--full-history', '--format=%H', '--', ...E2E_PATHS]);
 if (!lastE2eSha) {
   console.error('✗ no commit found touching the E2E suite; cannot measure drift against nothing.');
   process.exit(1);
