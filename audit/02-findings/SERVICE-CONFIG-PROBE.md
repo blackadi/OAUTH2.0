@@ -302,7 +302,23 @@ claims_supported                    = 20 claims (sub, name, given_name, family_n
                                       preferred_username, profile, picture, website, email, email_verified,
                                       gender, birthdate, zoneinfo, locale, phone_number,
                                       phone_number_verified, address, updated_at)
+                                      ^ TRIMMED TO 11 on 2026-09-01 — see the note below
 supportedClaimTypes                 = ["NORMAL"]
+
+> **`claims_supported` was trimmed from 20 to 11 on 2026-09-01, and the probe above records the old
+> value.** Nine of the twenty were served by nothing: `address`, `birthdate`, `gender`, `middle_name`,
+> `phone_number`, `phone_number_verified`, `picture`, `profile`, `website`. This deployment produces
+> only `sub`, `name`, `given_name`, `family_name`, `nickname`, `preferred_username`, `email`,
+> `email_verified`, `zoneinfo`, `locale` and `updated_at` — see `SERVED_CLAIMS` in
+> `server/src/utils/demo-claims.ts`.
+>
+> **The probe could not have caught this**, and that is the point worth recording. It reads the service
+> and reports what the service says; it has no idea what the server can produce. The mismatch needed a
+> conformance run to surface —
+> `fapi2-security-profile-final-test-claims-parameter-identity-claims` warning
+> *"the server did not return all the requested claims … it should have returned them in either the
+> id_token or the userinfo response"*. `scripts/check-claims-supported.mjs` now measures the two sides
+> against each other, in both directions.
 acr_values_supported                = <ABSENT>
 id_token_signing_alg_values_supported   = ["HS256", "HS512", "ES256", "HS384"]     # no RS256  ⚠️ superseded, probe 6
 userinfo_signing_alg_values_supported   = ["HS256", "HS512", "ES256", "HS384", "none"]        # ⚠️ superseded, probe 6

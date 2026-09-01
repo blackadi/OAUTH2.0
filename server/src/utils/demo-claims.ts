@@ -74,6 +74,56 @@ export function requestedIdTokenClaimNames(idTokenClaims?: string | null): strin
  */
 const PROFILE_UPDATED_AT = 1735689600; // 2025-01-01T00:00:00Z
 
+/**
+ * Every claim this deployment can actually produce — the single list, used three ways.
+ *
+ * 1. `claimValuesFor` below produces exactly these and no others.
+ * 2. The consent screen offers exactly these, so it never asks to share a claim that is never issued.
+ * 3. The Authlete service's `supportedClaims` is aligned to these, so the advertised
+ *    `claims_supported` is true.
+ *
+ * **Why it exists.** The service advertised 20 claims while the server could serve 11, and nothing
+ * connected the two, so the gap survived until a conformance run found it:
+ *
+ *   WARNING  EnsureIdentityClaimsContainRequestedClaims: The server did not return all the requested
+ *            claims. … As the server listed the claims in claims_supported, it should have returned
+ *            them in either the id_token or the userinfo response.
+ *
+ * The nine dropped — `address`, `birthdate`, `gender`, `middle_name`, `phone_number`,
+ * `phone_number_verified`, `picture`, `profile`, `website` — were never served by anything. Omitting a
+ * claim you have no value for is right (OIDC Core §5.1); advertising it is not.
+ *
+ * **Adding a claim means three edits, in this order:** a `case` below, this list, then
+ * `node scripts/fapi2-align-supported-claims.mjs --apply`. `check-claims-supported.mjs` catches it if
+ * you stop after two, and `demo-claims.test.ts` catches it if you stop after one.
+ */
+/**
+ * **`sub` is in this list but is not produced by `claimValuesFor`.** It belongs in `claims_supported`
+ * — the server does serve it, on every id_token and userinfo response — but it is not an identity
+ * claim value the authorization server supplies. Authlete emits it from `AuthorizationIssueRequest`'s
+ * `subject`, and `userinfo.controller.ts` sets it directly. Putting it in the supplied `claims` JSON
+ * would be redundant at best and a second source for the subject at worst.
+ *
+ * `IDENTITY_CLAIMS` below is the half `claimValuesFor` actually produces; the test pins the
+ * relationship so neither can drift from the other.
+ */
+export const SERVED_CLAIMS = [
+  "sub",
+  "name",
+  "given_name",
+  "family_name",
+  "nickname",
+  "preferred_username",
+  "email",
+  "email_verified",
+  "zoneinfo",
+  "locale",
+  "updated_at",
+] as const;
+
+/** The claims `claimValuesFor` produces: everything served except `sub`. See the note above. */
+export const IDENTITY_CLAIMS = SERVED_CLAIMS.filter((c) => c !== "sub");
+
 export function claimValuesFor(
   subject: string,
   names: readonly string[],

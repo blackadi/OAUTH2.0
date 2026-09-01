@@ -11,6 +11,7 @@ import { checkStepUpRequirements } from "../utils/step-up";
 import { validateOrThrow, loginSchema } from "../utils/validation";
 import consentStore from "../services/consent-store.service";
 import { claimsFromScopes, claimLabel } from "../utils/scope-claims";
+import { SERVED_CLAIMS } from "../utils/demo-claims";
 import { AUTHORIZATION_REDIRECT_STATUS } from "../utils/http-utils";
 
 const loginAttempts = new Map<string, { count: number; banUntil: number }>()
@@ -233,8 +234,23 @@ export function createSessionController(
     const { clientName = "", redirectUri = "", authorizationIssueRequest: { scopes = [], authorizationDetails } = {} } =
       req.session.authorization || {};
 
-    // Derive claim names from scopes per OIDC Core 1.0 §5.4
-    const claimNames = claimsFromScopes(scopes as string[]);
+    /**
+     * Derive claim names from scopes per OIDC Core 1.0 §5.4, then **keep only the ones this
+     * deployment can actually issue.**
+     *
+     * `claimsFromScopes` is a faithful §5.4 mapping and stays one — `profile` really does expand to
+     * fourteen claims. But this server produces ten of them, so rendering the raw expansion asked the
+     * user to share a `birthdate`, `gender` and `address` that no response has ever contained. On a
+     * server people learn from, a consent screen that overstates what is disclosed teaches the wrong
+     * thing; and once `supportedClaims` was trimmed to the truth (2026-09-01), Authlete would refuse
+     * those names anyway, so the checkbox could not have meant anything.
+     *
+     * Filtering here rather than in `scope-claims.ts` keeps the spec mapping and the deployment's
+     * capability as separate facts — this is the point where the question is "what can we actually
+     * give away".
+     */
+    const claimNames = claimsFromScopes(scopes as string[])
+      .filter((name) => (SERVED_CLAIMS as readonly string[]).includes(name));
     const claims = claimNames.map(name => ({ name, label: claimLabel(name) }));
 
     res.render("consent", { clientName, scopes, redirectUri, authorizationDetails, claims });

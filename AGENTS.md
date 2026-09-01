@@ -34,10 +34,10 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (1158 tests, 80 files)
+npm --prefix server run test              # unit + integration (1161 tests, 80 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (854 tests, 73 files)
+npm --prefix server run test:unit         # unit tests only (857 tests, 73 files)
 npm --prefix server run test:integration  # integration tests only (304 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
@@ -208,6 +208,7 @@ node scripts/check-route-coverage.mjs    # every route is named by some test
 node scripts/check-e2e-staleness.mjs     # which server files changed since the E2E suite was revised
 node scripts/check-client-server-contract.mjs   # every SPA endpoint resolves to a mounted server route
 node scripts/check-discovery.mjs         # the discovery baseline, BY NAME rather than by count
+node scripts/check-claims-supported.mjs  # claims_supported vs what the server can actually serve
 ```
 
 **What they cannot see, in one place**, because every one of these has let a real defect through:
@@ -220,6 +221,14 @@ node scripts/check-discovery.mjs         # the discovery baseline, BY NAME rathe
   handler directly and never touches the middleware chain**, so it cannot see an auth gate at all.
 - **A line number that resolves is not a line number that is right.** `check-docs.mjs` asserts the file
   has that many lines, which is all it can do offline. Re-resolve the refs naming a file you edited.
+- **Advertising a capability is not having it.** `check-claims-supported.mjs` exists because
+  `claims_supported` listed **20** claims while the server could produce **11**, and nothing connected
+  the two — the gap survived typecheck, lint, the whole suite and every other check here, and took a
+  conformance run to find. It reads the **live** document, so it measures the deployment rather than the
+  repo: a change to `SERVED_CLAIMS` shows up only once it has been applied to the service *and*
+  deployed. Like `check-discovery.mjs` it is **not in CI** — a service configuration change is somebody
+  else's action and is not a reason to fail somebody's pull request. It cannot see the other metadata
+  members, only this one.
 - **A count is not evidence.** `check-discovery.mjs` exists because the discovery document's member
   *count* changed and nobody could say which member. Keep the list, not the number.
 - **An auth gate added on the server is a client change too**, and the documentation being right is not
