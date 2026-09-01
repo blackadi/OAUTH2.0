@@ -105,7 +105,7 @@ reaches the global handler. Four sites derive a status from a caught error local
 `server/src/controllers/par.controller.ts:42` and the `AppError`-narrowed branches in
 `server/src/controllers/ciba.controller.ts:59`, `server/src/controllers/device.controller.ts:52` and
 `server/src/utils/controller-error.ts:12` are **safe by construction** (this repo's own error types, deliberate
-statuses); `server/src/controllers/userinfo.controller.ts:165-166` is safe for the same reason, via
+statuses); `server/src/controllers/userinfo.controller.ts:133-134` is safe for the same reason, via
 `isTokenPresentationError`. The two the entry names — `server/src/controllers/jwks.controller.ts:17` and
 `server/src/services/health.service.ts:49` — read a status from an SDK error **by design** and must not be
 clamped. **The residue is one line of API surface: `errorStatusFrom` is not exported** (it is declared

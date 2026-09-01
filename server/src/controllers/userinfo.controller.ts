@@ -5,6 +5,7 @@ import {
   UserinfoIssueRequest,
 } from "@authlete/typescript-sdk/models";
 import { senduserInfoIssueResponse } from "./userinfo-issue-response.handler";
+import { claimValuesFor } from "../utils/demo-claims";
 import {
   authChallenge,
   extractAccessToken,
@@ -78,37 +79,18 @@ export const userinfoController = {
             return res.status(500).send("Missing subject in userinfo response");
           }
 
-          const claims: Record<string, unknown> = { sub: subject };
-          for (const name of claimNames) {
-            switch (name) {
-              case "name":
-              case "given_name":
-              case "family_name":
-              case "nickname":
-              case "preferred_username":
-                claims[name] = subject;
-                break;
-              case "email":
-                claims[name] = `${subject}@example.com`;
-                break;
-              case "email_verified":
-                claims[name] = true;
-                break;
-              case "zoneinfo":
-                claims[name] = "UTC";
-                break;
-              case "locale":
-                claims[name] = "en-US";
-                break;
-              case "updated_at":
-                claims[name] = Math.floor(Date.now() / 1000);
-                break;
-              default:
-                break;
-            }
-          }
+          // `claimValuesFor` is shared with the authorization-issue path, which had no claim values at
+          // all and so put `null` in every id_token claim. One source is the point: the defect was two
+          // sources disagreeing, and userinfo's output here is unchanged by construction.
+          const claims: Record<string, unknown> = {
+            sub: subject,
+            ...claimValuesFor(subject, claimNames),
+          };
 
-          logger.info("Prepared userinfo claims", { subject, claims });
+          // Names only. The values are end-user identity data — email, name, locale — and this line
+          // wrote all of them to a 14-day-retained log at info level. Same rule as the request-body
+          // logging in `token.service.ts`: log what was asked for, never what was answered.
+          logger.info("Prepared userinfo claims", { subject, claims: Object.keys(claims) });
 
           // Same parser the service used, so the two calls can never disagree about what the token
           // is. This previously stripped only `Bearer`, which meant a DPoP-scheme request that

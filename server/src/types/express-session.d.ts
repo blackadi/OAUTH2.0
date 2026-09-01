@@ -20,6 +20,10 @@ declare module "express-session" {
       maxAge?: number;
       // Track when the current session authentication occurred (epoch seconds)
       authTime?: number;
+      // Claim names the client asked to have in the ID token, from the `claims` request parameter's
+      // `id_token` member. The VALUES are built at issue time by `claimValuesFor`; passing the request
+      // JSON through as the values is what put `"name": null` in every id_token before 2026-09-01.
+      idTokenClaimNames?: string[];
     };
     // RFC 9470: Step-up authentication context bound to issued tokens
     stepUp?: {

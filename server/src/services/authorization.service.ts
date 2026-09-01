@@ -12,6 +12,7 @@ import session from "express-session";
 import logger from "../utils/logger";
 import { AppError } from "../utils/app-error";
 import crypto from "crypto";
+import { claimValuesFor } from "../utils/demo-claims";
 
 export class AuthorizationService {
   constructor(private authleteApi: Authlete = defaultApi) {}
@@ -117,6 +118,35 @@ export class AuthorizationService {
       });
     }
 
+    /**
+     * The ID token's claim **values** — the same ones `/api/userinfo` returns, from the one shared
+     * source, so the two can no longer disagree.
+     *
+     * This field used to be set in `authorization.controller.ts` to `result.idTokenClaims`, which is
+     * the claims *request* rather than the claim values: `{"name":null,…}`, where OIDC's claims-request
+     * syntax uses `null` to mean *"no special requirements"*. Authlete embedded it verbatim, so every
+     * id_token came back with `"name": null` while userinfo returned `"name": "admin"` for the same
+     * claim. `fapi2-security-profile-final-test-claims-parameter-identity-claims` reported 21 invalid
+     * claims plus *"Value of name **differs** between id_token and userinfo"* — `differs`, because a
+     * `null` claim is present-but-invalid rather than absent.
+     *
+     * Only claims the client asked for by name reach here; `claimValuesFor` omits any it has no value
+     * for, per OIDC Core §5.1. So an empty object is possible, and is not worth a round trip.
+     */
+    const idTokenClaimNames = req.session.authorization?.idTokenClaimNames ?? [];
+    if (idTokenClaimNames.length) {
+      const values = claimValuesFor(subject, idTokenClaimNames);
+      if (Object.keys(values).length) {
+        reqBody.claims = JSON.stringify(values);
+      }
+      // Names only, never values — these are the end-user's name, email and locale, and this log is
+      // retained for 14 days. Same rule as the request-body logging in `token.service.ts`.
+      log.info("Supplying ID token claim values to Authlete", {
+        requested: idTokenClaimNames,
+        supplied: Object.keys(values),
+      });
+    }
+
     // RFC 9470: Pass authentication context to Authlete so it binds
     // acr and auth_time to the access token (and ID token).
     // These come from session.stepUp set during the login flow.
@@ -137,7 +167,17 @@ export class AuthorizationService {
       log.info("Native SSO: generated sessionId for authorization issue", { sessionId });
     }
 
-    log.info("Issue authorization request parameters", { params: reqBody });
+    // `claims` and `properties` are redacted, not omitted — knowing they were sent is useful, knowing
+    // their contents is a disclosure. `claims` now carries the end-user's name, email and locale (it
+    // previously carried the claims *request*, which was harmless, so this line was safe until the fix
+    // above); `properties` is arbitrary caller-supplied data. Everything else here is an identifier or a
+    // timestamp. Same rule as `token.service.ts`, which logs a body's length and never its value.
+    const { claims, properties, ...loggable } = reqBody;
+    log.info("Issue authorization request parameters", {
+      params: loggable,
+      ...(claims ? { claimNames: Object.keys(JSON.parse(claims)) } : {}),
+      ...(properties ? { propertyCount: properties.length } : {}),
+    });
 
     const response = await this.authleteApi.authorization.issue({
       serviceId,
