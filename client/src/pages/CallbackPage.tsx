@@ -7,6 +7,7 @@ import {
   CLIENT_ID,
   CLIENT_SECRET,
   ISSUER,
+  JWKS_ENDPOINT,
   TOKEN_ENDPOINT,
   getRedirectUri,
 } from '@/config';
@@ -14,6 +15,10 @@ import { tokenService } from '@/services';
 import type { TokenResponseWithNonce } from '@/services/token.service';
 import { createProof } from '@/services/dpop.service';
 import type { JWK } from '@/services/crypto-utils';
+import { readJarmResponse } from '@/utils/jarm';
+// Aliased: `JWK` above is a *private* key read out of session storage, and two types differing only
+// in capitalisation in one file is a mistake waiting to be made. This one is a JWKS member.
+import type { Jwk as JwksKey } from '@/utils/jwt';
 import { createClientAssertion } from '@/services/client-assertion.service';
 import { useToken } from '@/context/TokenContext';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
@@ -21,6 +26,7 @@ import { Button } from '@/components/ui/Button';
 import { TokenOutcome } from '@/components/ui/TokenOutcome';
 import { TokenRequestPanel } from '@/components/auth/TokenRequestPanel';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
+import { JwtInspector } from '@/components/ui/JwtInspector';
 import { Spinner } from '@/components/ui/Spinner';
 import type { TokenResponse } from '@/types';
 import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
@@ -94,6 +100,24 @@ const CallbackPage = () => {
    */
   const startedRef = useRef<string | null>(null);
 
+  /**
+   * The signed authorization response, kept so it can be *read* rather than only acted on.
+   *
+   * A JARM response is the only artefact in this flow the page previously consumed and then discarded:
+   * `readJarmResponse` returns parameters, and the JWS that carried them — its `alg`, its `kid`, its
+   * `exp`, and the fact that it is signed at all — went nowhere. On a debugger that exists to show
+   * evidence, and which already owns `JwtInspector` for exactly this, that is the wrong thing to throw
+   * away. It matters most on the failing cases: "the signature does not verify" is an assertion until
+   * you can see the token it is about.
+   *
+   * **Deliberately its own hook rather than a sixth field on `CallbackState`.** Those five fields are
+   * set together, atomically, by a dozen `setState` calls that each write all of them — that is what
+   * makes the early returns safe to read. This value is orthogonal: it records what *arrived*, is set
+   * once before any check runs, and must survive every one of those outcomes unchanged. Folding it in
+   * would mean editing twelve literals for a field none of them has an opinion about.
+   */
+  const [jarmJwt, setJarmJwt] = useState<string | null>(null);
+
   useEffect(() => {
     const search = window.location.search;
     if (startedRef.current === search) return;
@@ -113,9 +137,64 @@ const CallbackPage = () => {
 
     const processCallback = async () => {
       const url = new URL(window.location.href);
-      const code = url.searchParams.get('code');
-      const stateParam = url.searchParams.get('state');
-      const errorParam = url.searchParams.get('error');
+
+      /**
+       * JARM first, because under `response_mode=jwt` there are no parameters to read.
+       *
+       * A Message Signing response arrives as one `response=<JWS>` parameter carrying `code`, `state`,
+       * `iss` and any error *inside* it. Everything below this block reads `params`, so both response
+       * shapes converge here and the `state` binding, the RFC 9207 check and the exchange are the same
+       * code either way — the alternative was a second copy of all three, which is how one of them
+       * ends up fixed and the other not.
+       *
+       * **Fail closed.** A `response` that cannot be verified sets an error and returns; it never falls
+       * through to the bare query string, or a forged JWT beside a real `?code=` would be ignored in
+       * favour of the attacker's parameters.
+       */
+      let params = url.searchParams;
+      const jarmResponse = url.searchParams.get('response');
+      if (jarmResponse) {
+        // Before any check, so a response that fails one is still on screen to read. The
+        // authorization code inside is already in the address bar and in the trace panel, so this
+        // discloses nothing the page was not showing.
+        setJarmJwt(jarmResponse);
+        let jwks: JwksKey[];
+        try {
+          jwks = (await tokenService.getJwks()).keys as JwksKey[];
+        } catch (e) {
+          // A JWKS that cannot be fetched is a different failure from a signature that does not
+          // verify, and reporting the token as invalid would send the reader to the wrong place.
+          setState({
+            error: `The authorization response is a signed JWT (JARM), but its signature could not be checked: the JWK Set at ${JWKS_ENDPOINT} could not be fetched — ${e instanceof Error ? e.message : 'unknown error'}.`,
+            loading: false,
+            tokenResponse: null,
+            issWarning: null,
+            sentRequest: {},
+          });
+          return;
+        }
+        const outcome = await readJarmResponse(jarmResponse, jwks, {
+          issuer: ISSUER,
+          // The same expression the exchange below uses, so the `aud` this checks is the client the
+          // code will be redeemed as. The FAPI wizard writes it at key generation time.
+          clientId: readKey(SESSION_KEYS.authzClientId) || CLIENT_ID,
+        });
+        if (!outcome.ok) {
+          setState({
+            error: outcome.error,
+            loading: false,
+            tokenResponse: null,
+            issWarning: null,
+            sentRequest: {},
+          });
+          return;
+        }
+        params = outcome.params;
+      }
+
+      const code = params.get('code');
+      const stateParam = params.get('state');
+      const errorParam = params.get('error');
 
       if (errorParam) {
         // `error_description` and `error_uri` were being discarded, which threw away the useful half of
@@ -123,8 +202,8 @@ const CallbackPage = () => {
         // server says *what* was wrong. The full string is handed to `ErrorExplainer` below, which
         // decodes the code and any `[Annnnnn]` inside the description.
         const parts = [`error=${errorParam}`];
-        const description = url.searchParams.get('error_description');
-        const errorUri = url.searchParams.get('error_uri');
+        const description = params.get('error_description');
+        const errorUri = params.get('error_uri');
         if (description) parts.push(`error_description="${description}"`);
         if (errorUri) parts.push(`error_uri="${errorUri}"`);
         setState({
@@ -213,7 +292,7 @@ const CallbackPage = () => {
        * failed comparison rather than as absence, because a value that is present and not a URL is a
        * stronger signal than nothing at all.
        */
-      const issParam = url.searchParams.get('iss');
+      const issParam = params.get('iss');
       const expectedOrigin = originOf(API_BASE_URL);
       let issWarning: string | null = null;
 
@@ -398,6 +477,39 @@ const CallbackPage = () => {
           </div>
         )}
         {!state.loading && state.error && <ErrorExplainer error={state.error} />}
+
+        {/*
+          The signed authorization response, on **both** outcomes and before the token request, because
+          that is the order the two arrived in.
+
+          Outside the error and success branches on purpose: the case with most to teach is the one where
+          verification failed, and a claim set that looks perfectly reasonable beside "the signature does
+          not verify" is the whole point — legible is not the same as authentic. `JwtInspector` fetches
+          the JWK Set and scores the signature on its own, so the reader can reach the same verdict the
+          page reached, by pressing the button rather than by trusting the sentence.
+        */}
+        {!state.loading && jarmJwt && (
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-foreground mb-1.5">
+              The signed authorization response (JARM)
+            </p>
+            <p className="text-xs text-muted-foreground mb-1.5">
+              Under <code className="text-foreground-muted">response_mode=jwt</code> the whole
+              response — <code className="text-foreground-muted">code</code>,{' '}
+              <code className="text-foreground-muted">state</code>,{' '}
+              <code className="text-foreground-muted">iss</code> — arrives inside this one JWS
+              instead of on the query string.
+            </p>
+            {/*
+              `defaultOpen` because the prop's default is written for the token vault — "off by
+              default so a vault entry stays compact", where a dozen inspectors share a screen. There
+              is exactly one of these, and it is the artefact that just decided the outcome; leaving
+              its claims behind a disclosure triangle on the failure path hides the only thing worth
+              reading.
+            */}
+            <JwtInspector token={jarmJwt} label="authorization response" defaultOpen />
+          </div>
+        )}
 
         {/*
           The request, explained, on **both** outcomes.

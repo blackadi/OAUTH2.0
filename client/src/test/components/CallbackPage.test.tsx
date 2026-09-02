@@ -310,3 +310,253 @@ describe('a successful exchange', () => {
     expect(screen.getByText(/unverified/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * **JARM — `response_mode=jwt`, which this page could not read at all.**
+ *
+ * Once a scope carries Authlete's `fapi2: ms-authres` attribute the authorization response is one
+ * signed `response=<JWS>` parameter and there is no bare `code`, `state` or `iss` on the query string.
+ * Every check above reads those three, so a correct Message Signing response was reported as *"Missing
+ * authorization code in callback URL"* — and the FAPI 2.0 wizard never reached this page in the first
+ * place, because its request object omitted `response_mode` and the server error-redirected with
+ * `[A309301]` (measured live 2026-09-02).
+ *
+ * The signatures here are real. The point of `readJarmResponse` is the difference between a JWT that
+ * verifies and one that merely decodes, and a stubbed verification would assert the decode.
+ */
+describe('JARM response_mode=jwt', () => {
+  const AS_ISSUER = 'http://localhost:3000';
+  const enc = new TextEncoder();
+
+  function b64url(bytes: Uint8Array | ArrayBuffer): string {
+    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    let binary = '';
+    for (const byte of view) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  async function signedResponse(claims: Record<string, unknown>) {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+      'sign',
+      'verify',
+    ]);
+    const jwk = (await crypto.subtle.exportKey('jwk', pair.publicKey)) as Record<string, unknown>;
+    jwk.kid = 'as-key';
+    const head = b64url(enc.encode(JSON.stringify({ alg: 'ES256', typ: 'JWT', kid: 'as-key' })));
+    const body = b64url(enc.encode(JSON.stringify(claims)));
+    const signature = await crypto.subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      pair.privateKey,
+      enc.encode(`${head}.${body}`),
+    );
+    // The page fetches the key set to check the signature against; that fetch failing is reported as
+    // itself rather than as an invalid token, which is why it is a separate spy.
+    vi.spyOn(tokenService, 'getJwks').mockResolvedValue({
+      keys: [jwk],
+    } as unknown as Awaited<ReturnType<typeof tokenService.getJwks>>);
+    return `${head}.${body}.${b64url(signature)}`;
+  }
+
+  function primed() {
+    sessionStorage.setItem('oauth_state', 'same');
+    sessionStorage.setItem('pkce_code_verifier', 'v1');
+    sessionStorage.setItem('authz_client_id', 'fapi-client-1');
+  }
+
+  const claims = (extra: Record<string, unknown> = {}) => ({
+    iss: AS_ISSUER,
+    aud: 'fapi-client-1',
+    exp: Math.floor(Date.now() / 1000) + 300,
+    code: 'jarm-code-1',
+    state: 'same',
+    ...extra,
+  });
+
+  it('redeems the code carried inside the signed response', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    primed();
+    const jwt = await signedResponse(claims());
+    at(`?response=${encodeURIComponent(jwt)}`);
+
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+    // The code came from inside the JWT — there is none on the query string to fall back to.
+    expect(exchange.mock.calls[0][0]).toMatchObject({ code: 'jarm-code-1', code_verifier: 'v1' });
+  });
+
+  it('binds on the state inside the JWT, and stops on a mismatch', async () => {
+    const exchange = vi.spyOn(tokenService, 'exchangeCodeForToken');
+    primed();
+    const jwt = await signedResponse(claims({ state: 'attacker-1' }));
+    at(`?response=${encodeURIComponent(jwt)}`);
+
+    expect(await screen.findByText(/State mismatch/i)).toBeInTheDocument();
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The reason the signature is checked rather than the payload merely decoded. A tampered response
+   * decodes perfectly — its claims are legible, and legible reads as authoritative.
+   */
+  it('refuses a tampered response and never redeems its code', async () => {
+    const exchange = vi.spyOn(tokenService, 'exchangeCodeForToken');
+    primed();
+    const jwt = await signedResponse(claims());
+    const [head, , signature] = jwt.split('.');
+    const forged = [
+      head,
+      b64url(enc.encode(JSON.stringify(claims({ code: 'attacker-code' })))),
+      signature,
+    ].join('.');
+    at(`?response=${encodeURIComponent(forged)}`);
+
+    expect(await screen.findByText(/signature was not verified/i)).toBeInTheDocument();
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * **Fail closed rather than fall through.** A forged JWT arriving beside a real `?code=` must not
+   * cause the page to shrug and read the query string instead — that would hand the attacker's
+   * parameters the outcome.
+   */
+  it('does not fall back to bare query parameters when the JWT is bad', async () => {
+    const exchange = vi.spyOn(tokenService, 'exchangeCodeForToken');
+    primed();
+    await signedResponse(claims());
+    at('?response=not-a-jwt&code=abc&state=same');
+
+    expect(await screen.findByText(/not a decodable JWS/i)).toBeInTheDocument();
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a signed error response as an error, not as a missing code', async () => {
+    primed();
+    const jwt = await signedResponse(
+      claims({ code: undefined, error: 'access_denied', error_description: 'Consent refused.' }),
+    );
+    at(`?response=${encodeURIComponent(jwt)}`);
+
+    // `findAllByText`: the explainer prints the raw string and also badges the decoded code, so the
+    // error legitimately appears more than once.
+    expect((await screen.findAllByText(/access_denied/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Missing authorization code/i)).not.toBeInTheDocument();
+  });
+
+  it('reports an unfetchable JWK Set as itself rather than as a bad signature', async () => {
+    primed();
+    const jwt = await signedResponse(claims());
+    vi.spyOn(tokenService, 'getJwks').mockRejectedValue(new Error('502 Bad Gateway'));
+    at(`?response=${encodeURIComponent(jwt)}`);
+
+    expect(await screen.findByText(/could not be fetched/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The signed response is *readable*, not merely acted on.
+ *
+ * `readJarmResponse` returns parameters and the JWS that carried them was discarded — on a debugger
+ * whose premise is showing evidence, and which already owns `JwtInspector` for every other JWS it
+ * handles. The failing case is the one that needed it most: "the signature does not verify" is an
+ * assertion until the reader can see the token it is about, and a tampered claim set that looks
+ * entirely reasonable next to that sentence is the lesson.
+ */
+describe('the JARM response is shown, on both outcomes', () => {
+  const AS_ISSUER = 'http://localhost:3000';
+  const enc = new TextEncoder();
+
+  function b64url(bytes: Uint8Array | ArrayBuffer): string {
+    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    let binary = '';
+    for (const byte of view) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  }
+
+  async function signed(extra: Record<string, unknown> = {}) {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+      'sign',
+      'verify',
+    ]);
+    const jwk = (await crypto.subtle.exportKey('jwk', pair.publicKey)) as Record<string, unknown>;
+    jwk.kid = 'as-key';
+    vi.spyOn(tokenService, 'getJwks').mockResolvedValue({
+      keys: [jwk],
+    } as unknown as Awaited<ReturnType<typeof tokenService.getJwks>>);
+    const head = b64url(enc.encode(JSON.stringify({ alg: 'ES256', typ: 'JWT', kid: 'as-key' })));
+    const body = b64url(
+      enc.encode(
+        JSON.stringify({
+          iss: AS_ISSUER,
+          aud: 'fapi-client-1',
+          exp: Math.floor(Date.now() / 1000) + 300,
+          code: 'jarm-code-1',
+          state: 'same',
+          ...extra,
+        }),
+      ),
+    );
+    const signature = await crypto.subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      pair.privateKey,
+      enc.encode(`${head}.${body}`),
+    );
+    return { jwt: `${head}.${body}.${b64url(signature)}`, head, body };
+  }
+
+  function primed() {
+    sessionStorage.setItem('oauth_state', 'same');
+    sessionStorage.setItem('pkce_code_verifier', 'v1');
+    sessionStorage.setItem('authz_client_id', 'fapi-client-1');
+  }
+
+  it('inspects it after a successful exchange', async () => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    primed();
+    const { jwt } = await signed();
+    at(`?response=${encodeURIComponent(jwt)}`);
+
+    expect(await screen.findByText(/signed authorization response \(JARM\)/i)).toBeInTheDocument();
+    // The inspector's own header row, which is what distinguishes it from a raw string dump. `All`,
+    // because the algorithm shows in both the header table and the signature row.
+    expect((await screen.findAllByText(/ES256/)).length).toBeGreaterThan(0);
+    // The claims are open, not behind a disclosure triangle — see `defaultOpen` at the call site.
+    expect(screen.getAllByText(/jarm-code-1/).length).toBeGreaterThan(0);
+  });
+
+  it('inspects it when verification failed, which is the case with most to read', async () => {
+    primed();
+    const { jwt, head } = await signed();
+    const forged = [
+      head,
+      b64url(
+        enc.encode(
+          JSON.stringify({
+            iss: AS_ISSUER,
+            aud: 'fapi-client-1',
+            exp: Math.floor(Date.now() / 1000) + 300,
+            code: 'attacker-code',
+            state: 'same',
+          }),
+        ),
+      ),
+      jwt.split('.')[2],
+    ].join('.');
+    at(`?response=${encodeURIComponent(forged)}`);
+
+    await screen.findByText(/signature was not verified/i);
+    // The token is on screen beside the refusal, not swallowed by it.
+    expect(screen.getByText(/signed authorization response \(JARM\)/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/attacker-code/).length).toBeGreaterThan(0);
+  });
+
+  it('shows nothing of the sort for an ordinary query-string callback', async () => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    sessionStorage.setItem('oauth_state', 'same');
+    sessionStorage.setItem('pkce_code_verifier', 'v1');
+    at('?code=abc&state=same');
+
+    await screen.findByText(/Successfully obtained tokens/i);
+    expect(screen.queryByText(/signed authorization response \(JARM\)/i)).not.toBeInTheDocument();
+  });
+});

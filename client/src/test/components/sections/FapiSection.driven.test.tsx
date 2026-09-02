@@ -176,6 +176,18 @@ describe('FapiSection — the test flow wizard', () => {
     expect(claims.response_type).toBe('code');
     expect(claims.nbf, 'the service sets nbfOptional: false').toBeTruthy();
 
+    /**
+     * **The regression this assertion exists for.** `myscope` carries `fapi2: ms-authres`, so the
+     * authorization *response* must be a signed JWT and the request has to ask for it. Without this
+     * claim Authlete defaults to `response_mode=query`, refuses it, and error-redirects with
+     * `[A309301] The value of 'response_mode' must be 'jwt'.` — which is a *front-channel* failure,
+     * so it produces no rejected request, no console error and no trace row on the page that sent
+     * it. Nothing in the suite could see it; the wizard simply never got past step 2.
+     */
+    expect(claims.response_mode, 'the `fapi2: ms-authres` attribute makes JARM mandatory').toBe(
+      'jwt',
+    );
+
     // A proof **factory**, not a proof: `dpopRequest` re-signs on a `use_dpop_nonce` refusal and the
     // nonce lives inside the signature, so a finished string could never be retried.
     expect(typeof proofFactory).toBe('function');

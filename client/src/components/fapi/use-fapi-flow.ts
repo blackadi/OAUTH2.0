@@ -139,6 +139,22 @@ export function useFapiFlow() {
           code_challenge: pkce.codeChallenge,
           code_challenge_method: 'S256',
           state,
+          /**
+           * **Required, not decorative.** `myscope` carries the `fapi2: ms-authres` attribute, which
+           * is the second half of Message Signing: the authorization *response* must be a signed JWT
+           * (JARM). Omitting this left Authlete defaulting to `response_mode=query`, which the
+           * profile forbids — so every run of this wizard died at step 2 with an error redirect
+           * carrying `[A309301] The value of 'response_mode' must be 'jwt'.`
+           *
+           * `scripts/fapi2-conformance.mjs` has sent this since Message Signing was turned on (see
+           * its `USE_JARM`, which defaults to `USE_JAR` for exactly this reason). The wizard was the
+           * one FAPI path that never got it, and nothing could see that: a front-channel refusal
+           * produces no failing request, no console error and no trace row on the page that sent it.
+           *
+           * The response therefore comes back as `?response=<JWS>` with no bare `code`, `state` or
+           * `iss` — `readJarmResponse` in `utils/jarm.ts` is the other end of this change.
+           */
+          response_mode: 'jwt',
         },
       );
 
