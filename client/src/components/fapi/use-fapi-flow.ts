@@ -3,12 +3,7 @@ import { toast } from 'sonner';
 import { parService, tokenService } from '@/services';
 import type { ParSuccessResponse } from '@/services/par.service';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
-import {
-  generateKeyPair,
-  createProof,
-  computeAth,
-  type DPoPKeyPair,
-} from '@/services/dpop.service';
+import { generateKeyPair, createProof, type DPoPKeyPair } from '@/services/dpop.service';
 import {
   generateSigningKeyPair,
   createClientAssertion,
@@ -23,10 +18,10 @@ import {
   ISSUER,
   PAR_ENDPOINT,
   AUTHORIZATION_ENDPOINT,
-  USERINFO_ENDPOINT,
 } from '@/config';
 import { createPkcePair } from '@/pkce';
-import { SESSION_KEYS, writeKey } from '@/services/session-keys';
+import { SESSION_KEYS, writeKey, readJsonKey, type SessionKey } from '@/services/session-keys';
+import type { JWK, CryptoKeyPair } from '@/services/crypto-utils';
 import { navigateTo } from '@/services/trace-store';
 
 /**
@@ -44,6 +39,31 @@ import { navigateTo } from '@/services/trace-store';
  * bound to the token from the callback. Each step consumes what the last produced, and a step that
  * quietly consumes nothing is the failure mode.
  */
+/**
+ * Read a key pair back out of the session, because the wizard's own memory does not survive step 2.
+ *
+ * **The defect this closes.** Both key pairs lived only in `useState`, and step 2 is
+ * `window.location.href = url` — a full-document navigation that discards them. Coming back from the
+ * callback left a section that had forgotten everything it had done while `sessionStorage` still held
+ * every byte of it, which produced three separate wrong behaviours: step 3 was **enabled and crashing**
+ * (gated on the token, which is session-backed, while dereferencing a key pair that was `null` —
+ * measured 2026-09-02 as `TypeError: Cannot read properties of null (reading 'privateKey')`, deferred
+ * into the proof factory where a mocked test never invokes it); both *Generate* buttons re-enabled, so
+ * one press silently replaced the key the live token is bound to and turned every later call into an
+ * unexplainable 401; and the registered JWK Set vanished from the screen mid-run.
+ *
+ * `kid` comes off the public JWK rather than from its own key, because `generateP256KeyPair` stamps it
+ * on both halves before returning — one fact, one place, and no fourth entry to keep in step.
+ */
+function restoreKeyPair(privateRef: SessionKey, publicRef: SessionKey): CryptoKeyPair | null {
+  const privateKey = readJsonKey<JWK>(privateRef);
+  const publicKey = readJsonKey<JWK>(publicRef);
+  // Both halves or neither: a pair missing one side cannot sign *and* cannot be registered, and
+  // returning a half of it would put the section back in the state this function exists to end.
+  if (!privateKey || !publicKey) return null;
+  return { privateKey, publicKey, kid: publicKey.kid ?? '' };
+}
+
 export function useFapiFlow() {
   const { getAccessToken } = useToken();
   // The FAPI client and scope, not the SPA's general-purpose ones — see `FAPI_CLIENT_ID` in config.
@@ -53,8 +73,14 @@ export function useFapiFlow() {
   // forbids and this service refuses. See `FAPI_REDIRECT_URI`.
   const [wizRedirectUri, setWizRedirectUri] = useState(FAPI_REDIRECT_URI);
   const [wizScopes, setWizScopes] = useState(FAPI_SCOPES);
-  const [wizDpopKeyPair, setWizDpopKeyPair] = useState<DPoPKeyPair | null>(null);
-  const [wizSigningKey, setWizSigningKey] = useState<SigningKeyPair | null>(null);
+  // Lazy initialisers, not `null`: the redirect in step 2 destroys this hook, and these are the only
+  // copies that survive it. See `restoreKeyPair`.
+  const [wizDpopKeyPair, setWizDpopKeyPair] = useState<DPoPKeyPair | null>(() =>
+    restoreKeyPair(SESSION_KEYS.dpopPrivateKey, SESSION_KEYS.dpopPublicKey),
+  );
+  const [wizSigningKey, setWizSigningKey] = useState<SigningKeyPair | null>(() =>
+    restoreKeyPair(SESSION_KEYS.fapiSigningKey, SESSION_KEYS.fapiSigningPublicKey),
+  );
   /**
    * Typed by `ParSuccessResponse`, not by an inline shape — and that is the fix, not a tidy-up.
    *
@@ -188,18 +214,30 @@ export function useFapiFlow() {
     navigateTo(
       authorizeUrl,
       'authorize (FAPI 2.0, PAR) — front channel, browser leaves for the authorization endpoint',
+      // Step 3 is what comes next, and it is *after* the redirect — which is why it was the step
+      // nobody reached. `#fapi-step-3` exists on the element already and `useHashScroll` (wired in
+      // `AppLayout`) scrolls and focuses it, so the callback returns the reader to the exact step.
+      '/fapi#fapi-step-3',
     );
   };
 
+  /**
+   * Step 3 goes through `tokenService.userInfoForToken`, which owns the scheme decision and sources the
+   * DPoP key from the session.
+   *
+   * It used to build the proof from `wizDpopKeyPair!` — a second copy of a decision `TokenOpsSection`
+   * already made correctly, and the `!` is what let the compiler miss that this hook's state is empty
+   * after step 2's redirect. Two implementations of "present this token the way it must be presented"
+   * had already diverged into one that worked and one that threw.
+   */
   const handleWizUserinfo = async () => {
     const { error } = await wizCall('userinfo', async () => {
       const accessToken = getAccessToken();
       if (!accessToken)
         throw new Error('No access token stored in context. Complete the authorize step first.');
-      const athValue = await computeAth(accessToken);
-      const { data } = await tokenService.userInfoWithDpop(accessToken, (nonce) =>
-        createProof(wizDpopKeyPair!.privateKey, 'POST', USERINFO_ENDPOINT, athValue, nonce),
-      );
+      // Always DPoP here: a FAPI 2.0 token from this client is sender-constrained by definition, and
+      // asking the context would let a stale bearer token from another section pick the wrong scheme.
+      const data = await tokenService.userInfoForToken(accessToken, true);
       setWizUserinfoResult(data as Record<string, unknown>);
     });
     if (error) {
@@ -224,6 +262,14 @@ export function useFapiFlow() {
     userinfoResult: wizUserinfoResult,
     /** `getAccessToken()` at render time, so the step-3 gate reflects the callback having run. */
     hasToken: Boolean(getAccessToken()),
+    /**
+     * Both halves of what step 3 needs, so its button is gated on the key *and* the token.
+     *
+     * Gating on the token alone is what made the button enabled and crashing: the token survives the
+     * redirect in session storage and the key pair did not. Each step gates on the field it is about to
+     * use — the same rule this section learned from `request_uri`.
+     */
+    hasDpopKey: Boolean(wizDpopKeyPair),
     generateDpopKey: handleWizGenerateDpopKey,
     generateSigningKey: handleWizGenerateSigningKey,
     pushPar: handleWizPar,

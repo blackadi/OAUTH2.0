@@ -62,6 +62,19 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
             <code className="text-muted-foreground">fapi2=sp</code> attribute and your client uses{' '}
             <code className="text-muted-foreground">PRIVATE_KEY_JWT</code> auth method.
           </p>
+          {/*
+            Both buttons stay enabled with a token held, because starting a second run is legitimate —
+            but replacing the DPoP key invalidates the token already in the vault, which the key is
+            bound to (`cnf.jkt`), and the resulting refusal names the proof rather than the cause.
+            Stated instead of prevented: the trap was that it happened silently.
+          */}
+          {flow.hasToken && (flow.dpopKeyPair || flow.signingKey) && (
+            <p className="text-xs text-warning-text mb-3">
+              A token from a previous run is loaded. Generating a new DPoP key replaces the one that
+              token is bound to, and every call made with it afterwards will be refused — start a
+              fresh run from Step 1 if you do.
+            </p>
+          )}
           <div className="flex gap-2">
             <Button
               onClick={flow.generateSigningKey}
@@ -161,13 +174,26 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
             onClick={flow.fetchUserinfo}
             loading={flow.loading === 'userinfo'}
             size="sm"
-            disabled={!flow.hasToken}
+            disabled={!flow.hasToken || !flow.hasDpopKey}
           >
             Call Userinfo with DPoP
           </Button>
           {!flow.hasToken && (
             <p className="text-xs text-warning-text mt-1">
               No access token found. Complete Step 2 first.
+            </p>
+          )}
+          {/*
+            The token can be present while the key is not, and that combination is what made this
+            button enabled and crashing — the token lives in session storage and survives step 2's
+            redirect, and the key pair used to live only in this hook's memory, which does not. RFC
+            9449 §7.1 gives a bound token no bearer alternative, so there is no degraded call to offer.
+          */}
+          {flow.hasToken && !flow.hasDpopKey && (
+            <p className="text-xs text-warning-text mt-1">
+              An access token is loaded but no DPoP key is in this session, so no valid proof can be
+              built for it. A sender-constrained token has no bearer alternative — generate a key
+              above and run the flow again.
             </p>
           )}
           {flow.userinfoResult && (

@@ -111,13 +111,26 @@ export function seedTokens(tokens: Record<string, unknown> = {}): void {
   );
 }
 
-/** Seed a DPoP key pair, for the sections whose sender-constrained path branches on its presence. */
+/**
+ * Seed a DPoP key pair, for the sections whose sender-constrained path branches on its presence.
+ *
+ * **The public half is seeded too, and that is not symmetry for its own sake.** The FAPI wizard restores
+ * its key pair from the session after step 2's redirect and needs both halves — one to sign the proof,
+ * one to show as the JWK Set — so a fixture with only the private key reproduces a state the app never
+ * actually reaches and would let a half-restored pair pass.
+ */
 export function seedDpopKey(): void {
-  sessionStorage.setItem(
-    'dpop_private_key',
-    JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'x', y: 'y', d: 'd' }),
-  );
+  const publicJwk = { kty: 'EC', crv: 'P-256', x: 'x', y: 'y', kid: 'seeded-kid' };
+  sessionStorage.setItem('dpop_private_key', JSON.stringify({ ...publicJwk, d: 'd' }));
+  sessionStorage.setItem('dpop_public_key', JSON.stringify(publicJwk));
   sessionStorage.setItem('dpop_kid', 'seeded-kid');
+}
+
+/** The `private_key_jwt` signing pair, the FAPI wizard's other durable key. */
+export function seedFapiSigningKey(): void {
+  const publicJwk = { kty: 'EC', crv: 'P-256', x: 'sx', y: 'sy', kid: 'sign-kid', alg: 'ES256' };
+  sessionStorage.setItem('fapi_signing_private_key', JSON.stringify({ ...publicJwk, d: 'sd' }));
+  sessionStorage.setItem('fapi_signing_pub_jwk', JSON.stringify(publicJwk));
 }
 
 /** Select a tab by its visible label, for the sections whose operations are tabs. */

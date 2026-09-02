@@ -11,7 +11,12 @@ import {
   expectCall,
   expectReadsBack,
   resetSectionState,
+  seedTokens,
+  seedDpopKey,
+  seedFapiSigningKey,
 } from '@/test/helpers/drive-section';
+import { tokenService } from '@/services';
+import { generateKeyPair } from '@/services/dpop.service';
 
 /**
  * The FAPI 2.0 wizard — where the third dead-flow class was found, and where **no component test
@@ -323,5 +328,111 @@ describe('FapiSection — every wizard step is addressable', () => {
 
     expect(document.getElementById('fapi-step-1')).toHaveTextContent(/Push Authorization Request/i);
     expect(document.getElementById('fapi-step-3')).toHaveTextContent(/Call Userinfo with DPoP/i);
+  });
+});
+
+/**
+ * **Step 3, mounted the way it is actually reached — after the redirect.**
+ *
+ * Every other case in this file drives the wizard on one unbroken page, and that is precisely why the
+ * suite was green over a step that could not work. Step 2 is `window.location.href = url`, a
+ * full-document navigation: the hook's `useState` is gone, and the section that comes back has
+ * forgotten both key pairs while `sessionStorage` still holds every byte of them.
+ *
+ * Measured before the fix (2026-09-02): the step-3 button was **enabled** — it was gated on the token,
+ * which is session-backed and therefore present — and its proof factory threw `TypeError: Cannot read
+ * properties of null (reading 'privateKey')`. The crash is deferred *into the factory*, so a test that
+ * mocks `userInfoWithDpop` and never invokes the factory it was handed sees a green pass over a button
+ * that cannot work. Both cases below invoke it.
+ */
+describe('FapiSection — coming back from the callback', () => {
+  /** The exact state the browser is in on return: token in the vault, keys in the session, hook empty. */
+  function afterRedirect() {
+    seedTokens({ token_type: 'DPoP', access_token: 'fapi-at-1' });
+    seedDpopKey();
+    seedFapiSigningKey();
+  }
+
+  it('restores both key pairs rather than showing a section that forgot what it did', async () => {
+    afterRedirect();
+    mountSection(<FapiSection />);
+
+    // The JWK Set is what the reader was told to register in the Authlete console. Losing it mid-run
+    // means it cannot be checked against what the server has.
+    await expectReadsBack(/sign-kid/, 'the restored client-auth public key');
+    expect(
+      screen.getByRole('button', { name: /^Generate Client Auth Key$/i }),
+      'a restored key must close the button that would replace it',
+    ).toBeDisabled();
+  });
+
+  /**
+   * A **real** P-256 pair here, not `seedDpopKey`'s placeholder.
+   *
+   * The shared fixture exists for the sections that only branch on a key being present, and WebCrypto
+   * rejects it with `DataError: Invalid keyData` the moment anything tries to sign — which is the
+   * correct answer for a key made of the letters `x`, `y` and `d`. This case is the one that has to
+   * produce a signature, so it generates one and seeds both halves the way the wizard does.
+   */
+  it('enables step 3 and builds a real proof from the restored key', async () => {
+    afterRedirect();
+    const real = await generateKeyPair();
+    sessionStorage.setItem(SESSION_KEYS.dpopPrivateKey, JSON.stringify(real.privateKey));
+    sessionStorage.setItem(SESSION_KEYS.dpopPublicKey, JSON.stringify(real.publicKey));
+    // Capture the factory and call it exactly as the transport does on a nonce retry. Asserting only
+    // that the service was reached is what let the TypeError hide.
+    let proofOutcome = 'factory never invoked';
+    vi.spyOn(tokenService, 'userInfoWithDpop').mockImplementation(async (_at, proof) => {
+      try {
+        // `DpopProofSource` admits a finished string as well as a factory. Step 3 must pass a
+        // **factory** — a `use_dpop_nonce` retry needs a fresh signature and the nonce lives inside it
+        // — so anything else is the defect, not a shape to accommodate.
+        if (typeof proof !== 'function') {
+          proofOutcome = 'a finished proof was passed, which cannot be retried with a nonce';
+        } else {
+          const jws: string = await proof(undefined);
+          proofOutcome =
+            jws.split('.').length === 3 ? 'signed a compact JWS' : `unexpected: ${jws}`;
+        }
+      } catch (e) {
+        proofOutcome = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      }
+      return { data: { sub: 'admin' } };
+    });
+    mountSection(<FapiSection />);
+
+    expect(screen.getByRole('button', { name: /Call Userinfo with DPoP/i })).toBeEnabled();
+    press(/Call Userinfo with DPoP/i);
+
+    await waitFor(() => expect(proofOutcome).toBe('signed a compact JWS'));
+  });
+
+  /**
+   * The other half of the gate. A token can be present while the key is not — clear the session keys,
+   * keep the vault — and RFC 9449 §7.1 gives a bound token no bearer alternative, so there is no
+   * degraded call to offer. The button must be shut, not enabled and failing.
+   */
+  it('shuts step 3 when the token is present but the DPoP key is gone', async () => {
+    seedTokens({ token_type: 'DPoP' });
+    mountSection(<FapiSection />);
+
+    expect(
+      screen.getByRole('button', { name: /Call Userinfo with DPoP/i }),
+      'gated on the token alone, this button was enabled and crashing',
+    ).toBeDisabled();
+    expect(screen.getByText(/no DPoP key is in this session/i)).toBeInTheDocument();
+  });
+
+  /**
+   * Regenerating a key silently invalidates the token already in the vault — it is bound to the old one
+   * through `cnf.jkt`, and the refusal that follows names the proof rather than the cause. Stated rather
+   * than prevented, because starting a second run is legitimate.
+   */
+  it('warns before a new key can orphan the token already held', async () => {
+    afterRedirect();
+    mountSection(<FapiSection />);
+    expect(
+      screen.getByText(/Generating a new DPoP key replaces the one that token is bound to/i),
+    ).toBeInTheDocument();
   });
 });

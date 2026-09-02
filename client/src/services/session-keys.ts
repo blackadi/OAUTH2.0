@@ -52,6 +52,15 @@ export const SESSION_KEYS = {
   fapiSigningPublicKey: 'fapi_signing_pub_jwk',
 
   /**
+   * Where the browser was when it left for the authorization server, so the callback can send you back.
+   *
+   * Owned by `navigateTo` in `trace-store.ts`, which is already the single place the app leaves — the
+   * same pairing that makes forgetting to record the hop impossible makes forgetting the return path
+   * impossible. Read once, by `CallbackPage`.
+   */
+  returnTo: 'return_to',
+
+  /**
    * The request trace, so it survives the front-channel redirect.
    *
    * Owned by `trace-store.ts`. It is here rather than reaching for `sessionStorage` directly for the

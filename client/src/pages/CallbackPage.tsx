@@ -71,6 +71,21 @@ function originOf(value: string): string | null {
   }
 }
 
+/**
+ * Where to go back to, if the value in the session is a path this app may navigate to.
+ *
+ * Written by `navigateTo` from `window.location`, so in normal operation it is always ours. It is read
+ * back through a check anyway, because `sessionStorage` is writable by anything on the origin and this
+ * value is handed straight to `navigate()` — and a **protocol-relative** `//evil.example` is a URL, not
+ * a path, which is the exact shape that made `post_logout_redirect_uri` matching an open redirect on the
+ * server twice. Requiring a single leading slash rejects that, every absolute URL, and every scheme.
+ */
+function safeReturnTo(): string | null {
+  const value = readKey(SESSION_KEYS.returnTo);
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
+  return value;
+}
+
 const CallbackPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -117,6 +132,10 @@ const CallbackPage = () => {
    * would mean editing twelve literals for a field none of them has an opinion about.
    */
   const [jarmJwt, setJarmJwt] = useState<string | null>(null);
+
+  // Read once at mount rather than on every render: `navigateTo` rewrites it before the next departure,
+  // so re-reading could only ever return the same value or one from a flow that has not happened yet.
+  const [returnTo] = useState(safeReturnTo);
 
   useEffect(() => {
     const search = window.location.search;
@@ -546,10 +565,27 @@ const CallbackPage = () => {
             <TokenOutcome tokens={state.tokenResponse} />
           </div>
         )}
+        {/*
+          Back to where the flow started, not to the dashboard.
+
+          `/callback` is registered outside `AppLayout`, so this page has no sidebar and no nav and this
+          button was the only way out of it — and it went to `/`. Four sections leave through
+          `navigateTo` (Grant Flows, PAR, RAR and the FAPI wizard), so finishing any of them meant
+          navigating back and finding your place by hand. In the FAPI wizard that made step 3
+          effectively unreachable, because step 3 comes *after* the redirect.
+
+          The dashboard link stays beside it: this page is a dead end by construction, and replacing one
+          exit with another exit is not an improvement.
+        */}
         {!state.loading && (
-          <div className="mt-6">
+          <div className="mt-6 flex gap-2">
+            {returnTo && (
+              <Button onClick={() => navigate(returnTo)}>
+                Back to <code className="font-mono ml-1">{returnTo}</code>
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => navigate('/')}>
-              Return to Dashboard
+              {returnTo ? 'Dashboard' : 'Return to Dashboard'}
             </Button>
           </div>
         )}

@@ -149,8 +149,30 @@ export function recordNavigation(input: NavigationInput): TraceEntry {
  * writing `window.location.href` in a component, use this instead — and if a new call site genuinely
  * must not be recorded, say why at that call site rather than reaching past this.
  */
-export function navigateTo(url: string, label: string): void {
+export function navigateTo(url: string, label: string, returnTo?: string): void {
   recordNavigation({ url, label, direction: 'outbound' });
+  /**
+   * Remember where we were, for the same reason we record the hop: this is the only place that knows.
+   *
+   * `/callback` is registered **outside** `AppLayout` (`App.tsx`), so it renders with no sidebar and no
+   * nav — its only exit was a "Return to Dashboard" button. Four sections leave through here (Grant
+   * Flows, PAR, RAR and the FAPI wizard) and every one of them dropped you on the dashboard, so
+   * finishing a flow meant navigating back and finding your place by hand. In the FAPI wizard that is
+   * fatal to the lesson rather than merely annoying: step 3 is *after* the redirect, so the last step
+   * was effectively unreachable.
+   *
+   * Stored with `search` and `hash` because the hash is what makes a step addressable —
+   * `useHashScroll` is wired in `AppLayout` and every wizard step already carries an `id`, so
+   * `/fapi#fapi-step-3` returns the reader to the exact step that comes next.
+   */
+  writeKey(
+    SESSION_KEYS.returnTo,
+    // `returnTo` lets a caller name the step the reader should come back to rather than the one they
+    // left from — the FAPI wizard leaves at step 2 and the next thing to do is step 3. Reaching past
+    // this function to write the key directly is the thing the paragraph above forbids, so it is a
+    // parameter here instead.
+    returnTo ?? window.location.pathname + window.location.search + window.location.hash,
+  );
   window.location.href = url;
 }
 

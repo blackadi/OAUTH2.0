@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   recordTrace,
   getTraces,
   clearTraces,
+  navigateTo,
   recordNavigation,
   importTraces,
   subscribeToTraces,
@@ -10,6 +11,32 @@ import {
   redactBody,
   type TraceInput,
 } from '@/services/trace-store';
+
+/**
+ * Replace `window.location` with something that records `href` instead of navigating.
+ *
+ * jsdom treats an assignment to `href` as a navigation it cannot perform, and the point of `navigateTo`
+ * is that it does both things — records, then leaves — so the leaving has to be observable rather than
+ * suppressed.
+ */
+let realLocation: Location | undefined;
+function stubNavigation(pathname: string, search: string, hash: string): void {
+  if (!realLocation) realLocation = window.location;
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    writable: true,
+    value: { pathname, search, hash, href: '' },
+  });
+}
+function restoreNavigation(): void {
+  if (realLocation) {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: realLocation,
+    });
+  }
+}
 
 function entry(overrides: Partial<TraceInput> = {}): TraceInput {
   return {
@@ -282,5 +309,44 @@ describe('surviving a full-page navigation', () => {
     expect(() => recordTrace(entry({ url: 'https://as.example/api/token' }))).not.toThrow();
     expect(getTraces()).toHaveLength(1);
     setItem.mockRestore();
+  });
+});
+
+/**
+ * **Where the browser was when it left, recorded for the same reason the hop is.**
+ *
+ * `/callback` is registered outside `AppLayout`, so it renders with no sidebar and no nav and its only
+ * exit was a button going to `/`. Four sections leave through `navigateTo` — Grant Flows, PAR, RAR and
+ * the FAPI wizard — so finishing any of them dropped you on the dashboard to find your place by hand.
+ * In the FAPI wizard that made step 3 unreachable in practice, because step 3 comes *after* the
+ * redirect. `navigateTo` is the only place that knows where the flow started, which is why the return
+ * path is written here rather than in each of the four callers.
+ */
+describe('navigateTo remembers where to come back to', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    stubNavigation('/rar', '?tab=build', '#rar-step-2');
+  });
+  afterEach(restoreNavigation);
+
+  it('stores the path with its query and fragment', () => {
+    navigateTo('http://as.example/api/authorization', 'authorize');
+    expect(sessionStorage.getItem('return_to')).toBe('/rar?tab=build#rar-step-2');
+  });
+
+  it('still leaves for the authorization endpoint', () => {
+    navigateTo('http://as.example/api/authorization', 'authorize');
+    expect(window.location.href).toBe('http://as.example/api/authorization');
+  });
+
+  /**
+   * A caller may name the step the reader should come back *to* rather than the one they left from —
+   * the FAPI wizard leaves at step 2 and the next thing to do is step 3, which is the step nobody
+   * reached. It is a parameter rather than a direct write because reaching past `navigateTo` is what
+   * left five of seven front-channel call sites unrecorded in the first place.
+   */
+  it('lets the caller name a different step to return to', () => {
+    navigateTo('http://as.example/api/authorization', 'authorize', '/fapi#fapi-step-3');
+    expect(sessionStorage.getItem('return_to')).toBe('/fapi#fapi-step-3');
   });
 });

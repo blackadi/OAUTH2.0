@@ -10,6 +10,9 @@ import {
 import { http } from './http';
 import { tokenResponseSchema, asMetadataSchema, introspectionSchema } from './schemas';
 import { dpopRequest, type DpopProofSource } from './dpop-fetch';
+import { createProof, computeAth } from './dpop.service';
+import { SESSION_KEYS, readJsonKey } from './session-keys';
+import type { JWK } from './crypto-utils';
 import type { TokenRequest, TokenResponse, JwksResponse } from '@/types';
 
 async function exchangeCodeForToken(tokenRequest: TokenRequest): Promise<TokenResponse> {
@@ -175,6 +178,51 @@ async function userInfoWithDpop(
 }
 
 /**
+ * Call UserInfo with whatever this particular token requires. **The one place that decision is made.**
+ *
+ * **Why this exists.** The choice between `Bearer` and `DPoP` was made in two components — `TokenOps`
+ * and the FAPI wizard's step 3 — and the two had already diverged, with only one of them correct.
+ * `TokenOps` reads the private key out of `sessionStorage`; the wizard read it from a `useState` in
+ * `use-fapi-flow`, which the authorization redirect destroys. Measured 2026-09-02: after the callback
+ * the wizard's step-3 button is *enabled* (it is gated on the token, which is session-backed and
+ * therefore present) and its proof factory throws `TypeError: Cannot read properties of null (reading
+ * 'privateKey')`. The crash is deferred into the factory, so a test that mocks `userInfoWithDpop`
+ * without invoking it sees nothing wrong — which is why the suite was green.
+ *
+ * The key comes from `sessionStorage` and never from a caller's memory, because that is the only copy
+ * that survives a full-page navigation, and every flow that produces a DPoP-bound token here gets one.
+ *
+ * **A bound token has no bearer fallback.** RFC 9449 §7.1 gives it no bearer option and §7.2 requires
+ * the resource to reject one; Authlete enforces it with `[A089311]`. So a missing key is reported as
+ * what it is rather than quietly downgraded — the downgrade produced a request that could not succeed,
+ * explained only by a vendor code.
+ *
+ * `ath` is REQUIRED when a proof accompanies an access token (§7.1) — and it is `ath`, not `sub`.
+ */
+async function userInfoForToken(accessToken: string, isDpopBound: boolean): Promise<unknown> {
+  // Through `tokenService`, not the local bindings. This composes the two published operations rather
+  // than reaching around them, so the scheme it picked stays observable from outside — the driven tests
+  // assert *"presents a bearer token with the Bearer scheme"* by watching which transport the button
+  // reached, and a direct local call makes that assertion silently unobservable rather than false.
+  if (!isDpopBound) return tokenService.userInfo(accessToken);
+
+  const dpopKey = readJsonKey<JWK>(SESSION_KEYS.dpopPrivateKey);
+  if (!dpopKey) {
+    throw new Error(
+      'This access token is DPoP-bound, but the DPoP private key is no longer in this session — so no valid proof can be built for it. RFC 9449 §7.1 gives a bound token no bearer alternative. Obtain a new token with DPoP enabled.',
+    );
+  }
+
+  const ath = await computeAth(accessToken);
+  // A factory, not a finished proof: `dpopRequest` re-signs on a `use_dpop_nonce` refusal and the
+  // nonce lives inside the signature, so a completed string could never be retried.
+  const { data } = await tokenService.userInfoWithDpop(accessToken, (nonce) =>
+    createProof(dpopKey, 'POST', USERINFO_ENDPOINT, ath, nonce),
+  );
+  return data;
+}
+
+/**
  * Both introspection endpoints require this deployment's admin Basic credentials.
  *
  * RFC 7662 §2.1 requires the endpoint to be protected, and until 2026-08-12 neither was — anyone could post
@@ -253,6 +301,7 @@ export const tokenService = {
   jwtBearerGrant,
   userInfo,
   userInfoWithDpop,
+  userInfoForToken,
   introspection,
   introspectionStandard,
   revocation,

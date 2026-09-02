@@ -560,3 +560,60 @@ describe('the JARM response is shown, on both outcomes', () => {
     expect(screen.queryByText(/signed authorization response \(JARM\)/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * **The way out of a page that has no nav.**
+ *
+ * `/callback` is registered outside `AppLayout` (`App.tsx`), so it renders with no sidebar and no
+ * links, and its only exit went to `/`. Four sections leave through `navigateTo` — Grant Flows, PAR,
+ * RAR and the FAPI wizard — so completing any flow dropped the reader on the dashboard to find their
+ * place again. For the FAPI wizard it was worse than friction: step 3 is *after* the redirect, so the
+ * final step of the flow was effectively unreachable.
+ */
+describe('returning to where the flow started', () => {
+  function primed() {
+    sessionStorage.setItem('oauth_state', 'same');
+    sessionStorage.setItem('pkce_code_verifier', 'v1');
+  }
+
+  it('offers the stored path, and keeps the dashboard as a second exit', async () => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    primed();
+    sessionStorage.setItem('return_to', '/fapi#fapi-step-3');
+    at('?code=abc&state=same');
+
+    expect(
+      await screen.findByRole('button', { name: /Back to.*\/fapi#fapi-step-3/i }),
+    ).toBeInTheDocument();
+    // Replacing one exit with another exit is not an improvement on a page that is a dead end.
+    expect(screen.getByRole('button', { name: /^Dashboard$/i })).toBeInTheDocument();
+  });
+
+  it('falls back to the dashboard when nothing was stored', async () => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    primed();
+    at('?code=abc&state=same');
+
+    expect(await screen.findByRole('button', { name: /Return to Dashboard/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Back to/i })).not.toBeInTheDocument();
+  });
+
+  /**
+   * `sessionStorage` is writable by anything on the origin and this value is handed to `navigate()`.
+   * A **protocol-relative** `//evil.example` is a URL, not a path — the exact shape that made
+   * `post_logout_redirect_uri` matching an open redirect on the server twice.
+   */
+  it.each([
+    ['protocol-relative', '//evil.example/callback'],
+    ['absolute', 'https://evil.example/callback'],
+    ['schemeless relative', 'evil'],
+  ])('refuses a return path that is not an internal path — %s', async (_label, value) => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    primed();
+    sessionStorage.setItem('return_to', value);
+    at('?code=abc&state=same');
+
+    await screen.findByRole('button', { name: /Return to Dashboard/i });
+    expect(screen.queryByRole('button', { name: /Back to/i })).not.toBeInTheDocument();
+  });
+});

@@ -200,7 +200,13 @@
   had used. Nothing could see it: a navigation leaves no artefact to assert against, which is precisely
   why `recordNavigation` was written in the first place — and then wired into one caller. Pairing the
   record with the navigation in one function is what makes forgetting impossible. `recordNavigation`
-  stays exported for the **inbound** hop, which `CallbackPage` records without navigating.
+  stays exported for the **inbound** hop, which `CallbackPage` records without navigating. **It also
+  records where to come back to** (`SESSION_KEYS.returnTo`), for the same reason: it is the only place
+  that knows. `/callback` renders outside `AppLayout`, so its one exit went to `/` — and since step 3 of
+  the FAPI wizard comes *after* the redirect, the last step of that flow was unreachable in practice.
+  An optional third argument lets a caller name the step to return *to* rather than the one it left
+  from (`/fapi#fapi-step-3`); `CallbackPage` validates it is an internal path — a leading `/`, never
+  `//` — before handing it to `navigate`.
 
   **The trace is persisted to `sessionStorage`, not held in memory.** Recording the outbound hop is not
   enough on its own: `window.location.href` discards the module holding the array, so the entry lived
@@ -233,6 +239,16 @@
   you close the tab, which makes it not a preference. Nothing sensitive goes in it, ever. Every read and
   write is wrapped, because `localStorage` *throws* rather than returning null in a private window and
   under some enterprise policies, and a preference is never worth a blank screen.
+
+**`tokenService.userInfoForToken` owns the Bearer-vs-DPoP decision, and nothing else may.** It lived in
+`TokenOpsSection` *and* in the FAPI wizard's step 3, and the copies diverged: one read the DPoP private
+key from `sessionStorage`, the other from a `useState` that step 2's full-page redirect destroys. So the
+wizard came back from the callback with step 3 **enabled** — it was gated on the token, which is
+session-backed — and a proof factory that threw `TypeError: … reading 'privateKey'`. The crash sits
+inside the factory, which a test mocking `userInfoWithDpop` never invokes, so the suite stayed green
+(fixed 2026-09-02). A bound token has no bearer fallback (RFC 9449 §7.1/§7.2, Authlete `[A089311]`), so a
+missing key is reported, never downgraded. `use-fapi-flow` restores both key pairs from the session on
+mount for the same reason — gate each step on the field it is about to use, not on a neighbour.
 
 **`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them. **One key is excluded from that sweep and it is not an oversight**: `traceHistory` is evidence, not credential state, and `resetSession` is what the vault's "Clear session" button calls — sweeping it would delete the request history as a side effect of clearing tokens, unmentioned in that dialog's list. The exclusion is the named `EVIDENCE_KEYS` list with a test on it, in both `session-keys.test.ts` and `TokenContext.test.tsx`.
 

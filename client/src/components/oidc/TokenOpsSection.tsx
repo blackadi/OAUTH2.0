@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
-import { createProof, computeAth } from '@/services/dpop.service';
 import type { JWK } from '@/services/crypto-utils';
-import { CLIENT_ID, USERINFO_ENDPOINT } from '@/config';
+import { CLIENT_ID } from '@/config';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { useUrlState } from '@/hooks/useUrlState';
 import { SectionPanel } from '@/components/layout/SectionPanel';
@@ -43,32 +42,16 @@ function TokenOpsSection() {
   const dpopKey = readJsonKey<JWK>(SESSION_KEYS.dpopPrivateKey);
 
   /**
-   * UserInfo is a protected resource, so the scheme is decided by the token, not by preference.
+   * UserInfo is a protected resource, so the scheme is decided by the token, not by preference — and
+   * that decision now lives in `tokenService.userInfoForToken`.
    *
-   * This called `tokenService.userInfo()` unconditionally, which sends `Authorization: Bearer`. RFC
-   * 9449 §7.1 gives a sender-constrained token no bearer option and §7.2 requires the refusal;
-   * Authlete enforces it with `[A089311]`. Since the Grant Flows section used to mint a DPoP-bound
-   * token whether you asked or not, the app's own headline flow produced a token this button could not
-   * use — failing with a vendor code and no explanation.
-   *
-   * `ath` is REQUIRED when a proof accompanies an access token (§7.1) — and it is `ath`, not `sub`.
+   * It used to live here, and a second copy lived in the FAPI wizard's step 3. The two diverged: this
+   * one read the DPoP key from `sessionStorage`, the wizard read it from React state that the
+   * authorization redirect destroys, so the wizard's button came back from the callback enabled and
+   * throwing. One owner, because the divergence had already happened.
    */
-  const fetchUserinfo = async () => {
-    // A bound token with no key is not a bearer token. Falling through to `userInfo()` here sent
-    // `Authorization: Bearer` for a token Authlete must refuse (`[A089311]`, RFC 9449 §7.2) — a request
-    // that cannot succeed, reported as a vendor code rather than as the thing that is actually wrong.
-    if (!isDpopBound) return tokenService.userInfo(at!);
-    if (!dpopKey) {
-      throw new Error(
-        'This access token is DPoP-bound, but the DPoP private key is no longer in this session — so no valid proof can be built for it. RFC 9449 §7.1 gives a bound token no bearer alternative. Obtain a new token with DPoP enabled.',
-      );
-    }
-    const ath = await computeAth(at!);
-    const { data } = await tokenService.userInfoWithDpop(at!, (nonce) =>
-      createProof(dpopKey, 'POST', USERINFO_ENDPOINT, ath, nonce),
-    );
-    return data;
-  };
+  const fetchUserinfo = () => tokenService.userInfoForToken(at!, isDpopBound);
+
   const { loading, result, error, call } = useDiscriminatedAsyncCall();
   /**
    * The selected operation lives in the URL, so a specific step can be shared and Back undoes it.
