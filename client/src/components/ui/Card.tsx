@@ -11,7 +11,7 @@ function Card({ className, variant = 'default', ...props }: CardProps) {
       className={cn(
         'rounded-xl bg-card text-card-foreground p-6',
         // Tokenised per palette — see `--shadow-card` in `globals.css`. The literal these replaced was
-        // `shadow-slate-900/80`, invisible on the dark ground it was chosen against and a near-black
+        // a `slate-900/80` shadow, invisible on the dark ground it was chosen against and a near-black
         // halo on the light one.
         variant === 'default' && 'shadow-card',
         variant === 'elevated' && 'shadow-card-elevated',

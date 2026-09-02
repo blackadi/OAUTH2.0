@@ -15,6 +15,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { useConfirmedAction } from '@/hooks/useConfirmedAction';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 function GrantManagementSection() {
   const { tokenSet, isDpopBound } = useToken();
@@ -125,12 +126,11 @@ function GrantManagementSection() {
       </div>
 
       <label className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/30 cursor-pointer mb-3">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={useDpop}
           onChange={(e) => setUseDpop(e.target.checked)}
           disabled={!canDpop}
-          className="w-3.5 h-3.5 accent-indigo-500 mt-0.5 shrink-0 cursor-pointer"
+          className="w-3.5 h-3.5 mt-0.5"
         />
         <span className="text-xs text-muted-foreground leading-relaxed">
           <span className="text-foreground font-medium">Present with the DPoP scheme</span>{' '}

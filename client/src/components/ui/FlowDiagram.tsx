@@ -71,7 +71,7 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
                   isCompleted &&
                     'bg-tint-success-strong text-success-text border-2 border-edge-success',
                   isCurrent &&
-                    'bg-tint-accent-strong text-accent-text border-2 border-indigo-500 ring-2 ring-edge-accent',
+                    'bg-tint-accent-strong text-accent-text border-2 border-accent ring-2 ring-edge-accent',
                   isPending && 'bg-muted/30 text-muted-foreground border-2 border-border',
                 )}
               >

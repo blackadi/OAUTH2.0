@@ -11,7 +11,11 @@ describe('Badge', () => {
   it('applies default variant', () => {
     render(<Badge>Default</Badge>);
     const badge = screen.getByText('Default');
-    expect(badge.className).toContain('rounded-full');
+    // The default *variant*, which is what this test is named for. It asserted `rounded-full` — a base
+    // class shared by every variant, so it proved nothing about the default and instead pinned the
+    // shape, which DESIGN.md owns. The pill is now `rounded-md` and this assertion was the only thing
+    // that noticed.
+    expect(badge.className).toContain('text-accent-text');
   });
 
   it('applies variant class', () => {

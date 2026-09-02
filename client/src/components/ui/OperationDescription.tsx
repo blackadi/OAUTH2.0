@@ -12,7 +12,9 @@ function OperationDescription({ doc, className }: OperationDescriptionProps) {
   return (
     <div
       className={cn(
-        'flex gap-2 items-start bg-tint-accent border-l-[3px] border-indigo-500 rounded-lg p-3 mb-3',
+        // A hairline on all four sides in the accent, not a 3px left edge. The side accent is the pattern
+        // this project bans in DESIGN.md, and this component shipped it into all thirteen oidc sections.
+        'flex gap-2 items-start bg-tint-accent border border-edge-accent rounded-lg p-3 mb-3',
         className,
       )}
     >

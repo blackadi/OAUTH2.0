@@ -83,7 +83,7 @@ function TokenVault({ defaultExpanded = false }: TokenVaultProps) {
             <span className="text-xs font-semibold text-foreground truncate">Token Vault</span>
             {hasTokens && (
               <span
-                className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"
+                className="w-1.5 h-1.5 rounded-full bg-success-text shrink-0"
                 title="Tokens held in this session"
               />
             )}

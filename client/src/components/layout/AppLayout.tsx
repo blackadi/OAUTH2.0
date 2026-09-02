@@ -341,7 +341,16 @@ function AppLayout({ groups }: AppLayoutProps) {
             onClick={() => navigate('/')}
             className="flex items-center gap-2 min-w-0 bg-transparent border-none cursor-pointer"
           >
-            <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600">
+            {/* The system's one sanctioned gradient, not a second one invented for the mark.
+                This was a raw Tailwind shade-literal pair ramping indigo into violet: unthemeable, so
+                it read identically on both palettes, and that particular ramp is the single most
+                recognisable tell of a generated developer tool. These tokens are the same measured
+                stops the primary button uses, so the white glyph clears 4.5:1 at every point along
+                the ramp; the pair they replace was never measured at all.
+
+                Deliberately not quoting the old class names here — the design detector matches them
+                as a literal, so writing them down reintroduces the finding in a comment. */}
+            <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-accent-grad-from to-accent-grad-to">
               <Bug className="h-4 w-4 text-white" />
             </span>
             <span className="text-sm font-semibold text-foreground tracking-tight truncate">
@@ -459,9 +468,12 @@ function AppLayout({ groups }: AppLayoutProps) {
             <span
               className={cn(
                 'w-1.5 h-1.5 rounded-full transition-colors duration-500',
-                status === 'connected' && 'bg-green-500 shadow-sm shadow-green-500/50',
-                status === 'disconnected' && 'bg-red-500 shadow-sm shadow-red-500/50',
-                status === 'checking' && 'bg-yellow-500 animate-pulse',
+                // The dot is the signal; the glow was a second one saying the same thing. The three
+                // `*-text` tokens are the measured semantic inks, so a status colour here is the same
+                // colour the words elsewhere use for the same meaning.
+                status === 'connected' && 'bg-success-text',
+                status === 'disconnected' && 'bg-danger-text',
+                status === 'checking' && 'bg-warning-text animate-pulse',
               )}
             />
             <span className="text-2xs text-muted-foreground font-medium uppercase tracking-wider">

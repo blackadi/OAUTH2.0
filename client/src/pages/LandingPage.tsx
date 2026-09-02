@@ -14,6 +14,7 @@ import { shouldSkipLanding, setSkipLanding } from '@/services/preferences';
 import { buttonVariants } from '@/components/ui/Button';
 import { Prose } from '@/components/ui/Prose';
 import { cn } from '@/utils/cn';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 /**
  * The on-ramp, which was the widest competitive gap in the audit.
@@ -255,14 +256,13 @@ function LandingPage() {
       {/* ── the preference ──────────────────────────────────────────────────────────────────────── */}
       <section className="pt-2 border-t border-border">
         <label className="flex items-start gap-2 cursor-pointer max-w-prose">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={skip}
             onChange={(e) => {
               setSkip(e.target.checked);
               setSkipLanding(e.target.checked);
             }}
-            className="w-3.5 h-3.5 accent-indigo-500 mt-0.5 shrink-0 cursor-pointer"
+            className="w-3.5 h-3.5 mt-0.5"
           />
           <span className="text-xs text-muted-foreground leading-relaxed">
             <span className="text-foreground">Go straight to Grant Flows next time.</span> This page

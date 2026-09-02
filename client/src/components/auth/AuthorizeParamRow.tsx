@@ -5,6 +5,7 @@ import { HelpPopover } from '@/components/ui/HelpPopover';
 import { Prose } from '@/components/ui/Prose';
 import { cn } from '@/utils/cn';
 import { jsonError } from './use-authorize-params';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 /**
  * One row of the authorization-request table: the toggle, the conformance word, the threat, the input.
@@ -59,12 +60,11 @@ function AuthorizeParamRow({
      */
     <div className={cn('px-3 py-2', !enabled && 'bg-muted/30')}>
       <div className="flex items-center gap-2 flex-wrap">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={enabled}
           onChange={(e) => onToggle(e.target.checked)}
           id={`param-${spec.name}`}
-          className="w-3.5 h-3.5 accent-indigo-500 shrink-0 cursor-pointer"
+          className="w-3.5 h-3.5"
         />
         <label
           htmlFor={`param-${spec.name}`}
@@ -122,8 +122,14 @@ function AuthorizeParamRow({
         </div>
       </div>
 
+      {/* The threat callout takes a hairline on all four sides, not a thick left edge. The `border-l-2`
+          this replaces is the side-tab accent — emphasis by border weight on one side rather than by
+          the tint scale the rest of the application uses. `TracePanel` already renders the same idea
+          correctly (`rounded border border-edge-danger bg-tint-danger`), so this is one callout
+          rejoining the pattern rather than a new treatment. The fill and the icon carry the warning;
+          the border only closes the shape. */}
       {spec.threat && threatOpen && (
-        <div className="flex gap-2 items-start mt-1.5 mb-0.5 rounded-md border-l-2 border-edge-warning bg-tint-warning pl-2 py-1.5 pr-2">
+        <div className="flex gap-2 items-start mt-1.5 mb-0.5 rounded border border-edge-warning bg-tint-warning px-2 py-1.5">
           <ShieldAlert className="h-3 w-3 text-warning-text mt-0.5 shrink-0" />
           <Prose as="p" className="text-xs text-foreground-muted leading-relaxed m-0">
             {spec.threat}

@@ -54,7 +54,7 @@ function TabBar<T extends string>({
           onClick={() => onChange(op.value)}
           disabled={disabled}
           className={cn(
-            'px-2.5 py-1 text-xs rounded-full border cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+            'px-2.5 py-1 text-xs rounded-md border cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
             value === op.value
               ? 'bg-tint-accent-strong text-accent-text border-edge-accent'
               : 'bg-muted/30 text-muted-foreground border-border hover:text-foreground',

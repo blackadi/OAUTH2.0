@@ -2,7 +2,9 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/cn';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+  // Square, following `Button`. A badge reports a state; under the converged rule it is the same
+  // family as every other bounded surface, and the pill was the incumbent's default.
+  'inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium transition-colors',
   {
     variants: {
       variant: {

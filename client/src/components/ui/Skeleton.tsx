@@ -15,8 +15,10 @@ function SkeletonCard() {
       <Skeleton className="h-4 w-2/3" />
       <Skeleton className="h-4 w-full" />
       <div className="flex gap-2 pt-2">
-        <Skeleton className="h-9 w-24 rounded-full" />
-        <Skeleton className="h-9 w-24 rounded-full" />
+        {/* Mimics `Button`, so it follows `Button` to square — a skeleton that does not match the shape it
+            stands in for is a layout shift waiting to happen. */}
+        <Skeleton className="h-9 w-24 rounded-md" />
+        <Skeleton className="h-9 w-24 rounded-md" />
       </div>
     </div>
   );

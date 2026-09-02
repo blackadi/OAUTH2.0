@@ -51,8 +51,20 @@ describe('Button', () => {
     expect(screen.getByRole('button').className).toContain('from-danger-grad-from');
     expect(screen.getByRole('button').className).toContain('hover:to-danger-grad-to-hover');
 
+    /**
+     * `default` no longer fills. It asserted `from-accent-grad-from` until 2026-09-02, when rank came
+     * off colour: the primary control now carries ink, a border and a solid offset, and the accent
+     * gradient is gone from it entirely. `danger` above keeps its measured stops, because it is the one
+     * action that cannot be undone and is deliberately the only filled control left.
+     *
+     * The assertion's *intent* is unchanged and is the reason this test exists — variants name tokens,
+     * never shade literals. `border-foreground` and `var(--foreground)` are tokens, so a palette move
+     * still carries, and a literal creeping back in still fails here.
+     */
     rerender(<Button variant="default">Primary</Button>);
-    expect(screen.getByRole('button').className).toContain('from-accent-grad-from');
+    expect(screen.getByRole('button').className).toContain('border-foreground');
+    expect(screen.getByRole('button').className).toContain('var(--foreground)');
+    expect(screen.getByRole('button').className).not.toContain('from-accent-grad-from');
 
     rerender(<Button variant="ghost">Ghost</Button>);
     expect(screen.getByRole('button').className).toContain('bg-transparent');

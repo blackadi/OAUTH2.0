@@ -9,6 +9,7 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { Badge } from '@/components/ui/Badge';
 import { getDoc } from '@/data/operationDocs';
 import type { OverallHealthResponse } from '@/types';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
@@ -156,11 +157,10 @@ function HealthSection() {
         <div>
           {docAuthlete && <OperationDescription doc={docAuthlete} />}
           <label className="flex items-center gap-2 text-xs text-muted-foreground mb-2 cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={extended}
               onChange={(e) => setExtended(e.target.checked)}
-              className="rounded"
+              className="w-3.5 h-3.5"
             />
             Extended check (test DB connectivity)
           </label>

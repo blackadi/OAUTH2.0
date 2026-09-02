@@ -4,8 +4,6 @@ import {
   Trash2,
   Copy,
   Check,
-  ChevronRight,
-  ChevronDown,
   Eye,
   EyeOff,
   Download,
@@ -31,6 +29,7 @@ import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SequenceView } from './SequenceView';
 import { cn } from '@/utils/cn';
 import { useCopyFeedback } from '@/hooks/useCopyFeedback';
+import '@/styles/register.css';
 
 /**
  * The request history — every call this app has made, newest first, with the status, the headers and
@@ -42,29 +41,47 @@ import { useCopyFeedback } from '@/hooks/useCopyFeedback';
  * was gone by step three.
  */
 
-/** Status classes carry meaning here, so they get colour — and it is separate from the indigo accent. */
-function statusTone(entry: TraceEntry): string {
-  // A front-channel hop shares `status: 0` with a network failure and means the opposite of it: nothing
-  // went wrong, the browser simply received the answer instead of this app. It gets the accent, and the
-  // badge below reads NAV rather than ERR.
-  if (entry.navigation) return 'bg-tint-accent-strong text-accent-text border-edge-accent';
-  // Neutral, not one of the five semantic roles: nothing succeeded and nothing was refused. `muted`
-  // is the existing token for a neutral surface and it is already defined per palette.
-  if (entry.status === 0) return 'bg-muted text-foreground-muted border-border/30';
-  if (entry.status >= 500) return 'bg-tint-danger-strong text-danger-text border-edge-danger';
-  if (entry.status === 429) return 'bg-tint-warning-strong text-warning-text border-edge-warning';
-  if (entry.status >= 400) return 'bg-tint-warning-strong text-warning-text border-edge-warning';
-  if (entry.status >= 300) return 'bg-tint-info-strong text-info-text border-edge-info';
-  return 'bg-tint-success-strong text-success-text border-edge-success';
+/**
+ * The row's outcome, as one of four words the Register world styles.
+ *
+ * Coarser than an HTTP status class on purpose: scanning a hundred rows is a search for failures, not a
+ * reading of status classes, so 3xx and 2xx are both "the exchange worked". `SequenceView` keeps its own
+ * `statusStroke` for the diagram — the two surfaces answer different questions and should not share.
+ */
+function rowOutcome(entry: TraceEntry): 'fail' | 'warn' | 'ok' | 'none' {
+  if (entry.navigation) return 'none';
+  if (entry.status === 0) return 'fail';
+  if (entry.status >= 500) return 'fail';
+  if (entry.status >= 400) return 'warn';
+  return 'ok';
 }
 
-const METHOD_TONE: Record<string, string> = {
-  GET: 'text-success-text',
-  POST: 'text-info-text',
-  PUT: 'text-warning-text',
-  PATCH: 'text-warning-text',
-  DELETE: 'text-danger-text',
-};
+/** The status column's own colour — the only chroma the Register world spends. */
+function statusInk(entry: TraceEntry): string {
+  if (entry.navigation) return 'text-accent-text';
+  if (entry.status === 0) return 'text-danger-text';
+  if (entry.status >= 500) return 'text-danger-text';
+  if (entry.status >= 400) return 'text-warning-text';
+  if (entry.status >= 300) return 'text-info-text';
+  return 'text-success-text';
+}
+
+/**
+ * The exchange as the wire carried it.
+ *
+ * The incumbent renders two `HeaderTable`s side by side, which is a rendering *of* the data rather than
+ * the artifact itself. HTTP is a line-oriented text format — start line, headers, blank line, body — and
+ * that is both the form the specification is written against and the thing a developer pastes into an
+ * issue. Showing it whole is cheaper to read and truer to the subject.
+ *
+ * Redaction is applied by the caller, so this never decides what a secret is.
+ */
+function wireLines(
+  start: string,
+  headers: Record<string, string>,
+): { start: string; headers: [string, string][] } {
+  return { start, headers: Object.entries(headers) };
+}
 
 /**
  * Headers worth pulling to the surface, because each one answers a question a user is about to ask.
@@ -90,23 +107,6 @@ function shortPath(url: string): string {
   } catch {
     return url;
   }
-}
-
-function HeaderTable({ headers }: { headers: Record<string, string> }) {
-  const names = Object.keys(headers);
-  if (names.length === 0) {
-    return <p className="text-xs text-muted-foreground italic">none captured</p>;
-  }
-  return (
-    <div className="space-y-0.5">
-      {names.map((name) => (
-        <div key={name} className="flex gap-2 text-xs font-mono">
-          <span className="text-accent-text shrink-0">{name}:</span>
-          <span className="text-muted-foreground break-all">{headers[name]}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean }) {
@@ -138,86 +138,70 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
     }
   }, [entry, reveal, setCopied, resetLater]);
 
+  const outcome = rowOutcome(entry);
+
+  // `HTTP/1.1` is what this transport speaks; the status line is reconstructed rather than captured
+  // because `fetch` never exposes the raw one.
+  const request = wireLines(`${entry.method} ${shortPath(entry.url)} HTTP/1.1`, requestHeaders);
+  const response = wireLines(
+    entry.navigation
+      ? 'HTTP/1.1 \u2014 front-channel navigation'
+      : `HTTP/1.1 ${entry.status === 0 ? '(no response)' : entry.status} ${entry.statusText ?? ''}`.trim(),
+    entry.responseHeaders,
+  );
+
   return (
-    <div className="border-b border-border/60">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-left bg-transparent border-none cursor-pointer hover:bg-muted/40 transition-colors"
-        aria-expanded={open}
-      >
-        {open ? (
-          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-        )}
-        <span
-          className={cn(
-            'text-2xs font-bold font-mono w-12 shrink-0',
-            METHOD_TONE[entry.method.toUpperCase()] ?? 'text-muted-foreground',
-          )}
-        >
-          {entry.method}
+    <div className="rg rg-row" data-outcome={outcome}>
+      {/*
+        Status first, and not in a chip.
+
+        The incumbent row led with a chevron, then the method, and put the status third inside a bordered
+        badge — three shapes to cross before the one number that decides whether the row is interesting.
+        Here the status is the first column, fixed width and tabular, so a hundred rows read as a numeric
+        column you can run your eye down. The chip's border is gone because a border around every status
+        in a dense list is a hundred rectangles competing with the digits inside them.
+      */}
+      <button onClick={() => setOpen((o) => !o)} className="rg-summary" aria-expanded={open}>
+        <span className="rg-caret" aria-hidden="true">
+          {open ? '\u2304' : '\u203a'}
         </span>
-        <span
-          className={cn(
-            'text-2xs font-mono px-1.5 py-0.5 rounded border shrink-0 w-11 text-center tabular-nums',
-            statusTone(entry),
-          )}
-        >
+        <span className={cn('rg-status', statusInk(entry))}>
           {entry.navigation ? 'NAV' : entry.status === 0 ? 'ERR' : entry.status}
         </span>
+        <span className="rg-method">{entry.method}</span>
+        <span className="rg-path">{shortPath(entry.url)}</span>
         {/*
-          Every imported row says so, on the row.
-
-          A banner alone would be a mode you can scroll away from — and a trace panel showing somebody
-          else's requests as though they were yours is the one failure of this feature that costs real
-          time. `title` carries the same thing for a pointer; the row's own `aria-label` further down
-          carries it for a screen reader.
+          Every imported row says so, on the row. A banner alone would be a mode you can scroll away
+          from, and a trace showing somebody else's requests as though they were yours is the one failure
+          of this feature that costs real time. A dotted underline rather than a chip: one less box.
         */}
         {entry.imported && (
-          <span
-            title="Loaded from a saved run — this build did not send it"
-            className="text-2xs font-mono px-1 py-0.5 rounded border border-edge-info bg-tint-info text-info-text shrink-0"
-          >
+          <span className="rg-flag" title="Loaded from a saved run — this build did not send it">
             saved
           </span>
         )}
-        <span className="text-xs font-mono text-foreground truncate flex-1">
-          {shortPath(entry.url)}
-        </span>
-        {entry.label && (
-          <span className="hidden md:inline text-2xs text-muted-foreground truncate max-w-[14rem]">
-            {entry.label}
-          </span>
-        )}
-        {notable.length > 0 && (
-          <span className="hidden lg:inline text-2xs font-mono text-warning-text shrink-0">
-            {notable[0]}
-          </span>
-        )}
-        <span className="text-2xs font-mono text-muted-foreground shrink-0 tabular-nums w-14 text-right">
+        {entry.label && <span className="rg-note">{entry.label}</span>}
+        {notable.length > 0 && <span className="rg-note hidden lg:inline">{notable[0]}</span>}
+        <span className="rg-ms">
           {/* Nothing was awaited on a navigation, so "0 ms" would be a measurement nobody took. */}
-          {entry.navigation ? '—' : `${Math.round(entry.durationMs)} ms`}
+          {entry.navigation ? '\u2014' : `${Math.round(entry.durationMs)} ms`}
         </span>
       </button>
 
       {open && (
-        <div className="px-3 pb-3 pt-1 space-y-3 bg-code/40">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="rg-detail">
+          <div className="rg-actions">
             {/* A front-channel hop is a browser navigation, not a request this app can reissue — a cURL
                 command for it would fetch the authorization page as a document and teach the wrong
                 thing. The URL is above and copyable; that is the reproducible part. */}
             {entry.navigation ? (
-              <span className="text-2xs text-muted-foreground italic">
+              <span className="rg-time">
                 Front-channel navigation — no request to replay. Paste the URL above into a browser
                 to repeat it.
               </span>
             ) : (
               <>
-                <button
-                  onClick={copyCurl}
-                  className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
-                >
+                <button onClick={copyCurl} className="rg-btn">
                   {copied ? (
                     <Check className="h-3 w-3 text-success-text" />
                   ) : (
@@ -225,18 +209,15 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
                   )}
                   {copied ? 'Copied' : reveal ? 'cURL (with secrets)' : 'cURL (redacted)'}
                 </button>
-                <button
-                  onClick={() => setReveal((r) => !r)}
-                  className="flex items-center gap-1 text-2xs px-2 py-1 rounded bg-muted/50 text-muted-foreground hover:text-foreground border-none cursor-pointer transition-colors"
-                >
+                <button onClick={() => setReveal((r) => !r)} className="rg-btn">
                   {reveal ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                   {reveal ? 'Hide secrets' : 'Reveal secrets'}
                 </button>
               </>
             )}
-            <span className="text-2xs text-muted-foreground font-mono">
+            <span className="rg-time">
               {new Date(entry.startedAt).toLocaleTimeString()}
-              {entry.statusText ? ` · ${entry.statusText}` : ''}
+              {entry.statusText ? ` \u00b7 ${entry.statusText}` : ''}
             </span>
           </div>
 
@@ -252,34 +233,48 @@ function TraceRow({ entry, forceOpen }: { entry: TraceEntry; forceOpen?: boolean
           )}
 
           {entry.networkError && (
-            <div className="rounded border border-edge-danger bg-tint-danger px-2 py-1.5">
+            <div className="rounded border border-edge-danger bg-tint-danger px-2 py-1.5 mb-3">
               <p className="text-xs text-danger-text">No response received: {entry.networkError}</p>
             </div>
           )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            <div className="space-y-2 min-w-0">
-              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Request
-              </p>
-              <HeaderTable headers={requestHeaders} />
-              {requestBody && (
-                <pre className="text-xs font-mono text-muted-foreground bg-code/60 border border-border/40 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
-                  {requestBody}
-                </pre>
-              )}
-            </div>
-            <div className="space-y-2 min-w-0">
-              <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Response
-              </p>
-              <HeaderTable headers={entry.responseHeaders} />
-              <JsonBlock
-                data={entry.responseBody}
-                className="[&_pre]:text-xs [&_pre]:p-2 [&_pre]:max-h-40 [&_pre]:overflow-auto"
-              />
-            </div>
-          </div>
+          {/*
+            The request as HTTP, not as a table of header rows. Start line, headers, blank line, body —
+            the shape the specification is written against, and the shape you paste into an issue.
+          */}
+          <pre className="rg-wire">
+            <span className="rg-wire-start">
+              {request.start}
+              {'\n'}
+            </span>
+            {request.headers.map(([name, value]) => (
+              <span key={name} className="rg-wire-header">
+                {name}: {value}
+                {'\n'}
+              </span>
+            ))}
+            {requestBody ? `\n${requestBody}\n` : ''}
+          </pre>
+
+          <pre className="rg-wire">
+            <span className="rg-wire-start">
+              {response.start}
+              {'\n'}
+            </span>
+            {response.headers.map(([name, value]) => (
+              <span key={name} className="rg-wire-header">
+                {name}: {value}
+                {'\n'}
+              </span>
+            ))}
+          </pre>
+
+          {/* The body keeps `JsonBlock`: it formats and it copies, which raw wire text does not. */}
+          <JsonBlock
+            data={entry.responseBody}
+            label="Response body"
+            className="[&_pre]:text-xs [&_pre]:p-2 [&_pre]:max-h-40 [&_pre]:overflow-auto"
+          />
         </div>
       )}
     </div>

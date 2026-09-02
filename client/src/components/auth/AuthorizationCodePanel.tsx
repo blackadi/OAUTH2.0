@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { AuthorizeRequestBuilder } from './AuthorizeRequestBuilder';
 import type { AuthorizeSendContext } from './use-authorize-params';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 /**
  * The authorization-code grant: the only one of the five that leaves this tab.
@@ -199,11 +200,10 @@ function AuthorizationCodePanel({ active }: { active: boolean }) {
       </div>
 
       <label className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/30 cursor-pointer">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={acUseDpop}
           onChange={(e) => void toggleDpop(e.target.checked)}
-          className="w-3.5 h-3.5 accent-indigo-500 mt-0.5 shrink-0 cursor-pointer"
+          className="w-3.5 h-3.5 mt-0.5"
         />
         <span className="text-xs text-muted-foreground leading-relaxed">
           <span className="text-foreground font-medium">Sender-constrain with DPoP</span> (RFC 9449)
