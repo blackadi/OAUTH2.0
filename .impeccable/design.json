@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-02T07:00:00Z",
+  "title": "Design System: Authlete OAuth 2.0 / OIDC Debugger",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Observatory Ground",
+        "canonical": "#020617",
+        "light": "#f8fafc",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#55637a",
+          "#94a3b8",
+          "#cbd5e1",
+          "#f1f5f9"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Instrument Card",
+        "canonical": "#0f172a",
+        "light": "#ffffff",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#55637a",
+          "#94a3b8",
+          "#e9eef4",
+          "#ffffff"
+        ]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Raised Panel",
+        "canonical": "#1e293b",
+        "light": "#f1f5f9",
+        "tonalRamp": [
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#475569",
+          "#64748b",
+          "#94a3b8",
+          "#e2e8f0",
+          "#f1f5f9"
+        ]
+      },
+      "code": {
+        "role": "neutral",
+        "displayName": "Sunken Well",
+        "canonical": "#020617",
+        "light": "#f1f5f9",
+        "note": "On dark this is the same value as the page, which is why a code block reads as a hole cut in the page rather than a panel laid on it."
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Field",
+        "canonical": "#1e293b",
+        "light": "#e9eef4"
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Primary Text",
+        "canonical": "#f1f5f9",
+        "light": "#0f172a"
+      },
+      "foreground-muted": {
+        "role": "neutral",
+        "displayName": "Secondary Text",
+        "canonical": "#cbd5e1",
+        "light": "#334155",
+        "note": "The rank between foreground and muted-foreground. It exists because collapsing it into either neighbour flattened a hierarchy the dense panels depend on."
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Muted Text",
+        "canonical": "#94a3b8",
+        "light": "#55637a"
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#1e293b",
+        "light": "#d8dfe8"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Signal Indigo",
+        "canonical": "#6366f1",
+        "light": "#4f46e5",
+        "tonalRamp": [
+          "#1e1b4b",
+          "#312e81",
+          "#3730a3",
+          "#4338ca",
+          "#4f46e5",
+          "#6366f1",
+          "#a5b4fc",
+          "#e0e7ff"
+        ]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Signal Indigo Text",
+        "canonical": "#a5b4fc",
+        "light": "#4338ca",
+        "note": "The accent as text. Lightened on dark, darkened on light, so it clears AA against the surfaces it sits on. The raw accent is never used at body size."
+      },
+      "success-text": {
+        "role": "tertiary",
+        "displayName": "Verified Emerald",
+        "canonical": "#6ee7b7",
+        "light": "#065f46"
+      },
+      "warning-text": {
+        "role": "tertiary",
+        "displayName": "Deviation Amber",
+        "canonical": "#fcd34d",
+        "light": "#854d0e"
+      },
+      "danger-text": {
+        "role": "tertiary",
+        "displayName": "Refusal Red",
+        "canonical": "#f87171",
+        "light": "#b91c1c"
+      },
+      "info-text": {
+        "role": "tertiary",
+        "displayName": "Commentary Sky",
+        "canonical": "#7dd3fc",
+        "light": "#0369a1"
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card and section headings. The largest type in normal use."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Document default, set on body. Prose, descriptions, field values."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "The workhorse \u2014 182 usages. Field labels, tab text, badge text, table headers."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "The floor at 11px \u2014 102 usages. Sidebar headings, metadata, smallest rank."
+      },
+      "mono": {
+        "displayName": "Wire Mono",
+        "purpose": "Anything that travelled the wire: tokens, claims, JSON, HTTP headers, inline code."
+      }
+    },
+    "shadows": [
+      {
+        "name": "offset",
+        "value": "1px 1px 0 0 var(--foreground), deepening to 2px 2px 0 0 on hover",
+        "purpose": "The primary button, and nothing else. Hard, unblurred, no colour of its own \u2014 weight rather than lift, which is how rank is signalled once colour is reserved for meaning."
+      },
+      {
+        "name": "card",
+        "value": "0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8)",
+        "light": "0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06)",
+        "purpose": "Default Card. Separation, not lift \u2014 near-invisible on dark by design, because tone is already carrying the hierarchy."
+      },
+      {
+        "name": "card-elevated",
+        "value": "0 25px 50px -12px rgb(2 6 23 / 0.85)",
+        "light": "0 20px 25px -5px rgb(15 23 42 / 0.12), 0 8px 10px -6px rgb(15 23 42 / 0.08)",
+        "purpose": "Reserved for surfaces that genuinely float above the page."
+      }
+    ],
+    "motion": [
+      {
+        "name": "reveal",
+        "value": "reveal 220ms ease-out both \u2014 opacity 0\u21921, translateY 4px\u21920",
+        "purpose": "A response arrived. Draws the eye to the pane that just changed."
+      },
+      {
+        "name": "step-in",
+        "value": "step-in 260ms ease-out both \u2014 scale 0.82 \u2192 1.06 \u2192 1",
+        "purpose": "The flow advanced a step. The only overshoot in the system, at 6%."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "all animations collapse to one 0.01ms iteration; .animate-spin slows to 1.6s instead of stopping",
+        "purpose": "A spinner that stops reads as a hung request, which is worse than motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px",
+        "note": "Sidebar appears; scroll containment is applied from here up."
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one committing action on a surface. It carries rank by weight rather than colour: a hairline foreground border and a hard 1px offset shadow that deepens to 2px on hover. The filled indigo gradient it replaced spent a semantic colour on importance, which in a debugger teaches the reader to discount the only colour that carries information.",
+      "html": "<button class=\"ds-btn-primary\">Send request</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 2.5rem; padding: 0.5rem 1rem; border: 1px solid #f1f5f9; border-radius: 2px; font-family: Inter, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; color: #f1f5f9; background: transparent; box-shadow: 1px 1px 0 0 #f1f5f9; cursor: pointer; transition: box-shadow 150ms ease; } .ds-btn-primary:hover { box-shadow: 2px 2px 0 0 #f1f5f9; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #020617, 0 0 0 4px #6366f1; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "The only filled control in the application, and its scarcity is the signal: destroying a token or revoking a grant is a meaning rather than a rank, and it is the one action here that cannot be undone. Gradient stops were computed by hand to clear 4.5:1 at every stop; hover darkens.",
+      "html": "<button class=\"ds-btn-danger\">Revoke token</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; justify-content: center; height: 2.5rem; padding: 0.5rem 1rem; border: none; border-radius: 2px; font-family: Inter, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; color: #ffffff; background-image: linear-gradient(to right, #b91c1c, #dc2626); cursor: pointer; transition: background-image 150ms ease; } .ds-btn-danger:hover { background-image: linear-gradient(to right, #991b1b, #b91c1c); } .ds-btn-danger:focus-visible { outline: none; box-shadow: 0 0 0 2px #020617, 0 0 0 4px #6366f1; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Everything that is not the one committing action. Transparent with a hairline, filling to muted on hover.",
+      "html": "<button class=\"ds-btn-secondary\">Reset</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; height: 2.5rem; padding: 0.5rem 1rem; border: 1px solid #1e293b; border-radius: 2px; font-family: Inter, system-ui, sans-serif; font-size: 0.875rem; font-weight: 500; color: #f1f5f9; background: transparent; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-secondary:hover { background-color: #1e293b; } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 2px #020617, 0 0 0 4px #6366f1; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-success",
+      "description": "One of five semantic roles. Tinted fill plus matching text colour, never a border.",
+      "html": "<span class=\"ds-badge ds-badge-success\">verified</span><span class=\"ds-badge ds-badge-danger\">invalid_grant</span><span class=\"ds-badge ds-badge-info\">DPoP</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; margin-right: 0.5rem; padding: 0.125rem 0.625rem; border-radius: 2px; font-family: Inter, system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; } .ds-badge-success { background: rgb(16 185 129 / 0.2); color: #6ee7b7; } .ds-badge-danger { background: rgb(239 68 68 / 0.2); color: #f87171; } .ds-badge-info { background: rgb(14 165 233 / 0.2); color: #7dd3fc; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The working surface. Exactly one of shadow, elevated shadow, or hairline border \u2014 never a border and a shadow together.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><h3 class=\"ds-card-title\">Token response</h3><p class=\"ds-card-desc\">Returned by the token endpoint.</p></div><div class=\"ds-card-content\">The access token is sender-constrained.</div></div>",
+      "css": ".ds-card { padding: 1.5rem; border-radius: 3px; background: #0f172a; color: #e2e8f0; box-shadow: 0 10px 15px -3px rgb(2 6 23 / 0.8), 0 4px 6px -4px rgb(2 6 23 / 0.8); font-family: Inter, system-ui, sans-serif; font-size: 0.875rem; line-height: 1.5; } .ds-card-header { margin-bottom: 0.5rem; } .ds-card-title { margin: 0; font-size: 1.125rem; font-weight: 600; color: #f1f5f9; } .ds-card-desc { margin: 0.25rem 0 0; font-size: 0.875rem; color: #94a3b8; } .ds-card-content { margin-top: 0.75rem; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Label above, hint or error below. focus:outline-none is only ever paired with a visible ring.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-in\">Client ID</label><input class=\"ds-input\" id=\"ds-in\" value=\"1241400020\" /><span class=\"ds-field-hint\">Registered on the authorization server.</span></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 0.375rem; font-family: Inter, system-ui, sans-serif; } .ds-field-label { font-size: 0.875rem; color: #94a3b8; } .ds-input { height: 2.5rem; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #1e293b; border-radius: 2px; background: #0f172a; color: #f1f5f9; font-size: 0.875rem; font-family: inherit; } .ds-input::placeholder { color: #94a3b8; } .ds-input:focus { outline: none; box-shadow: 0 0 0 1px #020617, 0 0 0 3px #6366f1; } .ds-field-hint { font-size: 0.6875rem; line-height: 1.45; color: #94a3b8; }"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-selected",
+      "description": "Pill tabs, always bordered. The selected treatment \u2014 accent tint, accent text, accent edge \u2014 is the same selection language as the sidebar's active item.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab ds-tab-on\">Authorization</button><button class=\"ds-tab\">Token</button><button class=\"ds-tab\">UserInfo</button></div>",
+      "css": ".ds-tabs { display: flex; flex-wrap: wrap; gap: 0.375rem; font-family: Inter, system-ui, sans-serif; } .ds-tab { padding: 0.25rem 0.625rem; font-size: 0.75rem; border-radius: 2px; border: 1px solid #1e293b; background: rgb(30 41 59 / 0.3); color: #94a3b8; cursor: pointer; transition: color 150ms ease, background-color 150ms ease; } .ds-tab:hover { color: #f1f5f9; } .ds-tab-on { background: rgb(99 102 241 / 0.2); color: #a5b4fc; border-color: rgb(99 102 241 / 0.35); } .ds-tab:focus-visible { outline: none; box-shadow: 0 0 0 2px #020617, 0 0 0 4px #6366f1; }"
+    },
+    {
+      "name": "Code Well",
+      "kind": "custom",
+      "refersTo": "code-well",
+      "description": "A sunken surface for anything the server produced. Caption-size uppercase label, copy affordance that swaps to a success check.",
+      "html": "<div class=\"ds-well-wrap\"><div class=\"ds-well-bar\"><span class=\"ds-well-label\">token response</span><button class=\"ds-well-copy\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\"/><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"/></svg>Copy</button></div><pre class=\"ds-well\">{\n  \"token_type\": \"DPoP\",\n  \"expires_in\": 3600\n}</pre></div>",
+      "css": ".ds-well-wrap { display: flex; flex-direction: column; gap: 0.5rem; font-family: Inter, system-ui, sans-serif; } .ds-well-bar { display: flex; align-items: center; justify-content: space-between; } .ds-well-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; } .ds-well-copy { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0; border: none; background: transparent; color: #94a3b8; font-size: 0.75rem; font-family: inherit; cursor: pointer; transition: color 150ms ease; } .ds-well-copy:hover { color: #f1f5f9; } .ds-well { margin: 0; padding: 0.75rem; border-radius: 2px; background: #020617; color: #cbd5e1; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; line-height: 1.5; overflow-x: auto; }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "description": "Caption-size uppercase section headings at 0.1em tracking; Label-size items with a leading icon inheriting currentColor. The active item takes the same accent tint as a selected tab.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-nav-section\">Core flows</div><a class=\"ds-nav-item ds-nav-on\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m22 2-7 20-4-9-9-4Z\"/></svg>Authorization</a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 6v6l4 2\"/></svg>Token</a></nav>",
+      "css": ".ds-nav { width: 14rem; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; background: #0f172a; border-radius: 3px; font-family: Inter, system-ui, sans-serif; } .ds-nav-section { padding: 0.375rem 0.75rem; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; } .ds-nav-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.75rem; border-radius: 2px; font-size: 0.75rem; color: #cbd5e1; text-decoration: none; transition: background-color 150ms ease, color 150ms ease; } .ds-nav-item svg { flex-shrink: 0; } .ds-nav-item:hover { background: #1e293b; color: #f1f5f9; } .ds-nav-on { background: rgb(99 102 241 / 0.2); color: #a5b4fc; }"
+    },
+    {
+      "name": "Checkbox",
+      "kind": "input",
+      "refersTo": "checkbox",
+      "description": "Nine call sites across eight files each rebuilt this control by hand, and every one reached for an accent-<hue>-500 literal, because accent-color has no token and the native control offers no other colour hook. A missing primitive does not stay missing; it gets re-implemented badly. The native input is kept and only its appearance replaced, so it stays in the accessibility tree with the right role, state and keyboard behaviour. The mark is a rotated pseudo-element border rather than an icon, so it follows both palettes and costs no dependency.",
+      "html": "<label class=\"ds-check-row\"><input type=\"checkbox\" class=\"ds-check\" checked><span>Sender-constrain with DPoP</span></label>",
+      "css": ".ds-check-row { display: inline-flex; align-items: flex-start; gap: 0.5rem; font-family: Inter, system-ui, sans-serif; font-size: 0.875rem; color: #f1f5f9; cursor: pointer; } .ds-check { position: relative; flex-shrink: 0; width: 1rem; height: 1rem; margin: 0; appearance: none; border: 1px solid #1e293b; border-radius: 1px; background: #0f172a; cursor: pointer; } .ds-check:checked { border-color: #6366f1; background: #6366f1; } .ds-check::after { content: ''; position: absolute; left: 0.3125rem; top: 0.0625rem; width: 0.25rem; height: 0.5rem; border-right: 2px solid #ffffff; border-bottom: 2px solid #ffffff; transform: rotate(45deg); opacity: 0; transition: opacity 150ms ease; } .ds-check:checked::after { opacity: 1; } .ds-check:focus-visible { outline: none; box-shadow: 0 0 0 2px #020617, 0 0 0 4px #6366f1; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calibrated Instrument",
+    "overview": "This is an instrument, and its identity is its rigour. Every value in this system was measured before it shipped, and the measurement is usually still recorded next to it: gradient stops computed stop-by-stop because white text on the old ones fell to 2.98:1 on hover; an 11px type floor set after an 8.8px label was found on one of the highest-value badges in the app; tint alphas made lower on the light palette because the same wash reads stronger over white than over near-black. Nothing here is present on taste alone.\n\nThe surface is dark by default because that is the condition a developer tool is actually used in, and the palette is cool and near-neutral so that the five semantic signal colours have somewhere quiet to land. Density is high and deliberate: this reader is a practitioner watching a protocol exchange, and information rank is carried by size, tone and tint rather than by whitespace.\n\nThe system is instrument first, teacher second. Where scanability and comprehension pull apart, scanability wins on the debugging surfaces, and the teaching is carried by the detail layer.\n\nThe shape of the thing is a ruled rectangle. Two visual directions were built out in full for this application \u2014 a transcript for exchange content and a register for the trace log \u2014 and both arrived at near-square corners independently, because a document and a logbook are ruled rectangles rather than collections of pills. The 12px cards and 9999px buttons that preceded them came from a component-library default and were never argued for.",
+    "keyCharacteristics": [
+      "Dark-first, with a complete second palette rather than an inverted one",
+      "Cool near-neutral ground; colour reserved for semantics",
+      "Five signal roles x three intensity steps, never raw shade literals",
+      "Near-square throughout: 1-3px radii, with rounded-full reserved for actual circles",
+      "Rank carried by weight and tone; exactly one filled control in the application",
+      "Monospace for anything that travelled the wire",
+      "Motion only where an event needs a cue, at amplitudes below the vestibular threshold"
+    ],
+    "rules": [
+      {
+        "name": "The Both-Palettes Rule",
+        "body": "Every colour is defined at token level in both palettes, and nothing is defined only inside a media query. A colour that exists in one branch and not the other is how a page ends up rendering one theme's text on the other theme's ground. check:theme enforces this mechanically.",
+        "section": "colors"
+      },
+      {
+        "name": "The Measured Value Rule",
+        "body": "No colour pairing ships without a contrast measurement in both palettes. Anything check:contrast structurally cannot see \u2014 a gradient, text over an image \u2014 is computed by hand and the number is recorded in a comment beside the token.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Literals Rule",
+        "body": "Never write a raw Tailwind shade utility - a bg-<hue>-500/10, a text-<neutral>-300, a border-<hue>-500/30. A literal chosen against #020617 cannot be re-themed. If a needed colour has no token, add a token.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Signal Rule",
+        "body": "A state gets one visual carrier. The server-status dot was a colour and a matching glow saying the same thing; it is now the colour alone. A second carrier does not add emphasis, it adds a thing to keep in sync.",
+        "section": "colors"
+      },
+      {
+        "name": "The 11px Floor",
+        "body": "0.6875rem is the smallest type in the system and nothing goes below it. Six arbitrary sizes once accounted for 91 of 253 font-size declarations, crowded into a quarter-rem band where two of them differed by 0.32px.",
+        "section": "typography"
+      },
+      {
+        "name": "The Five Sizes Rule",
+        "body": "The scale is Title / Body / Label / Caption / Mono, and that is the whole of it. If a new size seems necessary, the hierarchy is wrong somewhere else.",
+        "section": "typography"
+      },
+      {
+        "name": "The Wire Rule",
+        "body": "Anything that came from or goes to the authorization server is monospace. Anything the interface says about those things is Inter. The reader should never have to guess which they are looking at.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sunken Code Rule",
+        "body": "Code wells recede; nothing else does. Recession means 'this is data the server produced', and it is the only inward direction in the system.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Colour Is Meaning, Never Rank Rule",
+        "body": "The five signal roles say what the server said. Nothing may spend those colours on importance; rank is carried by weight. Exactly one filled control exists in the application, Button variant danger, because it is the one action that cannot be undone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ruled Rectangle Rule",
+        "body": "Everything is a rectangle with a corner just soft enough to look intentional. Radius no longer encodes behaviour - that scheme died the moment a badge and a button both needed to be pills. Behaviour is encoded by weight, border and fill; shape is constant.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Circle Test",
+        "body": "rounded-full is permitted only where the element is as tall as it is wide. Five call sites qualify and all five pass: two 6px status dots, a 28px step marker, a 20px help button and a 20px step number.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Scale Is The Lever",
+        "body": "130 rounded-* call sites across 48 files take their shape from four theme values, so moving the whole application from soft-rectangle to near-square required editing none of them - and restoring those four values rolls it back with no call site half-migrated. Note that Tailwind's bare rounded utility reads --radius, not --radius-md: omitting it stranded 39 call sites across 16 files at the built-in 0.25rem, a half-migration invisible in the source and obvious in the compiled CSS.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Accent Gradient Is The Mark",
+        "body": "accent-grad-* survives at exactly one call site, the logo mark in the header. It is brand, not affordance, and it is the only place the accent is used as decoration.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do add a token when a needed colour is missing, and define it in both palettes in the same edit.",
+      "Do record the measurement beside any value a gate cannot check \u2014 gradient stops, text over imagery, anything check:contrast structurally cannot see.",
+      "Do use the three-step tint scale (tint-*, tint-*-strong, edge-*) for every emphasised surface.",
+      "Do set anything that travelled the wire in Mono, and anything the interface says about it in Inter.",
+      "Do pair focus:outline-none with a visible ring-ring ring, always.",
+      "Do keep new motion under ~250ms and under ~6% of scale, and let the blanket reduced-motion rule collapse it.",
+      "Do slow a spinner under reduced motion rather than stopping it \u2014 a spinner that stops reads as a hung request.",
+      "Do change shape at the scale, never at the call site. If a corner is wrong everywhere, one of four values is wrong.",
+      "Do read the built stylesheet when you change the theme. A scale you have not seen compiled is a scale you are guessing about.",
+      "Do reach for the existing primitive's error, label and hint props before hand-rolling the same thing in a call site. The bespoke version reliably keeps the colour and drops the ARIA."
+    ],
+    "donts": [
+      "Don't use Tailwind shade literals. They encode an assumption about which palette is active.",
+      "Don't ship type below 0.6875rem, or add a sixth size to the scale.",
+      "Don't put a thick coloured border on one edge of a card. A side-tab accent is the most recognisable tell of generated UI.",
+      "Don't reach for a violet or cyan gradient as decoration. The two gradients in this system are the primary and danger buttons, both measured; a third is drift toward the generic dev-tool dashboard this system is explicitly not.",
+      "Don't add decorative background texture. The .bg-grid hairline field is legacy, not a pattern to extend.",
+      "Don't let marketing-page habits in: no hero type, no centred landing sections, no scroll-triggered reveals, no stat tiles.",
+      "Don't add illustration, mascots, or celebratory empty states. An empty state here says what to do next, in Body text.",
+      "Don't stack toolbars or bury actions in dropdowns to save space. Density is solved with tone and rank, not with chrome.",
+      "Don't give a card both a border and a shadow \u2014 pick the variant.",
+      "Don't use Signal Indigo for anything that is not actionable.",
+      "Don't write a literal utility class name in prose - a comment, a docstring, or the design document. Tailwind scans them and compiles what it finds, so a note explaining that a literal was removed silently ships the rule it documents the removal of. Break the token when you must name it.",
+      "Don't spend a signal colour on importance. Rank is weight; colour is meaning.",
+      "Don't add a second filled control. There is one, it deletes things, and its scarcity is the signal.",
+      "Don't use rounded-full on anything that is not a circle.",
+      "Don't restate the body font stack in a scoped stylesheet. It inherits."
+    ]
+  }
+}

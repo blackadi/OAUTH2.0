@@ -263,6 +263,19 @@
   light theme in a browser. Layout, borders, translucent fills (`bg-indigo-500/10` on white) and focus
   rings are outside what a contrast check can see. Treat those as unverified.
 
+  **Tailwind scans prose, so a utility name written in a comment ships its CSS rule** (found and fixed
+  2026-09-02). Automatic source detection starts at the **git root**, so it was reading `docs/`, an
+  archived audit and `DESIGN.md`, and compiling any class name it found in a sentence — including the
+  sentences *forbidding* those classes. Four comments were live at once, one of them inside
+  `ui/Checkbox.tsx`, the component written to abolish shade literals, and each shipped a rule no element
+  used — removing one pair of them measured 316 bytes off the stylesheet. `globals.css` now pins the scan with `@import 'tailwindcss' source('..')`,
+  which is exactly `client/src`. **This is why the literal three lines above is harmless and must not be
+  "fixed"** — and why a new comment naming a real utility is still worth breaking into
+  `bg-<hue>-500/10`, since the scope pin protects the repo's prose, not `client/src`'s own.
+
+  The measurement that found it: grep the **built** stylesheet for shade-literal selectors. No source
+  grep can see this class of defect, because the source is a comment.
+
 **`e2e/a11y.spec.ts` is the accessibility gate, and it predates this branch.** It runs **axe-core** over
 every surface in both palettes, plus the heading outline on every route, keyboard-only operation and both
 live regions — in a real browser, over the browser's own accessibility tree. **A deliberate scope
