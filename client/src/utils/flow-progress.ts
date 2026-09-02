@@ -35,6 +35,13 @@ export interface FlowProgress {
  * returned `false`. It was harmless because `authorizeSent` reads session storage instead, but it is the
  * clearest evidence that the missing trace went unnoticed. `recordNavigation` now writes both hops, so
  * the check works for the reason it was written.
+ *
+ * **And it is now true on the callback page too, which it was not when this was written.** The
+ * outbound hop is recorded microseconds before `window.location.href` discards the document, so while
+ * the trace lived only in memory this predicate went back to `false` the instant the browser left —
+ * `hasCallbackRedirect` was all that survived the round trip, and `authorizeSent` (session storage)
+ * carried the fact across instead. `trace-store.ts` now persists to `sessionStorage`, so both hops are
+ * present on the callback page and the two sources agree rather than one covering for the other.
  */
 function hasAuthorizeRequest(traces: TraceEntry[]): boolean {
   return traces.some((t) => t.url.includes('/api/authorization'));

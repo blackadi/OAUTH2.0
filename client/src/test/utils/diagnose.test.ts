@@ -46,6 +46,7 @@ function find(checks: Awaited<ReturnType<typeof diagnoseCodeExchange>>, title: s
 
 describe('canDiagnose', () => {
   it('offers itself only for errors it can say something useful about', () => {
+    tokenCall({ code: 'abc' });
     expect(canDiagnose('invalid_grant')).toBe(true);
     expect(canDiagnose('invalid_request')).toBe(true);
     // Offering to diagnose these would produce three inconclusive rows and teach the reader that the
@@ -53,6 +54,24 @@ describe('canDiagnose', () => {
     expect(canDiagnose('server_error')).toBe(false);
     expect(canDiagnose('invalid_client')).toBe(false);
     expect(canDiagnose(undefined)).toBe(false);
+  });
+
+  /**
+   * **The case that shipped as noise.** `invalid_request` is on the list because the *token* endpoint
+   * returns it — but the authorization endpoint returns it too, and a front-channel refusal never
+   * produces a code and so never produces a token request. Measured live on 2026-09-02: a FAPI 2.0
+   * authorization request refused with `[A309301] The value of 'response_mode' must be 'jwt'.` offered
+   * *"Compare this against the authorization request that produced the code"* on a page whose trace
+   * held exactly one row — the inbound redirect — and there was no code to compare anything to.
+   */
+  it('does not offer a code-exchange comparison when the trace holds neither request', () => {
+    expect(canDiagnose('invalid_grant')).toBe(false);
+    expect(canDiagnose('invalid_request')).toBe(false);
+  });
+
+  it('offers itself on the authorization hop alone, which names what is missing', () => {
+    authorizeHop({ client_id: 'c1' });
+    expect(canDiagnose('invalid_grant')).toBe(true);
   });
 });
 

@@ -180,8 +180,27 @@ function checkClientId(authz: URL | null, token: URLSearchParams | null): Diagno
  */
 export const DIAGNOSABLE_ERRORS = new Set(['invalid_grant', 'invalid_request']);
 
-export function canDiagnose(oauthError: string | undefined): boolean {
-  return Boolean(oauthError && DIAGNOSABLE_ERRORS.has(oauthError));
+/**
+ * Gated on the **evidence**, not only on the error code.
+ *
+ * `invalid_request` is on the list above because the token endpoint returns it, but the authorization
+ * endpoint returns it too — and a front-channel refusal produces no code and therefore no token
+ * request, ever. So the offer *"Compare this against the authorization request that produced the
+ * code"* appeared under errors where no code exists, and answered three `inconclusive` rows. That is
+ * honest but it is noise, and an offer that reliably says nothing teaches the reader to ignore the
+ * feature — the same argument the comment above makes for keeping this set narrow.
+ *
+ * One request is enough to offer: with only the token request the redirect-URI and `client_id` rows
+ * still say "not present in both", which names what is missing. With neither there is nothing to say
+ * at all — and since the trace now survives the front-channel redirect, "neither" on a callback page
+ * means the flow was started somewhere other than this tab.
+ */
+export function canDiagnose(
+  oauthError: string | undefined,
+  traces: TraceEntry[] = getTraces(),
+): boolean {
+  if (!oauthError || !DIAGNOSABLE_ERRORS.has(oauthError)) return false;
+  return Boolean(lastAuthorizeRequest(traces) || lastTokenRequest(traces));
 }
 
 /**
@@ -201,8 +220,20 @@ export async function diagnoseCodeExchange(
       {
         title: 'No evidence in this trace',
         verdict: 'inconclusive',
+        /**
+         * **This sentence has now been wrong twice, in opposite directions — hence the care.** It
+         * first said *"Both are recorded when the flow is run from Grant Flows in this tab"*, which
+         * could not be true: the trace was an in-memory array and the authorization hop is a
+         * full-page redirect, so the callback page always started empty. It was then corrected to
+         * say the history could not survive the redirect at all — true at the time, and made false
+         * within the hour by persisting the trace to `sessionStorage`.
+         *
+         * So it now describes the only case that actually reaches here: a callback in a tab that
+         * never sent the request. Naming the condition rather than the mechanism is what keeps it
+         * true across the next change to either.
+         */
         detail:
-          'Neither the authorization request nor the token request is in the request trace, so there is nothing to compare. Both are recorded when the flow is run from Grant Flows in this tab.',
+          'Neither the authorization request nor the token request is in this trace, so there is nothing to compare. The trace survives the redirect within a tab, so this means the request was started somewhere else — another tab, another browser, or a callback URL opened by hand. Run the flow from Grant Flows in this tab and both halves will be here.',
       },
     ];
   }

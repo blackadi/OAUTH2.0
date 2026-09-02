@@ -89,9 +89,13 @@ describe('setTokenSet', () => {
 });
 
 describe('clearTokens', () => {
-  it('clears the whole session, not three keys of thirteen', () => {
+  it('clears every credential in the session, not three keys of thirteen', () => {
     // The defect: `fapi_signing_private_key` survived a clear, and the callback branches on it — so
     // every later code exchange silently switched to private_key_jwt with no way to undo it.
+    //
+    // `traceHistory` is skipped, and that exclusion is the point of the case below: it is evidence
+    // rather than credential state, and pressing "clear tokens" to start a fresh flow must not throw
+    // away the record of the one that just ran. Pinned in `session-keys.test.ts` as well.
     for (const key of Object.values(SESSION_KEYS)) writeKey(key, 'x');
     writeKey(SESSION_KEYS.tokenResponse, JSON.stringify({ access_token: 'at-1' }));
 
@@ -100,8 +104,20 @@ describe('clearTokens', () => {
 
     expect(screen.getByTestId('at')).toHaveTextContent('none');
     for (const key of Object.values(SESSION_KEYS)) {
+      if (key === SESSION_KEYS.traceHistory) continue;
       expect(readKey(key), key).toBeNull();
     }
+  });
+
+  it('does not discard the request trace along with the tokens', () => {
+    writeKey(SESSION_KEYS.traceHistory, '{"entries":[],"counter":3}');
+    mount();
+    fireEvent.click(screen.getByText('clear'));
+
+    expect(
+      readKey(SESSION_KEYS.traceHistory),
+      'the button that starts a new flow must not delete the evidence of the last one',
+    ).not.toBeNull();
   });
 });
 

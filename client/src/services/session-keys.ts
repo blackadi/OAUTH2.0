@@ -50,6 +50,15 @@ export const SESSION_KEYS = {
    * file. That is the argument for enumerating them in one place rather than trusting a list.
    */
   fapiSigningPublicKey: 'fapi_signing_pub_jwk',
+
+  /**
+   * The request trace, so it survives the front-channel redirect.
+   *
+   * Owned by `trace-store.ts`. It is here rather than reaching for `sessionStorage` directly for the
+   * reason this file exists at all — and because `resetSession` enumerates these keys, which makes
+   * "forget everything" include the trace without anybody having to remember it.
+   */
+  traceHistory: 'trace_history',
 } as const;
 
 export type SessionKey = (typeof SESSION_KEYS)[keyof typeof SESSION_KEYS];
@@ -103,11 +112,34 @@ export function clearDpopKeys(): void {
 }
 
 /**
- * Forget everything.
+ * Keys `resetSession` deliberately leaves alone, because they are **evidence rather than state**.
+ *
+ * The defect this file was written for is a key whose lingering presence *changes what the next request
+ * does*: a stale `fapi_signing_private_key` silently rewired every later exchange to `private_key_jwt`.
+ * Every other entry above is that kind of key — a token, a credential, a proof, an in-flight parameter.
+ * The request trace is not: it records what already happened and alters nothing about what happens next.
+ *
+ * It matters because `resetSession` is what `TokenContext.clearTokens` calls, which is what the token
+ * vault's "Clear session" button calls. Sweeping the trace along with it would delete the request
+ * history as a side effect of clearing tokens — the evidence of the flow you just ran, discarded by the
+ * button you press to run another one, and not mentioned in that dialog's list of what it removes. The
+ * trace has its own owner and its own clear (`clearTraces`, behind the panel's own control).
+ *
+ * The exclusion is a named list with a test on it, because an exception to "enumerated so a key cannot
+ * be missed" is exactly the shape that drifts.
+ */
+const EVIDENCE_KEYS: readonly SessionKey[] = [SESSION_KEYS.traceHistory];
+
+/**
+ * Forget every credential.
  *
  * Enumerated from `SESSION_KEYS` rather than listed again, so a key added above cannot be missed here —
- * which is exactly how `fapi_signing_private_key` came to be unclearable.
+ * which is exactly how `fapi_signing_private_key` came to be unclearable. `EVIDENCE_KEYS` is the one
+ * documented exception; see the note on it.
  */
 export function resetSession(): void {
-  for (const key of Object.values(SESSION_KEYS)) removeKey(key);
+  for (const key of Object.values(SESSION_KEYS)) {
+    if (EVIDENCE_KEYS.includes(key)) continue;
+    removeKey(key);
+  }
 }

@@ -12,11 +12,28 @@
  * `useSyncExternalStore`, which is the supported way to read an external mutable source without
  * tearing during concurrent rendering.
  *
- * **Not persisted.** These entries hold access tokens, authorization codes, client secrets and DPoP
- * proofs. Keeping them in memory means a refresh discards them, which is the correct default for a
- * page that is also a teaching tool — nothing is written anywhere a later visitor could read it.
- * `redactHeaders` below governs what leaves the panel.
+ * **Persisted to `sessionStorage`, and that is a reversal worth explaining.** This paragraph used to
+ * read *"Not persisted … nothing is written anywhere a later visitor could read it"*, and the second
+ * half of that sentence was doing all the work while the first half broke the feature. The
+ * authorization request is `window.location.href = url` — a full-document navigation — so the array
+ * below, the module instance holding it and the whole JS heap were discarded on the way to the login
+ * page. `navigateTo` recorded the outbound hop microseconds before that happened, which means **no
+ * human ever saw it**: the callback page always started from an empty store, and the one screen where
+ * somebody needs to compare the two halves of an authorization-code flow was the one screen guaranteed
+ * to hold only the second. `utils/diagnose.ts` was reduced to printing "no evidence in this trace" on
+ * a correctly-executed run.
+ *
+ * `sessionStorage` rather than `localStorage`, and the distinction is the whole safety argument: it is
+ * scoped to **one tab**, dies with it, and is not readable from another tab or a later visit. The
+ * original objection — that these entries hold access tokens, authorization codes, client secrets and
+ * DPoP proofs — is answered by where the app already keeps its secrets: `session-keys.ts` holds the
+ * DPoP **private key**, the PKCE verifier and `state` in exactly this store. So the exposure widens
+ * from one document's heap to one tab's session, which is not a new class of exposure; it does not
+ * widen to disk, to another tab, or to a later visitor. `redactHeaders` below still governs what
+ * leaves the panel, which is the boundary that actually mattered.
  */
+
+import { SESSION_KEYS, readJsonKey, writeKey } from './session-keys';
 
 export interface TraceEntry {
   id: string;
@@ -144,12 +161,64 @@ export function navigateTo(url: string, label: string): void {
  */
 const MAX_ENTRIES = 200;
 
-let entries: TraceEntry[] = [];
-let counter = 0;
+/**
+ * What is written to the session, as one value.
+ *
+ * `counter` travels with the entries because it mints the ids. Restoring five entries and leaving the
+ * counter at zero makes the next live request `t1` again — a duplicate key in a React list, and a
+ * duplicate id in an exported run file. The two are one fact and are stored as one.
+ */
+interface PersistedTrace {
+  entries: TraceEntry[];
+  counter: number;
+}
+
+/**
+ * Read the trace back, or start empty.
+ *
+ * Anything malformed is treated as absent rather than repaired: this value is written by this module
+ * and nothing else, so a shape that does not match means the storage was hand-edited or written by an
+ * older build, and half-reviving either of those is worse than starting clean. `readJsonKey` already
+ * returns `null` instead of throwing on bad JSON, and `readKey` tolerates a `sessionStorage` that
+ * throws — a sandboxed frame, private mode, blocked site data.
+ */
+function restore(): PersistedTrace {
+  const saved = readJsonKey<PersistedTrace>(SESSION_KEYS.traceHistory);
+  if (!saved || !Array.isArray(saved.entries) || typeof saved.counter !== 'number') {
+    return { entries: [], counter: 0 };
+  }
+  return { entries: saved.entries.slice(0, MAX_ENTRIES), counter: saved.counter };
+}
+
+const restored = restore();
+let entries: TraceEntry[] = restored.entries;
+let counter = restored.counter;
 const listeners = new Set<() => void>();
 
 function emit(): void {
   for (const listener of listeners) listener();
+}
+
+/**
+ * The one place `entries` is assigned. Assign, persist, notify — in that order, always all three.
+ *
+ * Written as a seam rather than three copies of the same two lines because this repo's recurring
+ * failure is precisely "a capability was added and one caller was never told": `recordNavigation`
+ * existed for months while five of seven front-channel call sites never called it. `recordTrace`,
+ * `clearTraces` and `importTraces` all mutate this array, and a fourth will be written some day.
+ *
+ * A write that fails is non-fatal by design. `writeKey` swallows the error, so a full quota or a
+ * blocked store costs the *history* and not the panel: `entries` is already assigned, the listeners
+ * still fire, and the session degrades to the in-memory behaviour this store had before. The ceiling
+ * is the ~5MB `sessionStorage` gives an origin against `MAX_ENTRIES` entries carrying whole response
+ * bodies; if that is ever reached in practice, the fix is to persist a shorter tail rather than to
+ * truncate bodies, because a restored entry that silently differs from the one recorded is a lie a
+ * debugger cannot afford.
+ */
+function setEntries(next: TraceEntry[]): void {
+  entries = next;
+  writeKey(SESSION_KEYS.traceHistory, JSON.stringify({ entries, counter }));
+  emit();
 }
 
 export function recordTrace(input: TraceInput): TraceEntry {
@@ -161,8 +230,7 @@ export function recordTrace(input: TraceInput): TraceEntry {
   const entry: TraceEntry = { ...input, id: `t${counter}` };
   // A new array each time, not a mutation: `useSyncExternalStore` compares snapshots by identity, and
   // pushing in place would leave the panel showing a stale list.
-  entries = [entry, ...entries].slice(0, MAX_ENTRIES);
-  emit();
+  setEntries([entry, ...entries].slice(0, MAX_ENTRIES));
   return entry;
 }
 
@@ -171,9 +239,8 @@ export function getTraces(): TraceEntry[] {
 }
 
 export function clearTraces(): void {
-  entries = [];
   counter = 0;
-  emit();
+  setEntries([]);
 }
 
 /**
@@ -190,13 +257,13 @@ export function clearTraces(): void {
  */
 export function importTraces(input: TraceInput[]): TraceEntry[] {
   counter = 0;
-  entries = input.slice(0, MAX_ENTRIES).map((item) => {
+  const imported = input.slice(0, MAX_ENTRIES).map((item) => {
     counter += 1;
     // `id` and `imported` both go after the spread: the store owns the id, and an entry loaded from a
     // file does not get to declare itself live. A hand-edited `"imported": false` buys no disguise.
     return { ...item, id: `t${counter}`, imported: true };
   });
-  emit();
+  setEntries(imported);
   return entries;
 }
 

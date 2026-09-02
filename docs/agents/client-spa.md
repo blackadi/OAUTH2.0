@@ -202,6 +202,16 @@
   record with the navigation in one function is what makes forgetting impossible. `recordNavigation`
   stays exported for the **inbound** hop, which `CallbackPage` records without navigating.
 
+  **The trace is persisted to `sessionStorage`, not held in memory.** Recording the outbound hop is not
+  enough on its own: `window.location.href` discards the module holding the array, so the entry lived
+  for microseconds and the callback page always opened on an empty history — `utils/diagnose.ts` printed
+  "no evidence in this trace" for a flow that had run correctly. `sessionStorage`, **never
+  `localStorage`**: one tab, dies with it, unreadable from another tab or a later visit, and the app
+  already keeps the DPoP private key and the PKCE verifier there. Every mutation goes through
+  `setEntries` — assign, persist, notify — because `recordTrace`, `clearTraces` and `importTraces` all
+  write that array and "one caller was never told" is this file's recurring failure. `counter` is stored
+  **with** the entries: restore rows without it and the next request re-mints `t1`.
+
   **`services/run-file.ts` is a run as data; the Markdown export is a run as prose. Both stay.**
   `TracePanel.toMarkdown` produces something you paste into a chat or an issue and **nothing could read it
   back**, so a run was shareable only as prose — the recipient saw the exchange and could not load it.
@@ -224,7 +234,7 @@
   write is wrapped, because `localStorage` *throws* rather than returning null in a private window and
   under some enterprise policies, and a preference is never worth a blank screen.
 
-**`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them.
+**`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them. **One key is excluded from that sweep and it is not an oversight**: `traceHistory` is evidence, not credential state, and `resetSession` is what the vault's "Clear session" button calls — sweeping it would delete the request history as a side effect of clearing tokens, unmentioned in that dialog's list. The exclusion is the named `EVIDENCE_KEYS` list with a test on it, in both `session-keys.test.ts` and `TokenContext.test.tsx`.
 
   **`crypto-utils.ts` holds the one P-256 generator.** `kid` is derived from the exported JWK *before* `alg`/`use` are attached — folding the tags in first would silently change every signing key's `kid`. Pinned in `keygen-characterization.test.ts`, which was written against the duplicated version first.
 - **Config**: `config.ts` reads `VITE_*` env vars at build time and exports `API_BASE_URL` plus the endpoint constants built from it; `PROD_CONFIG` + `getRedirectUri()` carry the one per-environment override that survives. Separate `HEALTH_ENDPOINT` for the live status polling. The dev server's own port lives in `vite.config.ts`, which reads `VITE_DEV_CLIENT_PORT` itself — `config.ts` used to export an unread second copy as `DEV_SERVER`.

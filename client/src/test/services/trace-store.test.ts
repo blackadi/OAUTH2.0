@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   recordTrace,
   getTraces,
   clearTraces,
+  recordNavigation,
+  importTraces,
   subscribeToTraces,
   redactHeaders,
   redactBody,
@@ -172,5 +174,113 @@ describe('redaction — what may leave the panel', () => {
 
   it('passes an absent body through', () => {
     expect(redactBody(undefined)).toBeUndefined();
+  });
+});
+
+/**
+ * **Surviving the front-channel redirect, which is the whole reason the store is persisted.**
+ *
+ * The authorization request is `window.location.href = url` — a full-document navigation. `navigateTo`
+ * records the outbound hop and then unloads the page, so while the store lived only in a module-level
+ * array that entry existed for microseconds and no human ever saw it: the callback page always started
+ * from an empty history, and `utils/diagnose.ts` printed "no evidence in this trace" on a run that had
+ * gone perfectly. The only way to test the fix is to discard the module the way the browser discards
+ * the document, so every case here re-imports it.
+ */
+describe('surviving a full-page navigation', () => {
+  /** What the browser does to this module on `window.location.href = …`. */
+  async function reload() {
+    vi.resetModules();
+    return import('@/services/trace-store');
+  }
+
+  beforeEach(() => {
+    clearTraces();
+    vi.resetModules();
+  });
+
+  it('reads the history back after the document is discarded', async () => {
+    recordTrace(entry({ url: 'https://as.example/api/authorization?client_id=c1' }));
+    recordTrace(entry({ url: 'https://as.example/api/par' }));
+
+    const fresh = await reload();
+    expect(fresh.getTraces().map((t) => t.url)).toEqual([
+      'https://as.example/api/par',
+      'https://as.example/api/authorization?client_id=c1',
+    ]);
+  });
+
+  /**
+   * **The bug a naive `entries`-only save would have shipped.** Ids are minted from a counter; restoring
+   * two entries and leaving the counter at zero makes the next live request `t1` again — a duplicate
+   * React key in the panel and a duplicate id in an exported run. The counter is persisted *with* the
+   * entries because the two are one fact.
+   */
+  it('does not re-mint ids that the restored entries already hold', async () => {
+    recordTrace(entry({ url: 'one' }));
+    recordTrace(entry({ url: 'two' }));
+
+    const fresh = await reload();
+    fresh.recordTrace(entry({ url: 'three' }));
+
+    const ids = fresh.getTraces().map((t) => t.id);
+    expect(new Set(ids).size, `duplicate ids: ${ids.join(', ')}`).toBe(ids.length);
+  });
+
+  it('carries the front-channel hop and its direction across, not just the URL', async () => {
+    recordNavigation({
+      url: 'https://as.example/api/authorization',
+      direction: 'outbound',
+      label: 'authorize',
+    });
+
+    const fresh = await reload();
+    const [hop] = fresh.getTraces();
+    expect(hop.navigation).toBe(true);
+    expect(hop.direction).toBe('outbound');
+  });
+
+  /** An imported run must not lose its badge on reload — the flag is the safety property. */
+  it('keeps the imported flag, so restored foreign traffic still reads as foreign', async () => {
+    importTraces([entry({ url: 'https://someone-else/api/par' })]);
+
+    const fresh = await reload();
+    expect(fresh.getTraces()[0].imported).toBe(true);
+  });
+
+  it('clearing is durable rather than only local to the page', async () => {
+    recordTrace(entry({ url: 'one' }));
+    clearTraces();
+
+    const fresh = await reload();
+    expect(fresh.getTraces()).toEqual([]);
+  });
+
+  /**
+   * Storage written by an older build, or edited by hand, is treated as absent rather than repaired.
+   * Half-reviving an unknown shape is worse than starting clean, and this store is the one thing a
+   * reader trusts to say what happened.
+   */
+  it('starts clean on malformed storage instead of throwing at import time', async () => {
+    sessionStorage.setItem('trace_history', '{"entries":"not-an-array"}');
+    const fresh = await reload();
+    expect(fresh.getTraces()).toEqual([]);
+
+    sessionStorage.setItem('trace_history', 'not json at all');
+    const again = await reload();
+    expect(again.getTraces()).toEqual([]);
+  });
+
+  /**
+   * A write that cannot happen costs the *history*, never the panel. `writeKey` swallows the error, so
+   * the in-memory array is already assigned and the listeners have already fired.
+   */
+  it('still records in memory when the session store refuses the write', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    expect(() => recordTrace(entry({ url: 'https://as.example/api/token' }))).not.toThrow();
+    expect(getTraces()).toHaveLength(1);
+    setItem.mockRestore();
   });
 });

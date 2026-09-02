@@ -25,12 +25,33 @@ describe('the key inventory', () => {
 });
 
 describe('resetSession', () => {
-  it('clears every catalogued key — the defect was clearing three of thirteen', () => {
+  it('clears every catalogued credential — the defect was clearing three of thirteen', () => {
     for (const key of Object.values(SESSION_KEYS)) sessionStorage.setItem(key, 'x');
     resetSession();
     for (const key of Object.values(SESSION_KEYS)) {
+      if (key === SESSION_KEYS.traceHistory) continue;
       expect(sessionStorage.getItem(key), key).toBeNull();
     }
+  });
+
+  /**
+   * **The one documented exception, pinned so it cannot drift in either direction.**
+   *
+   * `resetSession` is what `TokenContext.clearTokens` calls, which is what the vault's "Clear session"
+   * button calls. Sweeping the trace along with the credentials would delete the request history as a
+   * side effect of clearing tokens — the evidence of the flow you just ran, removed by the button you
+   * press to run another one, and absent from that dialog's list of what it removes. The trace is
+   * evidence, not state: nothing about the next request depends on it, and it has its own clear.
+   */
+  it('leaves the request trace, which is evidence rather than credential state', () => {
+    writeKey(SESSION_KEYS.traceHistory, '{"entries":[],"counter":0}');
+    writeKey(SESSION_KEYS.tokenResponse, '{"access_token":"at"}');
+    resetSession();
+    expect(readKey(SESSION_KEYS.tokenResponse)).toBeNull();
+    expect(
+      readKey(SESSION_KEYS.traceHistory),
+      'clearing tokens must not silently discard the request history',
+    ).not.toBeNull();
   });
 
   it('clears the private_key_jwt signing key specifically', () => {
