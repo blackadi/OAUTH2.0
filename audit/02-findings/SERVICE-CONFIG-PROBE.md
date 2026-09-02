@@ -295,6 +295,20 @@ fields probes 1 and 2 did not. Same redaction rules — no key material, no secr
 
 ## 8. OIDC Core and Discovery members
 
+> **⚠️ `claims_supported` was trimmed to 11 (confirmed live 2026-09-02). This section records the state
+> on 2026-08-10.** The 20 below is superseded: nine of those names — `address`, `birthdate`, `gender`,
+> `middle_name`, `phone_number`, `phone_number_verified`, `picture`, `profile`, `website` — were
+> advertised but never servable, because `claimValuesFor` has no `case` for any of them and omitting a
+> claim you have no value for is correct per OIDC Core §5.1. The defect was the *advertisement*, and it
+> survived typecheck, lint, the whole suite and every other gate; it took a conformance run
+> (`OIDCC-5.5 EnsureIdentityClaimsContainRequestedClaims`) to surface. The live list is now the 11 in
+> `SERVED_CLAIMS` (`server/src/utils/demo-claims.ts`), and `scripts/check-claims-supported.mjs` is the
+> gate that did not exist when this probe was taken.
+>
+> The observation below is left as recorded. **This applies to service `2147478188` only** — the
+> curriculum service is separate and was not touched, which is why the module 10 lab transcript still
+> lists `birthdate`.
+
 ```
 subject_types_supported             = ["public", "pairwise"]
 claims_parameter_supported          = true

@@ -4,6 +4,16 @@
 Foundation's conformance suite produces a *certifiable* result. One script prepares everything the
 suite needs; this page walks the rest.
 
+> **Measured 2026-09-02: 25 passed, 0 failed, 0 skipped — and it takes two environment variables to
+> get there.** `JAR=1`, because `myscope` carries `fapi2: ms-authreq`/`ms-authres` and an unsigned PAR
+> is therefore refused; and `BASE=http://localhost:3000` against a locally-run server, because the
+> probe's login leg needs demo credentials the **deployment does not accept**. Run it against the
+> deployment with the default mode and it reports 1 failure and 10 skips; run it in `JAR=1` against
+> the deployment and it reports 3 failures, all of them the login leg returning its own sign-in page
+> rather than a redirect. **None of those five is a server defect** — they are a mode mismatch and a
+> credential the runner does not hold, which is exactly what makes them expensive: they read like
+> findings. Confirm a full pass locally before believing a failure seen against the deployment.
+
 ---
 
 ## Why a local suite is not enough

@@ -26,7 +26,14 @@
  *   ISSUER      assertion `aud`; Authlete's clientAssertionAudRestrictedToIssuer is on,
  *               so this must be the service's issuer identifier exactly
  *   REDIRECT_URI  must be registered on the client, https (FAPI 2.0 5.3.2.2)
- *   SCOPE       default "openid myscope" — myscope carries Authlete's {fapi2: sp} attribute
+ *   SCOPE       default "openid myscope"
+ *   JAR         "1" to send a signed request object. **Required for this service as configured**
+ *               (measured 2026-09-02): `myscope` carries `fapi2: ms-authreq`/`ms-authres`, so an
+ *               unsigned PAR is refused with `400 invalid_request` — correctly. Running the default
+ *               JAR=0 mode reports "PAR with private_key_jwt + PKCE S256 + DPoP" as a FAIL and skips
+ *               10 downstream cases, which reads as a server defect and is not one. The comment here
+ *               used to say the scope carried `{fapi2: sp}`; that was true before the Message Signing
+ *               work and cost a diagnostic round trip once it was not.
  *   FAPI_USERNAME / FAPI_PASSWORD  demo login, default admin/password. Namespaced on purpose:
  *               the shell already exports USERNAME on most systems.
  */
