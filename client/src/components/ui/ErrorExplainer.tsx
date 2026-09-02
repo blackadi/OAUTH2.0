@@ -176,7 +176,7 @@ function ErrorExplainer({ error, status, className }: ErrorExplainerProps) {
                 href={decoded.errorUri}
                 target="_blank"
                 rel="noreferrer"
-                className="text-accent-text hover:text-accent-text underline decoration-indigo-500/40"
+                className="text-accent-text hover:text-accent-text underline decoration-edge-accent"
               >
                 The server&apos;s own documentation for this error →
               </a>

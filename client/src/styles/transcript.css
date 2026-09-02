@@ -1,0 +1,571 @@
+/**
+ * The Transcript world — a pilot, scoped to `.tx` and applied so far only by `ParSection`.
+ *
+ * **The thesis.** An OAuth exchange is a conversation with a strict turn order, and its security model
+ * depends on that order. The incumbent world renders every operation as an isolated form with a JSON
+ * dump underneath, which is the one shape that hides the thing the protocol is actually about. Here the
+ * section *is* the transcript: turns run down a spine, you compose the outbound turn, and the server's
+ * reply lands in sequence below it.
+ *
+ * **The risk, stated plainly.** Colour is evidence, never chrome. No button is filled, no tab is tinted,
+ * no accent marks "you can click this" — affordance is carried by rule weight and ink. Every coloured
+ * pixel on the screen means *the server said something*. In a debugger that is a legible rule, and it
+ * inverts the category habit where the brightest thing on screen is a submit button.
+ *
+ * **Light by default, inverting the category.** Every OAuth debugger is dark, and the incumbent
+ * DESIGN.md admits its own dark-first choice was made because that is "what a developer tool is usually
+ * wanted in" — a habit, by its own admission. A protocol transcript is a document; documents are paper.
+ * The dark palette below is complete rather than inverted, because the app's theme toggle is real.
+ *
+ * **Type is drawn from the subject.** The display voice is monospace because the subject's own artifact
+ * — the RFC — is a hard-wrapped plain-text document. This is deliberately not "monospace as a costume
+ * for technical": it is the medium the specification is actually published in, used at display size and
+ * tight tracking so it reads as a document heading rather than as code. Both faces are already loaded by
+ * `index.html`; this adds no dependency.
+ */
+
+.tx {
+  --t-paper: #fbfaf7;
+  --t-sunk: #f2f0ea;
+  --t-rule: #ded9cf;
+  --t-rule-strong: #b4ada0;
+  --t-ink: #17150f;
+  --t-graphite: #56524a;
+  --t-issued: #0f5d45;
+  --t-refused: #9b1c1c;
+  --t-advisory: #7a5200;
+  --t-issued-wash: rgb(15 93 69 / 0.07);
+  --t-refused-wash: rgb(155 28 28 / 0.07);
+
+  --t-spine: 2rem;
+
+  background: var(--t-paper);
+  color: var(--t-ink);
+  border: 1px solid var(--t-rule);
+  border-radius: 2px;
+  /* No `font-family` here on purpose. `.tx` inherits the app's body stack, and restating it made a
+     second place the application's face is named — the kind of duplicate that drifts silently. The
+     transcript's typographic identity is its mono *display*, set per element below, not a second
+     body face. */
+}
+
+/* A viewer whose system prefers dark, who has not chosen otherwise — matching the app's own
+   dark-first-with-overrides structure so the toggle keeps working over this world. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .tx {
+    --t-paper: #12110e;
+    --t-sunk: #0b0a08;
+    --t-rule: #2b2820;
+    --t-rule-strong: #4d4839;
+    --t-ink: #f2efe8;
+    --t-graphite: #a19a8c;
+    --t-issued: #6bc7a3;
+    --t-refused: #f28e8e;
+    --t-advisory: #e0b457;
+    --t-issued-wash: rgb(107 199 163 / 0.1);
+    --t-refused-wash: rgb(242 142 142 / 0.1);
+  }
+}
+
+:root[data-theme='dark'] .tx {
+  --t-paper: #12110e;
+  --t-sunk: #0b0a08;
+  --t-rule: #2b2820;
+  --t-rule-strong: #4d4839;
+  --t-ink: #f2efe8;
+  --t-graphite: #a19a8c;
+  --t-issued: #6bc7a3;
+  --t-refused: #f28e8e;
+  --t-advisory: #e0b457;
+  --t-issued-wash: rgb(107 199 163 / 0.1);
+  --t-refused-wash: rgb(242 142 142 / 0.1);
+}
+
+/* ── Masthead ──────────────────────────────────────────────────────────────
+   The section names itself the way the specification does: designation on the
+   left, document reference on the right, one rule under both. */
+
+.tx-masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--t-rule);
+  flex-wrap: wrap;
+}
+
+.tx-title {
+  margin: 0;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+  color: var(--t-ink);
+}
+
+.tx-ref {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  color: var(--t-graphite);
+  white-space: nowrap;
+}
+
+.tx-standfirst {
+  padding: 0.75rem 1.5rem 0;
+  margin: 0;
+  max-width: 68ch;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--t-graphite);
+}
+
+/* ── The spine ─────────────────────────────────────────────────────────────
+   The signature. One hairline runs the height of the exchange; each turn hangs
+   a marker on it. The sequence is the information — OAuth's security model is
+   an ordering argument — so this is a real index, not decorative numbering. */
+
+.tx-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.tx-turn {
+  position: relative;
+  padding-left: var(--t-spine);
+  padding-bottom: 1.5rem;
+}
+
+.tx-turn::before {
+  content: '';
+  position: absolute;
+  left: 0.3125rem;
+  top: 1.25rem;
+  bottom: 0;
+  width: 1px;
+  /* `--t-rule` at desktop scale was invisible — the markers read but the thread between them did not,
+     which is the signature failing at the one job it has. Found by screenshotting, not by reasoning:
+     the same hairline reads fine at 390px where the turns are close together. */
+  background: var(--t-rule-strong);
+}
+
+.tx-turn:last-child::before {
+  display: none;
+}
+
+.tx-turn:last-child {
+  padding-bottom: 0;
+}
+
+.tx-marker {
+  position: absolute;
+  left: 0;
+  top: 0.0625rem;
+  width: 0.6875rem;
+  height: 0.6875rem;
+  border: 1px solid var(--t-rule-strong);
+  border-radius: 50%;
+  background: var(--t-paper);
+}
+
+/* Inbound turns are the only place colour is allowed. A filled marker means the
+   server answered; the hue says how. */
+.tx-turn[data-dir='in'] .tx-marker {
+  border-color: var(--t-issued);
+  background: var(--t-issued);
+}
+
+.tx-turn[data-dir='in'][data-outcome='refused'] .tx-marker {
+  border-color: var(--t-refused);
+  background: var(--t-refused);
+}
+
+.tx-turn[data-state='pending'] .tx-marker {
+  border-style: dashed;
+  background: transparent;
+}
+
+.tx-turn-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.tx-turn-label {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--t-ink);
+}
+
+.tx-turn[data-state='pending'] .tx-turn-label {
+  color: var(--t-graphite);
+}
+
+.tx-turn-note {
+  font-size: 0.75rem;
+  color: var(--t-graphite);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────────
+   Underlined, not boxed. A box around every input is chrome competing with the
+   evidence; a rule under it is the same affordance at a fraction of the weight. */
+
+.tx-field {
+  display: block;
+  margin-bottom: 0.875rem;
+}
+
+.tx-label {
+  display: block;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t-graphite);
+  margin-bottom: 0.3125rem;
+}
+
+.tx-input,
+.tx-textarea,
+.tx-select {
+  width: 100%;
+  padding: 0.4375rem 0;
+  border: none;
+  border-bottom: 1px solid var(--t-rule-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--t-ink);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.tx-textarea {
+  resize: vertical;
+  /* No `min-height`. It fought `rows` and the parameter string overflowed *under* the bottom rule —
+     `code_challenge_meth…` was clipped mid-word at 390px with no scrollbar to say so. `rows` alone
+     sizes the box to its content, and the scroll is honest when it exceeds. */
+  overflow: auto;
+}
+
+.tx-select {
+  padding-right: 1.25rem;
+  cursor: pointer;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    right 0.4rem center,
+    right 0.15rem center;
+  background-size:
+    0.25rem 0.25rem,
+    0.25rem 0.25rem;
+  background-repeat: no-repeat;
+}
+
+.tx-input::placeholder,
+.tx-textarea::placeholder {
+  color: var(--t-graphite);
+  opacity: 0.75;
+}
+
+.tx-input:focus-visible,
+.tx-textarea:focus-visible,
+.tx-select:focus-visible {
+  outline: none;
+  border-bottom-color: var(--t-ink);
+  box-shadow: 0 1px 0 0 var(--t-ink);
+}
+
+.tx-hint {
+  margin: 0.375rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--t-graphite);
+}
+
+.tx-row {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.tx-row > .tx-field {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+/* ── Checkbox ──────────────────────────────────────────────────────────────
+   A real control rather than a raw input with an `accent-*` literal. */
+
+.tx-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--t-ink);
+  cursor: pointer;
+}
+
+.tx-check input {
+  appearance: none;
+  width: 0.9375rem;
+  height: 0.9375rem;
+  margin: 0;
+  border: 1px solid var(--t-rule-strong);
+  border-radius: 1px;
+  background: var(--t-paper);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+}
+
+.tx-check input::after {
+  content: '';
+  width: 0.4375rem;
+  height: 0.4375rem;
+  transform: scale(0);
+  background: var(--t-ink);
+  transition: transform 120ms ease-out;
+}
+
+.tx-check input:checked {
+  border-color: var(--t-ink);
+}
+
+.tx-check input:checked::after {
+  transform: scale(1);
+}
+
+.tx-check input:focus-visible {
+  outline: 2px solid var(--t-ink);
+  outline-offset: 2px;
+}
+
+/* ── Actions ───────────────────────────────────────────────────────────────
+   Nothing is filled. The primary action is heavier ink and a solid rule; the
+   rest are the same shape with a lighter rule. */
+
+.tx-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.tx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.875rem;
+  border: 1px solid var(--t-rule-strong);
+  border-radius: 1px;
+  background: transparent;
+  color: var(--t-graphite);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 140ms ease-out,
+    border-color 140ms ease-out;
+}
+
+.tx-btn:hover:not(:disabled) {
+  color: var(--t-ink);
+  border-color: var(--t-ink);
+}
+
+.tx-btn-primary {
+  color: var(--t-ink);
+  border-color: var(--t-ink);
+  box-shadow: 1px 1px 0 0 var(--t-ink);
+}
+
+.tx-btn-primary:hover:not(:disabled) {
+  box-shadow: 2px 2px 0 0 var(--t-ink);
+}
+
+.tx-btn:focus-visible {
+  outline: 2px solid var(--t-ink);
+  outline-offset: 2px;
+}
+
+.tx-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tx-btn .tx-spin {
+  width: 0.6875rem;
+  height: 0.6875rem;
+  border: 1px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: tx-rotate 720ms linear infinite;
+}
+
+@keyframes tx-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Evidence ──────────────────────────────────────────────────────────────
+   Where the server's answer lands. The only region permitted colour. */
+
+/* A hairline on all four sides in the signal colour, not a thick left edge.
+   This shipped as `border-left: 2px solid var(--t-issued)` and the detector caught it — the same
+   side-tab accent removed from `AuthorizeParamRow` an hour earlier, reintroduced here by the author
+   who removed it. The wash and the verdict line already carry the outcome; the border only needs to
+   close the shape, and doing it on one side is emphasis by weight rather than by the signal system. */
+.tx-evidence {
+  border: 1px solid var(--t-issued);
+  background: var(--t-issued-wash);
+  border-radius: 1px;
+  padding: 0.875rem 1rem;
+}
+
+.tx-evidence[data-outcome='refused'] {
+  border-color: var(--t-refused);
+  background: var(--t-refused-wash);
+}
+
+.tx-evidence-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.tx-evidence-verdict {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-issued);
+}
+
+.tx-evidence[data-outcome='refused'] .tx-evidence-verdict {
+  color: var(--t-refused);
+}
+
+.tx-datum {
+  display: block;
+  margin-bottom: 0.625rem;
+}
+
+.tx-datum:last-child {
+  margin-bottom: 0;
+}
+
+.tx-datum-key {
+  display: block;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--t-graphite);
+  margin-bottom: 0.1875rem;
+}
+
+.tx-datum-value {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--t-ink);
+  word-break: break-all;
+}
+
+.tx-datum-value a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+/* ── Waiting ───────────────────────────────────────────────────────────────
+   An empty region is an invitation, not a void. This says what will arrive
+   here and is replaced by it — the shape stays, the content lands. */
+
+.tx-waiting {
+  border: 1px dashed var(--t-rule-strong);
+  border-radius: 1px;
+  padding: 0.875rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--t-graphite);
+  max-width: 62ch;
+}
+
+.tx-waiting code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--t-ink);
+}
+
+/* The one authored moment: an arriving turn settles in. Below the amplitude the
+   incumbent world already established as safe (4px, 220ms). */
+@keyframes tx-land {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.tx-lands {
+  animation: tx-land 200ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-lands,
+  .tx-check input::after {
+    animation: none;
+    transition: none;
+  }
+
+  /* Slowed, not stopped — a spinner that stops reads as a hung request. */
+  .tx-btn .tx-spin {
+    animation-duration: 1.6s;
+  }
+}
+
+/* ── The shared operation note, quieted for this world ──────────────────────
+   `OperationDescription` renders `bg-tint-accent border-l-[3px] border-indigo-500` — a 3px coloured
+   side accent and a raw shade literal, in a component all thirteen sections use. Inside the
+   transcript it was the loudest thing on the page and the only chrome carrying colour, which is
+   exactly the rule this world exists to hold.
+
+   Overridden here rather than changed at source: the other twelve sections still use the incumbent
+   world and would be left with an unstyled note. Fixing the shared component is the right move once
+   the world is adopted, not while it is a pilot in one section. */
+
+.tx-doc {
+  border-left: none;
+  border: 1px solid var(--t-rule);
+  border-radius: 1px;
+  background: transparent;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.tx-doc span,
+.tx-doc p {
+  color: var(--t-graphite);
+}
+
+.tx-doc svg {
+  color: var(--t-rule-strong);
+}

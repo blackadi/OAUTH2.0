@@ -1,4 +1,16 @@
-@import 'tailwindcss';
+/**
+ * Scanning is scoped to `src/`, and that is a correctness fix rather than a build-time one.
+ *
+ * Tailwind's automatic source detection starts at the **git root**, so it was reading every markdown
+ * file in the repository — `docs/`, an archived audit, this project's own `DESIGN.md` — and compiling
+ * any utility name it found in prose. The result: a sentence forbidding a shade literal *shipped that
+ * literal's CSS rule*, and so did every comment explaining that one had been removed. Four such
+ * comments were live at once, one of them inside the component written to abolish them.
+ *
+ * `source('..')` resolves against this file, so the scan is exactly `client/src` — the only place class
+ * names are actually written. `index.html` carries no classes; `e2e/` and `dist/` never should be read.
+ */
+@import 'tailwindcss' source('..');
 
 /**
  * Two complete palettes, dark-first.
@@ -38,12 +50,11 @@
   --danger-text: #f87171;
   --info-text: #7dd3fc;
   --ring: var(--accent);
-  --radius: 0.75rem;
   --sidebar-width: 14rem;
   /**
    * Card elevation, per palette.
    *
-   * `Card` hard-coded `shadow-slate-900/80` — `#0f172a` at 80%, chosen against `#020617` where it is
+   * `Card` hard-coded a `slate-900/80` shadow — `#0f172a` at 80%, chosen against `#020617` where it is
    * invisible. On the light palette the same declaration is a near-black halo, and `CallbackPage` is a
    * `Card`, so it landed on the page every learner reaches at the end of the headline flow. A shadow is
    * a colour like any other and belongs in the palette.
@@ -51,7 +62,7 @@
   /**
    * Tinted status surfaces, per palette.
    *
-   * **What these replace.** 121 literal `bg-indigo-500/10`, `border-amber-500/30`-style utilities across
+   * **What these replace.** 121 literal `bg-<hue>-500/10`, `border-<hue>-500/30`-style utilities across
    * ~30 files, in five semantic roles and eleven different opacities. They were all chosen against
    * `#020617`, where a 10% indigo wash is a whisper — and the same declaration over `#ffffff` reads as a
    * considerably stronger, cooler colour. The **contrast** was never the risk (`check-contrast.mjs`
@@ -295,7 +306,7 @@
   /**
    * Tinted status surfaces, per palette.
    *
-   * **What these replace.** 121 literal `bg-indigo-500/10`, `border-amber-500/30`-style utilities across
+   * **What these replace.** 121 literal `bg-<hue>-500/10`, `border-<hue>-500/30`-style utilities across
    * ~30 files, in five semantic roles and eleven different opacities. They were all chosen against
    * `#020617`, where a 10% indigo wash is a whisper — and the same declaration over `#ffffff` reads as a
    * considerably stronger, cooler colour. The **contrast** was never the risk (`check-contrast.mjs`
@@ -427,6 +438,38 @@
   --color-danger-grad-to: var(--danger-grad-to);
   --color-danger-grad-from-hover: var(--danger-grad-from-hover);
   --color-danger-grad-to-hover: var(--danger-grad-to-hover);
+  /**
+   * The converged corner scale — the migration lever for the whole tree (2026-09-02).
+   *
+   * Eighty `rounded-*` call sites across 64 components, and not one of them had to be edited: Tailwind
+   * generates its radius utilities from these, so redefining the scale moves every surface at once. That
+   * is also what makes it reversible — restoring the four values below rolls the entire visual migration
+   * back in one edit, with no call site left half-migrated.
+   *
+   * Near-square because both directions built for this app arrived there independently: a transcript and
+   * a logbook are ruled rectangles. The incumbent `rounded-lg` / `rounded-xl` came from a component
+   * library default and was never argued for; `--radius: 0.75rem` above it was declared and never
+   * consumed by anything at all.
+   *
+   * `--radius` is the fifth value and it is not decorative: Tailwind's bare `rounded` utility reads it
+   * rather than `--radius-md`, so without it 37 call sites across 10 components stayed at the built-in
+   * 0.25rem while everything around them moved to 2px — the exact half-migration this comment claims
+   * does not happen. It was found by reading the built stylesheet, not the source; a scale you have not
+   * seen compiled is a scale you are guessing about. The old `--radius: 0.75rem` in the palette block
+   * above is gone: nothing ever read `var(--radius)`, and two declarations of one name is how the next
+   * person picks the wrong one.
+   *
+   * `rounded-full` is deliberately NOT redefined, because a scale change cannot tell a circle from a
+   * pill. Of its eight uses, five were genuinely circular — two 6px status dots, a 28px step marker, a
+   * 20px help button and a 20px step number — and three were pills. The three pills are migrated at
+   * their call sites, where the judgment is visible; the five circles stay. Every survivor is
+   * square-dimensioned, which is the whole test.
+   */
+  --radius: 2px;
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1.45;
   --shadow-card: var(--shadow-card);
@@ -561,8 +604,8 @@
 }
 
 @layer utilities {
-  /* Hand-written rather than generated from `@theme`, matching `.bg-grid` and `.text-balance` below —
-     the colour tokens go through `@theme` because `check-theme-tokens.mjs` reads it; these do not. */
+  /* Hand-written rather than generated from `@theme`, matching `.text-balance` below — the colour
+     tokens go through `@theme` because `check-theme-tokens.mjs` reads it; these do not. */
   .animate-reveal {
     animation: reveal 220ms ease-out both;
   }
@@ -572,14 +615,21 @@
   }
 }
 
-@layer utilities {
-  .bg-grid {
-    background-image:
-      linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
-    background-size: 24px 24px;
-  }
+/**
+ * `.bg-grid` was here and is gone (2026-09-02).
+ *
+ * A two-axis hairline field — indigo at 3%, tiled on a 24px cell — drawn as a decorative page
+ * background. It had **no call sites**: not one `.tsx`, `.ts`, `.html` or `.ejs` in either package
+ * referenced it, so it had been shipping in the stylesheet and rendering nowhere.
+ *
+ * Removed on the strength of that rather than on taste, but the taste agrees: a tiled grid-line
+ * gradient is decoration standing in for depth, and this system conveys depth with four surface tones
+ * and one measured shadow. If a background ever needs texture again, it should come from the surface
+ * tokens, not from a hairline lattice keyed to a hardcoded `rgba(99, 102, 241, …)` that no longer
+ * tracks the accent in either palette.
+ */
 
+@layer utilities {
   .text-balance {
     text-wrap: balance;
   }

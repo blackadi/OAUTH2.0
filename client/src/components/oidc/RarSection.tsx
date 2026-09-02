@@ -19,6 +19,7 @@ import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
 import type { JWK } from '@/services/crypto-utils';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 const DEFAULT_RAR_JSON = JSON.stringify(
   [
@@ -222,13 +223,12 @@ function RarSection() {
           value={rarJson}
           onChange={(e) => setRarJson(e.target.value)}
           placeholder='[{ "type": "payment_initiation", "actions": ["initiate", "status"], "locations": ["https://bank.example.com/payments"] }]'
-          className={!isRarJsonValid && rarJson.trim() ? 'border-red-500' : ''}
+          error={
+            !isRarJsonValid && rarJson.trim()
+              ? 'Invalid JSON — must be an array of objects each with a "type" string field'
+              : undefined
+          }
         />
-        {!isRarJsonValid && rarJson.trim() && (
-          <p className="text-xs text-danger-text">
-            Invalid JSON — must be an array of objects each with a "type" string field
-          </p>
-        )}
 
         <Input
           label="Redirect URI"
@@ -275,22 +275,12 @@ function RarSection() {
         </div>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={usePar}
-            onChange={(e) => setUsePar(e.target.checked)}
-            className="accent-blue-500 w-4 h-4"
-          />
+          <Checkbox checked={usePar} onChange={(e) => setUsePar(e.target.checked)} />
           Use PAR (recommended for large authorization_details payloads)
         </label>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={useDpop}
-            onChange={(e) => setUseDpop(e.target.checked)}
-            className="accent-blue-500 w-4 h-4"
-          />
+          <Checkbox checked={useDpop} onChange={(e) => setUseDpop(e.target.checked)} />
           Use DPoP (sender-constrained token binding)
         </label>
 

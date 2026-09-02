@@ -1,0 +1,216 @@
+/**
+ * The Register — a world for chrome, piloted in `TraceRow`.
+ *
+ * **The thesis: the frame has no colour of its own.** This subtree is chrome. It surrounds sixty-four
+ * content surfaces, and every hue it spends is a hue competing with the thing it frames. So navigation,
+ * panels and controls here are type, rule and ground — and the only chroma in the entire frame is the
+ * outcome of a request. When something in the shell is coloured, the wire said so.
+ *
+ * That is the opposite of the incumbent shell, where the loudest object on screen is a violet logo chip
+ * and the second loudest is the active nav item, neither of which is evidence of anything.
+ *
+ * **The form is a bound logbook.** Ruled rows, a fixed numeric column you can scan down, tabular
+ * figures so digits align, and the status *first* because the status is what you are looking for. The
+ * incumbent row leads with a chevron and a method and puts the status third, in a bordered chip — three
+ * shapes competing before the one number that decides whether you care about the row.
+ *
+ * **A failure marks the whole row, not its edge.** A washed ground reads at scroll speed where a border
+ * does not, and it avoids the coloured side-accent this project bans in `DESIGN.md` — a ban I broke once
+ * already today and would have broken again here, since a status gutter down the left edge of a list row
+ * is exactly the pattern.
+ *
+ * Scoped to `.rg`. Both palettes. No new fonts.
+ */
+
+.rg {
+  --rg-rule: color-mix(in oklab, currentColor 12%, transparent);
+  --rg-rule-strong: color-mix(in oklab, currentColor 26%, transparent);
+  --rg-quiet: color-mix(in oklab, currentColor 55%, transparent);
+}
+
+/* ── The row ───────────────────────────────────────────────────────────── */
+
+.rg-row {
+  border-bottom: 1px solid var(--rg-rule);
+}
+
+.rg-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.3125rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  transition: background-color 120ms ease-out;
+}
+
+.rg-summary:hover {
+  background: var(--rg-rule);
+}
+
+.rg-summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+/* The whole row carries the outcome. A wash reads while scrolling; a 3px edge does not, and a coloured
+   border on a list item is the side-accent this project bans. */
+.rg-row[data-outcome='fail'] .rg-summary {
+  background: var(--tint-danger);
+}
+
+.rg-row[data-outcome='fail'] .rg-summary:hover {
+  background: var(--tint-danger-strong);
+}
+
+.rg-row[data-outcome='warn'] .rg-summary {
+  background: var(--tint-warning);
+}
+
+.rg-row[data-outcome='warn'] .rg-summary:hover {
+  background: var(--tint-warning-strong);
+}
+
+/* ── The columns ───────────────────────────────────────────────────────── */
+
+/* Status first, because the status is what you are scanning for. Fixed width and tabular figures so the
+   column reads as a column: three digits under three digits, with no chip border interrupting it. */
+.rg-status {
+  flex: none;
+  width: 2.25rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.rg-method {
+  flex: none;
+  width: 3rem;
+  color: var(--rg-quiet);
+}
+
+.rg-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rg-note {
+  flex: none;
+  color: var(--rg-quiet);
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rg-ms {
+  flex: none;
+  width: 3.75rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--rg-quiet);
+}
+
+.rg-caret {
+  flex: none;
+  width: 0.75rem;
+  color: var(--rg-quiet);
+}
+
+/* A saved row says so on the row: a trace showing somebody else's requests as yours is the one failure
+   of this feature that costs real time. Underline rather than a chip — one less box in a dense list. */
+.rg-flag {
+  flex: none;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-style: dotted;
+}
+
+/* ── The message ───────────────────────────────────────────────────────── */
+
+.rg-detail {
+  padding: 0.25rem 0.75rem 0.875rem 2.125rem;
+}
+
+/* The exchange as the wire carried it: request line, headers, blank line, body — the format the
+   specification is written against and the one you would paste into an issue. The incumbent shows two
+   header tables side by side, which is a rendering of the data rather than the artifact. */
+.rg-wire {
+  margin: 0 0 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-left: 1px solid var(--rg-rule-strong);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.rg-wire-start {
+  font-weight: 600;
+}
+
+.rg-wire-header {
+  color: var(--rg-quiet);
+}
+
+.rg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.rg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.1875rem 0.5rem;
+  border: 1px solid var(--rg-rule-strong);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--rg-quiet);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition:
+    color 120ms ease-out,
+    border-color 120ms ease-out;
+}
+
+.rg-btn:hover {
+  color: inherit;
+  border-color: currentColor;
+}
+
+.rg-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.rg-time {
+  color: var(--rg-quiet);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.6875rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rg-summary,
+  .rg-btn {
+    transition: none;
+  }
+}

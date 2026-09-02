@@ -207,7 +207,7 @@ function SequenceView({ traces, onSelect, selectedId }: SequenceViewProps) {
                 width={width}
                 height={ROW_HEIGHT - 6}
                 className={cn(
-                  isSelected ? 'fill-indigo-500/10' : 'fill-transparent hover:fill-muted/40',
+                  isSelected ? 'fill-tint-accent' : 'fill-transparent hover:fill-muted/40',
                 )}
               />
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useId } from 'react';
 import { toast } from 'sonner';
 import { parService } from '@/services';
 import type { ParSuccessResponse } from '@/services/par.service';
@@ -6,19 +6,36 @@ import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { generateKeyPair, createProof } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
 import { navigateTo } from '@/services/trace-store';
 import type { JWK } from '@/services/crypto-utils';
+import '@/styles/transcript.css';
 
+/**
+ * PAR, rendered as the exchange it is.
+ *
+ * **What changed and why.** This section used to be the same shape as the other twelve: a
+ * `SectionPanel`, a stack of boxed fields, a row of filled buttons, and a `JsonBlock` underneath. That
+ * shape is the one thing that hides what PAR is *for* — pushing the request out of the front channel, so
+ * the browser carries a reference instead of the parameters. A form-then-dump says nothing about a
+ * two-party exchange with a strict order, and the order is the security argument.
+ *
+ * So the section is a transcript. Turns run down a spine: you compose the outbound turn, the server's
+ * reply lands below it, and the front-channel hop is a third turn you can see coming before it exists.
+ *
+ * **Colour is evidence, never chrome.** No control on this surface is filled or tinted. Affordance is
+ * rule weight and ink; every coloured pixel means the server said something, and the hue says whether it
+ * issued or refused. That is why the primary action is a shadowed outline rather than a gradient — in a
+ * debugger, the brightest thing on screen should not be your own submit button.
+ *
+ * **Behaviour is unchanged.** Every handler, service call, DPoP path, session key, announcement and
+ * trace entry below is the incumbent implementation. This is a presentation rewrite; if it changed what
+ * the section *does*, it would be a different review.
+ */
 function ParSection() {
   const { loading, result, error, call } = useAsyncCall();
   const [parameters, setParameters] = useState(
@@ -38,6 +55,9 @@ function ParSection() {
   // paint, and which `react-hooks` flags. Lazy initialisation is the same read with no second render.
   const [pkceVerifier, setPkceVerifier] = useState(() => readKey(SESSION_KEYS.pkceVerifier) ?? '');
 
+  // `useId` rather than hand-written ids: this section renders once per route today, but a hardcoded
+  // `for`/`id` pair is a duplicate-id bug the moment it does not.
+  const uid = useId();
   const doc = getDoc('par', 'create');
 
   const handleGeneratePkce = useCallback(async () => {
@@ -153,120 +173,220 @@ function ParSection() {
     setParResult(null);
   };
 
+  const pushed = Boolean(parResult?.request_uri);
+
   return (
-    <SectionPanel
-      title="Pushed Authorization Requests (RFC 9126)"
-      description="Send authorization parameters via POST for a cleaner redirect"
-    >
-      {error && <ErrorExplainer error={error} className="mb-3" />}
+    <section className="tx">
+      <header className="tx-masthead">
+        {/* `h1` for the same reason the incumbent `SectionPanel` used one: this is the title of the page
+            the route renders, and it was the only heading on it. */}
+        <h1 className="tx-title">Pushed Authorization Request</h1>
+        <span className="tx-ref">RFC 9126</span>
+      </header>
 
-      {doc && <OperationDescription doc={doc} />}
+      <p className="tx-standfirst">
+        The client hands its authorization parameters to the server over the back channel and gets a
+        reference. The browser then carries only that reference, so the request cannot be inspected
+        or tampered with in the address bar.
+      </p>
 
-      <div className="space-y-3">
-        <Textarea
-          label="Parameters (URL-encoded)"
-          rows={4}
-          value={parameters}
-          onChange={(e) => setParameters(e.target.value)}
-          placeholder="response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3001/callback&scope=openid&state=...&code_challenge=..."
-        />
-
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">
-            Generate PKCE + State
-          </Button>
-          {pkceVerifier && (
-            <span
-              className="text-xs text-muted-foreground self-center truncate max-w-[200px]"
-              title={pkceVerifier}
-            >
-              verifier: {pkceVerifier.slice(0, 20)}...
-            </span>
-          )}
-        </div>
-
-        <Input
-          label="Client ID"
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-          placeholder="your_client_id"
-        />
-        {authMethod !== 'none' && (
-          <Input
-            label="Client Secret"
-            type="password"
-            value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
-            placeholder="your_client_secret"
+      <div className="tx-body">
+        {error && <ErrorExplainer error={error} className="mb-3" />}
+        {/* The Tailwind utilities are here so `twMerge` drops the component's own accent classes;
+            `tx-doc` carries the rest. Without them the incumbent tint wins the merge. */}
+        {doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
           />
         )}
 
-        <Select
-          label="Client Auth Method"
-          value={authMethod}
-          onChange={(e) => setAuthMethod(e.target.value as 'post' | 'basic' | 'none')}
-          options={[
-            { value: 'post', label: 'client_secret_post — credentials in body' },
-            { value: 'basic', label: 'client_secret_basic — Authorization header' },
-            { value: 'none', label: 'none — public client (PKCE required)' },
-          ]}
-        />
-        <p className="text-xs text-muted-foreground -mt-1">
-          Must match the client&apos;s registered method. Authlete checks which channel the
-          credentials arrive on and returns 401 on a mismatch.
-        </p>
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-dir="out">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">1 · Client → Server</span>
+            <span className="tx-turn-note">POST {PAR_ENDPOINT}</span>
+          </div>
 
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={useDpop}
-            onChange={(e) => setUseDpop(e.target.checked)}
-            className="accent-blue-500 w-4 h-4"
-          />
-          Use DPoP (sender-constrained token binding)
-        </label>
+          <label className="tx-field">
+            <span className="tx-label">Parameters (URL-encoded)</span>
+            <textarea
+              className="tx-textarea"
+              rows={4}
+              value={parameters}
+              onChange={(e) => setParameters(e.target.value)}
+              placeholder="response_type=code&client_id=…&redirect_uri=…&scope=openid&code_challenge=…"
+            />
+          </label>
 
-        <div className="flex gap-2 flex-wrap">
-          <Button onClick={handlePush} loading={loading}>
-            Push Authorization Request
-          </Button>
-          {parResult?.request_uri && (
-            <>
-              <Button onClick={handleRedirectToAuthorize}>Authorize (redirect)</Button>
-              <Button variant="secondary" onClick={handlePushAndRedirect} loading={loading}>
+          <div className="tx-actions" style={{ marginTop: '0.25rem', marginBottom: '1rem' }}>
+            <button type="button" className="tx-btn" onClick={handleGeneratePkce}>
+              Generate PKCE + state
+            </button>
+            {pkceVerifier && (
+              <span className="tx-turn-note" title={pkceVerifier}>
+                verifier {pkceVerifier.slice(0, 12)}…
+              </span>
+            )}
+          </div>
+
+          <div className="tx-row">
+            <label className="tx-field" htmlFor={`${uid}-cid`}>
+              <span className="tx-label">Client ID</span>
+              <input
+                id={`${uid}-cid`}
+                className="tx-input"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                placeholder="your_client_id"
+              />
+            </label>
+
+            {authMethod !== 'none' && (
+              <label className="tx-field" htmlFor={`${uid}-secret`}>
+                <span className="tx-label">Client Secret</span>
+                <input
+                  id={`${uid}-secret`}
+                  className="tx-input"
+                  type="password"
+                  value={clientSecret}
+                  onChange={(e) => setClientSecret(e.target.value)}
+                  placeholder="your_client_secret"
+                />
+              </label>
+            )}
+          </div>
+
+          <label className="tx-field" htmlFor={`${uid}-auth`}>
+            <span className="tx-label">Client Auth Method</span>
+            <select
+              id={`${uid}-auth`}
+              className="tx-select"
+              value={authMethod}
+              onChange={(e) => setAuthMethod(e.target.value as 'post' | 'basic' | 'none')}
+              aria-describedby={`${uid}-auth-hint`}
+            >
+              <option value="post">client_secret_post — credentials in body</option>
+              <option value="basic">client_secret_basic — Authorization header</option>
+              <option value="none">none — public client (PKCE required)</option>
+            </select>
+            <p className="tx-hint" id={`${uid}-auth-hint`}>
+              Must match the client&apos;s registered method. Authlete checks which channel the
+              credentials arrive on and returns 401 on a mismatch.
+            </p>
+          </label>
+
+          <label className="tx-check">
+            <input
+              type="checkbox"
+              checked={useDpop}
+              onChange={(e) => setUseDpop(e.target.checked)}
+            />
+            Use DPoP (sender-constrained token binding)
+          </label>
+
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={handlePush}
+              disabled={loading}
+            >
+              {loading && <span className="tx-spin" aria-hidden="true" />}
+              {loading ? 'Pushing…' : 'Push Authorization Request'}
+            </button>
+            {pushed && (
+              <button
+                type="button"
+                className="tx-btn"
+                onClick={handlePushAndRedirect}
+                disabled={loading}
+              >
                 Push + Authorize
-              </Button>
-              <Button variant="secondary" onClick={handleReset} size="sm">
-                Reset
-              </Button>
-            </>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        <div
+          className="tx-turn"
+          data-dir={pushed ? 'in' : undefined}
+          data-state={pushed ? 'landed' : 'pending'}
+        >
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">2 · Server → Client</span>
+            {pushed && <span className="tx-turn-note">201 Created</span>}
+          </div>
+
+          {pushed && parResult ? (
+            <div className="tx-evidence tx-lands" data-outcome="issued">
+              <div className="tx-evidence-head">
+                <span className="tx-evidence-verdict">Request URI issued</span>
+                <span className="tx-turn-note">expires in {parResult.expires_in ?? '~600'}s</span>
+              </div>
+              <span className="tx-datum">
+                <span className="tx-datum-key">request_uri</span>
+                <span className="tx-datum-value">{parResult.request_uri}</span>
+              </span>
+              {authUrl && (
+                <span className="tx-datum">
+                  <span className="tx-datum-key">Front-channel URL</span>
+                  <span className="tx-datum-value">
+                    <a href={authUrl} target="_blank" rel="noopener noreferrer">
+                      {authUrl}
+                    </a>
+                  </span>
+                </span>
+              )}
+            </div>
+          ) : (
+            /* The waiting state is the same shape the answer will occupy, so nothing jumps when it
+               lands — and it names what is coming rather than leaving a void. */
+            <div className="tx-waiting">
+              The server will answer with a <code>request_uri</code> and the seconds it stays valid.
+              Nothing is sent until you push.
+            </div>
           )}
         </div>
-      </div>
 
-      {parResult?.request_uri && (
-        <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
-          <p className="text-xs text-foreground-muted font-mono break-all">
-            <span className="text-muted-foreground">request_uri: </span>
-            {parResult.request_uri}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Expires in: {parResult.expires_in ?? '~600'}s &nbsp;|&nbsp; Auth URL:{' '}
-            <a
-              href={authUrl}
-              className="text-info-text hover:underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {authUrl}
-            </a>
-          </p>
+        {/* ── Turn 3 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-state={pushed ? 'landed' : 'pending'}>
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">3 · Browser → Server</span>
+            <span className="tx-turn-note">front channel</span>
+          </div>
+
+          {pushed ? (
+            <div className="tx-actions" style={{ marginTop: 0 }}>
+              <button
+                type="button"
+                className="tx-btn tx-btn-primary"
+                onClick={handleRedirectToAuthorize}
+              >
+                Authorize (redirect)
+              </button>
+              <button type="button" className="tx-btn" onClick={handleReset}>
+                Clear
+              </button>
+            </div>
+          ) : (
+            <div className="tx-waiting">
+              You leave the application here, carrying only the reference. The parameters stay on
+              the server.
+            </div>
+          )}
         </div>
-      )}
 
-      {result !== null && !parResult && <JsonBlock data={result} label="Response" />}
-      {parResult && <JsonBlock data={parResult} label="PAR Response" />}
-    </SectionPanel>
+        {/* The raw body stays available — it is the evidence, and the summary above is a reading of it,
+            not a replacement for it. */}
+        {result !== null && !parResult && <JsonBlock data={result} label="Response" />}
+        {parResult && <JsonBlock data={parResult} label="PAR Response" />}
+      </div>
+    </section>
   );
 }
 

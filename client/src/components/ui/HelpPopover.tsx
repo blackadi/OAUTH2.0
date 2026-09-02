@@ -162,7 +162,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
       <button
         ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center justify-center w-5 h-5 rounded-full border border-indigo-500 bg-transparent text-accent-text cursor-pointer hover:bg-indigo-500 hover:text-white transition-colors shrink-0"
+        className="flex items-center justify-center w-5 h-5 rounded-full border border-accent bg-transparent text-accent-text cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         aria-label="Help"
         aria-expanded={open}
         aria-controls="help-popover-panel"

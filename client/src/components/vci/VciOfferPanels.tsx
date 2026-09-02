@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { AdminAuth } from '@/components/layout/AdminAuth';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 /**
  * The two offer operations, which are the only ones here behind **admin Basic auth**.
@@ -18,11 +19,10 @@ import { AdminAuth } from '@/components/layout/AdminAuth';
 function renderCheckbox(label: string, checked: boolean, onChange: (v: boolean) => void) {
   return (
     <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-      <input
-        type="checkbox"
+      <Checkbox
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="accent-indigo-500 w-3.5 h-3.5 rounded border-border bg-muted/30"
+        className="w-3.5 h-3.5"
       />
       {label}
     </label>
