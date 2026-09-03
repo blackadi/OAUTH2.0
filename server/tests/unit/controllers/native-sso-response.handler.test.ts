@@ -129,3 +129,100 @@ describe("handleNativeSso — device secret minting (F-4)", () => {
     expect(b.status).toHaveBeenCalledWith(500)
   })
 })
+
+/**
+ * **Phase 2 — the exchange leg, where the binding is checked rather than recomputed.**
+ *
+ * The defect these pin (found 2026-09-03 by `scripts/native-sso-verify.mjs`, live): the handler
+ * computed `deviceSecretHash` from whatever `actor_token` arrived, on both legs. Authlete echoes that
+ * value back on an exchange, so the hash was **re-bound** to the caller's secret instead of compared to
+ * the one already bound. Sending 32 random bytes returned 200 with the victim's `sub` and `sid` and an
+ * ID token whose `ds_hash` was the hash of the attacker's own secret — so holding an ID token was
+ * enough, and the device secret proved nothing.
+ *
+ * The old code passes every case above and fails every case below, which is the point of keeping both.
+ */
+describe("handleNativeSso — Phase 2 verifies the presented device secret", () => {
+  const secret = "the-real-device-secret"
+  const boundHash = createHash("sha256").update(secret).digest("base64url")
+
+  /** An ID token is only read for its claims here, so an unsigned one is a faithful fixture. */
+  const idTokenWith = (claims: Record<string, unknown>) =>
+    [
+      Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url"),
+      Buffer.from(JSON.stringify(claims)).toString("base64url"),
+      "",
+    ].join(".")
+
+  /** Authlete echoes the caller's `actor_token` back as `deviceSecret` on the exchange leg. */
+  const phase2 = (echoed: string) =>
+    ({
+      action: "NATIVE_SSO",
+      accessToken: "at-phase-2",
+      sessionId: "sess-1",
+      subject: "probe-user",
+      deviceSecret: echoed,
+    }) as unknown as TokenResponse
+
+  const exchangeReq = (actorToken: string, dsHash?: string) =>
+    ({
+      body: {
+        actor_token: actorToken,
+        actor_token_type: "urn:openid:params:token-type:device-secret",
+        subject_token: idTokenWith(dsHash === undefined ? { sub: "probe-user" } : { sub: "probe-user", ds_hash: dsHash }),
+      },
+    }) as unknown as Request
+
+  beforeEach(() => mockProcess.mockReset())
+
+  it("refuses a device secret whose hash is not the subject token's ds_hash", async () => {
+    const res = mockRes()
+    await handleNativeSso(exchangeReq("32-random-bytes-from-an-attacker", boundHash), res, phase2("32-random-bytes-from-an-attacker"), next)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "invalid_grant" }),
+    )
+    expect(
+      mockProcess,
+      "reaching /nativesso at all would mint an ID token bound to the attacker's secret",
+    ).not.toHaveBeenCalled()
+  })
+
+  it("refuses a subject token that carries no ds_hash, rather than skipping the check", async () => {
+    const res = mockRes()
+    await handleNativeSso(exchangeReq(secret, undefined), res, phase2(secret), next)
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    // Fail-closed: "nothing to compare" is the reading that turns a missing value into a bypass.
+    expect(mockProcess).not.toHaveBeenCalled()
+  })
+
+  it("accepts the real secret and forwards the hash already bound to the session", async () => {
+    mockProcess.mockResolvedValue({ action: "OK", responseContent: '{"access_token":"new"}' })
+    const res = mockRes()
+    await handleNativeSso(exchangeReq(secret, boundHash), res, phase2(secret), next)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    const sent = (mockProcess.mock.calls[0][0] as Request).body as Record<string, unknown>
+    expect(sent.deviceSecret, "forwarded unchanged").toBe(secret)
+    expect(
+      sent.deviceSecretHash,
+      "the bound hash, not a fresh computation — recomputing is what allowed re-binding",
+    ).toBe(boundHash)
+  })
+
+  /**
+   * `nonce` and `s_hash` reach the ID token only through `/nativesso`'s `claims`. Omitting it dropped a
+   * nonce the client had sent, so OIDC Core §3.1.3.7's check could not be performed.
+   */
+  it("forwards additionalClaims so a nonce survives into the ID token", async () => {
+    mockProcess.mockResolvedValue({ action: "OK", responseContent: "{}" })
+    const res = mockRes()
+    const result = { ...phase1, additionalClaims: '{"nonce":"n-1"}' } as unknown as TokenResponse
+    await handleNativeSso(req(), res, result, next)
+
+    const sent = (mockProcess.mock.calls[0][0] as Request).body as Record<string, unknown>
+    expect(sent.claims).toBe('{"nonce":"n-1"}')
+  })
+})

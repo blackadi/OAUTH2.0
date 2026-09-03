@@ -359,6 +359,36 @@ async function run() {
     t2.ok,
   );
 
+  /**
+   * The assumption `native-sso-response.handler.ts` relies on, asserted rather than commented.
+   *
+   * That handler reads `ds_hash` out of the subject token **without verifying its signature**, on the
+   * grounds that Authlete cannot have reached `action: NATIVE_SSO` for a token it did not issue. If that
+   * is ever untrue, an attacker mints their own ID token with a `ds_hash` of their choosing and the
+   * verification compares two attacker-supplied values. So: forge one and require a refusal.
+   */
+  const forgedSecret = randomBytes(32).toString("base64url");
+  const forged = [
+    Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url"),
+    Buffer.from(
+      JSON.stringify({
+        ...idc,
+        ds_hash: createHash("sha256").update(forgedSecret).digest("base64url"),
+      }),
+    ).toString("base64url"),
+    "",
+  ].join(".");
+  const forgedRes = await exchange({ subjectToken: forged, actorToken: forgedSecret });
+  const t4 = refusedBecause(forgedRes, "invalid|A\\d{6}|token");
+  record(
+    "a self-signed subject token is refused",
+    "the handler reads ds_hash unverified, so Authlete must be the one rejecting this",
+    "4xx",
+    t4.detail,
+    t4.ok,
+    "if this ever passes, reading ds_hash without verifying the subject token becomes a forgery route",
+  );
+
   // Documents the service flag rather than working around it. Native SSO targets mobile apps, which
   // are normally public — so this is the constraint a real deployment has to decide about.
   const asPublic = await exchange({
