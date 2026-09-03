@@ -260,7 +260,9 @@ a proof minted elsewhere cannot be replayed. Two details: the proof's `htm`/`htu
 introspection endpoint's own*, because the server derives them from that request rather than from a
 resource request; and `ath` **is** included here, unlike Grant Management, which omits it because its
 request carries the token in the `Authorization` header — introspection's holds the admin credential
-and the token is a body parameter, so `ath` is what ties proof to token. `Introspect (RFC 7662)`
+and the token is a body parameter, so `ath` is what ties proof to token (verified live 2026-09-03: the
+introspection body comes back with `ath` present, so the two paths differ deliberately and neither is a
+template for the other). `Introspect (RFC 7662)`
 checks no binding and remains the working path when the key is gone.
 
 **`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them. **One key is excluded from that sweep and it is not an oversight**: `traceHistory` is evidence, not credential state, and `resetSession` is what the vault's "Clear session" button calls — sweeping it would delete the request history as a side effect of clearing tokens, unmentioned in that dialog's list. The exclusion is the named `EVIDENCE_KEYS` list with a test on it, in both `session-keys.test.ts` and `TokenContext.test.tsx`.

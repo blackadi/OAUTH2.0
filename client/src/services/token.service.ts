@@ -286,7 +286,9 @@ async function introspection(
  * because its request carries the token in the `Authorization` header, so Authlete derives the binding
  * from `cnf.jkt`. Here the `Authorization` header holds the *admin* credential and the token is a body
  * parameter, so `ath` — the hash of the token, RFC 9449 §7.1 — is what ties this proof to the token
- * being introspected.
+ * being introspected. **Verified live 2026-09-03**: introspection of a FAPI 2.0 DPoP-bound token from
+ * the deployed client returns the introspection body with `ath` present, so this is vendor behaviour
+ * observed rather than inferred. The two paths differ on purpose; neither is a template for the other.
  *
  * `htm`/`htu` are this endpoint's own, because `introspection.service.ts` derives them from the
  * incoming introspection request rather than from a resource request. They must agree or the proof is

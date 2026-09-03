@@ -200,8 +200,8 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
   },
   A065308: {
     cause: 'The same DPoP downgrade, refused at the introspection API.',
-    fix: 'As A089311 — the `DPoP` scheme plus a proof. Note the code differs per API for one condition.',
-    spec: 'Verified live 2026-08-12 at /auth/introspection',
+    fix: "A proof, but **not** the `DPoP` scheme — and that is where this differs from A089311. `/auth/introspection` is resource-server-facing: the token travels as the `token` body parameter while `Authorization` carries the caller's own credential, so the proof goes in the `DPoP` header beside it and `ath` binds it to the token. `htm`/`htu` are the introspection endpoint's, since that is the request being signed. `Introspect (RFC 7662)` checks no binding and works without any of this.",
+    spec: 'Verified live 2026-08-12 at /auth/introspection; fix verified 2026-09-03',
     verifiedHere: true,
   },
   A281305: {
