@@ -83,9 +83,10 @@
   `invalid_dpop_proof`** — §8 makes rejection a MUST and lets the rejection carry a fresh nonce, and
   `use_dpop_nonce` is the code that means *"retry with this one"*. Reserve `invalid_dpop_proof` for a proof that
   is genuinely malformed. Token/PAR endpoints may return a nonce on success; protected resources return one only
-  on error. See `docs/PAR-TUTORIAL.md` → *DPoP Nonce Handling* for the full captured transcript, and
-  `docs/FAPI-TUTORIAL.md` Step 3 for the PAR half — both are labelled **captured under a temporary
-  configuration**, which is a different claim from *"reproducible here"* and from `UNVERIFIED`.
+  on error. See `docs/PAR-TUTORIAL.md` → *DPoP Nonce Handling* for the full transcript, labelled **captured under a
+  temporary configuration** — a different claim from *"reproducible here"* and from `UNVERIFIED`.
+  `docs/FAPI-TUTORIAL.md` Step 3 summarises the same behaviour, stated conditionally ("if nonces are
+  on") because the flag is off here by decision.
 
   **Observed with the flag temporarily on — six things RFC 9449 does not say:**
 
@@ -94,7 +95,9 @@
     One written to treat a repeated nonce as a replay would be wrong.
   - **A nonce comes back on success at both AS endpoints** — the token endpoint (2026-08-15) *and* PAR's
     `201 Created` (2026-08-17). That confirms the "may return a nonce on success" sentence above for both, and
-    it is why `FAPI-TUTORIAL.md`'s PAR block showing `201 + DPoP-Nonce` was **unreachable rather than wrong**.
+    it also settled an earlier deletion: a tutorial block showing `201 + DPoP-Nonce` had been removed as
+    `UNVERIFIED`, and the probe showed it was **unreachable rather than wrong** — the distinction to make
+    before deleting a transcript you cannot currently reproduce.
   - **PAR and the token endpoint use different vendor codes for one condition** — **`[A350308]`** at
     `/pushed_auth_req`, **`[A254307]`** at `/auth/token`. Match on `error: use_dpop_nonce`, never on the code.
   - **An authorization code SURVIVES a `use_dpop_nonce` refusal.** The refusal precedes redemption, so the same
