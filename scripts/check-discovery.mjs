@@ -60,7 +60,7 @@ const CLAIMS = [
   { feature: "Backchannel Logout", member: "backchannel_logout_supported", expect: true },
   // Declined / not enabled — the member must stay ABSENT. These are the rows that catch a flag
   // being switched on without its paired doc change, which is the failure DR-03 shipped in August.
-  { feature: "Native SSO (DR-04, declined)", member: "native_sso_supported", expect: false },
+  { feature: "Native SSO (DR-04, ENABLED 2026-09-03)", member: "native_sso_supported", expect: true },
   { feature: "Session Management (DR-08, declined)", member: "check_session_iframe", expect: false },
   { feature: "Front-Channel Logout (DR-08, declined)", member: "frontchannel_logout_supported", expect: false },
   { feature: "Back-channel logout `sid` (DR-08, declined)", member: "backchannel_logout_session_supported", expect: false },

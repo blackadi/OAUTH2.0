@@ -386,6 +386,18 @@ authentication: the first app's token response includes a `device_secret`, which
 (together with the first app's ID token) via
 `grant_type=urn:openid:params:grant-type:device_secret` for its own tokens.
 
+> **This runs on the deployment now — enabled and verified 2026-09-03**, reversing
+> [DR-04](../../../../audit/05-decision-records.md#dr-04--native-sso). `scripts/native-sso-verify.mjs`
+> drives both phases and passes 13 of 13: App 2's ID token carries the *same* `sid` and `ds_hash` as App
+> 1's, which is the shared-session property the whole feature exists for.
+>
+> **What verifying it found is the part worth your time.** Phase 2 never checked the device secret — it
+> recomputed `ds_hash` from whatever secret was presented, so any secret "matched" and holding an ID
+> token was enough. The two phases arrive as the *same* vendor action and need opposite handling: Phase 1
+> mints and hashes, Phase 2 compares and must compute nothing. And omitting the `actor_token` turns the
+> request into a plain RFC 8693 impersonation exchange, which needs no device secret at all — so the
+> binding is only as strong as the deployment's token-exchange policy.
+
 > **Status caveat, and it matters.** This is an **OpenID 2nd Implementer's Draft** — **draft 07, whose own
 > header is dated 16 January 2025, approved as the 2nd Implementer's Draft on 2025-10-17** — and **not** a Final
 > specification. Do not cite it as normative. **Give both dates, because they answer different questions:** the

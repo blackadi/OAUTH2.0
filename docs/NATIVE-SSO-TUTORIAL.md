@@ -36,9 +36,12 @@
 > the device secret optional in practice. `scripts/native-sso-verify.mjs` asserts this rather than
 > leaving it as an inference.
 >
-> **Note on decision records:** [DR-04](../audit/05-decision-records.md#dr-04--native-sso) records Native
-> SSO as *declined*. The service now has it enabled, so that record is behind reality; reconciling it is
-> a separate decision and this file does not assume the answer.
+> **Specification status, because it is not Final.** Draft 07, header dated 16 January 2025, approved as
+> an **OpenID 2nd Implementer's Draft** — a stable version with IP protections for implementers, but not
+> a Final specification. Do not cite it as normative. Give **both** dates when you do cite it: the header
+> date says which text you read, the approval date says what standing it has.
+> [DR-04](../audit/05-decision-records.md#dr-04--native-sso) was reversed on 2026-09-03 to enable the
+> feature, and records why the reversal was cheap and what verifying it cost.
 >
 > ### 🔒 The defect verification found, because it is the lesson of this file
 >

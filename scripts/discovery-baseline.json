@@ -1,8 +1,8 @@
 {
-  "captured": "2026-08-17",
+  "captured": "2026-09-03",
   "issuer": "https://oauth2-0-ekh2.onrender.com",
-  "count": 66,
-  "note": "Member LIST, not just a count. A count tells you something changed; only a list tells you what.",
+  "count": 67,
+  "note": "Member LIST, not just a count. A count tells you something changed; only a list tells you what. Recaptured 2026-09-03: native_sso_supported appeared when Native SSO was enabled (DR-04 reversed), taking the document from 66 members to 67.",
   "members": [
     "acr_values_supported",
     "authorization_details_types_supported",
@@ -42,6 +42,7 @@
     "introspection_signing_alg_values_supported",
     "issuer",
     "jwks_uri",
+    "native_sso_supported",
     "pre-authorized_grant_anonymous_access_supported",
     "prompt_values_supported",
     "pushed_authorization_request_endpoint",

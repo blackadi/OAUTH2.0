@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Native SSO Phase 2 re-bound the device secret instead of verifying it**
+  (`native-sso-response.handler.ts`): `deviceSecretHash` was recomputed from whatever `actor_token`
+  arrived, so any secret "matched" the subject token's `ds_hash` and possession of an ID token was
+  enough to obtain tokens for that user. Phase 2 now compares in constant time and refuses on mismatch;
+  a subject token with no `ds_hash` is refused rather than treated as nothing to check. Found by
+  `scripts/native-sso-verify.mjs`
+- **`ath` and the DPoP proof at the introspection API** (`token.service.ts`, client): introspecting a
+  DPoP-bound token sent no proof, so Authlete refused it with `[A065308]`. `introspectForToken` now
+  sources the key from the session and sends the proof beside the admin credential
+
 ### Added
+
+- **`scripts/native-sso-verify.mjs`**: end-to-end Native SSO probe — both phases, the `ds_hash` binding,
+  `sid` continuity across two apps, and four negative cases including a forged subject token. 13/13
+- **Native SSO enabled and verified** (2026-09-03), reversing DR-04. Discovery now advertises
+  `native_sso_supported` and carries 67 members
+- **JARM support in the SPA callback** (`utils/jarm.ts`): verifies the signed authorization response
+  against the server JWKS before reading `code`/`state`/`iss`, and shows the JWT in the inspector
+- **Request trace persistence** (`trace-store.ts`): the trace survives the front-channel redirect, so
+  the callback page can compare both halves of an authorization-code flow
 
 - **MCP (Model Context Protocol) OAuth 2.1 testing section**: Full client UI with 3 tabs (AS Metadata, Protected Resource Metadata, CIMD Metadata) and 5-step Full Flow Wizard (Discover → Register → Authorize → Token → UserInfo)
 - **`/.well-known/oauth-authorization-server` endpoint**: RFC 8414 AS metadata served at root for MCP spec compliance
@@ -19,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **FAPI 2.0 wizard could not complete** (`use-fapi-flow.ts`, `CallbackPage.tsx`): the signed request
+  object omitted `response_mode=jwt`, which the `fapi2: ms-authres` scope attribute makes mandatory, so
+  every run ended in an `[A309301]` error redirect. The callback also could not read a JARM response
+- **Native SSO step 3 was unreachable and would have crashed** (`use-fapi-flow.ts`, `trace-store.ts`):
+  the callback dropped every flow on the dashboard, and the FAPI wizard lost both key pairs across the
+  redirect. `navigateTo` now records where to return to, and the wizard restores its keys
+- **An ID-token `subject_token` returned HTTP 500** (`token-exchange-response.handler.ts`): the whole
+  JWT was passed as the token-create `subject`, earning `[A144103]`. Authlete leaves subject resolution
+  to the AS for `subjectTokenType: ID_TOKEN`, so the `sub` claim is used — leaving Module 06 Exercise
+  6c's deliberate substitution untouched
 - **Token revoke bug** (`token.management.controller.ts:152`): `TokenRevokeResponse` has no `action` field — replaced `resultCode`-based switch with correct handling, sanitized response body to `{ count }`, improved catch block for `ResultError`
 - **`revokeGrant()` bug** (`grant.service.ts:21`): Was calling `response.json()` on 204 No Content
 - **Routes view gap**: `routes-list.routes.ts` static `ROUTES` array updated — 80+ endpoints now listed including Device Flow, Native SSO, JAR, Federation, VCI, Client Management, HSK, FAPI

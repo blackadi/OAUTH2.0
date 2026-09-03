@@ -95,7 +95,7 @@ marker whose premise has silently changed is worse than no marker at all.
 >
 > | Kind | Means | Example |
 > |---|---|---|
-> | **decision-gated** | a decision record says the deployment will not produce it | Native SSO ([DR-04](../audit/05-decision-records.md#dr-04--native-sso)), FAPI 2.0 (DR-02), JWT access tokens (DR-09) |
+> | **decision-gated** | a decision record says the deployment will not produce it | FAPI 2.0 (DR-02), JWT access tokens (DR-09). **Native SSO left this category on 2026-09-03** — [DR-04](../audit/05-decision-records.md#dr-04--native-sso) was reversed and the feature is verified |
 > | **deliberately not probed** | settling it would make the documentation *worse* | the exact `error_description` strings — vendor text that rots between versions, and printing it invites parsing it |
 > | **partly answerable** | one half is testable, the other needs elapsed time or a client we lack | device-code garbage collection; issuing a real credential (needs a wallet) |
 > | **answerable at a cost** | a probe exists but requires a live configuration write | the unregistered RAR types |

@@ -29,7 +29,7 @@ decline with no trigger is a dead end rather than a decision.
 | [DR-01](#dr-01--mutual-tls-rfc-8705) | Mutual TLS | **UPHELD** — decline, rationale corrected | FAPI 1.0 Part 2, FAPI 2.0's mTLS branch |
 | [DR-02](#dr-02--fapi-20-security-profile) | FAPI 2.0 Security Profile | ✅ **RULED 2026-08-14 — qualify the claim; do NOT enable the profile** | The most curriculum material of any record |
 | [DR-03](#dr-03--oid4vci-verifiable-credential-issuance) | OID4VCI | ✅ **DECIDED + EXECUTED 2026-08-14 — enabled.** `/vci/metadata` answers `OK`; F-1 closed | Module 09b, `README.md` |
-| [DR-04](#dr-04--native-sso) | Native SSO | ✅ **RULED 2026-08-14, RE-RULED 2026-08-17 — do NOT enable.** Upheld on live evidence; a new Phase-1 defect found | `NATIVE-SSO-TUTORIAL.md`, Module 09a |
+| [DR-04](#dr-04--native-sso) | Native SSO | ✅ **REVERSED 2026-09-03 — ENABLED and verified.** Ground 2 answered by probe; ground 1 (draft status) accepted as a caveat. Verifying found an auth bypass | `NATIVE-SSO-TUTORIAL.md`, Module 09a, `scripts/native-sso-verify.mjs` |
 | [DR-05](#dr-05--cimd-and-the-mcp-claim) | CIMD / MCP | ✅ **DECIDED + EXECUTED 2026-08-14 — CIMD enabled; MCP still qualified** | `MCP-OAUTH-TUTORIAL.md` |
 | [DR-06](#dr-06--fapi-10-baseline-and-advanced) | FAPI 1.0 | ✅ **RULED 2026-08-14 — document-only** | Module 10 |
 | [DR-07](#dr-07--spiffe_jwt-and-the-nine-advertised-client-auth-methods) | `SPIFFE_JWT` | ✅ **DECIDED + EXECUTED 2026-08-12 — dropped; Ex 4 rebuilt, not retired** | **Module 10 Exercise 4** |
@@ -67,7 +67,8 @@ decline with no trigger is a dead end rather than a decision.
 |---|---|
 | **Executed — configuration changed** | DR-03 (VCI enabled, + a credential-issuer JWK Set via VCI-W6), DR-05 (CIMD enabled), DR-07 (`SPIFFE_JWT` withdrawn, nine methods → five), DR-11 (issuer aligned) |
 | **Executed — documentation/code only** | DR-12 (five surfaces added, one exclusion made explicit), DR-17, DR-18 |
-| **Ruled: do not enable / decline** | DR-01 (mTLS), DR-02 (FAPI 2.0 — qualify, do not enable), DR-04 (Native SSO), DR-06 (FAPI 1.0, document-only), DR-08 (Session Management + Front-Channel Logout, as one), DR-13, DR-14, DR-15, DR-16, **DR-20 (DPoP nonces)**, **DR-21 (OpenID Federation)** |
+| **Ruled: do not enable / decline** | DR-01 (mTLS), DR-02 (FAPI 2.0 — qualify, do not enable), DR-06 (FAPI 1.0, document-only), DR-08 (Session Management + Front-Channel Logout, as one), DR-13, DR-14, DR-15, DR-16, **DR-20 (DPoP nonces)**, **DR-21 (OpenID Federation)** |
+| **Reversed — later enabled** | **DR-04 (Native SSO, 2026-09-03)** — the only record so far to change direction; see it for why the reversal was cheap and what verifying it cost |
 | **Ruled: defer** | DR-09 (JWT access tokens) |
 | **Ruled: keep as-is** | DR-10 (the three deliberate token-exchange defects — 8693-W5 **not** approved) |
 | **Deliberately no record** | DR-19 (RFC 9901) |
@@ -195,7 +196,56 @@ carries the same banner — theme 2's remedy (T2-8).
 
 ## DR-04 — Native SSO
 
-**Status: ✅ RULED 2026-08-14 — do NOT enable. ✅ RE-RULED 2026-08-17 — upheld, on evidence rather than prediction.**
+**Status: ✅ REVERSED 2026-09-03 — Native SSO is ENABLED and verified end to end.** Ruled 2026-08-14 and
+re-ruled 2026-08-17 as *do not enable*; the history below is kept because the reversal is only legible
+against it.
+
+> ### The reversal, and what it cost to find out
+>
+> `nativeSsoSupported` and the `device_sso` scope were enabled on service `3693555522` on **2026-09-03**,
+> and `scripts/native-sso-verify.mjs` now drives both phases: **13 of 13 checks pass.** App 1 receives a
+> `device_secret` with an ID token carrying `sid` and a `ds_hash`; App 2 exchanges the pair for its own
+> tokens with no user interaction and gets the *same* `sid` and `ds_hash`.
+>
+> **Ground 2 — the `sid` question — is answered, and the answer is that no code change was needed.** This
+> record feared that *"a second app must be able to exchange an ID token issued under an earlier session"*
+> and that, failing that, `sessionId` would have to derive from the browser session — a security-critical
+> edit to `services/authorization.service.ts`. Measured: the Phase 2 exchange carries **no cookies at
+> all**. Authlete resolves the session from the ID token's `sid` claim, so a fresh `sessionId` per
+> authorization is the correct design and the feared edit is unnecessary. The blocker was real as a
+> question and empty as a defect.
+>
+> **Ground 1 stands as a caveat, and it is weaker than this record originally stated.** It called the
+> specification an *"active Internet-Draft … the one feature in this group resting on a moving
+> document."* Checked 2026-09-03: the document is **draft 07, header dated 16 January 2025**, and it was
+> approved as an **OpenID 2nd Implementer's Draft** — a *stable* version carrying IP protections for
+> implementers, published as `openid-connect-native-sso-1_0-ID2.html`. Not Final, so do not cite it as
+> normative; but "moving document" overstated it, and Module 09a's status line had this right while this
+> record did not. `NATIVE-SSO-TUTORIAL.md` and Module 09a both carry the status, with **both dates** —
+> the header date says which text you read, the approval date says what standing it has.
+>
+> **The 2026-08-17 blocker 2 also stands.** `tokenExchangeByConfidentialClientsOnly` is `true`, so Phase 2
+> is refused to **public** clients (`[A311304]`) — the client type the specification exists to serve. The
+> probe asserts that refusal rather than relaxing the flag, and the finding below explains why relaxing it
+> would be the wrong instinct.
+>
+> ### What verifying it found, which is the argument for having enabled it
+>
+> **Phase 2 never checked the device secret; it re-bound it.** `handleNativeSso` recomputed
+> `deviceSecretHash` from whatever `actor_token` arrived, so 32 random bytes returned **200** with the
+> victim's `sub` and `sid` and an ID token whose `ds_hash` was the hash of the attacker's own secret.
+> Possession of an ID token was sufficient. Fixed 2026-09-03; four unit cases pin it.
+>
+> **That defect existed for the entire period this record said "declined".** Declining a feature does not
+> make its code harmless — it makes it *unexercised*, and this repo had already shipped the Phase 1 mint
+> fix into the same handler while declining, which is how a bypass came to be waiting behind a flag. The
+> lesson generalises past Native SSO: **a decision not to enable is not a decision not to verify.**
+>
+> **And one interaction worth carrying elsewhere.** Omit the `actor_token` and the same request is a plain
+> RFC 8693 impersonation exchange — `actor_token` is OPTIONAL (§2.1) — so a confidential client holding a
+> user's ID token gets tokens with no device secret at all. Native SSO's device binding is therefore only
+> as strong as the deployment's token-exchange policy, which is a second reason not to widen
+> `tokenExchangeByConfidentialClientsOnly` casually.
 
 > **What the 2026-08-17 re-derivation changed.** The 2026-08-14 ruling *predicted* that enabling the flag
 > *"would produce a two-app sequence that half-works."* A set → probe → revert (`SERVICE-CONFIG-PROBE.md` §24.3,
