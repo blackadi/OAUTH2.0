@@ -18,10 +18,23 @@
 > `[A311304]`. Native SSO exists for *mobile* apps, which are normally public — so this is a real
 > deployment decision, not a box to tick. The probe asserts the refusal instead of relaxing the flag.
 >
-> **One failure is open and is not in the Native SSO path.** An exchange with no `actor_token` returns
-> Authlete's `TOKEN_EXCHANGE` action rather than `NATIVE_SSO`, lands in
-> `controllers/token-exchange-response.handler.ts`, and answers HTTP 500 — see
-> [Part 10](#problem-token-exchange-returns-500).
+> **All 13 checks pass as of 2026-09-03.** The one that used to fail — an exchange with no
+> `actor_token` answering HTTP 500 — was two mistakes stacked: the server handed Authlete an entire ID
+> token as a `subject` (fixed), and the probe expected a refusal where RFC 8693 §2.1 makes `actor_token`
+> **optional**, so a 200 is correct. See the security note below, because the correct behaviour is the
+> more interesting finding.
+>
+> ### ⚠️ The device secret is only as strong as your token-exchange policy
+>
+> Omit the `actor_token` and the same request becomes a plain RFC 8693 **impersonation** exchange:
+> Authlete answers `action: TOKEN_EXCHANGE` instead of `NATIVE_SSO`, and a confidential client holding
+> the user's ID token gets tokens for that user **with no device secret at all**. Nothing is broken —
+> that is impersonation working as specified, on a service that has deliberately granted the grant type.
+>
+> But it means Native SSO's device binding is not a floor. If the secret must be mandatory, plain
+> impersonation exchange has to be withheld from these clients; enabling both on the same clients makes
+> the device secret optional in practice. `scripts/native-sso-verify.mjs` asserts this rather than
+> leaving it as an inference.
 >
 > **Note on decision records:** [DR-04](../audit/05-decision-records.md#dr-04--native-sso) records Native
 > SSO as *declined*. The service now has it enabled, so that record is behind reality; reconciling it is
@@ -865,16 +878,20 @@ The AS should maintain a list of apps authorized for SSO. During token exchange,
 
 ### Problem: Token Exchange Returns 500
 
-**Measured cause (2026-09-03), and it is not the Native SSO path.** An exchange with **no**
-`actor_token` is not a Native SSO request, so Authlete returns `action: TOKEN_EXCHANGE` rather than
-`NATIVE_SSO`. In this repo that lands in `controllers/token-exchange-response.handler.ts`, which passes
-the whole subject-token JWT as the `subject` of a token-create call; Authlete answers
-`[A144103] Failed to insert a new access token into the database` and the request 500s.
+**Fixed 2026-09-03. The cause was subject resolution, not the Native SSO path.** An exchange with no
+`actor_token` is not a Native SSO request, so Authlete returns `action: TOKEN_EXCHANGE`. In this repo
+that lands in `controllers/token-exchange-response.handler.ts`, which passed the **whole subject-token
+JWT** as the `subject` of a token-create call; Authlete answered
+`[A144103] Failed to insert a new access token into the database` and the request 500d.
 
-A missing required parameter should be a 4xx. This is an open finding rather than a fix, because that
-handler carries defects the curriculum teaches deliberately — changing its behaviour is a curriculum
-question. If you are seeing this with an `actor_token` present, check the `action` your AS actually
-returned before looking anywhere else.
+Measured for `subjectTokenType: "ID_TOKEN"`: Authlete returns `subject: null` *and*
+`subjectTokenInfo.subject: null`, reporting only the type. It has verified the token but leaves subject
+resolution to the authorization server, because the subject **is** the token's `sub` claim. Resolving
+it there fixes the 500 without touching the substitution that Module 06 Exercise 6c depends on — that
+one only applies to non-ID-token subject tokens.
+
+If you are seeing a 500 here on your own server, check which `action` your AS returned before looking
+anywhere else: the two paths differ entirely, and only one of them involves a device secret.
 
 ### Problem: `ds_hash` Doesn't Match
 

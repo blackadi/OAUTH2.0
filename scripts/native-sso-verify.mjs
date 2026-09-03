@@ -349,14 +349,33 @@ async function run() {
     "without this the ds_hash binding is decorative",
   );
 
+  /**
+   * **Not a refusal case, and getting that wrong is the point.**
+   *
+   * This probe first asserted a 4xx here and reported a FAIL — which was the probe being wrong, not the
+   * server. `actor_token` is OPTIONAL in RFC 8693 §2.1, so an exchange without one is a valid
+   * *impersonation* request rather than a malformed Native SSO one. It never reaches `handleNativeSso`:
+   * Authlete answers `action: TOKEN_EXCHANGE`, and the generic handler issues a token.
+   *
+   * It used to answer **500** — that handler passed the whole ID token JWT as the `subject` of a
+   * token-create call and Authlete refused with `[A144103]` (fixed 2026-09-03 by resolving the ID
+   * token's `sub`, which is what Authlete leaves to the AS for `subjectTokenType: ID_TOKEN`).
+   *
+   * **The consequence is worth more than the assertion.** A confidential client holding a user's ID
+   * token can obtain tokens for that user by simply *omitting* the device secret. That is RFC 8693
+   * impersonation working as specified, and it means Native SSO's device-secret requirement is only as
+   * strong as the deployment's token-exchange policy: if the secret must be mandatory, plain
+   * impersonation exchange has to be withheld from these clients.
+   */
   const noActor = await exchange({ subjectToken: body.id_token, actorToken: null, omitActor: true });
-  const t2 = refusedBecause(noActor, "actor|device|invalid_request|invalid_grant|A\\d{6}");
+  const noActorBody = noActor.json ?? {};
   record(
-    "an exchange with no actor_token is refused",
-    "Native SSO 1.0 §4",
-    "4xx",
-    t2.detail,
-    t2.ok,
+    "no actor_token is a plain impersonation exchange, not a Native SSO request",
+    "RFC 8693 §2.1 — actor_token is OPTIONAL",
+    "200, and no device_secret (it did not take the Native SSO path)",
+    `${noActor.status} device_secret=${noActorBody.device_secret ? "PRESENT" : "absent"}`,
+    noActor.status === 200 && !noActorBody.device_secret,
+    "so the device secret is mandatory only if the deployment withholds impersonation exchange",
   );
 
   /**

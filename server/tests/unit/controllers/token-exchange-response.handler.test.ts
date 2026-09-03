@@ -224,3 +224,61 @@ describe("handleTokenExchange — characterization of deliberate gaps", () => {
     expect(res.status).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * **An ID-token subject token resolved to a 500, and that was not one of the taught defects.**
+ *
+ * `subject = result.subject || subjectToken` is deliberate — Exercise 6c has the learner find a live
+ * access token sitting in an identity field when Authlete resolves no subject for a client-credentials
+ * subject token. The cases below leave that exactly as it is.
+ *
+ * What it also did, unintentionally, is hand Authlete an entire ID token JWT as a `subject` when the
+ * subject token was an ID token. Authlete answered `[A144103] Failed to insert a new access token into
+ * the database` and the request 500d — for a legitimate RFC 8693 impersonation exchange. Measured
+ * 2026-09-03: for `subjectTokenType: "ID_TOKEN"` Authlete returns `subject: null` *and*
+ * `subjectTokenInfo.subject: null`, leaving subject resolution to the AS because the subject is the
+ * token's `sub`.
+ */
+describe("handleTokenExchange — subject resolution by subject-token type", () => {
+  const idToken = [
+    Buffer.from(JSON.stringify({ alg: "ES256" })).toString("base64url"),
+    Buffer.from(JSON.stringify({ sub: "alice", sid: "sess-9" })).toString("base64url"),
+    "sig",
+  ].join(".")
+
+  beforeEach(() => mocks.mockCreate.mockReset())
+
+  it("uses the ID token's sub, not the whole JWT, as the subject", async () => {
+    mocks.mockCreate.mockResolvedValue({ action: "OK", accessToken: "at-x", scopes: ["openid"] })
+    const res = mockRes()
+    await handleTokenExchange(
+      mockReq(),
+      res,
+      { ...authleteResult, subject: undefined, subjectToken: idToken, subjectTokenType: "ID_TOKEN" } as never,
+      next(),
+    )
+
+    const sent = (mocks.mockCreate.mock.calls[0][0] as Request).body as Record<string, unknown>
+    expect(sent.subject, "the whole JWT here is what earned [A144103] and a 500").toBe("alice")
+    expect(res.status).toHaveBeenCalledWith(200)
+  })
+
+  /**
+   * Exercise 6c, unchanged. A client-credentials subject token has no user, Authlete resolves no
+   * subject, and the raw token still lands in the identity field — which is the finding the exercise
+   * is built on. Fixing that here would retire it.
+   */
+  it("still substitutes the raw subject token for a non-ID-token type", async () => {
+    mocks.mockCreate.mockResolvedValue({ action: "OK", accessToken: "at-y", scopes: [] })
+    const res = mockRes()
+    await handleTokenExchange(
+      mockReq(),
+      res,
+      { ...authleteResult, subject: undefined, subjectToken: "opaque-cc-token", subjectTokenType: "ACCESS_TOKEN" } as never,
+      next(),
+    )
+
+    const sent = (mocks.mockCreate.mock.calls[0][0] as Request).body as Record<string, unknown>
+    expect(sent.subject, "Exercise 6c depends on this staying wrong").toBe("opaque-cc-token")
+  })
+})

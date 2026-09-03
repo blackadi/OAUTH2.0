@@ -3,6 +3,7 @@ import { Request, NextFunction, Response } from "express";
 import logger from "../utils/logger";
 import { TokenResponse } from "@authlete/typescript-sdk/models";
 import { NativeSsoService } from "../services/native-sso.service";
+import { unverifiedStringClaim } from "../utils/jwt-claims";
 
 const nativeSsoService = new NativeSsoService();
 
@@ -26,17 +27,7 @@ const deviceSecretHashOf = (secret: string) =>
  * (`scripts/native-sso-verify.mjs`) asserts it directly with a self-signed subject token rather than
  * leaving it as a comment.
  */
-function dsHashOf(subjectToken: unknown): string | undefined {
-  if (typeof subjectToken !== "string") return undefined;
-  try {
-    const payload = JSON.parse(
-      Buffer.from(subjectToken.split(".")[1] ?? "", "base64url").toString("utf8")
-    ) as Record<string, unknown>;
-    return typeof payload.ds_hash === "string" ? payload.ds_hash : undefined;
-  } catch {
-    return undefined;
-  }
-}
+const dsHashOf = (subjectToken: unknown) => unverifiedStringClaim(subjectToken, "ds_hash");
 
 /** Constant-time, because this compares a credential. Unequal lengths are answered before comparing. */
 function hashesMatch(a: string, b: string): boolean {

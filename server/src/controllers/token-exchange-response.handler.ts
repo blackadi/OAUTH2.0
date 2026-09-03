@@ -1,5 +1,6 @@
 import { Request, NextFunction, Response } from "express";
 import logger from "../utils/logger";
+import { unverifiedStringClaim } from "../utils/jwt-claims";
 import {
   TokenCreateRequest,
   TokenResponse,
@@ -29,7 +30,28 @@ export async function handleTokenExchange(
     // The result is a live access token sitting in an identity field, returned to the client and
     // served by the unauthenticated introspection endpoint. That is the finding Module 06
     // Exercise 6c has the learner discover; failing closed here would retire the exercise.
-    const subject = result.subject || subjectToken;
+    /**
+     * **An ID-token subject token resolves to its `sub`, and that is the fix for a 500 — not a change
+     * to the defect below.**
+     *
+     * Measured 2026-09-03 for `subject_token_type=urn:ietf:params:oauth:token-type:id_token`: Authlete
+     * answers `subject: null` **and** `subjectTokenInfo.subject: null`, reporting only
+     * `subjectTokenType: "ID_TOKEN"`. It has verified the token but leaves subject resolution to the
+     * authorization server, because the subject *is* the token's `sub` claim.
+     *
+     * Without this branch the fallback below handed Authlete the entire ID token JWT as a `subject`,
+     * and token-create answered `[A144103] Failed to insert a new access token into the database` — an
+     * HTTP **500** for a legitimate RFC 8693 impersonation request. Found by
+     * `scripts/native-sso-verify.mjs` while probing Native SSO: an exchange with no `actor_token` is
+     * not a Native SSO request, so it arrives here instead of at `handleNativeSso`.
+     *
+     * Reading `sub` unverified is safe *here* for the reason `utils/jwt-claims.ts` documents: Authlete
+     * refuses an unsigned `subject_token` with `[A311335]` before this code runs.
+     */
+    const idTokenSubject =
+      result.subjectTokenType === "ID_TOKEN" ? unverifiedStringClaim(subjectToken, "sub") : undefined;
+
+    const subject = result.subject || idTokenSubject || subjectToken;
 
     // ⚠️ DELIBERATE TEACHING DEFECT — four request parameters are dropped here.
     //
