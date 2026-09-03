@@ -317,16 +317,32 @@ if (!hasRealAuthleteCreds) {
         expect(res.body).toHaveProperty("access_token")
         expect(res.body.token_type).toBe("Bearer")
 
-        // Only store the token if id_token is present (indicates full OIDC support)
-        if (res.body.id_token) {
-          state.accessToken = res.body.access_token
-          state.idToken = res.body.id_token
-          state.refreshToken = res.body.refresh_token || ""
-        }
+        /**
+         * The id_token is REQUIRED here, not a capability to probe for.
+         *
+         * This was `if (res.body.id_token) { … }` under the comment *"only store the token if id_token
+         * is present (indicates full OIDC support)"*, and it made the suite lie in two directions. The
+         * authorization request above asks for `scope: "openid profile"`, and OIDC Core §3.1.3.3 says
+         * the token response for that flow **MUST** include an `id_token` — so its absence is a defect,
+         * not an optional feature to detect at runtime.
+         *
+         * Worse, `state.accessToken` was assigned inside the same conditional. A regression that
+         * stopped the id_token being issued therefore also emptied the access token, and every later
+         * test keyed on it returned early and **passed**. One defensive `if` silently disabled the
+         * id_token assertion, this section's remaining coverage and the userinfo checks below it.
+         * Found 2026-09-03 by `check-e2e-staleness.mjs`, after three commits rewrote exactly the claim
+         * handling this was failing to watch.
+         */
+        expect(
+          res.body.id_token,
+          "scope included `openid`, so OIDC Core §3.1.3.3 makes an id_token mandatory",
+        ).toBeTruthy()
+        state.accessToken = res.body.access_token
+        state.idToken = res.body.id_token
+        state.refreshToken = res.body.refresh_token || ""
       })
 
-      it("ID Token has subject = admin (if id_token was issued)", async () => {
-        if (!state.idToken) return
+      it("ID Token has subject = admin", async () => {
         const parts = state.idToken.split(".")
         expect(parts.length).toBe(3)
         const payload = JSON.parse(
@@ -411,6 +427,61 @@ if (!hasRealAuthleteCreds) {
           .get("/api/userinfo")
           .set("Authorization", "Bearer not-a-real-token")
         expect([400, 401]).toContain(res.status)
+      })
+    })
+
+    /**
+     * **The success body, which nothing asserted until 2026-09-03.**
+     *
+     * UserInfo had exactly two tests and both were rejections — no Authorization header, and a bad
+     * bearer token. So the only thing the suite knew about this endpoint was how it says no, on the
+     * one surface three commits (`6c31852`, `a8b6704`, `97a4ca9`) had just rewritten: which claims are
+     * served and what their values are. `check-e2e-staleness.mjs` flagged the files; the gap it could
+     * not see is that the coverage pointed the other way.
+     *
+     * Gated with `describeIf` rather than an early `return` on `state.accessToken`. The early-return
+     * habit is what let the block above disable itself silently — a skipped test says so in the
+     * report, a guarded one reads as a pass.
+     *
+     * Costs one Authlete call on a token the happy path has already obtained; it adds no login, no
+     * consent and no exchange, so it does not move the suite against the ~15-call rate limit.
+     */
+    describeIf(hasConfidential)("Userinfo — the response body (OIDC Core §5.3.2)", () => {
+      it("returns the subject and the profile claims this deployment actually serves", async () => {
+        expect(state.accessToken).toBeTruthy()
+        const res = await request
+          .get("/api/userinfo")
+          .set("Authorization", `Bearer ${state.accessToken}`)
+
+        expect(res.status).toBe(200)
+        expect(res.body.sub).toBe("admin")
+        // `profile` was requested, and `name` is on SERVED_CLAIMS with the subject as its value.
+        // `claims_supported` advertised nine claims the server could not produce until 97a4ca9; this
+        // asserts the served side of that correction rather than the advertised side.
+        expect(res.body.name).toBe("admin")
+        // Not requested — `email` needs its own scope, and returning it anyway would be over-disclosure.
+        expect(res.body).not.toHaveProperty("email")
+      })
+
+      /**
+       * `updated_at` was `Math.floor(Date.now() / 1000)` — a clock read — so the id_token and userinfo
+       * disagreed about when a profile that never changes was last changed (`a8b6704`). Asserting a
+       * literal would pin an implementation constant; asserting it is not *now* states the defect
+       * itself. A clock read puts the delta within seconds of zero, and these profiles come from
+       * static `AUTH_USERS` configuration that is never updated.
+       */
+      it("reports updated_at as a fixed profile timestamp, not the current clock", async () => {
+        const res = await request
+          .get("/api/userinfo")
+          .set("Authorization", `Bearer ${state.accessToken}`)
+
+        expect(res.status).toBe(200)
+        expect(typeof res.body.updated_at).toBe("number")
+        const ageSeconds = Math.floor(Date.now() / 1000) - res.body.updated_at
+        expect(
+          ageSeconds,
+          "updated_at within a day of now is a clock read, which is the defect a8b6704 fixed",
+        ).toBeGreaterThan(86_400)
       })
     })
 
