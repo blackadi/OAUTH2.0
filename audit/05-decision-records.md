@@ -224,10 +224,18 @@ against it.
 > record did not. `NATIVE-SSO-TUTORIAL.md` and Module 09a both carry the status, with **both dates** —
 > the header date says which text you read, the approval date says what standing it has.
 >
-> **The 2026-08-17 blocker 2 also stands.** `tokenExchangeByConfidentialClientsOnly` is `true`, so Phase 2
-> is refused to **public** clients (`[A311304]`) — the client type the specification exists to serve. The
-> probe asserts that refusal rather than relaxing the flag, and the finding below explains why relaxing it
-> would be the wrong instinct.
+> **The 2026-08-17 blocker 2 is now closed too, and the order it was closed in is the point.**
+> `tokenExchangeByConfidentialClientsOnly` was `true`, refusing Phase 2 to **public** clients
+> (`[A311304]`) — the client type the specification exists to serve. Lifting it alone would have opened
+> plain impersonation to any permitted public client, since `actor_token` is optional (RFC 8693 §2.1) and
+> a `client_id` is not a secret. So the refusal went into `handleTokenExchange` **first**, inert while
+> the flag was still on, and the flag came off second (2026-09-03). Public clients now complete Phase 2
+> with a device secret and are refused without one — 14 of 14. Authlete has no setting expressing that
+> rule, which is why it is the authorization server's to hold.
+>
+> **One step remains and it is configuration, not code.** `tokenExchangeByPermittedClientsOnly` is
+> `true`, but all four clients carry `tokenExchangePermitted: true`, so the allowlist currently grants
+> everything.
 >
 > ### What verifying it found, which is the argument for having enabled it
 >

@@ -23,8 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`scripts/native-sso-verify.mjs`**: end-to-end Native SSO probe — both phases, the `ds_hash` binding,
   `sid` continuity across two apps, and four negative cases including a forged subject token. 13/13
-- **Native SSO enabled and verified** (2026-09-03), reversing DR-04. Discovery now advertises
-  `native_sso_supported` and carries 67 members
+- **Native SSO enabled and verified** (2026-09-03), reversing DR-04, including for **public** clients —
+  the client type the specification exists to serve. Discovery now advertises `native_sso_supported`
+  and carries 67 members
+- **An unauthenticated client may not impersonate** (`token-exchange-response.handler.ts`): a token
+  exchange from a client that did not authenticate is refused with `unauthorized_client`. This is what
+  makes lifting `tokenExchangeByConfidentialClientsOnly` safe — `actor_token` is optional in RFC 8693
+  §2.1, so without it any permitted public client could obtain tokens for any user whose ID token it
+  held. Authlete has no setting that expresses the rule
 - **JARM support in the SPA callback** (`utils/jarm.ts`): verifies the signed authorization response
   against the server JWKS before reading `code`/`state`/`iss`, and shows the JWT in the inspector
 - **Request trace persistence** (`trace-store.ts`): the trace survives the front-channel redirect, so

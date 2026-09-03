@@ -408,24 +408,6 @@ async function run() {
     "if this ever passes, reading ds_hash without verifying the subject token becomes a forgery route",
   );
 
-  // Documents the service flag rather than working around it. Native SSO targets mobile apps, which
-  // are normally public — so this is the constraint a real deployment has to decide about.
-  const asPublic = await exchange({
-    subjectToken: body.id_token,
-    actorToken: deviceSecret,
-    clientId: APP1,
-    secret: "",
-  });
-  const t3 = refusedBecause(asPublic, "A311304|public|confidential");
-  record(
-    "a public client cannot exchange (tokenExchangeByConfidentialClientsOnly)",
-    "Authlete service flag",
-    "4xx [A311304]",
-    t3.detail,
-    t3.ok,
-    "Native SSO is for mobile apps, which are usually public clients — this flag is a real deployment decision",
-  );
-
   /**
    * **The public-client path — the one thing between "verified here" and "usable by a real mobile app".**
    *

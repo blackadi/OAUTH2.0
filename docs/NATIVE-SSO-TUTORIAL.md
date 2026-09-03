@@ -13,10 +13,9 @@
 > interaction** and receives the *same* `sid` and `ds_hash` — which is the property the whole feature
 > exists for. Discovery advertises `native_sso_supported: true` and grows to 67 members.
 >
-> **One constraint remains, and it is a policy rather than a defect.**
-> `tokenExchangeByConfidentialClientsOnly` is `true`, so Phase 2 from a public client is refused with
-> `[A311304]`. Native SSO exists for *mobile* apps, which are normally public — so this is a real
-> deployment decision, not a box to tick. The probe asserts the refusal instead of relaxing the flag.
+> **Public clients can complete Phase 2 as of 2026-09-03**, which is what makes this usable by the
+> client type Native SSO exists for. `tokenExchangeByConfidentialClientsOnly` is now `false`, and the
+> refusal that keeps that safe is this server's, not Authlete's — see the box below.
 >
 > **All 13 checks pass as of 2026-09-03.** The one that used to fail — an exchange with no
 > `actor_token` answering HTTP 500 — was two mistakes stacked: the server handed Authlete an entire ID
@@ -24,30 +23,31 @@
 > **optional**, so a 200 is correct. See the security note below, because the correct behaviour is the
 > more interesting finding.
 >
-> ### 📱 What is still needed for a real mobile app
+> ### 📱 Public clients, and the guard that makes them safe
 >
-> Native SSO's target client type is a **public** native app, and
-> `tokenExchangeByConfidentialClientsOnly` is `true` here — so Phase 2 is verified only for a
-> *confidential* App 2. Closing that gap takes three steps **in this order**, and the order is the whole
-> point:
+> Native SSO's target client type is a **public** native app — no client secret, and a `client_id` that
+> is not a secret either. `tokenExchangeByConfidentialClientsOnly` is `false` here so those apps can
+> complete Phase 2, verified 2026-09-03: a public client presenting a valid device secret gets tokens,
+> and one presenting **no** device secret is refused with `unauthorized_client`.
 >
-> 1. **Code first.** An unauthenticated client must be refused plain impersonation. That guard is
->    already in place (`token-exchange-response.handler.ts`) and is **inert** while the flag is true.
-> 2. **Then the service flag** → `tokenExchangeByConfidentialClientsOnly: false`.
-> 3. **Then narrow the allowlist.** `tokenExchangeByPermittedClientsOnly` is already `true`, but every
->    client currently has `tokenExchangePermitted: true`, so it grants everything. Turn it off for any
->    client that is not a Native SSO participant — this is the authorized-app list
->    [Part 9 §6](#6-explicit-app-authorization) describes.
+> **That second refusal is this server's, and Authlete cannot do it for you.** Its restrictions are
+> `tokenExchangeByIdentifiableClientsOnly`, `tokenExchangeByConfidentialClientsOnly` and
+> `tokenExchangeByPermittedClientsOnly`, plus per-client `tokenExchangePermitted` — none expresses
+> *"public clients may exchange **with** a device secret and never without."* Without that rule, lifting
+> the confidential-only flag lets any permitted public client obtain tokens for any user whose ID token
+> it holds, because `actor_token` is optional in RFC 8693 §2.1 and nothing else is being proved. So the
+> order matters: **the guard goes in before the flag comes off.**
 >
-> Flip the flag before step 1 and there is a window in which any permitted public client can obtain
-> tokens for any user whose ID token it holds — a `client_id` is not a secret. **Authlete cannot enforce
-> step 1 for you**: its restrictions are `tokenExchangeByIdentifiableClientsOnly`,
-> `tokenExchangeByConfidentialClientsOnly` and `tokenExchangeByPermittedClientsOnly`, plus per-client
-> `tokenExchangePermitted`, and none expresses *"public clients may exchange **with** a device secret and
-> never without."*
+> The rule is one condition because of how Authlete routes: a device-secret exchange becomes
+> `action: NATIVE_SSO`, everything else `TOKEN_EXCHANGE`. Arriving at the generic handler therefore
+> *means* "not a Native SSO exchange", so an unauthenticated caller there is exactly the impersonation
+> case to refuse.
 >
-> `scripts/native-sso-verify.mjs` carries both public-client cases and reports them **SKIP** with the
-> reason until the flag moves, so they are visible rather than absent.
+> **One step is still open, and it is yours.** `tokenExchangeByPermittedClientsOnly` is `true`, but every
+> client currently has `tokenExchangePermitted: true` — so the allowlist grants everything. Turn it off
+> for any client that is not a Native SSO participant; that is the authorized-app list
+> [Part 9 §6](#6-explicit-app-authorization) describes, and it is the difference between "these apps
+> share a session" and "any registered app can join".
 >
 > ### ⚠️ The device secret is only as strong as your token-exchange policy
 >
