@@ -43,11 +43,17 @@
 > *means* "not a Native SSO exchange", so an unauthenticated caller there is exactly the impersonation
 > case to refuse.
 >
-> **One step is still open, and it is yours.** `tokenExchangeByPermittedClientsOnly` is `true`, but every
-> client currently has `tokenExchangePermitted: true` — so the allowlist grants everything. Turn it off
-> for any client that is not a Native SSO participant; that is the authorized-app list
-> [Part 9 §6](#6-explicit-app-authorization) describes, and it is the difference between "these apps
-> share a session" and "any registered app can join".
+> **The allowlist is narrowed, and that completes the picture.** `tokenExchangeByPermittedClientsOnly`
+> is `true` *and* per-client `tokenExchangePermitted` is now off for every client that is not a Native
+> SSO participant (narrowed 2026-09-03). Both halves are needed: the flag alone does nothing while every
+> client is permitted, which is how this service sat for a while — enabled and granting everything.
+> A client outside the list is refused with `[A311305]`, which the probe asserts.
+>
+> **Two refusals that look alike and are not.** A client outside the allowlist is refused by
+> **Authlete**; an unauthenticated impersonation is refused by **this server**. Reading only the status
+> code cannot tell them apart, and the difference is which layer you go and fix. This is the
+> authorized-app list [Part 9 §6](#6-explicit-app-authorization) describes, and it is the difference
+> between *"these apps share a session"* and *"any registered app can join."*
 >
 > ### ⚠️ The device secret is only as strong as your token-exchange policy
 >

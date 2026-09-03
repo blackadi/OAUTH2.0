@@ -476,6 +476,35 @@ async function run() {
     );
   }
 
+  /**
+   * **The allowlist, asserted rather than assumed.**
+   *
+   * `tokenExchangeByPermittedClientsOnly` is `true`, but that flag only bites if per-client
+   * `tokenExchangePermitted` is actually *off* somewhere — and for a while every client on this service
+   * had it on, so the flag was enabled and granting everything. Narrowed 2026-09-03 to the two paired
+   * clients; this case is what tells you the narrowing is real.
+   *
+   * It also separates two refusals that would otherwise look alike: a client outside the allowlist is
+   * refused by **Authlete**, whereas an unauthenticated impersonation is refused by **this server**.
+   * A single "4xx" assertion would not distinguish them, and the difference is which layer you fix.
+   */
+  const notPermitted = process.env.UNPERMITTED_CLIENT_ID || "1678274156";
+  const outsideList = await exchange({
+    subjectToken: body.id_token,
+    actorToken: deviceSecret,
+    clientId: notPermitted,
+    secret: "",
+  });
+  const t6 = refusedBecause(outsideList, "permit|A\\d{6}|unauthorized_client|invalid");
+  record(
+    "a client outside the token-exchange allowlist is refused",
+    "Authlete `tokenExchangeByPermittedClientsOnly` + per-client `tokenExchangePermitted`",
+    "4xx",
+    t6.detail,
+    t6.ok,
+    `client ${notPermitted} has tokenExchangePermitted=false — this is the authorized-app list Part 9 §6 describes`,
+  );
+
   summarise();
 }
 

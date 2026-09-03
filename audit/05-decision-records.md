@@ -233,9 +233,12 @@ against it.
 > with a device secret and are refused without one — 14 of 14. Authlete has no setting expressing that
 > rule, which is why it is the authorization server's to hold.
 >
-> **One step remains and it is configuration, not code.** `tokenExchangeByPermittedClientsOnly` is
-> `true`, but all four clients carry `tokenExchangePermitted: true`, so the allowlist currently grants
-> everything.
+> **Closed 2026-09-03: the allowlist is narrowed.** `tokenExchangeByPermittedClientsOnly` was already
+> `true` while all four clients carried `tokenExchangePermitted: true` — enabled and granting
+> everything, which is the state a flag audit reads as "on" and a request audit reads as "no
+> restriction". It is now off for the two clients with no token-exchange role, verified by read-back
+> with **zero unexpected field changes** beyond `modifiedAt`, and a client outside the list is refused
+> with `[A311305]`. The probe asserts it, so the narrowing cannot silently regress.
 >
 > ### What verifying it found, which is the argument for having enabled it
 >
