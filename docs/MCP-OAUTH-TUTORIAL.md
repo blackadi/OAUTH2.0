@@ -1,57 +1,43 @@
 # MCP OAuth 2.1 — Testing & Configuration Guide
 
-**The short version:** MCP (Model Context Protocol) uses OAuth 2.1 for authorization, and this guide walks the
-discovery, registration, authorization and token steps end to end. **The code for all of it is here** — CIMD
-client discovery, resource indicators for scoped access, PKCE for public clients. What is *not* here is a
-service configured to let those steps succeed. Read the box below before you run anything, or you will debug
-your own request when the answer is a service flag.
+> **The short version:** MCP (Model Context Protocol) uses OAuth 2.1 to let AI assistants reach external
+> tools and data. This guide walks discovery, registration, authorization and the token exchange end to
+> end.
 
-> ### ⚠️ MCP does not work end to end on the reference deployment — three preconditions fail
+> ### ⚠️ MCP does not work end to end on the reference deployment
 >
-> This guide used to open by saying the server *"supports MCP flows out of the box"*. That was wrong, and it is
-> the kind of wrong that costs an afternoon: the wiring is complete, so the failures look like your bugs.
-> Verified against the live service on **2026-08-10**, against the discovery document on **2026-08-11**, and
-> re-checked on **2026-08-14** — when the document had grown to **64 members**. Labels below are
-> **captured** / *illustrative* / **`UNVERIFIED`**, defined once in
+> The code is all here — CIMD discovery, resource indicators, PKCE. What is missing is a *service*
+> configured to let the steps succeed, and because the wiring is complete the failures look like your
+> bugs. Read this before you debug your own request. Labels are **captured** / *illustrative* /
+> **`UNVERIFIED`**, defined once in
 > [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials).
 >
-> | Precondition | What MCP requires | This deployment | Fix |
-> |---|---|---|---|
-> | **OAuth 2.1** | *"Authorization servers **MUST** implement OAuth 2.1"* (MCP Authorization, Overview) | ⚠️ **still unmet.** `implicit` **and** `password` are in `grant_types_supported`, and OAuth 2.1 removes both. PKCE is required **per client, not service-wide**: `pkceRequired`/`pkceS256Required` are `true` on two clients since 2026-08-13, while the service flag stays `false` — verified live, `/api/fapi/config` answers `pkceRequired: false`. Two other clients deliberately still permit the plain flow, because Modules 02 and 03 teach what it costs | a differently-configured service, or scope the claim |
-> | **A self-consistent issuer** | RFC 8414 §3 — the metadata must be served from the `issuer` host, because that correspondence *is* the trust anchor discovery rests on | ✅ **fixed 2026-08-14 (DR-11).** `issuer` and all 14 URL fields are now `https://oauth2-0-ekh2.onrender.com`, so §3.3 passes — the issuer is exactly the host and every URL member sits under it. Until then `issuer` was `https://blackadi.dev` while the metadata lived on an ephemeral tunnel host, so a client following §3 could not resolve this AS at all | — |
-> | **CIMD** | an HTTPS URL as `client_id`, with metadata auto-fetched | ✅ **enabled 2026-08-14 (DR-05).** `clientIdMetadataDocumentSupported = true`, verified live — `/api/fapi/config` answers `cimdSupported: true`. Authlete handles CIMD entirely server-side, so no endpoint or client code was needed | — |
+> | Precondition | Status here (verified 2026-08-14) |
+> |---|---|
+> | **OAuth 2.1** — MCP says the AS *"MUST implement OAuth 2.1"* | ⚠️ **unmet.** `implicit` and `password` are still in `grant_types_supported`, and OAuth 2.1 removes both. PKCE is per-client here, not service-wide |
+> | **A self-consistent issuer** — RFC 8414 §3 requires the metadata to be served from the `issuer` host | ✅ met |
+> | **CIMD** — an HTTPS URL as `client_id` | ✅ met (`clientIdMetadataDocumentSupported`) |
 >
-> Two more, both about members that are **absent** from the 64-member document (re-checked 2026-08-14):
+> Two discovery members are **absent**, and they are different problems:
 >
-> - **`registration_endpoint`** — so there is nothing for a client to discover and Dynamic Client Registration
->   cannot be found the way RFC 7591 clients find it. This repo's DCR routes are at `/api/client/dcr/*` behind
->   admin Basic auth — use those directly (see [DCR](API.md)).
-> - **`resource_indicators_supported`** — and this one cannot be fixed from the console. Of the `Service`
->   schema's properties in Authlete 3.0.16, **none** carries the word `resource` except
->   `resourceSignatureKeyId`, and the string `resource_indicators_supported` appears nowhere in Authlete's own
->   OpenAPI document. So the row for it in [Required Authlete Configuration](#required-authlete-configuration)
->   names **a setting that does not exist** — corrected below. **✅ Settled 2026-08-17, and the answer is
->   stronger than the question:** RFC 8707 (*Resource Indicators for OAuth 2.0*, **Standards Track, February
->   2020**) §5 registers exactly two things — the **`resource` request parameter** and the **`invalid_target`
->   error code**. It registers **no authorization-server metadata parameter at all.** So
->   `resource_indicators_supported` is not a member Authlete declines to emit; **it is not a member.** Its
->   absence from the discovery document is correct, and the original configuration row was wrong twice over:
->   no console field *and* no such metadata member. The `resource` **request** parameter is a separate
->   question and is forwarded normally.
+> - **`registration_endpoint`** — so RFC 7591 clients cannot find DCR. This repo's routes are at
+>   `/api/client/dcr/*` behind admin Basic auth; call them directly ([DCR](API.md)).
+> - **`resource_indicators_supported`** — **not a member of anything.** RFC 8707 §5 registers exactly two
+>   things: the `resource` request *parameter* and the `invalid_target` error code. It registers no
+>   authorization-server metadata parameter, and there is no Authlete field for one. So its absence is
+>   correct, not a gap — see the struck row in
+>   [Required Authlete Configuration](#required-authlete-configuration). The `resource` request parameter
+>   is a separate question and is forwarded normally.
 >
-> That is the **fourth** time in this audit that an instruction said "set X in the console" for an X with no
-> console field. The habit worth copying: check the field exists before writing the step.
+> **The retired grants are deliberate.** The curriculum uses `implicit` and `password` as the *"here is
+> what OAuth 2.1 removed, and why"* exhibit
+> ([Module 07](curriculum/modules/07-oauth-2-1-and-security-bcp/README.md)) — a good reason to keep them,
+> and an equally good reason not to claim MCP support on the same service, since MCP's first MUST is that
+> the server does not behave that way. The two goals conflict on one service; choosing between them is an
+> open decision (`audit/05-decision-records.md` DR-05, DR-11).
 >
-> **The retired grants are enabled deliberately.** The curriculum uses `implicit` and `password` as the
-> *"here is what OAuth 2.1 removed, and why"* exhibit — see
-> [Module 07](curriculum/modules/07-oauth-2-1-and-security-bcp/README.md). That is a good reason to keep them
-> and an equally good reason not to claim MCP support on the same service: MCP's first MUST is precisely that
-> the server does not behave that way. **The two goals conflict on one service**, and choosing between them is
-> an open decision (`audit/05-decision-records.md` DR-05, DR-11).
->
-> Everything below is still worth reading and running: the protocol description is accurate, the request shapes
-> are right, and each step tells you what a conformant AS would answer. Where this deployment answers something
-> else, that is noted at the step.
+> **Everything below still transfers.** The protocol description, the request shapes and the expected
+> answers are all accurate; where this deployment answers something else, the step says so.
 
 ## What is MCP?
 
