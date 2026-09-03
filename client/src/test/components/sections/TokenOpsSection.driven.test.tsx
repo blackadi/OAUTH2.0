@@ -101,7 +101,9 @@ describe('TokenOpsSection — presenting the token the way it requires', () => {
     mountSection(<TokenOpsSection />);
 
     expect(
-      screen.getByText(/no DPoP key is in this session — UserInfo will be refused/i),
+      screen.getByText(
+        /no DPoP key is in this session — UserInfo and Introspect \(Authlete\) will be refused/i,
+      ),
     ).toBeInTheDocument();
   });
 });
@@ -218,5 +220,66 @@ describe('TokenOpsSection — revocation, the one that destroys something', () =
 
     expect(await screen.findByText(/What does this mean\?|Hide explanation/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText(/A089311/).length).toBeGreaterThan(0));
+  });
+});
+
+/**
+ * **Introspection, which was left on the old side of the fix above.**
+ *
+ * Authlete's `/auth/introspection` is the resource-server-facing API: it decides whether a request
+ * bearing this token is authorized, so for a sender-constrained token it must check the binding and
+ * cannot do so without the proof. The panel offered the button and sent `Authorization: Basic` and
+ * nothing else, so the app's own FAPI 2.0 token — the one the deployed client had just minted — earned
+ * `401 [A065308] Expected a DPoP header but none was provided.` with no explanation. Reported from the
+ * deployed client 2026-09-03; the same condition the repo verified at this API on 2026-08-12 and had
+ * already fixed once at UserInfo.
+ *
+ * The server was never the problem: `introspection.service.ts` forwards `dpop`/`htm`/`htu`/`targetUri`
+ * to Authlete whenever a `DPoP` header arrives. Only the client never sent one.
+ */
+describe('TokenOpsSection — introspecting a sender-constrained token', () => {
+  it('sends a proof with the admin credential, rather than the credential alone', async () => {
+    seedTokens({ access_token: 'at-bound-02', token_type: 'DPoP' });
+    seedDpopKey();
+    const introspect = vi.spyOn(tokenService, 'introspection').mockResolvedValue({ active: true });
+    mountSection(<TokenOpsSection />);
+
+    press(/Introspect \(Authlete\)/i);
+
+    const args = await expectCall(introspect, 'the Introspect button');
+    const [token, , , options] = args as [string, string, string, { dpopProof?: unknown }];
+    expect(token).toBe('at-bound-02');
+    // A factory, not a finished proof — `dpopRequest` re-signs on a `use_dpop_nonce` refusal.
+    expect(
+      typeof options?.dpopProof,
+      'no proof means [A065308]: the API cannot check a binding it was not given',
+    ).toBe('function');
+  });
+
+  it('leaves a bearer token alone, because there is no binding to prove', async () => {
+    seedTokens({ access_token: 'at-bearer-02', token_type: 'Bearer' });
+    const introspect = vi.spyOn(tokenService, 'introspection').mockResolvedValue({ active: true });
+    mountSection(<TokenOpsSection />);
+
+    press(/Introspect \(Authlete\)/i);
+
+    const args = await expectCall(introspect, 'the Introspect button');
+    const [, , , options] = args as [string, string, string, { dpopProof?: unknown } | undefined];
+    expect(options?.dpopProof).toBeUndefined();
+  });
+
+  /**
+   * A bound token with no key cannot be introspected at this API at all — and the message has to say
+   * so *and* name the path that still works, or the reader is left at a dead end holding a valid token.
+   */
+  it('explains the missing key and points at the endpoint that checks no binding', async () => {
+    seedTokens({ access_token: 'at-bound-03', token_type: 'DPoP' });
+    const introspect = vi.spyOn(tokenService, 'introspection');
+    mountSection(<TokenOpsSection />);
+
+    press(/Introspect \(Authlete\)/i);
+
+    expect(await screen.findByText(/RFC 7662.*does not check the binding/i)).toBeInTheDocument();
+    expect(introspect, 'a request that cannot succeed should not be sent').not.toHaveBeenCalled();
   });
 });

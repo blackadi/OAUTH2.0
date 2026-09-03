@@ -7,7 +7,7 @@ import {
   DISCOVERY_ENDPOINT,
   JWKS_ENDPOINT,
 } from '@/config';
-import { http } from './http';
+import { http, basicAuthHeader } from './http';
 import { tokenResponseSchema, asMetadataSchema, introspectionSchema } from './schemas';
 import { dpopRequest, type DpopProofSource } from './dpop-fetch';
 import { createProof, computeAth } from './dpop.service';
@@ -233,17 +233,88 @@ async function introspection(
   token: string,
   adminClientId: string,
   adminClientSecret: string,
-  options?: { acrValues?: string; maxAge?: number },
+  options?: { acrValues?: string; maxAge?: number; dpopProof?: DpopProofSource },
 ): Promise<unknown> {
   const params: Record<string, string> = { token };
   if (options?.acrValues) params.acrValues = options.acrValues;
   if (options?.maxAge !== undefined) params.maxAge = String(options.maxAge);
+  const body = new URLSearchParams(params).toString();
+
+  /**
+   * Two credentials on one request, and they mean different things.
+   *
+   * `Authorization: Basic` is this **deployment's admin** credential, protecting the endpoint per RFC
+   * 7662 §2.1. The `DPoP` header is the **proof for the token being introspected**, which Authlete's
+   * resource-server-facing `/auth/introspection` requires whenever that token is sender-constrained —
+   * it is deciding whether a request bearing this token is authorized, and for a bound token it cannot
+   * answer that without the proof. Omitting it earns `401 [A065308] Expected a DPoP header but none
+   * was provided.` (verified live 2026-08-12, and again 2026-09-03 from the deployed client).
+   *
+   * `dpopRequest` rather than `postBasicAuth` because the proof must be re-signed on a
+   * `use_dpop_nonce` refusal — the nonce lives inside the signature.
+   */
+  if (options?.dpopProof) {
+    const { data } = await dpopRequest(INTROSPECTION_ENDPOINT, options.dpopProof, (proof) => ({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: basicAuthHeader(adminClientId, adminClientSecret),
+        DPoP: proof,
+      },
+      body,
+    }));
+    return data;
+  }
+
   return http.postBasicAuth(
     INTROSPECTION_ENDPOINT,
     new URLSearchParams(params),
     adminClientId,
     adminClientSecret,
   );
+}
+
+/**
+ * Introspect a token the way that particular token has to be introspected. **The one place that
+ * decision is made** — the sibling of `userInfoForToken` above, and for the same reason.
+ *
+ * The panel offered "Introspect (Authlete)" for a DPoP-bound token while sending no proof, so the
+ * app's own FAPI 2.0 flow produced a token this button could not use, refused with a vendor code and
+ * no explanation. That is the identical shape already fixed at UserInfo once, left standing here.
+ *
+ * **`ath` is included, and Grant Management's decision not to does not transfer.** That path omits it
+ * because its request carries the token in the `Authorization` header, so Authlete derives the binding
+ * from `cnf.jkt`. Here the `Authorization` header holds the *admin* credential and the token is a body
+ * parameter, so `ath` — the hash of the token, RFC 9449 §7.1 — is what ties this proof to the token
+ * being introspected.
+ *
+ * `htm`/`htu` are this endpoint's own, because `introspection.service.ts` derives them from the
+ * incoming introspection request rather than from a resource request. They must agree or the proof is
+ * validated against the wrong target.
+ */
+async function introspectForToken(
+  accessToken: string,
+  isDpopBound: boolean,
+  adminClientId: string,
+  adminClientSecret: string,
+  options?: { acrValues?: string; maxAge?: number },
+): Promise<unknown> {
+  if (!isDpopBound) {
+    return tokenService.introspection(accessToken, adminClientId, adminClientSecret, options);
+  }
+
+  const dpopKey = readJsonKey<JWK>(SESSION_KEYS.dpopPrivateKey);
+  if (!dpopKey) {
+    throw new Error(
+      'This access token is DPoP-bound, but the DPoP private key is no longer in this session — so no proof can be built for it, and Authlete will not introspect a bound token without one. Introspect (RFC 7662) does not check the binding and still works, or obtain a new token with DPoP enabled.',
+    );
+  }
+
+  const ath = await computeAth(accessToken);
+  return tokenService.introspection(accessToken, adminClientId, adminClientSecret, {
+    ...options,
+    dpopProof: (nonce) => createProof(dpopKey, 'POST', INTROSPECTION_ENDPOINT, ath, nonce),
+  });
 }
 
 async function introspectionStandard(
@@ -302,6 +373,7 @@ export const tokenService = {
   userInfo,
   userInfoWithDpop,
   userInfoForToken,
+  introspectForToken,
   introspection,
   introspectionStandard,
   revocation,

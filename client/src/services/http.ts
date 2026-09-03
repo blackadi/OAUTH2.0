@@ -29,8 +29,20 @@ type Schema = ZodMiniType;
 const FORM = 'application/x-www-form-urlencoded';
 const JSON_TYPE = 'application/json';
 
-function basic(clientId: string, clientSecret: string): string {
+/**
+ * Exported because one caller needs the header *without* this module building the whole request.
+ *
+ * Introspecting a DPoP-bound token has to send `Authorization: Basic <admin>` **and** `DPoP: <proof>`
+ * on the same request, and the proof has to be re-minted on a `use_dpop_nonce` retry — so it goes
+ * through `dpopRequest`, which owns that retry, rather than through `postBasicAuth`. Exporting the one
+ * line beats a fourth hand-rolled `btoa` (there are already two, in `par.service` and `ciba.service`).
+ */
+export function basicAuthHeader(clientId: string, clientSecret: string): string {
   return `Basic ${btoa(`${clientId}:${clientSecret}`)}`;
+}
+
+function basic(clientId: string, clientSecret: string): string {
+  return basicAuthHeader(clientId, clientSecret);
 }
 
 async function postForm(

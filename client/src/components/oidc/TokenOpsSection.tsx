@@ -120,11 +120,18 @@ function TokenOpsSection() {
           Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
           {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
               so it is stated rather than left to be discovered. */}
+          {/*
+            Names UserInfo *and* Introspect (Authlete), because both are refused for a bound token
+            presented without a proof and only the first was ever mentioned — which is how the
+            introspection button came to fail with `[A065308]` and no explanation. Introspect (RFC
+            7662) is called out as still working: it checks no binding, so it is the honest fallback
+            rather than a second dead end.
+          */}
           <span className="ml-2 text-success-text">
             {isDpopBound
               ? dpopKey
-                ? '· sender-constrained, so UserInfo is called with the DPoP scheme and a proof'
-                : '· sender-constrained, but no DPoP key is in this session — UserInfo will be refused'
+                ? '· sender-constrained, so UserInfo and Introspect (Authlete) both send a DPoP proof'
+                : '· sender-constrained, but no DPoP key is in this session — UserInfo and Introspect (Authlete) will be refused; Introspect (RFC 7662) checks no binding and still works'
               : '· bearer token, presented with the Bearer scheme'}
           </span>
         </div>
@@ -213,8 +220,13 @@ function TokenOpsSection() {
                     const opts: { acrValues?: string; maxAge?: number } = {};
                     if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();
                     if (introspectMaxAge.trim()) opts.maxAge = Number(introspectMaxAge.trim());
-                    return tokenService.introspection(
+                    // `introspectForToken`, not `introspection`: Authlete's resource-server-facing
+                    // API checks the binding of a sender-constrained token and refuses without the
+                    // proof (`[A065308]`). The scheme decision lives in the service, beside the
+                    // identical one for UserInfo, rather than being made a third time here.
+                    return tokenService.introspectForToken(
                       at!,
+                      isDpopBound,
                       adminId,
                       adminSecret,
                       Object.keys(opts).length ? opts : undefined,

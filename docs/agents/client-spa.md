@@ -240,7 +240,7 @@
   write is wrapped, because `localStorage` *throws* rather than returning null in a private window and
   under some enterprise policies, and a preference is never worth a blank screen.
 
-**`tokenService.userInfoForToken` owns the Bearer-vs-DPoP decision, and nothing else may.** It lived in
+**`tokenService.userInfoForToken` and `introspectForToken` own the Bearer-vs-DPoP decision, and nothing else may.** It lived in
 `TokenOpsSection` *and* in the FAPI wizard's step 3, and the copies diverged: one read the DPoP private
 key from `sessionStorage`, the other from a `useState` that step 2's full-page redirect destroys. So the
 wizard came back from the callback with step 3 **enabled** — it was gated on the token, which is
@@ -249,6 +249,19 @@ inside the factory, which a test mocking `userInfoWithDpop` never invokes, so th
 (fixed 2026-09-02). A bound token has no bearer fallback (RFC 9449 §7.1/§7.2, Authlete `[A089311]`), so a
 missing key is reported, never downgraded. `use-fapi-flow` restores both key pairs from the session on
 mount for the same reason — gate each step on the field it is about to use, not on a neighbour.
+
+**Introspection was left on the old side of that fix and had to be brought across (2026-09-03).**
+Authlete's `/auth/introspection` is the *resource-server-facing* API: it decides whether a request
+bearing the token is authorized, so for a sender-constrained token it checks the binding and refuses
+without the proof — `401 [A065308]`, reported from the deployed client against the app's own FAPI 2.0
+token. **The server was never the problem**: `introspection.service.ts` already forwards
+`dpop`/`htm`/`htu`/`targetUri` whenever a `DPoP` header arrives, with `targetUri` from HTTP context so
+a proof minted elsewhere cannot be replayed. Two details: the proof's `htm`/`htu` are *the
+introspection endpoint's own*, because the server derives them from that request rather than from a
+resource request; and `ath` **is** included here, unlike Grant Management, which omits it because its
+request carries the token in the `Authorization` header — introspection's holds the admin credential
+and the token is a body parameter, so `ath` is what ties proof to token. `Introspect (RFC 7662)`
+checks no binding and remains the working path when the key is gone.
 
 **`services/session-keys.ts` owns every `sessionStorage` key.** Thirteen were written from six components with no owner and `clearTokens()` removed three of them — so a signing key generated in the FAPI section survived, and the callback branches on its presence, silently switching every later code exchange to `private_key_jwt`. Read and write through this module; `resetSession()` enumerates the keys rather than repeating them. **One key is excluded from that sweep and it is not an oversight**: `traceHistory` is evidence, not credential state, and `resetSession` is what the vault's "Clear session" button calls — sweeping it would delete the request history as a side effect of clearing tokens, unmentioned in that dialog's list. The exclusion is the named `EVIDENCE_KEYS` list with a test on it, in both `session-keys.test.ts` and `TokenContext.test.tsx`.
 
