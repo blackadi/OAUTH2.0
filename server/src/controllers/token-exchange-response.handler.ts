@@ -19,6 +19,54 @@ export async function handleTokenExchange(
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Cache-Control", "no-cache, no-store");
 
+    /**
+     * **An unauthenticated client may not impersonate. Read this before deleting it as dead code.**
+     *
+     * This guard is **inert today** and that is not a reason to remove it — it is the reason it exists.
+     * `tokenExchangeByConfidentialClientsOnly` is `true` on the service, so Authlete refuses a public
+     * client with `[A311304]` before anything reaches here. The moment that flag is set `false` — which
+     * Native SSO requires, because its target client type is a *native mobile app*, i.e. public — this
+     * line becomes the only thing standing between any permitted public client and account takeover.
+     *
+     * **Why here, and why one condition is enough.** Authlete routes a device-secret exchange to
+     * `action: NATIVE_SSO` and everything else to `TOKEN_EXCHANGE` (measured). So *reaching this
+     * handler at all* means the request is not a Native SSO exchange — it is plain RFC 8693
+     * impersonation, where `actor_token` is optional (§2.1) and the only thing presented is a subject
+     * token. A `client_id` is not a secret, so an unauthenticated caller holding any user's ID token
+     * would receive tokens for that user. Measured 2026-09-03 with the confidential-only flag on:
+     * omitting `actor_token` returns 200 and a usable access token.
+     *
+     * **Authlete cannot express this rule.** Its three service-level restrictions are
+     * `tokenExchangeByIdentifiableClientsOnly`, `tokenExchangeByConfidentialClientsOnly` and
+     * `tokenExchangeByPermittedClientsOnly`, plus per-client `tokenExchangePermitted` — none of which
+     * says *"public clients may exchange **with** a device secret and never without"*. That distinction
+     * is the authorization server's to enforce, so it is enforced here.
+     *
+     * Fail-closed on a missing value: `clientAuthMethod` is populated on a real exchange (measured
+     * `CLIENT_SECRET_BASIC`), so its absence means we cannot establish that the client authenticated —
+     * and "cannot establish" must not read as "did". Any *named* method counts as authenticated, so a
+     * method Authlete adds later is admitted rather than broken.
+     */
+    const method = result.clientAuthMethod;
+    // Case-insensitively, for the same reason `token_type` is compared that way in this repo: the
+    // vendor has answered a different case than the documentation shows before now.
+    const clientAuthenticated = typeof method === "string" && method.toUpperCase() !== "NONE";
+    if (!clientAuthenticated) {
+      logger.warn("handleTokenExchange: refusing impersonation by an unauthenticated client", {
+        clientId: result.clientId,
+        clientAuthMethod: method ?? null,
+      });
+      // `.type().send()` rather than `.json()`, matching the four refusals below it. One idiom per file.
+      return res
+        .status(400)
+        .type("application/json")
+        .send({
+          error: "unauthorized_client",
+          error_description:
+            "A client that does not authenticate may not exchange a subject token for its own tokens. A Native SSO exchange must present the device secret as actor_token.",
+        });
+    }
+
     const subjectToken = result.subjectToken;
     const clientId = result.clientId as number;
     const scopes = result.scopes;

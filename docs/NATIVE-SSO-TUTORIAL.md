@@ -24,6 +24,31 @@
 > **optional**, so a 200 is correct. See the security note below, because the correct behaviour is the
 > more interesting finding.
 >
+> ### 📱 What is still needed for a real mobile app
+>
+> Native SSO's target client type is a **public** native app, and
+> `tokenExchangeByConfidentialClientsOnly` is `true` here — so Phase 2 is verified only for a
+> *confidential* App 2. Closing that gap takes three steps **in this order**, and the order is the whole
+> point:
+>
+> 1. **Code first.** An unauthenticated client must be refused plain impersonation. That guard is
+>    already in place (`token-exchange-response.handler.ts`) and is **inert** while the flag is true.
+> 2. **Then the service flag** → `tokenExchangeByConfidentialClientsOnly: false`.
+> 3. **Then narrow the allowlist.** `tokenExchangeByPermittedClientsOnly` is already `true`, but every
+>    client currently has `tokenExchangePermitted: true`, so it grants everything. Turn it off for any
+>    client that is not a Native SSO participant — this is the authorized-app list
+>    [Part 9 §6](#6-explicit-app-authorization) describes.
+>
+> Flip the flag before step 1 and there is a window in which any permitted public client can obtain
+> tokens for any user whose ID token it holds — a `client_id` is not a secret. **Authlete cannot enforce
+> step 1 for you**: its restrictions are `tokenExchangeByIdentifiableClientsOnly`,
+> `tokenExchangeByConfidentialClientsOnly` and `tokenExchangeByPermittedClientsOnly`, plus per-client
+> `tokenExchangePermitted`, and none expresses *"public clients may exchange **with** a device secret and
+> never without."*
+>
+> `scripts/native-sso-verify.mjs` carries both public-client cases and reports them **SKIP** with the
+> reason until the flag moves, so they are visible rather than absent.
+>
 > ### ⚠️ The device secret is only as strong as your token-exchange policy
 >
 > Omit the `actor_token` and the same request becomes a plain RFC 8693 **impersonation** exchange:

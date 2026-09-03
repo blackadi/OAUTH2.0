@@ -55,6 +55,17 @@ const next = () => vi.fn() as unknown as NextFunction
 const authleteResult = {
   action: "TOKEN_EXCHANGE",
   clientId: 1523514379,
+  /**
+   * **Added 2026-09-03, and its absence had made this fixture unfaithful.**
+   *
+   * Authlete populates `clientAuthMethod` on a real TOKEN_EXCHANGE response — measured
+   * `"CLIENT_SECRET_BASIC"` against the live service. The fixture omitted it, so when the
+   * unauthenticated-impersonation guard landed, all 20 cases in this file began exercising a *refusal*
+   * instead of the behaviour they were written for. They still passed their own assertions in spirit
+   * and proved nothing about the handler, which is the failure mode a fixture that differs from the
+   * real response always has. Keep this in step with what the vendor actually sends.
+   */
+  clientAuthMethod: "CLIENT_SECRET_BASIC",
   scopes: ["profile"],
   subject: "admin",
   subjectToken: "EXAMPLE-subject-token",
@@ -280,5 +291,56 @@ describe("handleTokenExchange — subject resolution by subject-token type", () 
 
     const sent = (mocks.mockCreate.mock.calls[0][0] as Request).body as Record<string, unknown>
     expect(sent.subject, "Exercise 6c depends on this staying wrong").toBe("opaque-cc-token")
+  })
+})
+
+/**
+ * **A guard that is inert today, tested today, so it is not deleted as dead code.**
+ *
+ * `tokenExchangeByConfidentialClientsOnly` is `true`, so Authlete refuses public clients with
+ * `[A311304]` and this branch is unreachable in production. Native SSO needs that flag `false` — its
+ * target client type is a native mobile app, which is public — and at that moment this becomes the only
+ * thing between a permitted public client and account takeover: reaching this handler means the request
+ * is plain impersonation (a device-secret exchange goes to `NATIVE_SSO` instead), `actor_token` is
+ * optional per RFC 8693 §2.1, and a `client_id` is not a secret.
+ *
+ * Authlete has no setting expressing "public clients may exchange with a device secret and never
+ * without", so these cases are the specification of a rule only this server can hold.
+ */
+describe("handleTokenExchange — an unauthenticated client may not impersonate", () => {
+  beforeEach(() => mocks.mockCreate.mockReset())
+
+  it("refuses a public client (clientAuthMethod NONE) before creating anything", async () => {
+    const res = mockRes()
+    await handleTokenExchange(mockReq(), res, { ...authleteResult, clientAuthMethod: "NONE" } as never, next())
+
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.send).toHaveBeenCalledWith(expect.objectContaining({ error: "unauthorized_client" }))
+    expect(mocks.mockCreate, "no token may be minted for an unauthenticated impersonation").not.toHaveBeenCalled()
+  })
+
+  it("refuses when clientAuthMethod is absent, rather than assuming it authenticated", async () => {
+    const res = mockRes()
+    await handleTokenExchange(mockReq(), res, { ...authleteResult, clientAuthMethod: undefined } as never, next())
+
+    // Fail-closed: "cannot establish that it authenticated" must not read as "it did".
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(mocks.mockCreate).not.toHaveBeenCalled()
+  })
+
+  it("refuses lowercase `none` too", async () => {
+    const res = mockRes()
+    await handleTokenExchange(mockReq(), res, { ...authleteResult, clientAuthMethod: "none" } as never, next())
+    expect(res.status).toHaveBeenCalledWith(400)
+  })
+
+  it("admits an authenticated client, including a method this build has not seen", async () => {
+    mocks.mockCreate.mockResolvedValue({ action: "OK", accessToken: "at-ok", scopes: [] })
+    for (const method of ["CLIENT_SECRET_BASIC", "PRIVATE_KEY_JWT", "SOME_FUTURE_METHOD"]) {
+      mocks.mockCreate.mockClear()
+      const res = mockRes()
+      await handleTokenExchange(mockReq(), res, { ...authleteResult, clientAuthMethod: method } as never, next())
+      expect(mocks.mockCreate, `${method} authenticated, so it must be admitted`).toHaveBeenCalled()
+    }
   })
 })

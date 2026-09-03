@@ -426,14 +426,88 @@ async function run() {
     "Native SSO is for mobile apps, which are usually public clients — this flag is a real deployment decision",
   );
 
+  /**
+   * **The public-client path — the one thing between "verified here" and "usable by a real mobile app".**
+   *
+   * Native SSO's target client type is a native app, which is *public*. While
+   * `tokenExchangeByConfidentialClientsOnly` is `true` Authlete refuses those with `[A311304]` (asserted
+   * above), so these two cases report SKIP and say why. Set the flag `false` and they become the
+   * assertions that matter:
+   *
+   *   - a public client presenting a **valid** device secret must succeed — the secret is the credential
+   *     that stands in for client authentication
+   *   - a public client presenting **no** device secret must be refused, because that is plain
+   *     impersonation by a caller that proved nothing, and a `client_id` is not a secret
+   *
+   * The second is enforced by this server, not by Authlete: its token-exchange restrictions cannot
+   * express "public clients may exchange with a device secret and never without".
+   */
+  const publicPath = await exchange({
+    subjectToken: body.id_token,
+    actorToken: deviceSecret,
+    clientId: APP1,
+    secret: "",
+  });
+  const confidentialOnly = /A311304/.test(JSON.stringify(publicPath.json ?? publicPath.text));
+
+  if (confidentialOnly) {
+    record(
+      "a public client CAN complete Phase 2 with a valid device secret",
+      "Native SSO 1.0 — the specification's target client type is a public native app",
+      "200",
+      "skipped — tokenExchangeByConfidentialClientsOnly is true, so [A311304] comes first",
+      null,
+      "flip that flag to exercise this; the guard for the case below must be in place first",
+    );
+    record(
+      "a public client CANNOT impersonate without a device secret",
+      "enforced by this server — Authlete has no setting for it",
+      "4xx unauthorized_client",
+      "skipped — blocked earlier by [A311304]",
+      null,
+      "inert while the flag is true, and the only thing between a public client and account takeover once it is false",
+    );
+  } else {
+    record(
+      "a public client CAN complete Phase 2 with a valid device secret",
+      "Native SSO 1.0 — the specification's target client type is a public native app",
+      "200 with an access token",
+      `${publicPath.status} ${publicPath.json?.error ?? ""}`.trim(),
+      publicPath.status === 200 && !!publicPath.json?.access_token,
+    );
+
+    const publicImpersonation = await exchange({
+      subjectToken: body.id_token,
+      actorToken: null,
+      omitActor: true,
+      clientId: APP1,
+      secret: "",
+    });
+    const t5 = refusedBecause(publicImpersonation, "unauthorized_client|authenticate");
+    record(
+      "a public client CANNOT impersonate without a device secret",
+      "enforced by this server — Authlete has no setting for it",
+      "4xx unauthorized_client",
+      t5.detail,
+      t5.ok,
+      "a client_id is not a secret, so this would be account takeover for anyone holding an ID token",
+    );
+  }
+
   summarise();
 }
 
 function summarise() {
   const pass = results.filter((r) => r.pass === true).length;
   const fail = results.filter((r) => r.pass === false).length;
+  // Skips are counted separately and never folded into the pass total: a skipped case says so in the
+  // report, a case quietly treated as passing does not — the distinction this repo's E2E suite learned
+  // the hard way when a guarded test read as a pass.
+  const skip = results.filter((r) => r.pass === null).length;
   console.log(`\n${"─".repeat(70)}`);
-  console.log(`Native SSO: ${pass} passed, ${fail} failed, ${results.length} total`);
+  console.log(
+    `Native SSO: ${pass} passed, ${fail} failed, ${skip} skipped, ${results.length} total`,
+  );
   if (fail) {
     console.log("\nFailures:");
     for (const r of results.filter((r) => r.pass === false)) {
