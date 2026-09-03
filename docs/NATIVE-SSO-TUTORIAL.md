@@ -2,74 +2,54 @@
 
 > **The short version:** Native SSO lets mobile apps from the same vendor share authentication state directly through secure device storage (iOS Keychain, Android Account Manager), eliminating the need for browser cookies and providing SSO that works even in incognito mode.
 
-> ### ⚠️ `UNVERIFIED` — Native SSO is **declined** here, so **nothing in this file has been run in production**
+> ### ✅ Verified end to end on 2026-09-03 — both phases run
 >
-> Labels are **captured** / *illustrative* / **`UNVERIFIED`** — defined once in
-> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials). This whole file is the
-> third kind. Re-derived against the live service on **2026-08-17**:
+> This file was `UNVERIFIED` in full while Native SSO was switched off. It is now enabled on service
+> `3693555522`, and `scripts/native-sso-verify.mjs` drives both phases headlessly: **12 of 13 checks
+> pass.** Re-run it rather than trusting this paragraph.
 >
-> | Setting | Live value | Consequence |
-> |---|---|---|
-> | `nativeSsoSupported` | **`false`** — **by decision**, see [DR-04](../audit/05-decision-records.md#dr-04--native-sso) | no `device_secret` is ever issued, so Phase 1 cannot complete |
-> | `native_sso_supported` | **absent** from the discovery document (66 members on 2026-08-17; it becomes 67 when the flag goes on, and that member is the only one that moves) | a client cannot discover the capability either |
-> | `device_sso` in `supportedScopes` | **not registered** | the scope is silently ignored — OAuth drops unknown scopes, so the request *succeeds* and Native SSO simply never triggers |
-> | `tokenExchangeByConfidentialClientsOnly` | **`true`** | **Phase 2 is refused for public clients** — `[A311304]`. Native SSO exists for *native mobile apps*, which are public clients |
+> What the probe confirms: App 1 gets a `device_secret` and an ID token carrying `sid` and a `ds_hash`
+> equal to `base64url(SHA-256(secret))`; App 2 exchanges that pair for its own tokens **with no user
+> interaction** and receives the *same* `sid` and `ds_hash` — which is the property the whole feature
+> exists for. Discovery advertises `native_sso_supported: true` and grows to 67 members.
 >
-> **The middle row is the one that bites.** An unregistered scope produces no error. You get a normal token
-> response, no `device_secret`, and nothing anywhere saying why. [Part 6](#part-6-authlete-console-setup) is
-> the fix list, and it is ordered deliberately: the flag, then the scope, then the grant type, then the two
-> per-client settings — **but see the box below: the list is incomplete, and the flag is not the last blocker.**
+> **One constraint remains, and it is a policy rather than a defect.**
+> `tokenExchangeByConfidentialClientsOnly` is `true`, so Phase 2 from a public client is refused with
+> `[A311304]`. Native SSO exists for *mobile* apps, which are normally public — so this is a real
+> deployment decision, not a box to tick. The probe asserts the refusal instead of relaxing the flag.
 >
-> ### 🔬 What a temporary enablement actually showed (2026-08-17)
+> **One failure is open and is not in the Native SSO path.** An exchange with no `actor_token` returns
+> Authlete's `TOKEN_EXCHANGE` action rather than `NATIVE_SSO`, lands in
+> `controllers/token-exchange-response.handler.ts`, and answers HTTP 500 — see
+> [Part 10](#problem-token-exchange-returns-500).
 >
-> The flag *was* switched on, probed with a throwaway confidential client, and switched back
-> (`audit/02-findings/SERVICE-CONFIG-PROBE.md` §24.3). Enabling it is **not** sufficient, and the reasons are
-> worth more than this tutorial's predictions:
+> **Note on decision records:** [DR-04](../audit/05-decision-records.md#dr-04--native-sso) records Native
+> SSO as *declined*. The service now has it enabled, so that record is behind reality; reconciling it is
+> a separate decision and this file does not assume the answer.
 >
-> | # | Blocker | Evidence |
-> |---|---|---|
-> | 1 | `/auth/authorization/issue` **requires a `sessionId`** when the request asks for a Native SSO ID token | `[A499201]`, returned as `error=server_error` in an error **redirect**. This server already supplies one (`services/authorization.service.ts:135`), so it clears this bar — a hand-rolled probe does not |
-> | ~~2~~ | ~~**This server answers Phase 1 with HTTP `500`**~~ | ✅ **FIXED 2026-08-17.** Authlete's `action: NATIVE_SSO` response to an authorization-code exchange carries **no `deviceSecret`** — the AS is expected to *mint* one — and `controllers/native-sso-response.handler.ts` used to require it and answer `500`. It now mints one and computes `deviceSecretHash` |
-> | 3 | Public clients cannot complete Phase 2 | `[A311304]`, per the table above |
+> ### 🔒 The defect verification found, because it is the lesson of this file
 >
-> **Two blockers remain, and neither is a defect** — one is the specification's maturity, one is a service
-> policy. Once the AS mints a secret everything downstream works: `/nativesso` answers **`OK [A501001]`**,
-> and the ID token carries **`sid`** and a **`ds_hash`** equal to `base64url(SHA-256(secret))`. So the gap is
-> narrow and well understood, not the sweeping unknown this file used to imply.
+> Phase 2 must **compare** the presented device secret against the subject token's `ds_hash`. This
+> server recomputed the hash from whatever `actor_token` arrived, which *re-bound* the session to the
+> caller's value instead of checking it. Measured: 32 random bytes as `actor_token` returned **200**,
+> the victim's `sub` and `sid`, and an ID token whose `ds_hash` was the hash of the attacker's own
+> secret. **Possession of an ID token was enough**, and an ID token is not a secret.
+>
+> Fixed 2026-09-03. The shape is worth carrying to any implementation: the two legs look identical —
+> both arrive as Authlete `action: NATIVE_SSO` — and need *opposite* handling. Phase 1 mints a secret and
+> computes its hash; Phase 2 verifies and must not compute anything. One expression served both, and its
+> comment reasoned correctly about forwarding the secret unchanged while missing that the hash was being
+> recomputed from it. See [Part 9 §5](#5-ds_hash-binding).
+>
+> **Labels** are **captured** / *illustrative* / **`UNVERIFIED`**, defined once in
+> [the tutorial index](README.md#how-to-read-the-transcripts-in-these-tutorials). Both phases route to
+> `case "NATIVE_SSO"` → `handleNativeSso`, so the device-secret exchange never touches
+> `token-exchange-response.handler.ts` and that file's deliberate teaching defects do not apply here.
 >
 > **`b81d5ae9-9f85-4c6d-8658-1a36ffa42c83` is one *illustrative* constant, not a captured value.** It
-> appears in all four token-response blocks in this file so that you can follow one device secret through
-> Phase 1 → storage → Phase 2 and see that it is the *same* value. Real device secrets are opaque and
-> server-generated; do not read the UUID format as a promise.
->
-> ### ✅ Settled 2026-08-17 — the device-secret exchange does **not** reach the token-exchange handler
->
-> **This box used to warn you about the wrong file.** It said: this repo's `/api/token` routes Authlete's
-> `action: TOKEN_EXCHANGE` through `controllers/token-exchange-response.handler.ts`, which **omits
-> `issued_token_type`** and **drops `actor_token`** — two deliberate teaching defects recorded in `AGENTS.md`
-> — and `actor_token` is how Native SSO carries the device secret. It then asked whether a device-secret
-> exchange actually reaches that handler, offered `TOKEN_EXCHANGE` or `OK` as the two possibilities, and told
-> you to *"settle it by enabling the flag and reading `action`."*
->
-> **The answer is neither, and enabling the flag alone does not produce it.** A live probe
-> (`audit/02-findings/SERVICE-CONFIG-PROBE.md` §24.3) gives:
->
-> | Request | Authlete's `action` |
-> |---|---|
-> | Phase 1 — `grant_type=authorization_code` with `scope=openid device_sso` | **`NATIVE_SSO`** (`A050002`) |
-> | Phase 2 — token exchange with `actor_token_type=urn:openid:params:token-type:device-secret` | **`NATIVE_SSO`** (`A311002`) |
->
-> Both route to `case "NATIVE_SSO"` in `controllers/token.controller.ts:173` → `handleNativeSso`. So the
-> device-secret exchange **never touches `token-exchange-response.handler.ts` at all**, and that handler's two
-> deliberate defects are **irrelevant to Native SSO**. The warning was real, well-reasoned, and aimed one file
-> to the left.
->
-> **Two lessons worth more than the answer.** A question posed as a binary (`TOKEN_EXCHANGE` *or* `OK`) cannot
-> represent a third outcome, and vendors reserve the right to have one — Authlete has a dedicated action and a
-> dedicated `/nativesso` API. And *"settle it by enabling the flag"* was not an executable instruction: the
-> flag was the first of **three** blockers, and the second — this server answering HTTP `500` on Phase 1 —
-> would have stopped the reader before any `action` reached them. That one is fixed now; the instruction was
-> still not executable on the day it was written, which is the point.
+> appears in every token-response block below so you can follow one device secret through Phase 1 →
+> storage → Phase 2 and see it is the *same* value. Real secrets are opaque and server-generated; do not
+> read the UUID format as a promise.
 
 ---
 
@@ -821,7 +801,28 @@ The device secret is only accessible to apps signed by the **same vendor certifi
 
 ### 5. ds_hash Binding
 
-The `ds_hash` claim cryptographically binds the ID token to the device secret. An attacker who steals an ID token cannot use it with a different device secret — the hash won't match.
+The `ds_hash` claim binds the ID token to the device secret. An attacker who steals an ID token cannot
+use it with a different device secret — **provided the authorization server compares the two.**
+
+That proviso is the whole property, and it is easy to lose. This server lost it: Phase 2 recomputed
+`ds_hash` from the incoming `actor_token` instead of comparing against the value already in the subject
+token, so any secret "matched" and possession of an ID token was sufficient (found and fixed
+2026-09-03). Two details make the mistake natural rather than careless:
+
+- **Both phases arrive as the same Authlete `action: NATIVE_SSO`** but need opposite handling — Phase 1
+  mints the secret and computes its hash, Phase 2 verifies and computes nothing.
+- **Authlete echoes the caller's `actor_token` back** as `deviceSecret` on the exchange leg, so code
+  that forwards "the secret from the response" is forwarding the attacker's own value.
+
+If you implement this, the check is one comparison and it belongs on the Phase 2 branch only:
+
+```
+base64url(SHA-256(actor_token)) == ds_hash claim of subject_token   →  else refuse
+```
+
+Compare in constant time, and refuse when the subject token carries **no** `ds_hash` — "nothing to
+compare" is the reading that turns a missing value into a bypass. `scripts/native-sso-verify.mjs`
+asserts both.
 
 ### 6. Explicit App Authorization
 
@@ -846,25 +847,45 @@ The AS should maintain a list of apps authorized for SSO. During token exchange,
 
 ### Problem: No `device_secret` in Token Response
 
-**Checklist:**
-1. Is `nativeSsoSupported = true` on the service?
-2. Is `device_sso` registered as a scope?
-3. Does the authorization request include `scope=openid device_sso`?
-4. Does the client have `device_sso` in its requestable scopes?
-5. Does the client have `TOKEN_EXCHANGE` in its grant types?
+**Checklist, in the order these bite:**
+
+1. Does the authorization request include **both** scopes — `scope=openid device_sso`? One alone is not
+   a Native SSO request.
+2. Is `device_sso` **registered** on the service? An unregistered scope is dropped silently, so you get
+   a normal token response with no `device_secret` and no error anywhere.
+3. Is `nativeSsoSupported = true`?
+4. Does the client have `device_sso` requestable and `TOKEN_EXCHANGE` granted?
+5. Did `/auth/authorization/issue` receive a **`sessionId`**? Without one, Authlete answers `[A499201]`
+   and the redirect carries `error=server_error` — whose downstream symptom is
+   `[A050305] No such authorization code`, because the code was extracted from an error redirect that
+   carried none. Right-looking failure, wrong cause.
+6. Is the AS **minting** the secret? Authlete returns no `deviceSecret` on the Phase 1
+   authorization-code exchange — there is no prior secret to carry forward — so an implementation that
+   requires one answers 500 on the only call that can bootstrap the feature.
 
 ### Problem: Token Exchange Returns 500
 
-**Cause:** The server's token controller doesn't handle `NATIVE_SSO` action.
+**Measured cause (2026-09-03), and it is not the Native SSO path.** An exchange with **no**
+`actor_token` is not a Native SSO request, so Authlete returns `action: TOKEN_EXCHANGE` rather than
+`NATIVE_SSO`. In this repo that lands in `controllers/token-exchange-response.handler.ts`, which passes
+the whole subject-token JWT as the `subject` of a token-create call; Authlete answers
+`[A144103] Failed to insert a new access token into the database` and the request 500s.
 
-**Fix:** Implement the `NATIVE_SSO` case in the token controller (see Part 7).
+A missing required parameter should be a 4xx. This is an open finding rather than a fix, because that
+handler carries defects the curriculum teaches deliberately — changing its behaviour is a curriculum
+question. If you are seeing this with an `actor_token` present, check the `action` your AS actually
+returned before looking anywhere else.
 
 ### Problem: `ds_hash` Doesn't Match
 
 **Checklist:**
 1. Are you using the same device secret that was originally issued?
-2. Was the device secret stored correctly in shared storage?
-3. Is the hash computation correct (SHA-256, base64url)?
+2. Was the secret stored correctly in shared device storage?
+3. Is the hash computation the same on both sides — SHA-256, base64url, no padding?
+
+**And check the opposite failure, which is worse and silent:** if a *wrong* secret does **not** produce
+a mismatch, your server is recomputing `ds_hash` rather than comparing it. See
+[Part 9 §5](#5-ds_hash-binding).
 
 ### Problem: Session ID Validation Fails
 
