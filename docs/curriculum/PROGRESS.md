@@ -1119,13 +1119,15 @@ Module 05 halves stay in T2-15. **`FAPI2-W6` had no tier row of its own** — it
 §5.2's cluster 22 — so the coverage check counted it as covered without anything scheduling it. That failure
 mode is now recorded in the plan.
 
-**One thing deliberately not done.** `STEP-UP-AUTH-TUTORIAL.md` still prints its step-up challenge as **403**
-where RFC 9470 §3 requires **401**, including the sequence-diagram arrow. That is **T2-11**, and leaving it
-keeps T2-11 one reviewable change instead of half-absorbed here. The file's new box says what *is* and is not
-runnable — `accessTokenSignAlg` is unset so Part 4's JWT payload cannot exist, and
-`urn:mace:incommon:iap:silver` is not a registered ACR (`supportedAcrs` is `["pwd","mfa"]`, so use `mfa`) —
-and records the T1-7 correction that `max_age` can only genuinely fail on the `prompt=none` path, because on a
-login POST the user has just authenticated.
+**One thing was deliberately left for a separate change, and it shipped the same day.** As of this entry,
+`STEP-UP-AUTH-TUTORIAL.md` still printed its step-up challenge as **403** where RFC 9470 §3 requires **401**,
+including the sequence-diagram arrow — left for **T2-11** so that change stayed one reviewable diff instead of
+half-absorbed here. **T2-11 shipped 2026-08-14** (see the entry above): the tutorial now shows 401 in all five
+places the challenge was drawn. The file's box described below still stands — what *is* and is not runnable —
+`accessTokenSignAlg` is unset so Part 4's JWT payload cannot exist, and `urn:mace:incommon:iap:silver` is not a
+registered ACR (`supportedAcrs` is `["pwd","mfa"]`, so use `mfa`) — and it still records the T1-7 correction that
+`max_age` can only genuinely fail on the `prompt=none` path, because on a login POST the user has just
+authenticated.
 
 **Verification.** 1081 server tests / 73 files, 109 client / 16 — unchanged, this is a documentation change.
 `check-docs.mjs` clean across **166 files**, now validating **1037 endpoint paths** (up from 997) and 274
