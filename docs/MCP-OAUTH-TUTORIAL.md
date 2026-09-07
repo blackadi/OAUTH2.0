@@ -193,10 +193,13 @@ The AI client first discovers the authorization server. MCP clients support two 
 
 ### Step 2: Client Registration (CIMD)
 
-MCP uses **Client ID Metadata Document (CIMD)** for dynamic client registration. Instead of sending a full registration request, the client provides an HTTPS URL that describes itself:
+MCP uses **Client ID Metadata Document (CIMD)** for dynamic client registration. Instead of sending a full
+registration request, the client uses an HTTPS URL *as its `client_id`*, and publishes the metadata that
+describes it at that same URL:
 
 ```json
 {
+  "client_id": "https://myapp.com/client.json",
   "client_name": "My AI Assistant",
   "redirect_uris": ["http://localhost:3001/callback"],
   "grant_types": ["authorization_code", "refresh_token"],
@@ -206,19 +209,26 @@ MCP uses **Client ID Metadata Document (CIMD)** for dynamic client registration.
 }
 ```
 
-The server fetches this URL, validates the metadata, and registers the client automatically. This is simpler than DCR — no need to send client secrets.
+Authlete — not this server; CIMD is handled entirely at the vendor layer — fetches that URL the first time it
+sees the client ID, validates the metadata, and registers the client automatically. **The URL itself is the
+`client_id`, permanently, for every request the client makes from here on — no new identifier is minted.** This
+is simpler than DCR: no registration round trip, no client secret to send or store (a CIMD client is necessarily
+public). See [`CIMD.md`](CIMD.md) for the full mechanism, its configuration flags, and this deployment's live
+settings.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    CIMD Registration                        │
 │                                                             │
-│  Client: "My metadata is at https://myapp.com/client.json"  │
+│  Client: "My client_id is https://myapp.com/client.json"    │
 │     ↓                                                       │
-│  Server: *fetches the URL*                                  │
+│  Authlete: *fetches that URL, the first time it is seen*    │
 │     ↓                                                       │
-│  Server: "I've registered you as client_id: abc123"         │
+│  Authlete: "Registered — and your client_id stays exactly   │
+│             https://myapp.com/client.json"                  │
 │     ↓                                                       │
-│  Client: "Great, now I'll authorize at /authorize"          │
+│  Client: "Great, now I'll authorize at /authorize using     │
+│           that same URL as client_id"                       │
 └─────────────────────────────────────────────────────────────┘
 ```
 

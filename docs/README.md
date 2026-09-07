@@ -68,6 +68,7 @@ an unindexed document is one nobody finds and nobody updates.
 | Document | What it is |
 |---|---|
 | [Authlete tickets](./TICKET-PARAMETER.md) | **Reference.** What a `ticket` is, why it is a credential rather than a correlation id, and why `/api/jar/process` no longer returns one to anonymous callers. Read this before touching any endpoint that handles Authlete's authorization response |
+| [OAuth Client ID Metadata Document (CIMD)](./CIMD.md) | **Reference.** What CIMD is, why it has no request/response cycle of this server's own (Authlete handles it entirely at the vendor layer), the metadata and configuration rules, and this deployment's live settings. Exercised only inside [`MCP-OAUTH-TUTORIAL.md`](./MCP-OAUTH-TUTORIAL.md) |
 | [API reference](./API.md) · [Architecture](./ARCHITECTURE.md) · [Development](./DEVELOPMENT.md) · [Monitoring](./MONITORING.md) | **Reference.** Endpoints, request lifecycle, SDK version pin, Prometheus/Grafana |
 | [Curriculum audit pass A](./curriculum/AUDIT-PASS-A.md) · [pass B](./curriculum/AUDIT-PASS-B.md) | **Internal.** Working records of two curriculum review passes. Kept for their method and their misses — pass A recorded `sd-jwt.mjs` as *"CLEAN, 0 defects"* and it had three, one of them a security defect. Not a description of current state; read the module itself for that |
 | [CHANGELOG](../CHANGELOG.md) | **Internal.** Release-level history. Day-to-day build history lives in [`curriculum/PROGRESS.md`](./curriculum/PROGRESS.md), which is the fuller record |
