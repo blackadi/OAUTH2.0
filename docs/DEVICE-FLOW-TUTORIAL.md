@@ -257,7 +257,7 @@ The grant type has to be enabled on the **client** too, not just the service. In
 
 This is the configuration Authlete's own guide recommends, and it is what real devices need.
 
-**The curl examples in this tutorial use a confidential client instead** (`-u "$CID:$SEC"`, plus `clientSecret` in the JSON body) because it is easier to test from a terminal and matches the credentials most people already have on hand. If you follow the public-client configuration above, drop the `-u` flag and the `clientSecret` field and pass `client_id` inside `parameters` instead:
+**The curl examples in this tutorial use a confidential client instead** (`clientId`/`clientSecret` in the JSON body) because it is easier to test from a terminal and matches the credentials most people already have on hand. If you follow the public-client configuration above, drop the `clientId`/`clientSecret` fields and pass `client_id` inside `parameters` instead:
 
 ```bash
 # Public client — no secret anywhere
@@ -266,7 +266,22 @@ curl -X POST http://localhost:3000/api/device/authorization \
   -d '{"parameters": "client_id=YOUR_CLIENT_ID&scope=openid+profile"}'
 ```
 
-> If you do use a confidential client, its **Client Authentication Method must match how you send the credentials**. A client set to `CLIENT_SECRET_POST` will reject `-u` (HTTP Basic) with `invalid_client` — send `client_id` and `client_secret` in the body instead.
+> ### ⚠️ **Confirmed live 2026-09-08** — `-u` (HTTP Basic) never works on this endpoint, for any client
+>
+> Unlike `/api/par`, `/api/ciba/authentication` and `/api/token`, `server/src/services/device.service.ts`
+> never parses `Authorization: Basic` — it only reads `clientId`/`clientSecret` from the JSON body and
+> forwards them to Authlete as-is. Probed against this deployment's own `CLIENT_SECRET_BASIC` client:
+>
+> | You send | Result |
+> |---|---|
+> | `clientId`/`clientSecret` in the JSON body | ✅ `200` — succeeds |
+> | `Authorization: Basic` header only, nothing in the body | ❌ `401 [A157357]` — Authlete reports that the Basic authentication it expects never arrived, because this server never forwards the header |
+>
+> **The body is the only working channel here, whichever Client Authentication Method the client is
+> registered under** — there is no Basic-vs-body choice to get right or wrong, because only one channel is
+> wired up. That is different from the rest of this repo's client-authenticated endpoints, where Basic vs.
+> body is a real choice that must match the client's registered method — see [PAR](PAR-TUTORIAL.md) and
+> [CIBA](CIBA-TUTORIAL.md). Do not port that expectation here.
 
 ---
 
