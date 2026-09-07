@@ -1463,18 +1463,21 @@ if (!hasRealAuthleteCreds) {
             clientId: process.env.CID,
             clientSecret: process.env.SEC,
           })
-        expect([200, 400]).toContain(res.status)
-        if (res.status === 200) {
-          // T1-11 (2026-08-14): exactly RFC 8628 §3.2's snake_case body, not Authlete's envelope with
-          // camelCase names beside an `action`. Probe-confirmed as 8628-W6.
-          expect(res.body).toHaveProperty("device_code")
-          expect(res.body).toHaveProperty("user_code")
-          expect(res.body).toHaveProperty("verification_uri")
-          expect(res.body).toHaveProperty("expires_in")
-          expect(res.body).not.toHaveProperty("action")
-          deviceCode = res.body.device_code
-          userCode = res.body.user_code
-        }
+        // Was `expect([200, 400]).toContain(res.status)` with the property assertions gated behind
+        // `if (res.status === 200)` — that passes whether the call succeeds or fails and asserts nothing
+        // on the 400 path, so a real regression here would not fail the suite. `CID` is a live,
+        // confirmed-working CLIENT_SECRET_BASIC client with DEVICE_CODE enabled (verified 2026-09-08), so
+        // this must succeed.
+        expect(res.status).toBe(200)
+        // T1-11 (2026-08-14): exactly RFC 8628 §3.2's snake_case body, not Authlete's envelope with
+        // camelCase names beside an `action`. Probe-confirmed as 8628-W6.
+        expect(res.body).toHaveProperty("device_code")
+        expect(res.body).toHaveProperty("user_code")
+        expect(res.body).toHaveProperty("verification_uri")
+        expect(res.body).toHaveProperty("expires_in")
+        expect(res.body).not.toHaveProperty("action")
+        deviceCode = res.body.device_code
+        userCode = res.body.user_code
       })
 
       it("verifies user_code (returns VALID)", async () => {
@@ -1614,10 +1617,13 @@ if (!hasRealAuthleteCreds) {
             clientId: process.env.CID,
             clientSecret: process.env.SEC,
           })
-        expect([200, 400]).toContain(res.status)
-        if (res.status !== 200) return
-        browserDeviceCode = res.body.deviceCode
-        browserUserCode = res.body.userCode
+        expect(res.status).toBe(200)
+        // Was `res.body.deviceCode` / `.userCode` (camelCase) — the endpoint has returned RFC 8628 §3.2's
+        // snake_case body since T1-11 (2026-08-14), so those were always `undefined`. Both variables were
+        // silently empty, and every test below that gates on `if (!browserUserCode) return` was a no-op
+        // rather than an assertion.
+        browserDeviceCode = res.body.device_code
+        browserUserCode = res.body.user_code
       })
 
       it("serves device verification form with CSRF token", async () => {
