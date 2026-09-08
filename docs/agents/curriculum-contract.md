@@ -26,6 +26,20 @@ Log.
 **After any change to server behaviour**, grep the curriculum for the symptom you changed —
 `grep -rn "<the error string>" docs/curriculum/modules` — before assuming nothing else is affected.
 
+**That grep alone is not enough — also search for the descriptive phrase, and check who cross-references
+the module you edited.** An error string only finds the module the defect actually lives in; it does not
+find a *different* module that discusses the same defect in its own words, with no error string in sight.
+This is not hypothetical: the 2026-08-10 fix to the logout endpoint's open redirect updated Module 08 (where
+the code lives) correctly and completely, but missed Module 10, which cross-references the open redirect
+five times as an exercise about *which attacker it serves* — no shared error string, because the whole point
+of that exercise is naming the attacker in prose, not reproducing a transcript. The fix stood uncaught in
+Module 10 for two more days. So after fixing a defect a module is *built on*:
+
+1. `grep -rn "<the plain-English phrase for the defect>" docs/curriculum` — e.g. `"open redirect"`, not only
+   the vendor code or error string that never leaves the one module where it was demonstrated.
+2. Check every module whose **Prerequisites** or forward-reference section names the module you just edited
+   — a cross-reference is exactly where the second copy of a stale claim hides.
+
 **And after any change to Authlete *configuration*, that grep does not fire — so do a different one.** A
 service flag has no error string. When you enable a feature, the strings that change are the ones that were
 there *because it was off*, and you cannot search for a string you are about to create. This is not
