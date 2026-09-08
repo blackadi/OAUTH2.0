@@ -545,6 +545,73 @@ if (!hasRealAuthleteCreds) {
       })
     })
 
+    // ── 9a. RFC 9470 Step-Up Challenge ───────────────────────────────────
+
+    // Regression coverage for the 2026-09-08 fix: introspection.controller.ts assumed Authlete answers an
+    // ACR/max_age-insufficient token with action FORBIDDEN (403, JSON-reshaped). Live testing proved
+    // Authlete actually answers UNAUTHORIZED (401) instead — the FORBIDDEN branch was real, unit-tested
+    // against a mock, and unreachable by real traffic. Nothing here mocks Authlete; every unit test that
+    // covered this scenario did, which is exactly why the bug went unnoticed.
+    //
+    // Uses `resolveToken()` (the same helper the Introspection block above uses), not `state.accessToken`
+    // directly: section 8 (Refresh) runs immediately before this and exchanges `state.refreshToken`, which
+    // invalidates the original `state.accessToken` — Authlete answers introspection on it with a plain
+    // `invalid_token`/"does not exist", not the ACR-insufficient response these tests need. The refreshed
+    // token (`state.secondAccessToken`, `resolveToken()`'s first preference) still carries the *original*
+    // `acr: "pwd"` and `auth_time`, since no new authentication occurred — refresh extends access without
+    // re-authenticating, so the authentication context travels with it.
+    describe("RFC 9470 Step-Up Challenge", () => {
+      it("answers 401 with a structured challenge when the token's ACR is insufficient", async () => {
+        const token = resolveToken()
+        if (!token) return
+        const res = await request
+          .post("/api/introspection")
+          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+          .send({ token, acrValues: ["mfa"] })
+        expect(res.status).toBe(401)
+        expect(res.body).toMatchObject({
+          error: "insufficient_user_authentication",
+          acr_values: "mfa",
+          acr: "pwd",
+        })
+        expect(res.body.error_description).toContain("[A341302]")
+      })
+
+      it("answers 401 with a structured challenge when max_age is exceeded", async () => {
+        const token = resolveToken()
+        if (!token) return
+        // Measured, not assumed: without a delay this returned 200, not 401. `resolveToken()` prefers
+        // `state.secondAccessToken` — refreshed by section 8 immediately before this one — and Authlete
+        // evaluates `max_age` against a reference recent enough that the refresh-to-here gap (well under
+        // a second) does not exceed `maxAge: 1`. A short wait guarantees it does, regardless of which
+        // timestamp Authlete actually anchors the check to.
+        await new Promise((r) => setTimeout(r, 1500))
+        const res = await request
+          .post("/api/introspection")
+          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+          .send({ token, maxAge: 1 })
+        expect(res.status).toBe(401)
+        expect(res.body).toMatchObject({
+          error: "insufficient_user_authentication",
+          max_age: "1",
+          acr: "pwd",
+        })
+        expect(res.body.error_description).toContain("[A340301]")
+      })
+
+      it("does not reshape a plain invalid token as a step-up challenge", async () => {
+        const res = await request
+          .post("/api/introspection")
+          .auth(process.env.MGMT_CLIENT_ID!, process.env.MGMT_CLIENT_SECRET!)
+          .send({ token: "not-a-real-token-e2e" })
+        expect(res.status).toBe(401)
+        // Raw WWW-Authenticate text, not JSON — confirms the fix did not turn every UNAUTHORIZED
+        // response into a step-up-shaped one.
+        expect(res.body).toEqual({})
+        expect(res.text).toContain("invalid_token")
+      })
+    })
+
     // ── 10. Revocation ──────────────────────────────────────────────────
 
     describe("Token Revocation (RFC 7009)", () => {
