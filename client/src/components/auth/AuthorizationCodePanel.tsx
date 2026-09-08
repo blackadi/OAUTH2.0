@@ -124,6 +124,11 @@ function AuthorizationCodePanel({ active }: { active: boolean }) {
     if (ctx.state) writeKey(SESSION_KEYS.oauthState, ctx.state);
     else removeKey(SESSION_KEYS.oauthState);
 
+    // RFC 8707: the value only restricts the issued token's `aud` if the *token* request carries it
+    // too (see the note on `SESSION_KEYS.authzResource`) — `CallbackPage` reads this back.
+    if (ctx.resource) writeKey(SESSION_KEYS.authzResource, ctx.resource);
+    else removeKey(SESSION_KEYS.authzResource);
+
     writeKey(SESSION_KEYS.authzClientId, acId);
     /**
      * An emptied secret field must *remove* the stored secret, not leave the last one behind.

@@ -7,6 +7,8 @@ export interface TokenRequest {
   code_verifier?: string;
   client_assertion_type?: string;
   client_assertion?: string;
+  /** RFC 8707 §2.2 — restricts the issued token's `aud` to this resource. */
+  resource?: string;
 }
 
 /**

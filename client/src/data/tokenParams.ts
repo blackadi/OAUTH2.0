@@ -29,7 +29,9 @@ export type TokenParamPresence =
   /** Sent only when the client authenticates with a secret in the body. */
   | 'secret'
   /** Sent only when the client authenticates with a signed assertion (`private_key_jwt`). */
-  | 'assertion';
+  | 'assertion'
+  /** Sent only when the authorization request enabled RFC 8707's `resource` parameter. */
+  | 'resource';
 
 export interface TokenParamSpec {
   name: string;
@@ -119,17 +121,28 @@ export const TOKEN_PARAMS: TokenParamSpec[] = [
       'This request shape appears whenever a FAPI signing key is left in the session, because the callback branches on its presence — so a public client silently starts sending client-authentication data and is refused with `[A157303]`. Grant Flows now warns when such a key is stored, because the mode was previously invisible.',
     presence: 'assertion',
   },
+  {
+    name: 'resource',
+    spec: 'RFC 8707 §2.2',
+    requirement: 'OPTIONAL',
+    note: 'Present here only because it was set on the authorization request too (step 1’s "Resource Indicators" field) — sending it on that request alone restricts nothing. This is the copy that actually narrows the audience of the token this exchange issues.',
+    failure:
+      'A value that is not an absolute URI, or that carries a fragment, earns `invalid_target` — the same two rules the authorization request enforces. Omitted entirely, the issued token carries no `aud` restriction at all, which is the state most tokens in this app are in unless step 1’s field was turned on.',
+    presence: 'resource',
+  },
 ];
 
 /** Which parameters a given exchange actually sends. */
 export function tokenParamsFor(options: {
   pkce: boolean;
   auth: 'none' | 'secret' | 'assertion';
+  resource: boolean;
 }): TokenParamSpec[] {
   return TOKEN_PARAMS.filter((p) => {
     if (p.presence === 'always') return true;
     if (p.presence === 'pkce') return options.pkce;
     if (p.presence === 'secret') return options.auth === 'secret';
+    if (p.presence === 'resource') return options.resource;
     return options.auth === 'assertion';
   });
 }

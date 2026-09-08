@@ -294,6 +294,56 @@ describe('AuthFlowsSection — the authorization request', () => {
   });
 
   /**
+   * RFC 8707 — sending `resource` on the authorization request alone is a documented no-op
+   * (`data/authParams.ts`'s own note): only the *token* request's copy restricts the issued token's
+   * `aud`. `SESSION_KEYS.authzResource` is what carries the value across the redirect for
+   * `CallbackPage` to read back.
+   */
+  it('stores the resource parameter across the redirect, so the token request can carry it too', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    fireEvent.click(screen.getByRole('button', { name: /Extensions/i }));
+    fireEvent.click(screen.getByLabelText(/^resource$/i, { selector: 'input[type="checkbox"]' }));
+    fireEvent.change(screen.getByLabelText('resource value'), {
+      target: { value: 'https://api.example.com/orders' },
+    });
+
+    press(/Send authorization request/i);
+
+    await waitFor(() =>
+      expect(sessionStorage.getItem(SESSION_KEYS.authzResource)).toBe(
+        'https://api.example.com/orders',
+      ),
+    );
+  });
+
+  it('does not leave a stale resource behind once the parameter is turned back off', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    fireEvent.click(screen.getByRole('button', { name: /Extensions/i }));
+    const checkbox = screen.getByLabelText(/^resource$/i, {
+      selector: 'input[type="checkbox"]',
+    });
+    fireEvent.click(checkbox);
+    fireEvent.change(screen.getByLabelText('resource value'), {
+      target: { value: 'https://api.example.com/orders' },
+    });
+    press(/Send authorization request/i);
+    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEYS.authzResource)).toBeTruthy());
+
+    fireEvent.click(checkbox);
+    press(/Send authorization request/i);
+
+    // A stale value here would silently restrict a later token request to an API the user no longer
+    // asked for, with nothing on screen showing why.
+    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEYS.authzResource)).toBeNull());
+  });
+
+  /**
    * **The authorization-code path has its own stored secret, and its own else branch.**
    *
    * Two keys, two writers, one lesson learned twice: `saveClientCredentials` writes

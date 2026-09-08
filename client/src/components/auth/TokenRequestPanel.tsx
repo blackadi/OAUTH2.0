@@ -58,7 +58,11 @@ function TokenRequestPanel({
 }: TokenRequestPanelProps) {
   const [open, setOpen] = useState(false);
   const auth = basicAuthClientId ? 'secret' : authKindOf(body);
-  const sent = tokenParamsFor({ pkce: Boolean(body.code_verifier), auth });
+  const sent = tokenParamsFor({
+    pkce: Boolean(body.code_verifier),
+    auth,
+    resource: Boolean(body.resource),
+  });
 
   /**
    * A parameter the specification expects that this request did not carry.

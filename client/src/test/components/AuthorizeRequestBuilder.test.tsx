@@ -178,6 +178,60 @@ describe('PKCE', () => {
   });
 });
 
+/**
+ * RFC 8707 — and the property worth pinning is the one `data/authParams.ts`'s own note calls out:
+ * `resource` on the authorization request alone restricts nothing. `sendContext().resource` is what
+ * lets the caller (`AuthorizationCodePanel`) carry the value across the redirect to the token request,
+ * which is the request that actually narrows the issued token's `aud`.
+ */
+describe('resource (RFC 8707)', () => {
+  function openExtensions() {
+    fireEvent.click(screen.getByRole('button', { name: /Extensions/i }));
+  }
+
+  it('is off by default and sends nothing in the context', async () => {
+    const { onSend } = mount();
+    await waitForGenerated();
+    fireEvent.click(screen.getByRole('button', { name: /Send authorization request/i }));
+
+    expect(paramsOf(previewUrl()).get('resource')).toBeNull();
+    expect(onSend.mock.calls[0][1].resource).toBeNull();
+  });
+
+  it('carries the typed value in both the URL and the send context, once enabled', async () => {
+    const { onSend } = mount();
+    await waitForGenerated();
+    openExtensions();
+    fireEvent.click(screen.getByLabelText(/^resource$/i, { selector: 'input[type="checkbox"]' }));
+    fireEvent.change(screen.getByLabelText('resource value'), {
+      target: { value: 'https://api.example.com/orders' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Send authorization request/i }));
+
+    expect(paramsOf(previewUrl()).get('resource')).toBe('https://api.example.com/orders');
+    expect(onSend.mock.calls[0][1].resource).toBe('https://api.example.com/orders');
+  });
+
+  /**
+   * Enabled-but-empty must not become `resource=` on the wire, and must not read as "sent, but blank"
+   * in the context either — both would be a real request no server would treat as absent.
+   */
+  it('does not send an enabled-but-empty value', async () => {
+    const { onSend } = mount();
+    await waitForGenerated();
+    openExtensions();
+    fireEvent.click(screen.getByLabelText(/^resource$/i, { selector: 'input[type="checkbox"]' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Send authorization request/i }));
+
+    // An empty value is omitted from the URL entirely (`builtUrl` skips `value === ''`), so the context
+    // must agree rather than report a value nothing on the wire carries.
+    expect(paramsOf(previewUrl()).get('resource')).toBeNull();
+    expect(onSend.mock.calls[0][1].resource).toBeNull();
+  });
+});
+
 describe('escape hatches', () => {
   it('raw mode seeds from the built URL and sends what was typed', async () => {
     const { onSend } = mount();

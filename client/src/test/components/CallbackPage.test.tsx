@@ -286,6 +286,44 @@ describe('client authentication on the code exchange', () => {
   });
 });
 
+/**
+ * RFC 8707 — `resource` only restricts the issued token's `aud` when the *token* request carries it,
+ * per `data/authParams.ts`'s own note. `SESSION_KEYS.authzResource` is what `AuthFlowsSection` writes
+ * before the redirect; this is the read-back half.
+ */
+describe('resource (RFC 8707) on the code exchange', () => {
+  const ready = () => {
+    sessionStorage.setItem('oauth_state', 'same');
+    sessionStorage.setItem('pkce_code_verifier', 'v1');
+  };
+
+  it('forwards the resource stored before the redirect', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    sessionStorage.setItem('authz_resource', 'https://api.example.com/orders');
+    at('?code=abc&state=same');
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+
+    expect(exchange.mock.calls[0][0]).toMatchObject({
+      resource: 'https://api.example.com/orders',
+    });
+  });
+
+  it('omits resource entirely when the authorization request never carried one', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    // No `authz_resource` written — the ordinary, most common case.
+    at('?code=abc&state=same');
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+
+    expect('resource' in exchange.mock.calls[0][0]).toBe(false);
+  });
+});
+
 describe('a successful exchange', () => {
   it('stores the tokens and inspects the ID token', async () => {
     // A structurally valid JWT — the inspector decodes it; verification is a separate, explicit step.

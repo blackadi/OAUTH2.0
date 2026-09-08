@@ -47,6 +47,8 @@ export interface ParamState {
 export interface AuthorizeSendContext {
   codeVerifier: string | null;
   state: string | null;
+  /** RFC 8707 `resource`, when the parameter is enabled and non-empty in the authorization request. */
+  resource: string | null;
 }
 
 export interface CustomParam {
@@ -318,6 +320,9 @@ export function useAuthorizeParams({ endpoint, seed, dpopThumbprint }: UseAuthor
     (): AuthorizeSendContext => ({
       codeVerifier: challengeEdited ? null : codeVerifier,
       state: enabledOf('state') ? effective('state') : null,
+      // RFC 8707: worth nothing unless the token request carries the same value — see the note on
+      // `SESSION_KEYS.authzResource`. An empty string is not "sent, but blank"; it is not enabled.
+      resource: enabledOf('resource') && effective('resource') ? effective('resource') : null,
     }),
     [challengeEdited, codeVerifier, enabledOf, effective],
   );

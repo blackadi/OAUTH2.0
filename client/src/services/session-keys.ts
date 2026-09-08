@@ -28,6 +28,17 @@ export const SESSION_KEYS = {
   oauthState: 'oauth_state',
   authzClientId: 'authz_client_id',
   authzClientSecret: 'authz_client_secret',
+  /**
+   * RFC 8707 `resource`, carried from the authorization request to the token request.
+   *
+   * The two requests are separated by a full-page redirect, so a value typed into the authorization
+   * builder has nowhere to survive to unless something writes it down — the same reason
+   * `pkceVerifier`/`oauthState` live here rather than in component state. Sending `resource` only on
+   * the authorization request is a documented no-op (see `data/authParams.ts`'s own note): Authlete
+   * restricts the issued token's `aud` from the *token* request's value, not the authorization
+   * request's.
+   */
+  authzResource: 'authz_resource',
 
   /** The client the most recent token belongs to — used to pre-fill revocation and introspection. */
   activeClientId: 'active_client_id',

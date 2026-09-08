@@ -24,26 +24,41 @@ const PUBLIC_PKCE = {
 
 describe('tokenParamsFor', () => {
   it('sends five parameters for a public client using PKCE', () => {
-    const names = tokenParamsFor({ pkce: true, auth: 'none' }).map((p) => p.name);
+    const names = tokenParamsFor({ pkce: true, auth: 'none', resource: false }).map((p) => p.name);
     expect(names).toEqual(['grant_type', 'code', 'redirect_uri', 'client_id', 'code_verifier']);
   });
 
   it('adds the body secret for a client_secret_post client', () => {
-    const names = tokenParamsFor({ pkce: true, auth: 'secret' }).map((p) => p.name);
+    const names = tokenParamsFor({ pkce: true, auth: 'secret', resource: false }).map(
+      (p) => p.name,
+    );
     expect(names).toContain('client_secret');
     expect(names).not.toContain('client_assertion');
   });
 
   it('adds both assertion parameters for private_key_jwt, and no secret', () => {
-    const names = tokenParamsFor({ pkce: true, auth: 'assertion' }).map((p) => p.name);
+    const names = tokenParamsFor({ pkce: true, auth: 'assertion', resource: false }).map(
+      (p) => p.name,
+    );
     expect(names).toContain('client_assertion_type');
     expect(names).toContain('client_assertion');
     expect(names).not.toContain('client_secret');
   });
 
   it('omits code_verifier when PKCE was not used', () => {
-    const names = tokenParamsFor({ pkce: false, auth: 'none' }).map((p) => p.name);
+    const names = tokenParamsFor({ pkce: false, auth: 'none', resource: false }).map((p) => p.name);
     expect(names).not.toContain('code_verifier');
+  });
+
+  /** RFC 8707 — present only when the authorization request actually enabled the parameter. */
+  it('adds resource only when it was enabled, regardless of PKCE or auth', () => {
+    const without = tokenParamsFor({ pkce: true, auth: 'none', resource: false }).map(
+      (p) => p.name,
+    );
+    expect(without).not.toContain('resource');
+
+    const withIt = tokenParamsFor({ pkce: true, auth: 'none', resource: true }).map((p) => p.name);
+    expect(withIt).toContain('resource');
   });
 });
 

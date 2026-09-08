@@ -402,13 +402,22 @@ const CallbackPage = () => {
          * `AuthorizeRequestBuilder` navigate to the string it displays. A panel that explains a request
          * nobody made is worse than no panel.
          */
+        // RFC 8707: only present when the authorization request carried one — see the note on
+        // `SESSION_KEYS.authzResource`. Sending it here is what actually restricts the issued token's
+        // `aud`; the authorization request's copy alone changes nothing observable.
+        const storedResource = readKey(SESSION_KEYS.authzResource);
+        const resourceParam: { resource: string } | Record<string, never> = storedResource
+          ? { resource: storedResource }
+          : {};
+
         const baseRequest = {
           grant_type: 'authorization_code',
           code,
           redirect_uri: redirectUri,
           client_id: storedClientId,
           code_verifier: codeVerifier,
-        } as const;
+          ...resourceParam,
+        };
 
         if (dpopPrivateKeyJwk && signingPrivateKeyJwk) {
           // A factory, not a proof. On a `use_dpop_nonce` refusal the proof must be re-signed with the
