@@ -450,7 +450,7 @@ every identifier on 2026-08-02**, when the corrections above were applied. The 2
 IETF identifier from `datatracker.ietf.org` (not the rendered RFC text — see the TLS note in §0 for why) and
 every OpenID specification from `openid.net`, and found no further status errors._
 
-> **Two traps this file has now been bitten by twice — check both before citing an OpenID spec.**
+> **Two traps this file has now hit twice — check both before citing an OpenID spec.**
 > **(1) `-final.html` is not always current.** JARM's `oauth-v2-jarm-final.html` serves the **Nov 2022**
 > Final, while `oauth-v2-jarm.html` serves *"incorporating errata set 1"*, **17 Aug 2025**. Identity
 > Assurance behaves the same way (`-final` = 1 Oct 2024; the errata-set-1 revision of 1 Jul 2026 is at the

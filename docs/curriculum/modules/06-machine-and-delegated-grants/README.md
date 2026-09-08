@@ -42,7 +42,8 @@ by authenticating them. In an assertion grant the AS **takes someone's word for 
 parties precisely — the **Issuer** creates and signs the assertion, and *"the authorization server acts as a
 relying party."* Relying. The security of every token minted this way rests on one question the spec pushes
 onto the deployment: *which subjects is this issuer allowed to speak for?* Get that wrong and an assertion
-grant is an identity-provider licence. You will demonstrate exactly that in the lab, in three commands.
+grant hands out the power to impersonate any user, as freely as an identity provider does. You will
+demonstrate exactly that in the lab, in three commands.
 
 **A service acting on behalf of someone else.** The user is long gone but their request is still travelling:
 the API gateway calls the orders service, which calls the pricing service, which calls the ledger. Each hop

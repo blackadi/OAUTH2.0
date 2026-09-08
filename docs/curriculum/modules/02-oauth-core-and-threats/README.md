@@ -19,9 +19,14 @@ a token, and that gap hides the single most important design decision in the pro
 
 Here it is. The user finishes consenting at the authorization server. The AS now needs to get something back
 to the client — and the only route available is a redirect through the browser, because that is where the user
-is. Module 00 established what that means: **whatever the AS puts in that redirect is visible and editable by
-the user agent, sits in the URL bar, lands in browser history, and leaks in `Referer` headers and server
-logs.** So the AS has two options. Put the access token there — that is the **implicit grant**, and it means
+is. Module 00 established what that means: **whatever the AS puts in that redirect**
+
+- is visible and editable by the user agent
+- sits in the URL bar
+- lands in browser history
+- leaks in `Referer` headers and server logs
+
+So the AS has two options. Put the access token there — that is the **implicit grant**, and it means
 the credential you worked so hard to protect is replaced by a token you just published. Or put a short-lived,
 single-use *reference* there — an **authorization code** — which is worthless to anyone who cannot also
 authenticate as the client on the back channel. That second choice is the authorization-code grant, and

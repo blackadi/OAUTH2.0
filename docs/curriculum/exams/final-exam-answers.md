@@ -186,7 +186,7 @@ drops the port makes the server compute a different URI than the client signed, 
 production, only behind the proxy. *(This repo hit exactly that: the server derived
 `http://localhost/api/par`, without the port.)*
 
-Accept "mTLS everywhere" only if the answer confronts the CDN problem. Accept "DPoP everywhere" readily —
+Accept "mTLS everywhere" only if the answer addresses the CDN problem. Accept "DPoP everywhere" readily —
 it is the simpler operational story and FAPI 2.0 permits either.
 
 ### F10 (8) — third-party SSO

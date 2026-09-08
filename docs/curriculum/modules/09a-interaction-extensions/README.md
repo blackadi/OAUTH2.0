@@ -2,10 +2,13 @@
 
 **The short version:** every module so far assumed one shape for the interaction — a browser redirect, one
 authentication that lasts the whole session, and coarse scopes to describe what was authorized. Four
-extensions lift four of those assumptions, and each one turns on with a single configuration field on this
-deployment — all four of which are now set, so the lab shows you both states side by side. **JARM** signs the response. **CIBA** removes the browser. **RFC 9470** lets a resource server
-demand *stronger* authentication mid-session. **RAR** replaces "read write" with a structured description of
-what you are actually asking for.
+extensions lift four of those assumptions. Each one turns on with a single configuration field on this
+deployment, and all four are now set, so the lab shows you both states side by side:
+
+- **JARM** signs the response.
+- **CIBA** removes the browser.
+- **RFC 9470** lets a resource server demand *stronger* authentication mid-session.
+- **RAR** replaces "read write" with a structured description of what you are actually asking for.
 
 ## Prerequisites
 

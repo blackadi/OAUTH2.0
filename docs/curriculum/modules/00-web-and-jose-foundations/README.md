@@ -13,7 +13,7 @@ foundation the `docs/` tutorials silently assume.
 
 ## Why this module exists
 
-Almost every OAuth attack you will study later is, at its root, a failure to reason about **who controls the
+Almost every OAuth attack you will study later is fundamentally a failure to reason about **who controls the
 bytes**. The authorization-code flow sends data *through the user's browser* — a party that can read and
 rewrite anything it relays. Token theft, mix-up attacks, and code interception all exploit the gap between
 "the protocol drew an arrow from A to B" and "the bytes physically passed through an untrusted C in between."
@@ -33,7 +33,7 @@ endpoints* against eavesdropping and tampering. It does **not** protect you from
 and it does **not** stop the human at the browser from reading and editing a redirect URL that passes through
 their own machine. The front channel is encrypted on the wire and still fully visible and editable at the
 user agent. Holding those two facts at once — "encrypted in transit" *and* "readable/editable at the
-endpoint" — is the whole game.
+endpoint" — is the entire point.
 
 So this module is deliberately not about OAuth. It is about the ground OAuth stands on, taught first so that
 nothing later has to hand-wave over it.

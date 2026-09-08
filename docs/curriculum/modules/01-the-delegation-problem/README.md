@@ -32,11 +32,16 @@ received: *everything you can do, forever, indistinguishable from you.* The gap 
 the delegation problem. OAuth is the machinery that closes it.
 
 The core move is to stop sharing the credential and start issuing a **token**: a separate artifact, minted by
-the party that already authenticates the user, which is *narrow* (only certain operations), *time-limited*,
-*revocable independently of the password*, *attributable* (the logs know which app did what), and *useless
-elsewhere* (it is not the password, and it is bound to a specific audience). To issue that artifact safely you
-need a third party the user already trusts to hold the credential — and that requirement is what forces the
-roles apart. The client must **not** be the thing that sees the password. So the login page has to live
+the party that already authenticates the user. That token is:
+
+- *narrow* — only certain operations
+- *time-limited*
+- *revocable independently of the password*
+- *attributable* — the logs know which app did what
+- *useless elsewhere* — it is not the password, and it is bound to a specific audience
+
+To issue that artifact safely you need a third party the user already trusts to hold the credential — and
+that requirement is what forces the roles apart. The client must **not** be the thing that sees the password. So the login page has to live
 somewhere else. So the app must be redirected away and back. So there must be an endpoint that issues tokens
 and a separate endpoint where the user authenticates.
 

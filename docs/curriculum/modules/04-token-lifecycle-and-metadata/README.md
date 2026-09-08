@@ -1,11 +1,11 @@
 # Module 04 — Token Lifecycle + Metadata
 
 **The short version:** you can now get a token safely into any kind of client. This module is about
-everything that happens *after*: what the token means to the resource server that receives it, how the RS
-decides whether to honour it, how anyone kills it early, how a token gets restricted to one API instead of
-all of them, and how clients and resource servers discover all of this without a human wiring up config.
-The organising question is the one Module 02 left hanging when your access token turned out to be **opaque**:
-*given this string, what is a resource server supposed to do?*
+everything that happens *after*. What does the token mean to the resource server that receives it? How does
+the RS decide whether to honour it? How does anyone kill it early? How does a token get restricted to one API
+instead of all of them? And how do clients and resource servers discover all of this without a human wiring
+up config? The organising question is the one Module 02 left hanging when your access token turned out to be
+**opaque**: *given this string, what is a resource server supposed to do?*
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ the hot path and a hard dependency on the AS being up. The server in this repo i
 why the token you decoded in Module 02 had no structure. It was not a broken JWT; it was a database key.
 
 Then there is a question people skip: **what is this token good for?** By default, a token is often accepted
-by every API that trusts the issuer, which means a token you obtained for a low-value service can be replayed
+by every API that trusts the issuer. That means a token you obtained for a low-value service can be replayed
 against a high-value one — the confused-deputy problem from Module 01, at token scale. `resource` (RFC 8707)
 is the fix: the client says which API it intends to call, and the AS audience-restricts the token to it. You
 will do this in the lab and watch `aud` appear.

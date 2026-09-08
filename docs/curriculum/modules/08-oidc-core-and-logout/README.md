@@ -30,8 +30,8 @@ loginAs(profile.sub);        // ← the bug
 ```
 
 This runs. It returns the right user. It passes code review, and it will pass your tests. It is also a
-complete authentication bypass, and the reason is worth stating precisely, because "use an ID token instead"
-is advice people follow without understanding.
+complete authentication bypass. The reason is worth stating precisely, because "use an ID token instead" is
+advice people follow without understanding why.
 
 **An access token is a bearer credential addressed to a resource server. It says nothing about who obtained
 it, when, or how — and nothing about who it was issued *to*.** So:
@@ -328,8 +328,8 @@ hiding behind the obvious fix.
 **`max_age` is where `prompt=none` gets genuinely interesting.** Succeeding "immediately" is only correct if
 the OP can *evidence* what the client asked about. A client sending `max_age=300` is asking "was this person
 authenticated in the last five minutes?" — and an OP that cannot answer must say so, not guess. The failure
-mode to recognise is an OP that fills in `acr` and `auth_time` from nowhere in order to return a code, which
-turns a step-up control into decoration. Exercise 5 has a worked example.
+mode to recognise is an OP that fills in `acr` and `auth_time` from nowhere just to return a code. That turns
+a step-up control into decoration. Exercise 5 has a worked example.
 
 ## The logout family — four specs, four problems
 

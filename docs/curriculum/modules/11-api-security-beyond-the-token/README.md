@@ -216,9 +216,8 @@ So the split is not a matter of taste: **the gateway does the token and the verb
 the column.** Anything else is either duplicated or missing.
 
 The failure mode to watch for is the one this creates socially rather than technically: a gateway that
-handles "auth" gives every service team the impression that auth is handled. It is handled — the half of it
-that is not the half that gets you breached. If you operate a gateway, say explicitly and often what it does
-*not* do.
+handles "auth" gives every service team the impression that auth is handled. It is handled — just not the
+half that gets you breached. If you operate a gateway, say explicitly and often what it does *not* do.
 
 Two corollaries:
 

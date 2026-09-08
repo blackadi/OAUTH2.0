@@ -285,8 +285,8 @@ may see*.
 There is a legitimate adjacent concern worth raising *correctly*: unrestricted DCR is a spam and inventory
 problem (OWASP API9), and RFC 7591 supports an initial access token for gating it. That is a
 low-severity operational finding, phrased as such. Reporting it as "anyone can read patient data" is the
-error the rubric penalises — and in a real engagement it is the finding that costs you the room, because the
-first thing the vendor's engineers will do is disprove it and then discount everything else you wrote.
+error the rubric penalises — and in a real engagement it is the finding that makes the vendor's engineers stop
+taking the rest of your report seriously, because the first thing they will do is disprove it.
 
 ## Tier 4
 

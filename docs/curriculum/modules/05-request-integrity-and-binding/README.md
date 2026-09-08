@@ -1,11 +1,15 @@
 # Module 05 — Request Integrity + Binding
 
-**The short version:** everything so far has left two assumptions unexamined. First, that the authorization
-**request** arrives at the AS the way the client wrote it — it travels through the browser, so it does not
-have to. Second, that whoever presents a **token** is entitled to it — bearer tokens make possession
-sufficient, so a stolen token is as good as an earned one. This module closes both. PAR and JAR move the
-request off the front channel or sign it; `iss` tells the client which AS actually answered; and DPoP and
-mTLS bind the token to a key, so theft stops paying.
+**The short version:** everything so far has left two assumptions unexamined.
+
+First, that the authorization **request** arrives at the AS the way the client wrote it. It travels through
+the browser, so it does not have to.
+
+Second, that whoever presents a **token** is entitled to it. Bearer tokens make possession sufficient, so a
+stolen token is as good as an earned one.
+
+This module closes both. PAR and JAR move the request off the front channel or sign it; `iss` tells the
+client which AS actually answered; and DPoP and mTLS bind the token to a key, so theft stops paying.
 
 ## Prerequisites
 
@@ -42,7 +46,7 @@ by having the AS name itself in the response, and requiring the client to check.
 
 **Possession is not entitlement.** This is the deeper one. Every token so far is a **bearer** token: the RS
 checks that the string is valid, never that the presenter is the party it was issued to. Module 04 made this
-visible — introspection returns the same `active: true` to the legitimate client and to a thief with the same
+visible. Introspection returns the same `active: true` to the legitimate client and to a thief with the same
 string. So every leak path becomes a full compromise: a log, a proxy, an XSS payload, a compromised RS
 replaying tokens to another RS.
 
