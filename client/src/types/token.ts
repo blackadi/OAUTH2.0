@@ -32,6 +32,11 @@ export interface IssuedTokens {
   token_type?: string;
   expires_in?: number;
   scope?: string;
+  /**
+   * Native SSO 1.0 (draft 07) §3 — present when the authorization-code exchange requested the
+   * `device_sso` scope. Carried here so `NativeSsoSection` can pre-fill it without a second lookup.
+   */
+  device_secret?: string;
 }
 
 /**

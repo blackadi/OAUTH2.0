@@ -406,16 +406,16 @@ Retrieve a credential after deferred issuance. Maps to the OID4VCI Deferred Cred
 ## Native SSO
 
 ### `POST /api/nativesso`
-Process Native SSO token exchange. No admin auth — client auth via body `clientId`/`clientSecret`.
+Process Native SSO token exchange. **Admin Basic auth required** (`MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`, realm `nativesso`) — the same gate as DCR registration and Federation registration, not a body credential.
 
-**Body:** `clientId`, `clientSecret`, `accessToken`, `deviceSecret`, `deviceSecretHash` (optional), `sub` (optional), `claims` (optional), `idtHeaderParams` (optional), `idTokenAudType` (optional)
+**Body:** `accessToken`, `deviceSecret`, `deviceSecretHash` (optional), `sub` (optional), `claims` (optional), `idtHeaderParams` (optional), `idTokenAudType` (optional)
 
 **Response:** 200 (OK — returns `responseContent` JSON with ID token, device secret), 400 (CALLER_ERROR), 500 (INTERNAL_SERVER_ERROR)
 
 ### `POST /api/nativesso/logout`
-Revoke all tokens for a session. No admin auth — client auth via body `clientId`/`clientSecret`.
+Revoke all tokens for a session. **Admin Basic auth required** (`MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET`, realm `nativesso`) — not a body credential.
 
-**Body:** `clientId`, `clientSecret`, `sessionId`
+**Body:** `sessionId`
 
 **Response:** 200 (OK — returns `responseContent` JSON with revocation confirmation), 500 (INTERNAL_SERVER_ERROR)
 

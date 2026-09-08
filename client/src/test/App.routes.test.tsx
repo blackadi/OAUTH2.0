@@ -134,18 +134,20 @@ describe('every route resolves to a section', () => {
     const paths = new Set(allSectionsFlat.map((s) => s.path));
     expect(paths.size).toBe(allSectionsFlat.length);
     /**
-     * 22, not 20. The two additions are `/reference` — the **only reading surface** in the application —
-     * and `/token-exchange`, which the server implemented and Module 06 taught while the debugger could
-     * not send it.
+     * 23, not 20. The three additions are `/reference` — the **only reading surface** in the
+     * application — `/token-exchange`, which the server implemented and Module 06 taught while the
+     * debugger could not send it, and `/native-sso`, a direct probe of the server's dedicated
+     * `/api/nativesso` pair (OpenID Native SSO 1.0 draft 07).
      *
      * A hardcoded count is the right shape here — it is a deliberate tripwire on a hand-maintained map,
      * and it should fail when a route is added so that somebody confirms the id → component entry
      * exists. It just has to be updated on purpose rather than treated as a regression.
      */
-    expect(allSectionsFlat.length).toBe(22);
-    // The two routes added after the audit, named rather than merely counted.
+    expect(allSectionsFlat.length).toBe(23);
+    // The routes added after the audit, named rather than merely counted.
     expect(allSectionsFlat.map((s) => s.id)).toContain('reference');
     expect(allSectionsFlat.map((s) => s.id)).toContain('token-exchange');
+    expect(allSectionsFlat.map((s) => s.id)).toContain('native-sso');
   });
 });
 

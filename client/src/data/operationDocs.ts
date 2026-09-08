@@ -116,6 +116,39 @@ const docs: Record<string, Record<string, OpDoc>> = {
       tips: 'This is automatic client registration without a registration secret: trust comes from the chain, not from something the client was told in advance.',
     },
   },
+  'native-sso': {
+    process: {
+      title: 'Native SSO — Process',
+      description:
+        "Calls Authlete's dedicated /nativesso API directly with an access token and a device secret. On first use for a session, this mints the device secret and binds it; on a later call for the same session it verifies the presented secret instead of re-minting it, so a second native app can obtain its own tokens without the user logging in again.",
+      params: [
+        {
+          name: 'Access Token',
+          desc: 'Loaded from the vault. Native SSO 1.0 §3 says to use the jwtAccessToken from a token response when present, else the plain accessToken — this deployment issues opaque tokens, so it is always the latter.',
+        },
+        {
+          name: 'Device Secret',
+          desc: 'Pre-filled when the vault holds one. First call for a session: the authorization server is free to mint a new value. Later calls: it must be the value already bound to that session, or the request is refused — try editing it to see that check fire.',
+        },
+      ],
+      returns:
+        'The vendor envelope `{resultCode, resultMessage, action, responseContent, idToken}` — unflattened, unlike PAR/Device/DCR/VCI. `responseContent` is a JSON string; it is decoded and shown alongside the raw envelope.',
+      tips: 'The quickest way to get a real device secret into the vault: add `device_sso` to the scope in Grant Flows before running an Authorization Code exchange.',
+    },
+    logout: {
+      title: 'Native SSO — Logout',
+      description:
+        'Ends a shared native-SSO session by its session ID, revoking every token issued under it — for every app that was signed in through it, not just the one that calls this.',
+      params: [
+        {
+          name: 'Session ID',
+          desc: "The sid claim of an ID token issued under the session to end. Not tracked by this app — decode an ID token in the Token Vault's inspector to read it.",
+        },
+      ],
+      returns: 'The vendor envelope, including a count of revoked token records.',
+      tips: 'This is a broader action than revoking one token (`POST /api/revocation`): it ends the whole shared session, for every app that joined it via Native SSO.',
+    },
+  },
   'grant-mgmt': {
     query: {
       title: 'Query a Grant',

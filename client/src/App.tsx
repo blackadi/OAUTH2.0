@@ -27,6 +27,7 @@ import {
   Bot,
   BookOpen,
   ArrowRightLeft,
+  Link2,
 } from 'lucide-react';
 
 const AuthFlowsSection = lazy(() => import('@/components/auth/AuthFlowsSection'));
@@ -104,6 +105,9 @@ const TokenExchangeSection = lazy(() =>
 const StepUpSection = lazy(() =>
   import('@/components/oidc/StepUpSection').then((m) => ({ default: m.StepUpSection })),
 );
+const NativeSsoSection = lazy(() =>
+  import('@/components/oidc/NativeSsoSection').then((m) => ({ default: m.NativeSsoSection })),
+);
 
 export type SectionId =
   | 'auth-flows'
@@ -122,6 +126,7 @@ export type SectionId =
   | 'fapi'
   | 'mcp'
   | 'vci'
+  | 'native-sso'
   | 'admin'
   | 'client-mgmt'
   | 'grant-mgmt'
@@ -217,6 +222,12 @@ const SECTIONS: SectionGroup[] = [
         path: '/vci',
         icon: <BadgeCheck className="h-4 w-4" />,
       },
+      {
+        id: 'native-sso',
+        label: 'Native SSO',
+        path: '/native-sso',
+        icon: <Link2 className="h-4 w-4" />,
+      },
     ],
   },
   {
@@ -287,6 +298,7 @@ const sectionComponents: Record<SectionId, React.FC> = {
   fapi: FapiSection,
   mcp: McpSection,
   vci: VciSection,
+  'native-sso': NativeSsoSection,
   admin: AdminSection,
   'client-mgmt': ClientManagementSection,
   'grant-mgmt': GrantManagementSection,

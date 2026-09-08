@@ -77,6 +77,7 @@ export const SURFACES: Surface[] = [
   { path: '/fapi', name: 'fapi', cls: 'doing', ready: H1 },
   { path: '/mcp', name: 'mcp', cls: 'doing', ready: H1 },
   { path: '/vci', name: 'vci', cls: 'doing', ready: H1 },
+  { path: '/native-sso', name: 'native-sso', cls: 'doing', ready: H1 },
   { path: '/admin', name: 'admin', cls: 'doing', ready: H1 },
   { path: '/client-mgmt', name: 'client-mgmt', cls: 'doing', ready: H1 },
   { path: '/grant-mgmt', name: 'grant-mgmt', cls: 'doing', ready: H1 },

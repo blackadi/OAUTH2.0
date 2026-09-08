@@ -48,6 +48,14 @@ function TokenVault({ defaultExpanded = false }: TokenVaultProps) {
       inspectable: false,
     },
     { label: 'ID Token', value: tokenSet?.id_token, badge: 'default' as const, inspectable: true },
+    // Opaque, like the refresh token — Native SSO 1.0 §3 defines no structure for it, so there is
+    // nothing for `JwtInspector` to decode.
+    {
+      label: 'Device Secret',
+      value: tokenSet?.device_secret,
+      badge: 'warning' as const,
+      inspectable: false,
+    },
   ];
 
   return (

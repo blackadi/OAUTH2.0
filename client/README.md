@@ -32,6 +32,7 @@ A comprehensive interactive debugging dashboard for learning, testing, and debug
   - [21. Device Flow (RFC 8628)](#21-device-flow-rfc-8628)
   - [22. Token Exchange (RFC 8693)](#22-token-exchange-rfc-8693)
   - [23. Reference — the reading surface](#23-reference--the-reading-surface)
+  - [24. Native SSO (OpenID Native SSO 1.0)](#24-native-sso-openid-native-sso-10)
 - [Server Status Indicator](#server-status-indicator)
 - [Key Distinctions](#key-distinctions)
 - [Troubleshooting](#troubleshooting)
@@ -449,6 +450,35 @@ Three things worth knowing about how it is built:
 
 Issuance itself needs a wallet, which this repo does not contain. What you can exercise here is
 everything up to that point.
+
+### 24. Native SSO (OpenID Native SSO 1.0)
+
+Lets a second native app on the same device get its own tokens without asking the user to log in again,
+by presenting a `device_secret` the first app already obtained — bound to the shared authentication
+session rather than to either app's tokens.
+
+**There are two ways to exercise it, and this section is the second, more direct one.** The primary path
+needs no dedicated UI at all: add `device_sso` to the scope in Grant Flows' authorization request, and
+the token response that comes back already carries `device_secret` (now shown in the Token Vault) —
+Authlete answers `action: NATIVE_SSO` and the server's token controller mints the secret transparently
+inside the ordinary `/api/token` call. This section instead drives Authlete's own `/nativesso` API
+directly, the same "call the dedicated endpoint" shape `DcrSection` and Federation's Registration tab
+use, with two operations:
+
+- **Process** — presents an access token and a device secret. First call for a session: Authlete mints
+  the secret. A later call for the same session: it must be the value already bound, or the request is
+  refused — editable in this panel specifically so that failure is reachable.
+- **Logout** — ends the whole shared session by its `sid` (decode an ID token in the Token Vault to read
+  it), revoking every token issued under it for every app that joined.
+
+**Admin Basic auth, not a per-client credential.** Both operations are gated by `MGMT_CLIENT_ID`/
+`MGMT_CLIENT_SECRET` — the same credential `AdminAuth` collects for DCR and Federation registration —
+not by the client's own secret.
+
+**The response is a raw vendor envelope.** Unlike PAR, Device, DCR and VCI, this controller does not
+flatten Authlete's response into the spec-shaped body: it sends the whole
+`{resultCode, resultMessage, action, responseContent, idToken}` envelope, with `responseContent` as a
+JSON string. The panel shows the envelope as it arrives and decodes `responseContent` alongside it.
 
 ---
 

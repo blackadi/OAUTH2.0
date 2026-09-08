@@ -15,3 +15,5 @@ export { rarService } from './rar.service';
 export { processJar } from './jar.service';
 export { mcpService } from './mcp.service';
 export { tokenExchangeService } from './token-exchange.service';
+export { nativeSsoService } from './native-sso.service';
+export type { NativeSsoProcessBody } from './native-sso.service';

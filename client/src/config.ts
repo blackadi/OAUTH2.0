@@ -177,6 +177,9 @@ export const VCI_DEFERRED_ISSUE_ENDPOINT = `${API_BASE_URL}/api/vci/deferred/iss
 export const FAPI_CONFIG_ENDPOINT = `${API_BASE_URL}/api/fapi/config`;
 export const FAPI_STATUS_ENDPOINT = `${API_BASE_URL}/api/fapi/status`;
 
+export const NATIVE_SSO_PROCESS_ENDPOINT = `${API_BASE_URL}/api/nativesso`;
+export const NATIVE_SSO_LOGOUT_ENDPOINT = `${API_BASE_URL}/api/nativesso/logout`;
+
 /**
  * `MCP_AS_METADATA_ENDPOINT` is gone: it had **zero** consumers anywhere in `src/`.
  *
