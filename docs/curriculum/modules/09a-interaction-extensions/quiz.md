@@ -129,18 +129,27 @@ factual brief on two documents that appear nowhere in Modules 00–09a. **Nothin
 should not look them up** — the point is to place an unfamiliar extension using only the frames you already
 have.
 
-> **Brief.** *(Verified against the primary sources on 2026-08-02. Revisions and dates are given because
+> **Brief.** *(Verified against the primary sources on 2026-09-08. Revisions and dates are given because
 > Module 07 says a draft citation without them is not a citation — and because part 4 asks about it.)*
 >
-> **(A) OAuth Client ID Metadata Document (CIMD)** — `draft-ietf-oauth-client-id-metadata-document-01`,
-> **2 March 2026**, IETF OAuth working group, intended status Standards Track, expires 3 September 2026.
+> **(A) OAuth Client ID Metadata Document (CIMD)** — `draft-ietf-oauth-client-id-metadata-document-02`,
+> **6 July 2026**, IETF OAuth working group, intended status Standards Track, expires 7 January 2027.
 > It permits a client to use an **HTTPS URL as its `client_id`** — the URL must use the `https` scheme and
 > contain a path component. When an authorization server encounters such a `client_id` it **dereferences the
-> URL** and retrieves a JSON document of client metadata in the shape RFC 7591 defines; the document MUST
-> include at least `client_id`, `client_name` and `redirect_uris`, and its `client_id` MUST match the URL
-> exactly. There is no registration request and no registration response. Authorization servers advertise
-> support with `client_id_metadata_document_supported` in their RFC 8414 metadata, and cache the document
-> respecting HTTP cache headers.
+> URL** and retrieves a JSON document of client metadata drawn from RFC 7591's metadata registry; the only
+> field CIMD itself mandates is that the document's `client_id` property MUST match the URL exactly — it
+> does not separately require `client_name` or `redirect_uris` to be present. There is no registration
+> request and no registration response. Authorization servers advertise support with
+> `client_id_metadata_document_supported` in their RFC 8414 metadata, and cache the document respecting HTTP
+> cache headers.
+>
+> **Corrected 2026-09-08.** This brief previously cited `-01` (2 March 2026, expires 3 September 2026) and
+> claimed the document MUST include `client_id`, `client_name` and `redirect_uris`. Both were wrong even on
+> their own stated verification date: `-02` had already superseded `-01` on 6 July 2026 — a full month
+> before this brief's original "verified 2026-08-02" claim — and neither revision requires more than
+> `client_id` to match the URL; the rest come from RFC 7591's registry with no minimum set mandated by CIMD.
+> `docs/CIMD.md` and `docs/curriculum/SPEC-INVENTORY.md` already cited `-02` correctly; this brief had
+> drifted from its own sibling documents. See the note under part 4 below.
 >
 > **(B) The Model Context Protocol (MCP) authorization specification** — revision **2025-11-25**, governing
 > how AI agents reach third-party tools and data. Authorization is **OPTIONAL** for MCP implementations; when

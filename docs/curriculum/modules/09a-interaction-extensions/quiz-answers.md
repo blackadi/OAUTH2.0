@@ -492,8 +492,8 @@ client without a human; §5 is where that comparison gets sharp.
   the weakest — and Module 10 already told you what "supported but not required" is worth. The failure is
   not that nothing works; it is that everything works, badly, in incompatible ways.
 
-**4. Status, and how to cite.** CIMD is an **active IETF Internet-Draft** (`-01`, 2 March 2026, expiring
-3 September 2026) — not a published RFC. MCP's authorization specification is a **versioned vendor-neutral
+**4. Status, and how to cite.** CIMD is an **active IETF Internet-Draft** (`-02`, 6 July 2026, expiring
+7 January 2027) — not a published RFC. MCP's authorization specification is a **versioned vendor-neutral
 specification** rather than an IETF or OpenID document, dated **2025-11-25**; it is not on a standards track
 at all, which is a *third* status category beyond the ones Module 07 listed.
 
@@ -502,10 +502,21 @@ text to move. **Three compounding reasons for caution here**, and naming any two
 
 - MCP normatively references **OAuth 2.1**, itself a draft — so a claim about MCP conformance rests on two
   moving documents.
-- MCP references **CIMD `-00`** while the current CIMD revision is **`-01`**. A profile can pin an older
+- MCP references **CIMD `-00`** while the current CIMD revision is **`-02`**. A profile can pin an older
   revision of what it profiles, and if you cite "CIMD" without a revision you may be describing a document
-  neither party implements.
-- An expiry date of 3 September 2026 is not a formality. A draft that lapses has no status whatever.
+  neither party implements — and here the gap is two full revisions, not one.
+- An expiry date is not a formality. `-02` itself supersedes `-01` (which would otherwise have lapsed on
+  3 September 2026) — a draft that lapses without a successor has no status whatever, and even a
+  superseded-but-unexpired revision is the wrong one to cite once a later one exists.
+
+> **Corrected 2026-09-08.** This item previously cited CIMD at `-01` (2 March 2026, expiring 3 September
+> 2026) throughout — including in the brief the student reasons from (`quiz.md`) — and said the current
+> revision was `-01`. It was already wrong on its own stated verification date: `-02` published 6 July 2026,
+> a month before the brief's claimed "verified 2026-08-02". Corrected here and in `quiz.md` after a
+> cross-check against this same module's sibling references, `docs/CIMD.md` and
+> `docs/curriculum/SPEC-INVENTORY.md`, both of which already had `-02` right. The reasoning taught (cite a
+> revision, expect drift, expiry is not a formality) does not change — only the numbers do, and the
+> corrected numbers make the MCP-vs-CIMD revision gap larger, not smaller.
 
 **5. CIMD versus DCR and `private_key_jwt`.**
 
