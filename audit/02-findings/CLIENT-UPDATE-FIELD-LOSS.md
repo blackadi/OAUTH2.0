@@ -2,8 +2,11 @@
 
 - **Verdict:** ~~`PARTIAL`~~ → **`RESOLVED` in code, and the live proof is in** *(2026-08-14 — CU-W2 shipped; **CU-W1 confirmed REPLACE semantics**, and raised the severity of what the pre-fix code could have done: see the ⚠️ note below)*
 - **Severity:** **S2** — silent data loss on an admin write path, and it can undo a security control
-- **Status:** found 2026-08-12 while shipping **T0-4** (RPL-W1). **Not fixed** — recorded by decision, see the
-  scope note at the end
+- **Status:** found 2026-08-12 while shipping **T0-4** (RPL-W1). ~~**Not fixed** — recorded by decision, see the
+  scope note at the end~~ → **Fixed in code 2026-08-14 (CU-W2), two days later** — this line was never updated
+  when the Verdict above was. The "recorded by decision, not fixed" framing described the state between
+  2026-08-12 and 2026-08-14 only; the scope note at the end is still worth reading for *why* CU-W1 turned out
+  not to gate CU-W2, not for whether a fix shipped.
 - **Authlete version:** 3.0 (API Explorer **3.0.16**, `docs/openapi-spec.json`)
 - **Files under test:** `server/src/services/client.management.service.ts` (`buildClientInput`, `update`),
   `server/src/routes/client.routes.ts`

@@ -154,6 +154,14 @@ The second row is the one nobody had identified, and it is available now without
 
 ## Finding F-3 — the stack trace is gated on `NODE_ENV`, and the status inversion is not (S3)
 
+> **Closed as a side effect of EH-W1, 2026-08-11 — not called out at the time, so recorded here now.** The
+> top-of-file box addresses F-1 and the enum gap (F-2) explicitly but never mentioned F-3. `errorStatusFrom()`
+> (`errorHandler.ts:30`) computes `status` unconditionally — it is not gated on `server.nodeEnv`, which only
+> controls whether `err.stack` is attached (`:61`). So the fix below applies in production exactly as it does
+> in development: this scenario now answers **500** everywhere, not 200. The narrative below describes the
+> pre-EH-W1 state and is kept for the reasoning, which is still correct about *why* an ungated status was the
+> worse asymmetry — it is just no longer the current behaviour.
+
 `errorHandler.ts:36,45-47` gates `err.stack` on `server.nodeEnv === "development"`, so a production deployment
 leaks no stack. Good. But the **status** is not gated: production returns `200 {"error":"Bad Request","message":"Response validation failed"}`.
 
