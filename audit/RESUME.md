@@ -507,6 +507,17 @@ a vendor introspection API. RFC 9470 §3's challenge is the **resource server �
 *conflation*, which is why Part 5 now prints both responses side by side with a boundary table, and the
 client-action table is split: `acr_values`/`max_age` hang off the 401, `acr`/`auth_time` are labelled
 *Response 1 only*.
+
+> **This paragraph was proven wrong 2026-09-08, and it is worth reading the correction before the paragraph
+> above it.** Live testing — a real login → consent → token exchange → introspection round trip against the
+> actual deployment, not a mock — found that Authlete answers an ACR/`max_age`-insufficient token with
+> `action: "UNAUTHORIZED"`, not `FORBIDDEN`. The 403 branch above was real code, tested against a mock that
+> assumed the same wrong thing, and never reached by live traffic. **Response 1 is 401 too now**, fixed in
+> `c7c607d` with permanent E2E coverage added in `ee52e8b`. "No code changed" no longer holds, and the
+> "`API.md` ... describe[s] the introspection 403, which is correct" claim two paragraphs up is now backwards
+> for `API.md`, corrected to 401 the same day. See `RFC9470-step-up-authentication.md`'s 9470-W1 and 9470-W7
+> rows for the fuller account.
+
 **T2-15 and T2-17 are each one item lighter** — T2-1 took the tutorial halves of 9126-W6 and CIBA-W5, and
 `docs/README.md` gained the two index rows CUR-3c-W14 wants for `STEP-UP-AUTH-TUTORIAL.md` and
 `MCP-OAUTH-TUTORIAL.md` (the `TICKET-PARAMETER.md` / `AUDIT-PASS-A/B.md` / `CHANGELOG.md` rows are still owed).

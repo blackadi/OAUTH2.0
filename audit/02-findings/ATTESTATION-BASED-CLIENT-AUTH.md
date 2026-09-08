@@ -14,9 +14,10 @@
 > - **F-2 is unaffected and its severity is unchanged.** `par.service.ts` still forwards neither header. What
 >   changed is that the gap is now unreachable *by construction* rather than merely unused, so **ATT-W2 ships
 >   for correctness only** — as T1-21 already said, it cannot be exercised end to end.
-> - **F-3 (the missing `SPEC-INVENTORY.md` row) remains open** — and it now has a second thing to record: the
->   method was advertised and has been withdrawn, which is the *"permitted but not configured"* → *"declined"*
->   transition Module 09a's taxonomy has vocabulary for.
+> - **F-3 (the missing `SPEC-INVENTORY.md` row) is done, not open — this bullet was never updated after
+>   `ATT-W1` shipped 2026-08-14 (T2-5).** `SPEC-INVENTORY.md` has carried the row since, recording the
+>   method as *"withdrawn here, deliberately"* — the *"permitted but not configured"* → *"declined"*
+>   transition Module 09a's taxonomy has vocabulary for. See `04-remediation-plan.md`'s `ATT-W1` row.
 >
 > Severity **S3 → S4**: nothing is advertised that cannot be used, and the residue is documentation.
 
@@ -24,7 +25,7 @@
 - **Severity:** ~~**S3**~~ → **S4**
 - **Status:** **Active Internet-Draft**, OAuth WG — `draft-ietf-oauth-attestation-based-client-auth`, revision **10**, latest revision **6 July 2026** — verified this session
 - **Authlete version:** 3.0 — the SDK references the draft on `oauthClientAttestation` / `oauthClientAttestationPop`; **`llms.txt` has no page** (`00-inventory.md` §10: *"no page in `llms.txt`* … unverifiable against Authlete docs")
-- **Repo docs under test:** `AGENTS.md` (mentions the headers in the PAR known-gap note), `docs/curriculum/SPEC-INVENTORY.md` (**no row**)
+- **Repo docs under test:** `AGENTS.md` (mentions the headers in the PAR known-gap note), `docs/curriculum/SPEC-INVENTORY.md` (row added 2026-08-14, `ATT-W1` — this line predates that and is stale)
 
 > **Batch note.** This was one of the eight specifications added to scope at Gate 0 and no earlier batch emitted an
 > entry for it — it was mentioned in passing in three findings. Written now so the self-check holds.
