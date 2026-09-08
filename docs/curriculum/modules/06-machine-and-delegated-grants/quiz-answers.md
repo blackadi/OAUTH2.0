@@ -6,7 +6,7 @@ Every wrong option is explained, because the point is to find the misconception,
 
 ## Tier 1 — Recall
 
-**Q1 — B) confidential clients.**
+**Q1 — D) confidential clients.**
 
 RFC 6749 §4.4: *"The client credentials grant type MUST only be used by confidential clients."* The reason is
 not arbitrary. The grant's entire security argument is "the client authenticated, therefore the token
@@ -15,19 +15,19 @@ You verified this in Lab 1e: `unauthorized_client`, `[A052301]`.
 
 - **A** inverts the rule. A public client using this grant would issue tokens to anyone who knows a
   `client_id` — a value that is public by construction.
+- **B** ignores the MUST.
 - **C** confuses client *type* with client *platform*. Native apps are public clients (RFC 8252, Module 03),
   which is why they are excluded — but "native app" is not the category the spec uses.
-- **D** ignores the MUST.
 
 ---
 
-**Q2 — B) `assertion` / `client_assertion`.**
+**Q2 — A) `assertion` / `client_assertion`.**
 
 The §2.1 grant puts the JWT in `assertion` and the URN in `grant_type`. The §2.2 client authentication puts
 the JWT in `client_assertion` and the URN
 `urn:ietf:params:oauth:client-assertion-type:jwt-bearer` in `client_assertion_type`.
 
-- **A** is the answer reversed — the single most common version of this mistake, and worth noticing that
+- **B** is the answer reversed — the single most common version of this mistake, and worth noticing that
   getting it backwards means you have the *security properties* backwards too: §2.2 is a straight upgrade over
   a client secret, while §2.1 is a trust delegation with a much larger blast radius.
 - **C** invents parameters.
@@ -60,14 +60,14 @@ REQUIRED `actor_token_type`) → delegation, and the result should carry `act`.
 
 ---
 
-**Q5 — B) `access_token`, `token_type`, `issued_token_type`.**
+**Q5 — D) `access_token`, `token_type`, `issued_token_type`.**
 
 RFC 8693 §2.2.1. `expires_in` is RECOMMENDED, `scope` is conditionally required, `refresh_token` is optional
 and the spec notes it "will typically not be issued" for an exchange.
 
 - **A** promotes two non-required parameters and omits the one implementations most often drop.
+- **B** is the assumption behind the bug you found in Lab 6a.
 - **C** makes `refresh_token` required — the opposite of the spec's guidance.
-- **D** is the assumption behind the bug you found in Lab 6a.
 
 ---
 

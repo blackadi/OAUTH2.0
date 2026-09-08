@@ -19,13 +19,13 @@ OIDC Core §2 marks exactly these five REQUIRED. Everything else is conditional 
 
 ---
 
-**Q2 — B) the UTF-8 octets of the `client_secret`.**
+**Q2 — D) the UTF-8 octets of the `client_secret`.**
 
 Step 8: *"For MAC algorithms (HS256, HS384, HS512), use UTF-8 client_secret octets as validation key."*
 
 - **A** is the asymmetric case (RS*/ES*/PS*), which is what you should be using.
+- **B** is the algorithm-confusion bug: taking key selection from attacker-controlled header fields.
 - **C** invents a derivation.
-- **D** is the algorithm-confusion bug: taking key selection from attacker-controlled header fields.
 
 The consequence is the important part, and Lab B6 demonstrates it: with a symmetric algorithm the validation
 key *is* the signing key, so anyone who can verify can forge.
@@ -58,14 +58,14 @@ DPoP's `ath`, and all three of these hashes are the same idea.
 
 ---
 
-**Q5 — B) a redirect carrying `error=login_required`.**
+**Q5 — D) a redirect carrying `error=login_required`.**
 
 §3.1.2.6 defines `login_required` as *"The Authorization Server requires End-User authentication. This error
 MAY be returned when the prompt parameter value in the Authentication Request is none."* It is delivered the
 way all authorization-endpoint errors are: as a redirect to the already-validated `redirect_uri`.
 
 - **A** — the authorization endpoint is a browser endpoint; a 401 would show the user a broken page.
-- **C** and **D** are both what a *broken* implementation does. **D** is what this deployment actually does
+- **B** and **C** are both what a *broken* implementation does. **B** is what this deployment actually does
   (Lab 5c), and the reason it is so damaging is that a client's error handler is matching on four specific
   strings and gets none of them.
 

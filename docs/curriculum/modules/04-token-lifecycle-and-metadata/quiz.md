@@ -17,8 +17,8 @@ explanations in [quiz-answers.md](quiz-answers.md).
 - A) `client_id`  B) `jti`  C) `aud`  D) `nonce`
 
 **Q4.** RFC 8707 §2 says the `resource` parameter's value:
-- A) may be a relative path scoped to the issuer
-- B) MUST be an absolute URI and MUST NOT include a fragment component
+- A) MUST be an absolute URI and MUST NOT include a fragment component
+- B) may be a relative path scoped to the issuer
 - C) must be a single value per request
 - D) must exactly match a registered redirect URI
 
@@ -34,22 +34,22 @@ explanations in [quiz-answers.md](quiz-answers.md).
 compliance requires that a revoked token stop working "promptly." Which token strategy, and what makes
 "promptly" true?
 - A) Opaque tokens with introspection on every request — revocation is instant
-- B) JWT access tokens with a short lifetime (and a cache/introspection only for high-value operations);
-  "promptly" is bounded by the token lifetime you choose
+- B) Opaque tokens introspected once per session and cached until logout
 - C) JWT access tokens with a 24-hour lifetime — the signature proves validity
-- D) Opaque tokens introspected once per session and cached until logout
+- D) JWT access tokens with a short lifetime (and a cache/introspection only for high-value operations);
+  "promptly" is bounded by the token lifetime you choose
 
 **Q7.** A resource server receives an introspection response with `"active": true`. What may it conclude?
-- A) The caller is authorized to perform the requested operation
-- B) The token was issued by this AS, is unrevoked, and is inside its validity window — nothing more
+- A) The token was issued by this AS, is unrevoked, and is inside its validity window — nothing more
+- B) The caller is authorized to perform the requested operation
 - C) The token was issued for this resource server
 - D) The subject owns the object being requested
 
 **Q8.** Why does the revocation endpoint return **200** for a token string that was never issued?
 - A) It is a spec defect that most servers work around
-- B) So the endpoint cannot be used as an oracle to distinguish real tokens from invented ones
+- B) To keep the response shape uniform for client convenience
 - C) Because revocation is asynchronous and the result is unknown
-- D) To keep the response shape uniform for client convenience
+- D) So the endpoint cannot be used as an oracle to distinguish real tokens from invented ones
 
 **Q9.** A client discovers a new API and holds no configuration for it. Which document tells it *which
 authorization server* to get a token from?

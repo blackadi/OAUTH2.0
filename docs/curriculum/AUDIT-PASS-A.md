@@ -227,6 +227,27 @@ labelled as a neutral "routing choice," which teaches a learner to replicate it.
 ### A-013 · Multiple-choice answer keys are positionally biased: **`D` is never correct, in 90 items**
 
 > ⚠️ **PARTIALLY FIXED 2026-08-02.** Rebalanced to **A: 17 · B: 74 · C: 37 · D: 9** — `D` is no longer a dead option anywhere, and always-answering `B` drops from **62% → 54%**. Only **17 items** were changed, and deliberately so: **this defect is not safely automatable.** The keys' pedagogical value comes from explaining each wrong option *by letter* ("**A** is the trap", "**C** and **D** are endpoints, not channels"), and that is exactly what a mechanical re-lettering corrupts. A first attempt to bulk-rebalance 50 items *did* corrupt one — Module 08 Q1's header was re-lettered correctly while its prose still described the old option order — and was fully reverted (verified byte-identical to the baseline distribution) before the conservative pass was applied. Only items whose key contains **no standalone option letter anywhere** were touched; every change was verified by asserting the key's letter still resolves to the same answer text and that no option set changed (124 items checked, 0 violations). **The remaining ~114 items need per-item editing** — moving the correct answer *and* rewriting the key's letter references together. That is genuine editorial work, not a script, and should not be faked with one.
+>
+> **Correction to this entry's own numbers (2026-09-08).** Both the "137" corpus size and the "post-fix
+> A: 17 · B: 74 · C: 37 · D: 9" distribution above are wrong, measured directly against the current
+> `modules/*/quiz-answers.md` and cross-checked against the `A)`/`B)`/`C)`/`D)` option markers in each
+> matching `quiz.md` (two independent counts, in full agreement, per module). **The real corpus is 122
+> multiple-choice items** across the 13 module quizzes (exams remain free-response, unchanged). Distribution
+> going into this pass: **A: 10 · B: 73 · C: 30 · D: 9**. `D` was no longer dead, but `C` was already
+> effectively balanced, and `A` — not `D` — was the rarest option at 8.2%.
+>
+> ✅ **FIXED 2026-09-08.** Every module quiz was rebalanced by hand, one item at a time: for each MC item
+> whose correct answer sat at `B`, the correct option's text was swapped with a distractor at a target
+> letter, and every letter-referencing sentence in that item's answer-key explanation ("**A** is the
+> trap...", "**C** and **D** are...") was rewritten to match the new positions — never a mechanical
+> re-lettering, per the caution above. `quiz.md` and `quiz-answers.md` were kept in lockstep for every edit.
+> Module 09a was left untouched — its 5 MC items were already close to uniform (A1/B1/C2/D1) and did not
+> need it. Final corpus distribution: **A: 35 (29%) · B: 16 (13%) · C: 34 (28%) · D: 37 (30%)** — no letter
+> dominates, and answering the same letter every time no longer beats guessing. Verified after the pass: no
+> duplicate option text within any item (a mechanical check for the exact corruption class this entry warns
+> about), and every answer-key header's letter resolves to a real option in the matching `quiz.md`. One
+> transcription slip was caught and fixed during the pass itself (Module 12 Q6 briefly had the same option
+> text under two letters mid-edit) — recorded here as the concrete case for why this needed to be manual.
 
 | Field | Content |
 |---|---|

@@ -7,49 +7,49 @@ believe.
 
 ## Tier 1 — Recall
 
-### Q1 — **B) `[salt, claim name, claim value]`**
+### Q1 — **D) `[salt, claim name, claim value]`**
 
 RFC 9901 §4.2.1 requires "a JSON array of three elements in the following order: 1. A salt value. MUST be a
 string. 2. The claim name, or key, as it would be used in a regular JWT payload. 3. The claim value".
 
 - **A** is the array-element form minus the salt. For an *array element* (§4.2.2) a Disclosure has **two**
   elements — `[salt, value]` — because there is no claim name. Never zero salt.
-- **C** inverts salt and name. Order is normative; a verifier reads position 1 as the name.
-- **D** confuses the Disclosure with what goes *in* the JWT. The digest is derived from the Disclosure; it is
+- **B** confuses the Disclosure with what goes *in* the JWT. The digest is derived from the Disclosure; it is
   never inside it.
+- **C** inverts salt and name. Order is normative; a verifier reads position 1 as the name.
 
-### Q2 — **B) the US-ASCII bytes of the base64url-encoded Disclosure string**
+### Q2 — **A) the US-ASCII bytes of the base64url-encoded Disclosure string**
 
 §4.2.3: "The digest MUST be computed over the US-ASCII bytes of the base64url-encoded value that is the
 Disclosure." The RFC even restates it: "The input to the hash function MUST be the base64url-encoded
 Disclosure, not the bytes encoded by the base64url string."
 
-- **A** is the single most common implementation bug. See Q12.
+- **B** is the single most common implementation bug. See Q12.
 - **C** is what a naïve design would do, and it is exactly what the salt exists to prevent (Q6).
 - **D** is tempting because canonicalization *sounds* rigorous, but SD-JWT deliberately avoids needing a JSON
   canonicalization scheme by hashing the transmitted string. That is a design win: no canonicalization means
   no canonicalization bugs.
 
-### Q3 — **B) a default of `sha-256`**
+### Q3 — **D) a default of `sha-256`**
 
 §4.1.1: "If the `_sd_alg` claim is not present at the top level, a default value of `sha-256` MUST be used."
 
 - **A** would break interoperability with issuers that legitimately rely on the default.
+- **B** — the whole point of a specified default is that no negotiation is needed.
 - **C** is not the default.
-- **D** — the whole point of a specified default is that no negotiation is needed.
 
-### Q4 — **B) `iat`, `aud`, `nonce`, `sd_hash`**
+### Q4 — **A) `iat`, `aud`, `nonce`, `sd_hash`**
 
 §4.3 lists exactly these four as REQUIRED in the KB-JWT payload, plus `typ: kb+jwt` and a non-`none` `alg` in
 the header.
 
-- **A** is the generic registered-claim set; `iss`/`sub`/`exp` are not required here.
+- **B** is the generic registered-claim set; `iss`/`sub`/`exp` are not required here.
 - **C** is the DPoP proof claim set (RFC 9449) — a good distractor precisely because both are
   proof-of-possession mechanisms. See Q17.
 - **D** puts `cnf` in the wrong document: `cnf` is in the **issuer-signed JWT**, not the KB-JWT. The KB-JWT
   *proves* the key that `cnf` *names*.
 
-### Q5 — **B) concatenating `/.well-known/openid-federation` to the Entity Identifier**
+### Q5 — **D) concatenating `/.well-known/openid-federation` to the Entity Identifier**
 
 OpenID Federation **1.0** §9: *"Its location is determined by concatenating the string
 `/.well-known/openid-federation` to the Entity Identifier"*. Note also that a trailing `/` on the Entity
@@ -63,14 +63,14 @@ attached to the revision it was taken from, and you either re-quote from the new
 read.
 
 - **A** confuses federation with OIDC discovery. Different document, different purpose.
+- **B** is precisely what federation exists to eliminate.
 - **C** inverts the direction: discovery starts at the leaf and walks *up* via `authority_hints`.
-- **D** is precisely what federation exists to eliminate.
 
 ---
 
 ## Tier 2 — Applied reasoning
 
-### Q6 — **B) claim values come from small predictable sets, so an unsalted digest could be brute-forced**
+### Q6 — **A) claim values come from small predictable sets, so an unsalted digest could be brute-forced**
 
 This is the requirement that forces the design. `SHA-256("true")` is a constant; `over_18` has two possible
 values, `nationality` about two hundred. Without a salt, a verifier holding an unopened digest could
@@ -81,12 +81,12 @@ make selective disclosure decorative.
 enumerating the potential value space for a claim into the hash function to search for a matching digest
 value."
 
-- **A** describes a side effect, not the purpose. Sorting hides claim *order* (§4.2.4.1); the salt hides claim
+- **B** describes a side effect, not the purpose. Sorting hides claim *order* (§4.2.4.1); the salt hides claim
   *values*.
 - **C** is key binding's job (`cnf` + KB-JWT). The salt has nothing to do with the holder.
 - **D** is not a property SD-JWT provides at all.
 
-### Q7 — **B) it never recomputes digests, so an attacker can append any Disclosure they invent**
+### Q7 — **D) it never recomputes digests, so an attacker can append any Disclosure they invent**
 
 This verifier checks that the *issuer's signature* is valid and then trusts *unsigned* data attached
 alongside it. The signature covers the digests in `_sd`; it does not cover the Disclosures directly. The only
@@ -98,10 +98,10 @@ signature check, because the signature was never touched.
 
 - **A** is a real ordering concern but not the flaw; even with the KB-JWT verified first, forged Disclosures
   still sail through.
+- **B** is the actual misconception being tested. The signature does **not** cover the Disclosures.
 - **C** is one of the checks in §7.1/3.c.ii.1, but adding only that still accepts a well-formed forgery.
-- **D** is the actual misconception being tested. The signature does **not** cover the Disclosures.
 
-### Q8 — **B) the issuer-signed JWT is byte-identical across presentations; and issuer/verifier unlinkability against a coerced Verifier is unachievable**
+### Q8 — **A) the issuer-signed JWT is byte-identical across presentations; and issuer/verifier unlinkability against a coerced Verifier is unachievable**
 
 Both halves matter, and you measured the first one in Lab 6: two presentations disclosing *disjoint* claims
 shared a byte-identical issuer-signed JWT and an identical `cnf.jwk`. Colluding verifiers need to compare one
@@ -111,7 +111,7 @@ The second half is quoted from §10.1: it "cannot be achieved in salted hash-bas
 approaches, such as SD-JWT, as the issued credential with the Issuer's signature is directly presented to the
 Verifier, who can forward it to the Issuer."
 
-- **A** — key binding is orthogonal. It stops replay by non-holders; it does nothing about correlation, and
+- **B** — key binding is orthogonal. It stops replay by non-holders; it does nothing about correlation, and
   the `cnf` key is itself a stable correlator.
 - **C** confuses transport with linkage. A response mode changes who sees the message in transit, not what
   two recipients can compare afterwards.
@@ -127,7 +127,7 @@ wildly different assurance; `verified_claims` is what makes the difference legib
 - **B** — no encryption is involved.
 - **D** — that is `cnf` / key binding, a different mechanism in a different spec.
 
-### Q10 — **B) it prevents replay by an attacker who observed the QR code**
+### Q10 — **D) it prevents replay by an attacker who observed the QR code**
 
 OID4VCI §3.5: "The Transaction Code is intended to bind the Pre-Authorized Code to a certain transaction to
 prevent replay of this code by an attacker that, for example, scanned the QR code while standing behind the
@@ -138,9 +138,9 @@ pre-authorized flow has no authorization request and no user authentication at t
 bearer credential displayed on a screen in public.
 
 - **A** — issuer authentication comes from TLS and issuer metadata.
-- **C** — that is the proof-of-possession / `cnf` mechanism.
-- **D** — PKCE protects the authorization-code flow; the pre-authorized flow has no authorization request for
+- **B** — PKCE protects the authorization-code flow; the pre-authorized flow has no authorization request for
   PKCE to protect. Different problem, which is why a different mechanism was needed.
+- **C** — that is the proof-of-possession / `cnf` mechanism.
 
 ---
 

@@ -150,12 +150,12 @@ takes weeks, so shipping it first buys real risk reduction on day one.
 
 ## Tier 1
 
-**Q1 — B.** Every FAPI 2.0 `shall` in §5.3.2 is expressed as what the AS **rejects**. Supporting a mechanism
-an attacker can decline to use defends nothing. **A** is wrong — §5.3.2.1 permits MTLS *or* DPoP. **C** — JARM
+**Q1 — C.** Every FAPI 2.0 `shall` in §5.3.2 is expressed as what the AS **rejects**. Supporting a mechanism
+an attacker can decline to use defends nothing. **A** is wrong — §5.3.2.1 permits MTLS *or* DPoP. **B** — JARM
 belongs to FAPI 1.0 Advanced and Message Signing, not the base 2.0 profile. **D** is invented, though FAPI 2.0
 does require *only* confidential clients — which Meridian also violates.
 
-**Q2 — B) MUST NOT.** RFC 9700 §2.4, quoted in Module 01: *"The resource owner password credentials grant
+**Q2 — D) MUST NOT.** RFC 9700 §2.4, quoted in Module 01: *"The resource owner password credentials grant
 [RFC6749] MUST NOT be used."* Not SHOULD NOT, and there is no first-party exemption — **C** is the excuse
 Meridian actually makes.
 
@@ -174,27 +174,27 @@ holder of the client secret can mint tokens as well as check them. Module 08's l
 - **C** invents a constraint. Nothing in OIDC Core ties `alg` to lifetime.
 - **D** is wrong twice: `nonce` is an ordinary claim, and Meridian's tokens do carry one.
 
-**Q5 — B.** Grant Management §6.5: *"token revocation is not required to cause the revocation of the
+**Q5 — C.** Grant Management §6.5: *"token revocation is not required to cause the revocation of the
 underlying grant."* The consent record survives, so the next authorization request completes silently.
 
 - **A** is the belief the defect depends on — if the two were the same operation, wiring the button to
   RFC 7009 would be correct, and no reviewer would look twice.
-- **C** — RFC 7009 revocation is synchronous and its 200 is meaningful; asynchrony is not the issue.
+- **B** — RFC 7009 revocation is synchronous and its 200 is meaningful; asynchrony is not the issue.
 - **D** inverts the asymmetry. Grant revocation MUST kill refresh tokens *and* removes the grant; it is
   broader than token revocation, not narrower.
 
 ## Tier 2
 
-**Q6 — B.** The constraint is real and the conclusion does not follow. Offline validation gives you
+**Q6 — D.** The constraint is real and the conclusion does not follow. Offline validation gives you
 availability during a network blip; it is the **24-hour lifetime plus nightly sync** that produces the
 revocation lag, and those are independent choices. Five-to-fifteen-minute access tokens with a refresh on
 reconnect tolerate a minutes-long outage while bounding revocation to minutes. **This is the general shape of
 a bad justification: a true premise, a real constraint, and a conclusion that smuggles in a second decision
 nobody examined.**
 
-**Q7 — B.** Identity is asserted by a hop rather than proven by a credential, so the security boundary is the
+**Q7 — C.** Identity is asserted by a hop rather than proven by a credential, so the security boundary is the
 network. Any path that does not traverse the gateway — SSRF, a compromised sidecar, a debug port, another
-service — yields full impersonation across all tenants. **C** is a real availability concern and not the
+service — yields full impersonation across all tenants. **B** is a real availability concern and not the
 security answer.
 
 **Q8 — B) constraint 2, attributability.** RFC 8693 §1.1 defines impersonation as the downstream being unable
@@ -202,10 +202,10 @@ to distinguish the actor from the subject — *"indistinguishable"* is the spec'
 every Tier 1 access to be attributable to a named human *including when a partner made the call*, which is
 precisely the delegation case `act` exists for.
 
-**Q9 — B.** RFC 9470 defines `acr_values` and `max_age` in the challenge so the client learns what would
+**Q9 — A.** RFC 9470 defines `acr_values` and `max_age` in the challenge so the client learns what would
 satisfy the requirement. Omitting them leaves the client able to detect failure and unable to remedy it.
 
-- **A** confuses authentication with authorization. `scope` is the wrong axis entirely — more scope does not
+- **B** confuses authentication with authorization. `scope` is the wrong axis entirely — more scope does not
   make an authentication event stronger, and `insufficient_scope` (RFC 6750) is the *other* error, for the
   other problem.
 - **C** — the scheme in `WWW-Authenticate` reflects how the token is presented, not what the challenge asks

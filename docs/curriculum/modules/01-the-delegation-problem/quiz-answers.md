@@ -9,7 +9,7 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 **Q1 — D) §1.1.** RFC 6749 §1.1 is "Roles." §1.2 is "Protocol Flow" (where the *user agent* appears, but it is
 not one of the four roles), §3.1 is the authorization endpoint, §4.1 is the authorization code grant.
 
-**Q2 — C) the resource server.** That is the §1.1 definition verbatim. The **authorization server** (A) is
+**Q2 — A) the resource server.** That is the §1.1 definition verbatim. The **authorization server** (C) is
 defined separately as "the server issuing access tokens to the client after successfully authenticating the
 resource owner and obtaining authorization" — the two are frequently the same deployment but they are distinct
 roles, and conflating them is the source of a lot of confused design.
@@ -19,7 +19,7 @@ there. **A is the trap:** the client *composes* the authorization request but do
 endpoint — it hands a URL to the **user agent**, which makes the request. That distinction is the entire
 front-channel threat model.
 
-**Q4 — C) RFC 6749 §4.3**, the Resource Owner Password Credentials grant.
+**Q4 — D) RFC 6749 §4.3**, the Resource Owner Password Credentials grant.
 
 **Q5 — B) `Authorization: Bearer <token>`.** RFC 6750 §2.1, "Authorization Request Header Field." D (query
 parameter) is defined in RFC 6750 as an alternative but is discouraged — tokens in URLs leak into logs,
@@ -27,17 +27,17 @@ referrers, and history. A (`Basic`) is client authentication, not token presenta
 
 ## Tier 2 — Applied reasoning
 
-**Q6 — C.** The harms of credential sharing are *structural*, not confidentiality failures: unbounded scope,
-no independent revocation, no attribution, credential reuse across sites, phishing normalization. **A is the
+**Q6 — A.** The harms of credential sharing are *structural*, not confidentiality failures: unbounded scope,
+no independent revocation, no attribution, credential reuse across sites, phishing normalization. **C is the
 shallow trap** — it treats "the password might be intercepted or stolen" as the whole risk, so it reaches for
 transport and storage crypto. Encrypting the password perfectly still leaves the client able to do everything
 the user can do, forever, indistinguishably. B is irrelevant (TLS 1.3 is ubiquitous, and even TLS 1.2 would not
 change the analysis). D is nonsense here: the app must *replay* the password, so it cannot hash it — which is
 itself a tell that the design is wrong.
 
-**Q7 — C.** Attribution and independent revocation come from the token having a *record at the issuer*: the AS
+**Q7 — D.** Attribution and independent revocation come from the token having a *record at the issuer*: the AS
 knows it minted this token, for this client, with these scopes. A password has no such record — it is a fact
-about the user, identical no matter who presents it. A, B, and D are properties a password can also have (or
+about the user, identical no matter who presents it. A, B, and C are properties a password can also have (or
 that don't matter), which is why they're tempting.
 
 **Q8 — B.** Consent is where the resource owner sees *which client* is asking for *which scopes* and can

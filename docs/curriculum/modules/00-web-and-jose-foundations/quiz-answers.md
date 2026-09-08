@@ -16,26 +16,26 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 confidentiality (not A), does not sign (not B), and is reversible so it is not a hash (not D). This is the
 single most consequential misconception in the module.
 
-**Q4 — B) the front channel.** By definition the front channel is relayed via the user agent. The back
-channel (A) is server-to-server. C and D are endpoints, not channels.
+**Q4 — A) the front channel.** By definition the front channel is relayed via the user agent. The back
+channel (B) is server-to-server. C and D are endpoints, not channels.
 
 ## Tier 2 — Applied reasoning
 
-**Q5 — B.** Secrets belong on the back channel because the browser never sees those bytes. **A/C are the
+**Q5 — D.** Secrets belong on the back channel because the browser never sees those bytes. **A/C are the
 shallow trap:** "it's HTTPS so it's fine" confuses *transport* protection with *endpoint/user* exposure — TLS
-does nothing about the user agent reading a value that passes through it. D is nonsense; users shouldn't audit
+does nothing about the user agent reading a value that passes through it. B is nonsense; users shouldn't audit
 secrets.
 
-**Q6 — B.** Decoding is not verifying. Without checking the signature (and `iss`/`aud`/`exp`), any attacker
-can forge the `role` claim. A, C, D are cosmetic checks that a forged token passes trivially — they're the
+**Q6 — A.** Decoding is not verifying. Without checking the signature (and `iss`/`aud`/`exp`), any attacker
+can forge the `role` claim. B, C, D are cosmetic checks that a forged token passes trivially — they're the
 distractors a shallow model reaches for because they *look* like validation.
 
 **Q7 — C) JWE.** Confidentiality requires encryption. **A/B are the trap:** a signature proves integrity and
 origin but leaves the payload fully readable — a "stronger" signing algorithm changes nothing about
 readability. D (double-encoding) is still just encoding.
 
-**Q8 — B.** Pin the algorithm and use the matching public key. **A is the classic vulnerability** (letting the
-token pick the algorithm enables `none` and RS/HS confusion). C is worse (it maximizes confusion surface). D
+**Q8 — D.** Pin the algorithm and use the matching public key. **A is the classic vulnerability** (letting the
+token pick the algorithm enables `none` and RS/HS confusion). C is worse (it maximizes confusion surface). B
 ignores the signature entirely.
 
 **Q9 — C.** Front-channel data is attacker-influenceable at the user agent regardless of TLS. **A/B are the

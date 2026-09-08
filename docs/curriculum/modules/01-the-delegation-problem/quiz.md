@@ -12,14 +12,14 @@ explanations in [quiz-answers.md](quiz-answers.md).
 
 **Q2.** "The server hosting the protected resources, capable of accepting and responding to protected resource
 requests using access tokens" is the definition of:
-- A) the authorization server  B) the client  C) the resource server  D) the user agent
+- A) the resource server  B) the client  C) the authorization server  D) the user agent
 
 **Q3.** Which endpoint does the **client** call *directly*, over the back channel?
 - A) the authorization endpoint  B) the token endpoint  C) the redirection endpoint  D) the JWKS endpoint
 
 **Q4.** The password anti-pattern was formalized as an OAuth grant in:
-- A) RFC 6749 §4.1 (authorization code)  B) RFC 6749 §4.2 (implicit)  C) RFC 6749 §4.3 (resource owner
-  password credentials)  D) RFC 6749 §4.4 (client credentials)
+- A) RFC 6749 §4.1 (authorization code)  B) RFC 6749 §4.2 (implicit)  C) RFC 6749 §4.4 (client
+  credentials)  D) RFC 6749 §4.3 (resource owner password credentials)
 
 **Q5.** RFC 6750 §2.1 specifies that an access token is presented to a protected resource as:
 - A) `Authorization: Basic <token>`  B) `Authorization: Bearer <token>`  C) `X-Access-Token: <token>`
@@ -30,19 +30,19 @@ requests using access tokens" is the definition of:
 **Q6.** A team proposes: "Our app collects the user's identity-provider password, sends it over TLS 1.3, and
 stores it encrypted at rest with a hardware-backed key. That solves the password anti-pattern." What is wrong
 with this reasoning?
-- A) Nothing — TLS plus encryption at rest addresses the risk
-- B) TLS 1.3 is not yet widely enough deployed to rely on
-- C) The harms are structural (unbounded scope, no revocation, no attribution), and none of them is a
+- A) The harms are structural (unbounded scope, no revocation, no attribution), and none of them is a
   confidentiality problem that encryption can fix
+- B) TLS 1.3 is not yet widely enough deployed to rely on
+- C) Nothing — TLS plus encryption at rest addresses the risk
 - D) They should hash the password instead of encrypting it
 
 **Q7.** Which property does an access token have that a *password* cannot have, even if you give the password
 a short lifetime and store it perfectly?
 - A) It is transmitted over HTTPS
 - B) It is unguessable
-- C) Actions taken with it are attributable to a specific `client_id`, and it can be revoked without
+- C) It is longer than a password
+- D) Actions taken with it are attributable to a specific `client_id`, and it can be revoked without
   affecting other clients
-- D) It is longer than a password
 
 **Q8.** A product manager wants to remove the consent screen: "the user already clicked 'connect', so asking
 again is friction." Which security property is actually being removed?

@@ -7,7 +7,7 @@ vendors say in writing.
 
 ## Tier 1 — Recall
 
-### Q1 — **B) Authorization, authentication, session integrity**
+### Q1 — **D) Authorization, authentication, session integrity**
 
 FAPI 2.0 Attacker Model §5.2–§5.4. Stated as: *"no attacker can access protected resources other than their
 own"*; *"no attacker is able to log in at a client under the identity of another user"*; and, for session
@@ -16,41 +16,41 @@ integrity, *"no attacker is able to force a user to be logged in under the ident
 
 - **A** is the generic CIA triad — correct for information security in general, not what this document
   states. The distractor is there because people reach for it reflexively.
-- **C** is Module 09b's property set (SD-JWT / credentials), not FAPI's.
-- **D** lists mechanisms, not goals. Confusing the two is the exact error this module exists to fix: goals are
+- **B** lists mechanisms, not goals. Confusing the two is the exact error this module exists to fix: goals are
   what you must achieve, mechanisms are one way of achieving them.
+- **C** is Module 09b's property set (SD-JWT / credentials), not FAPI's.
 
-### Q2 — **B) MTLS or `private_key_jwt`**
+### Q2 — **A) MTLS or `private_key_jwt`**
 
 §5.3.2.1: *"shall authenticate clients using one of the following methods: MTLS as specified in Section 2 of
 [RFC8705], or private_key_jwt as specified in Section 9 of [OIDC]."*
 
-- **A** is exactly what most deployments do and what FAPI 2.0 forbids. Both send a shared secret that the AS
+- **B** is exactly what most deployments do and what FAPI 2.0 forbids. Both send a shared secret that the AS
   must store and the client must protect at rest.
 - **C** omits MTLS, which is permitted and is the FAPI 1.0 heritage option.
 - **D** is the "supported ≠ required" error in its purest form — advertising a method is a *finding*, not a
   defence.
 
-### Q3 — **B) of less than 600 seconds**
+### Q3 — **C) of less than 600 seconds**
 
 §5.3.2.2: *"shall issue pushed authorization requests `request_uri` with `expires_in` values of less than 600
 seconds."*
 
 - **A** is the trap, and the deployment in the lab falls into it: it issues exactly 600, which is not less
   than 600. `<` is not `<=`.
-- **C** confuses this with the 60-second bound on **authorization codes** (§5.3.2.1).
+- **B** confuses this with the 60-second bound on **authorization codes** (§5.3.2.1).
 - **D** — the client does not choose; the AS issues.
 
-### Q4 — **B) MTLS or DPoP**
+### Q4 — **D) MTLS or DPoP**
 
 §5.3.2.1: *"shall use one of the following methods for sender-constrained access tokens: MTLS as described in
 [RFC8705], DPoP as described in [RFC9449]."*
 
 - **A** — `at_hash` is an OIDC ID-token claim binding the ID token to the access token (Module 08). It
   constrains nothing about the presenter.
+- **B** — PKCE protects the authorization code, not the access token. Different artefact, different phase.
 - **C** is FAPI 1.0 Advanced. §5.5 records the change and the reason: *"DPoP can be easier to deploy in some
   scenarios."*
-- **D** — PKCE protects the authorization code, not the access token. Different artefact, different phase.
 
 ### Q5 — **A) MUST revoke refresh tokens; should revoke access tokens**
 
@@ -65,7 +65,7 @@ which is precisely why the asymmetry is worth memorising.
 
 ## Tier 2 — Applied reasoning
 
-### Q6 — **B) `nonce`/signature checks can be skipped by clients, PKCE cannot; plus the privacy gain**
+### Q6 — **A) `nonce`/signature checks can be skipped by clients, PKCE cannot; plus the privacy gain**
 
 Quoted from §5.5, Table 1: *"no ID token in front-channel (privacy improvement); nonce/signature check can be
 skipped by clients, PKCE cannot (security improvement)."*
@@ -75,12 +75,12 @@ validates `c_hash` looks completely healthy — flows complete, users log in, an
 production for years. A client that omits the `code_verifier` gets an immediate `invalid_grant`. Given two
 mechanisms of comparable strength, prefer the one whose absence is loud.
 
-- **A** — size is not the issue.
+- **B** — size is not the issue.
 - **C** — hybrid and PAR are not incompatible.
 - **D** is false and backwards: suitability for formal analysis is one of the *reasons* for the redesign
   (§5.5, row 3), not a gap in the old flow's provenance.
 
-### Q7 — **B) with only a code in the response, and PKCE making a stolen code useless, there is nothing left worth protecting**
+### Q7 — **C) with only a code in the response, and PKCE making a stolen code useless, there is nothing left worth protecting**
 
 §5.5: *"the authorization response is reduced to only contain the authorization code, obsoleting the need for
 integrity protection."*
@@ -89,10 +89,10 @@ This is the module's cleanest example of a **design** decision beating a **mecha
 a valuable response, remove the value from the response.
 
 - **A** — JARM is not insecure, and FAPI 2.0 Message Signing reintroduces it where non-repudiation is needed.
-- **C** — JARM has no mTLS dependency.
+- **B** — JARM has no mTLS dependency.
 - **D** is invented.
 
-### Q8 — **B) an attacker simply does not use PAR**
+### Q8 — **D) an attacker simply does not use PAR**
 
 Every FAPI `shall` in §5.3.2.2 is phrased in terms of what the AS **rejects**, because that is the only thing
 an attacker cannot route around. If non-PAR requests are accepted, the parameters travel through the browser
@@ -101,10 +101,10 @@ and attacker **A3a** — who *"can also read the authorization request sent in t
 - **A** is the seductive one, and it is wrong for a structural reason: security properties come from what the
   server *refuses*, not from what well-behaved clients happen to do. First-party client discipline is not a
   control an attacker respects.
+- **B** is unrelated.
 - **C** inverts the flag's meaning.
-- **D** is unrelated.
 
-### Q9 — **B) the threat is already eliminated, so rotation adds cost without benefit**
+### Q9 — **A) the threat is already eliminated, so rotation adds cost without benefit**
 
 §5.3.2.1 NOTE 1: *"The use of refresh token rotation does not provide security benefits when used with
 confidential clients and sender-constrained access tokens. This specification prohibits the use of refresh
@@ -115,10 +115,10 @@ Note *"for security reasons"* — the prohibition is not a usability concession.
 longer token lifetimes and aggressive retry logic, both of which are worse than the theft-detection rotation
 provided.
 
-- **A** — rotation is not weak; it is *redundant here*.
+- **B** — rotation is not weak; it is *redundant here*.
 - **C**, **D** are invented.
 
-### Q10 — **B) FAPI 2.0 requires the token endpoint from an authoritative source, eliminating the attacker**
+### Q10 — **C) FAPI 2.0 requires the token endpoint from an authoritative source, eliminating the attacker**
 
 §7.6: *"Since the FAPI 2.0 Security Profile mandates that the token endpoint address is obtained from an
 authoritative source and via a protected channel, i.e., through OAuth metadata obtained from the honest
@@ -127,7 +127,7 @@ purposes only."*
 
 The instructive part is that the document keeps A4 rather than deleting it — a record of an attacker the
 design *removed*, not merely mitigated. **A** is wrong (it was realistic in FAPI 1.0 — that is why it is
-there). **C** is wrong: A2 is a network attacker; A4 is a misconfiguration model. **D** is invented.
+there). **B** is wrong: A2 is a network attacker; A4 is a misconfiguration model. **D** is invented.
 
 ---
 

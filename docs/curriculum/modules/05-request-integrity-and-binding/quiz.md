@@ -8,10 +8,10 @@ explanations in [quiz-answers.md](quiz-answers.md).
 ## Tier 1 — Recall (5)
 
 **Q1.** On a successful pushed authorization request, RFC 9126 §2.2 requires the AS to respond with:
-- A) 200 OK  B) 201 Created  C) 302 Found  D) 204 No Content
+- A) 200 OK  B) 204 No Content  C) 302 Found  D) 201 Created
 
 **Q2.** RFC 9449 §4.2 requires the DPoP proof's JOSE header to contain at least:
-- A) `typ`, `alg`, `kid`  B) `typ`, `alg`, `jwk`  C) `alg`, `jwk`, `x5c`  D) `typ`, `jwk`, `jti`
+- A) `typ`, `alg`, `jwk`  B) `typ`, `alg`, `kid`  C) `alg`, `jwk`, `x5c`  D) `typ`, `jwk`, `jti`
 
 **Q3.** The confirmation claim member for a **certificate-bound** access token (RFC 8705 §3) is:
 - A) `jkt`  B) `cnf`  C) `x5t#S256`  D) `x5c`
@@ -23,24 +23,24 @@ explanations in [quiz-answers.md](quiz-answers.md).
 - D) only in the token response
 
 **Q5.** Which authentication scheme carries a DPoP-bound access token to a protected resource (RFC 9449 §7.1)?
-- A) `Bearer`  B) `DPoP`  C) `Basic`  D) either `Bearer` or `DPoP`
+- A) `Bearer`  B) either `Bearer` or `DPoP`  C) `Basic`  D) `DPoP`
 
 ## Tier 2 — Applied reasoning (5)
 
 **Q6.** Your deployment already uses PAR. A colleague asks why you would additionally sign the request object
 with JAR. The best answer is:
-- A) You would not — PAR already provides everything JAR does
-- B) JAR adds integrity *and non-repudiation*: the AS (and later an auditor) can prove which client authored
+- A) JAR adds integrity *and non-repudiation*: the AS (and later an auditor) can prove which client authored
   the request, which PAR alone does not establish
+- B) You would not — PAR already provides everything JAR does
 - C) JAR is required for PKCE to work
 - D) JAR encrypts the request, which PAR does not
 
 **Q7.** What does an attacker who reads the browser's address bar learn from a PAR-based authorization
 request?
 - A) The full set of requested scopes and the PKCE challenge
-- B) The `client_id` and an opaque, single-use, short-lived handle — and nothing about the request contents
+- B) The `redirect_uri` and `state` only
 - C) Nothing at all; PAR removes the browser from the flow entirely
-- D) The `redirect_uri` and `state` only
+- D) The `client_id` and an opaque, single-use, short-lived handle — and nothing about the request contents
 
 **Q8.** A client integrates with three authorization servers. Which control specifically prevents a mix-up
 attack?

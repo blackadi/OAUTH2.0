@@ -6,13 +6,13 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 
 ## Tier 1 — Recall
 
-**Q1 — B.** RFC 7636 §4.1: 43–128 characters from the unreserved set, ABNF `code-verifier = 43*128unreserved`.
+**Q1 — A.** RFC 7636 §4.1: 43–128 characters from the unreserved set, ABNF `code-verifier = 43*128unreserved`.
 **C is the near-miss:** 43 base64url characters is what you get from 32 random bytes and is a perfectly good
-verifier, but it is one valid choice, not the definition. A confuses encoding with the spec's character
+verifier, but it is one valid choice, not the definition. B confuses encoding with the spec's character
 restriction (hex is a subset of the unreserved set, so it is legal, but the bound is on characters, not bytes).
 
-**Q2 — B.** `BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))`. **A is the trap** — it omits the base64url
-encoding, so it produces raw bytes that cannot travel in a URL. C invents a client secret, which public
+**Q2 — C.** `BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))`. **A is the trap** — it omits the base64url
+encoding, so it produces raw bytes that cannot travel in a URL. B invents a client secret, which public
 clients do not have and which would defeat the purpose. D is `plain` with extra steps.
 
 **Q3 — A) `plain`.** §4.3: it *"defaults to 'plain' if not present."* This is why you always send
@@ -22,14 +22,14 @@ clients do not have and which would defeat the purpose. D is `plain` with extra 
 Section 5.2 of [RFC6749]."* **A is the trap:** `invalid_client` is about client authentication, and there is
 no client authentication here — that is the whole premise of the module.
 
-**Q5 — B.** *OAuth 2.0 for Native Apps*, BCP 212, October 2017. C is RFC 7636, D is RFC 9700 (BCP 240), A is a
+**Q5 — D.** *OAuth 2.0 for Native Apps*, BCP 212, October 2017. C is RFC 7636, B is RFC 9700 (BCP 240), A is a
 different (draft) document.
 
 ## Tier 2 — Applied reasoning
 
-**Q6 — B.** Anyone who loads the page can read the bundle, and the "secret" is identical for every
+**Q6 — A.** Anyone who loads the page can read the bundle, and the "secret" is identical for every
 installation — so it authenticates nothing while making the team believe the token endpoint is protected.
-**A is the shallow trap:** minification is not encryption, and HTTPS protects transit, not the recipient, who
+**B is the shallow trap:** minification is not encryption, and HTTPS protects transit, not the recipient, who
 is by definition the user. C is wrong and is the other common overcorrection — SPAs should absolutely use the
 code flow, as a *public* client with PKCE. D treats an unfixable design error as an operational chore.
 

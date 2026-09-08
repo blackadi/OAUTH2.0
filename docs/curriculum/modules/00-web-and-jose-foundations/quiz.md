@@ -17,20 +17,20 @@ it. Answers and explanations in [quiz-answers.md](quiz-answers.md).
 - A) an encryption scheme  B) a signature algorithm  C) a reversible text encoding  D) a hash function
 
 **Q4.** Which channel carries data **through the user's browser**?
-- A) the back channel  B) the front channel  C) the token endpoint  D) the JWKS endpoint
+- A) the front channel  B) the back channel  C) the token endpoint  D) the JWKS endpoint
 
 ## Tier 2 — Applied reasoning (5)
 
 **Q5.** Your client must send its `client_secret` to obtain a token. Which channel, and why?
 - A) Front channel — it's over HTTPS so it's encrypted anyway
-- B) Back channel — the browser never sees back-channel bytes
+- B) Front channel — so the user can audit what's sent
 - C) Either works, since TLS protects both equally
-- D) Front channel — so the user can audit what's sent
+- D) Back channel — the browser never sees back-channel bytes
 
 **Q6.** A teammate says: "We validate incoming JWTs by base64url-decoding them and checking the `role` claim."
 What is the critical missing step?
-- A) Checking the base64url padding
-- B) Verifying the signature against the issuer's key (and checking `iss`/`aud`/`exp`)
+- A) Verifying the signature against the issuer's key (and checking `iss`/`aud`/`exp`)
+- B) Checking the base64url padding
 - C) Confirming the token is exactly three segments
 - D) Re-encoding the payload to confirm it round-trips
 
@@ -42,9 +42,9 @@ What is the critical missing step?
 
 **Q8.** A token's header says `alg: ES256`. You have the issuer's public JWK. The safe way to verify is:
 - A) Use whatever algorithm the token's `alg` header specifies
-- B) Pin the expected algorithm (ES256) and verify with the issuer's public key
+- B) Trust it if the `kid` matches a key you've seen before
 - C) Try every algorithm until one verifies
-- D) Trust it if the `kid` matches a key you've seen before
+- D) Pin the expected algorithm (ES256) and verify with the issuer's public key
 
 **Q9.** A `code` value arrives in a redirect URL displayed in the user's browser. Before any verification, how
 much should the client trust that value's integrity?

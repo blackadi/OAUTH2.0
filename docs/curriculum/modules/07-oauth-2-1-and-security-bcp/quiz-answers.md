@@ -20,12 +20,12 @@ are expected to be updated.
 
 ---
 
-**Q2 — B) MUST NOT be used.**
+**Q2 — A) MUST NOT be used.**
 
 *"The resource owner password credentials grant MUST NOT be used."* One of the strongest statements in the
 document, and you demonstrated the deployment violating it in Lab 3b.
 
-- **A** is the strength of §2.1.2 (implicit), not §2.4. Mixing them up matters: SHOULD NOT admits a documented
+- **B** is the strength of §2.1.2 (implicit), not §2.4. Mixing them up matters: SHOULD NOT admits a documented
   rationale; MUST NOT does not.
 - **C** — PKCE is irrelevant. ROPC has no authorization request to bind a challenge to; the client already has
   the password.
@@ -33,14 +33,14 @@ document, and you demonstrated the deployment violating it in Lab 3b.
 
 ---
 
-**Q3 — B) sender-constrained **or** rotation.**
+**Q3 — D) sender-constrained **or** rotation.**
 
 *"Refresh tokens for public clients MUST be sender-constrained or use refresh token rotation as described in
 Section 4.14."* Either satisfies it. The lab deployment satisfies it by rotation, verified by observation.
 
 - **A** overstates. Refresh tokens for public clients are permitted; they are conditioned.
+- **B** — lifetime is §2.3 territory and is a SHOULD, not this MUST.
 - **C** drops the alternative and would fail a deployment that is conformant via rotation.
-- **D** — lifetime is §2.3 territory and is a SHOULD, not this MUST.
 
 Worth carrying: Module 10 will show you FAPI 2.0 saying an AS **shall not** rotate (bar extraordinary
 circumstances) — the opposite of the branch this deployment relies on. Not a contradiction: §2.2.2 is an
@@ -76,21 +76,21 @@ articulable. "Nobody got round to it" is not a circumstance.
 
 ## Tier 2 — Applied reasoning
 
-**Q6 — B) Almost nothing.**
+**Q6 — A) Almost nothing.**
 
 You have learned exactly one thing: the AS *supports* PKCE, satisfying §2.1.1's *"Authorization servers MUST
 support PKCE."* That is one of three requirements in that subsection. You have learned nothing about whether
 public clients are required to use it, nothing about enforcement once a challenge is sent, and nothing about
 downgrade mitigation. Only a request settles it.
 
-- **A** is conformance theatre in a single sentence.
+- **B** is conformance theatre in a single sentence.
 - **C** inverts the risk — public clients are where PKCE is a MUST.
 - **D** overcorrects. Metadata is useful and cheap; it is just not evidence of enforcement. A reviewer who
   discards it wastes time re-deriving what the AS will happily tell them.
 
 ---
 
-**Q7 — B) A finding that metadata is misleading, plus the observed behaviour as authoritative.**
+**Q7 — D) A finding that metadata is misleading, plus the observed behaviour as authoritative.**
 
 Two things are true and both belong in the report: the client is pinned to `client_secret_basic` (correct,
 expected, not a defect), *and* the metadata advertises a capability that no client can use, which will send
@@ -100,9 +100,9 @@ explicitly.
 
 - **A** is the most common wrong answer, and it is wrong because it treats "I can explain it" as "it is not a
   problem." Explaining a divergence is not the same as it being harmless.
-- **C** misattributes: RFC 7523 is not violated by a client that does not use it.
-- **D** is a recommendation, not a finding, and it presumes the client *should* use `private_key_jwt` —
+- **B** is a recommendation, not a finding, and it presumes the client *should* use `private_key_jwt` —
   a separate (and reasonable) §2.5 recommendation that should be filed as its own row.
+- **C** misattributes: RFC 7523 is not violated by a client that does not use it.
 
 ---
 

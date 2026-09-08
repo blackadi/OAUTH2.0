@@ -4,10 +4,10 @@
 
 ## Tier 1 — Recall
 
-### Q1 — **B) Broken Object Level Authorization**
+### Q1 — **C) Broken Object Level Authorization**
 
 API1:2023. It is first because it is both the most common and the most damaging API vulnerability. **A** is
-API2 — the one OAuth solves, and the only one of the ten this curriculum spent eleven modules on. **C** is
+API2 — the one OAuth solves, and the only one of the ten this curriculum spent eleven modules on. **B** is
 API8, **D** is API5.
 
 ### Q2 — **B) API1, API3, API5**
@@ -31,7 +31,7 @@ as RFC 7662 §2.2 in Module 04: do not let an error response distinguish "not yo
 
 ## Tier 2 — Applied reasoning
 
-### Q6 — **B) issued before the request exists; scopes are type-level; ownership is application data**
+### Q6 — **C) issued before the request exists; scopes are type-level; ownership is application data**
 
 Reconstruct the argument: (1) at issuance the AS knows subject, client and scopes — not which object IDs will
 be named later; (2) `accounts:read` is type-level and instance-level scopes do not scale; (3) only your
@@ -39,11 +39,11 @@ database knows who owns account 91847; therefore (4) the check must happen in th
 data, at request time.
 
 - **A** is about a different threat (theft), which sender-constraining already addresses.
-- **C** — claim capacity is not the constraint; the AS not knowing your data is.
+- **B** — claim capacity is not the constraint; the AS not knowing your data is.
 - **D** is the misconception under test. Instance-level scopes mean one scope per object in a space-delimited
   URL parameter.
 
-### Q7 — **B) the header is caller-controllable unless the gateway strips inbound copies**
+### Q7 — **A) the header is caller-controllable unless the gateway strips inbound copies**
 
 A gateway that *adds* `X-Tenant-Id` must also **remove** any inbound header of the same name, or the caller
 supplies their own and the "scoped" query silently reads another tenant. Even with stripping correct, the
@@ -51,7 +51,7 @@ service now depends on a gateway behaviour it cannot verify — and any path tha
 internal call, a debug port, a service mesh sidecar misconfiguration) is a cross-tenant breach. Take tenancy
 from the validated token.
 
-**A** is the trap: "the gateway is trusted" is a statement about intent, not about the request that actually
+**B** is the trap: "the gateway is trusted" is a statement about intent, not about the request that actually
 arrives. **C** is a valid defence-in-depth measure but does not fix the bug.
 
 ### Q8 — the proposal will not work; the rule is **ReBAC**; the decision belongs in the **data layer**

@@ -9,21 +9,21 @@ explanations in [quiz-answers.md](quiz-answers.md).
 
 **Q1.** The three security goals stated in the FAPI 2.0 Attacker Model §5 are:
 - A) Confidentiality, integrity, availability
-- B) Authorization, authentication, session integrity
+- B) Encryption, signing, sender-constraining
 - C) Non-repudiation, unlinkability, minimal disclosure
-- D) Encryption, signing, sender-constraining
+- D) Authorization, authentication, session integrity
 
 **Q2.** FAPI 2.0 §5.3.2.1 permits which client authentication methods?
-- A) `client_secret_basic` or `client_secret_post`
-- B) MTLS or `private_key_jwt`
+- A) MTLS or `private_key_jwt`
+- B) `client_secret_basic` or `client_secret_post`
 - C) `private_key_jwt` only
 - D) Any method the AS advertises
 
 **Q3.** FAPI 2.0 §5.3.2.2 requires the `request_uri` returned from PAR to have an `expires_in` value:
-- A) of exactly 600 seconds  B) of less than 600 seconds  C) of at most 60 seconds  D) chosen by the client
+- A) of exactly 600 seconds  B) of at most 60 seconds  C) of less than 600 seconds  D) chosen by the client
 
 **Q4.** Which two mechanisms does FAPI 2.0 permit for sender-constraining access tokens?
-- A) DPoP or `at_hash`  B) MTLS or DPoP  C) MTLS only  D) DPoP or PKCE
+- A) DPoP or `at_hash`  B) DPoP or PKCE  C) MTLS only  D) MTLS or DPoP
 
 **Q5.** Per Grant Management §6.5, on revoking a grant the authorization server:
 - A) MUST revoke refresh tokens; should revoke access tokens
@@ -34,40 +34,40 @@ explanations in [quiz-answers.md](quiz-answers.md).
 ## Tier 2 — Applied reasoning (5)
 
 **Q6.** FAPI 2.0 dropped the hybrid flow (`code id_token`). The specification's stated reason is:
-- A) ID tokens are too large for the front channel
-- B) `nonce`/signature checks can be skipped by clients, whereas PKCE cannot — plus a privacy gain from
+- A) `nonce`/signature checks can be skipped by clients, whereas PKCE cannot — plus a privacy gain from
   keeping the ID token out of the front channel
+- B) ID tokens are too large for the front channel
 - C) Hybrid flow is incompatible with PAR
 - D) The hybrid flow was never formally analysed
 
 **Q7.** Why did FAPI 2.0 replace JARM with "only `code` in the response"?
 - A) JARM was found to be insecure
-- B) If the response contains only an authorization code, and PKCE already makes a stolen code useless, there
+- B) JARM requires mTLS, which FAPI 2.0 made optional
+- C) If the response contains only an authorization code, and PKCE already makes a stolen code useless, there
   is nothing left in the response worth integrity-protecting
-- C) JARM requires mTLS, which FAPI 2.0 made optional
 - D) `response_mode=jwt` is incompatible with the `iss` parameter
 
 **Q8.** A deployment advertises `require_pushed_authorization_requests: false` but its documentation says
 "we use PAR." What is the security consequence?
 - A) None, provided all first-party clients use PAR
-- B) An attacker simply does not use PAR, so the authorization request travels through the front channel
-  where attacker A3a can read it
+- B) The AS cannot return `iss`
 - C) PAR requests will be rejected
-- D) The AS cannot return `iss`
+- D) An attacker simply does not use PAR, so the authorization request travels through the front channel
+  where attacker A3a can read it
 
 **Q9.** FAPI 2.0 says an AS *shall not* use refresh-token rotation except in extraordinary circumstances.
 The reason is best stated as:
-- A) Rotation is cryptographically weak
-- B) With confidential clients and sender-constrained tokens the threat rotation detects is already
+- A) With confidential clients and sender-constrained tokens the threat rotation detects is already
   eliminated, so it contributes no benefit while causing lockouts when a client fails to store the new token
+- B) Rotation is cryptographically weak
 - C) Rotation is incompatible with grant management
 - D) Rotation requires the AS to keep state, which FAPI 2.0 prohibits
 
 **Q10.** The attacker model defines **A4** and then says it "is not relevant in FAPI 2.0." Why?
 - A) A4 was found to be unrealistic
-- B) FAPI 2.0 requires the token endpoint address to come from an authoritative source via a protected
+- B) A4 is covered by A2, the network attacker
+- C) FAPI 2.0 requires the token endpoint address to come from an authoritative source via a protected
   channel (AS metadata), which eliminates the attacker
-- C) A4 is covered by A2, the network attacker
 - D) A4 applies only to FAPI 1.0 Baseline
 
 ## Tier 3 — Trace and diagnose (5)

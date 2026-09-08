@@ -9,51 +9,51 @@ explanations in [quiz-answers.md](quiz-answers.md).
 
 **Q1.** Per RFC 9901 §4.2.1, a Disclosure for an object property is a base64url-encoded JSON array of:
 - A) `[claim name, claim value]`
-- B) `[salt, claim name, claim value]`
+- B) `[digest, salt, claim value]`
 - C) `[claim name, salt, claim value]`
-- D) `[digest, salt, claim value]`
+- D) `[salt, claim name, claim value]`
 
 **Q2.** RFC 9901 §4.2.3 requires the digest to be computed over:
-- A) the UTF-8 bytes of the decoded JSON array
-- B) the US-ASCII bytes of the base64url-encoded Disclosure string
+- A) the US-ASCII bytes of the base64url-encoded Disclosure string
+- B) the UTF-8 bytes of the decoded JSON array
 - C) the claim value only, salted
 - D) the canonical JSON serialization of the array
 
 **Q3.** If the `_sd_alg` claim is absent from the top level of an SD-JWT payload, RFC 9901 §4.1.1 requires:
-- A) rejecting the SD-JWT  B) a default of `sha-256`  C) a default of `sha-512`  D) negotiating out of band
+- A) rejecting the SD-JWT  B) negotiating out of band  C) a default of `sha-512`  D) a default of `sha-256`
 
 **Q4.** The four REQUIRED payload claims of a Key Binding JWT (RFC 9901 §4.3) are:
-- A) `iss`, `sub`, `aud`, `exp`
-- B) `iat`, `aud`, `nonce`, `sd_hash`
+- A) `iat`, `aud`, `nonce`, `sd_hash`
+- B) `iss`, `sub`, `aud`, `exp`
 - C) `jti`, `htm`, `htu`, `ath`
 - D) `iat`, `exp`, `cnf`, `sd_hash`
 
 **Q5.** Per OpenID Federation §9, an Entity Configuration is located by:
 - A) resolving the `jwks_uri` in the entity's OIDC discovery document
-- B) concatenating `/.well-known/openid-federation` to the Entity Identifier
+- B) an out-of-band exchange during registration
 - C) querying the Trust Anchor's subordinate listing endpoint
-- D) an out-of-band exchange during registration
+- D) concatenating `/.well-known/openid-federation` to the Entity Identifier
 
 ## Tier 2 — Applied reasoning (5)
 
 **Q6.** Why does a Disclosure contain a salt at all? The strongest answer is:
-- A) To make each Disclosure unique so the `_sd` array can be sorted
-- B) Because claim values are drawn from small predictable sets, so an unsalted digest could be brute-forced
+- A) Because claim values are drawn from small predictable sets, so an unsalted digest could be brute-forced
   to recover the withheld value
+- B) To make each Disclosure unique so the `_sd` array can be sorted
 - C) To bind the Disclosure to a particular Holder
 - D) To prevent the Issuer from reissuing the same credential twice
 
 **Q7.** A verifier receives an SD-JWT+KB. It decodes each Disclosure, reads the values, and merges them into
 the payload. The issuer's signature verifies. What is the flaw?
 - A) It should verify the KB-JWT first
-- B) It never recomputes digests, so an attacker can append any Disclosure they invent and have it accepted
+- B) Nothing — the Issuer signature covers the Disclosures
 - C) It should reject Disclosures with fewer than three elements
-- D) Nothing — the Issuer signature covers the Disclosures
+- D) It never recomputes digests, so an attacker can append any Disclosure they invent and have it accepted
 
 **Q8.** A team argues: "We use SD-JWT, so our users' presentations are unlinkable." What is wrong?
-- A) Nothing, provided key binding is used
-- B) The issuer-signed JWT is byte-identical across presentations, so colluding Verifiers link trivially; and
+- A) The issuer-signed JWT is byte-identical across presentations, so colluding Verifiers link trivially; and
   issuer/verifier unlinkability against a coerced Verifier is unachievable in salted-hash schemes
+- B) Nothing, provided key binding is used
 - C) Unlinkability requires `direct_post.jwt`
 - D) It only holds if the credential contains no `sub` claim
 
@@ -66,10 +66,10 @@ the payload. The issuer's signature verifies. What is the flaw?
 
 **Q10.** In OID4VCI's pre-authorized code flow, what problem does `tx_code` solve?
 - A) It authenticates the Credential Issuer to the Wallet
-- B) It prevents an attacker who observed the QR code — for example by standing behind the End-User — from
-  replaying the pre-authorized code
+- B) It replaces PKCE for wallets
 - C) It binds the credential to the Wallet's key
-- D) It replaces PKCE for wallets
+- D) It prevents an attacker who observed the QR code — for example by standing behind the End-User — from
+  replaying the pre-authorized code
 
 ## Tier 3 — Trace and diagnose (4)
 

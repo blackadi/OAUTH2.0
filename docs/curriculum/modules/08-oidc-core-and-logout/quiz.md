@@ -15,9 +15,9 @@ explanations in [quiz-answers.md](quiz-answers.md).
 
 **Q2.** For an ID token signed with `HS256`, OIDC Core §3.1.3.7 says the validation key is:
 - A) the AS's public key from the JWKS
-- B) the UTF-8 octets of the `client_secret`
+- B) whatever key the `kid` header names
 - C) a key derived from `client_id` + `nonce`
-- D) whatever key the `kid` header names
+- D) the UTF-8 octets of the `client_secret`
 
 **Q3.** `nonce` is returned to the client in:
 - A) a query parameter on the redirect
@@ -30,9 +30,9 @@ explanations in [quiz-answers.md](quiz-answers.md).
 
 **Q5.** With `prompt=none` and no authenticated user, OIDC Core §3.1.2.6 expects the AS to return:
 - A) HTTP 401 with `WWW-Authenticate`
-- B) a redirect carrying `error=login_required`
+- B) a redirect with no parameters
 - C) HTTP 200 with an empty body
-- D) a redirect with no parameters
+- D) a redirect carrying `error=login_required`
 
 ## Tier 2 — Applied reasoning (5)
 

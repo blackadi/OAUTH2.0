@@ -8,8 +8,8 @@
 ## Tier 1 — Recall (5)
 
 **Q1.** In the OWASP API Security Top 10 (2023), **API1:2023** is:
-- A) Broken Authentication  B) Broken Object Level Authorization
-- C) Security Misconfiguration  D) Broken Function Level Authorization
+- A) Broken Authentication  B) Security Misconfiguration
+- C) Broken Object Level Authorization  D) Broken Function Level Authorization
 
 **Q2.** Which three items in the 2023 list are authorization failures?
 - A) API1, API2, API5  B) API1, API3, API5  C) API2, API4, API8  D) API1, API7, API10
@@ -27,16 +27,16 @@
 
 **Q6.** Why can a valid, sender-constrained, audience-restricted access token not prevent BOLA?
 - A) Because bearer tokens can be stolen
-- B) Because the token is issued before the request exists, and scopes are type-level while object ownership
+- B) Because JWTs cannot carry enough claims
+- C) Because the token is issued before the request exists, and scopes are type-level while object ownership
   is application data the AS does not hold
-- C) Because JWTs cannot carry enough claims
 - D) It can, if the scope is specific enough
 
 **Q7.** A team scopes every query by a `tenantId` taken from the `X-Tenant-Id` request header, set by their
 API gateway. What is wrong?
-- A) Nothing, provided the gateway is trusted
-- B) The header is caller-controllable unless the gateway strips inbound copies; the tenant must come from
+- A) The header is caller-controllable unless the gateway strips inbound copies; the tenant must come from
   the validated token
+- B) Nothing, provided the gateway is trusted
 - C) Tenant isolation should use separate databases
 - D) `X-` prefixed headers are deprecated
 

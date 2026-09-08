@@ -8,15 +8,15 @@ explanations in [quiz-answers.md](quiz-answers.md).
 ## Tier 1 — Recall (5)
 
 **Q1.** RFC 7636 §4.1 specifies the `code_verifier` as:
-- A) 16–32 random bytes, hex encoded
-- B) 43–128 characters from the unreserved set `[A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"`
+- A) 43–128 characters from the unreserved set `[A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"`
+- B) 16–32 random bytes, hex encoded
 - C) exactly 43 base64url characters
 - D) any string the client chooses, of any length
 
 **Q2.** The `S256` transformation is:
 - A) `code_challenge = SHA256(code_verifier)`
-- B) `code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))`
-- C) `code_challenge = HMAC-SHA256(client_secret, code_verifier)`
+- B) `code_challenge = HMAC-SHA256(client_secret, code_verifier)`
+- C) `code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))`
 - D) `code_challenge = BASE64URL-ENCODE(code_verifier)`
 
 **Q3.** If `code_challenge_method` is omitted from the authorization request, RFC 7636 §4.3 says it:
@@ -28,17 +28,17 @@ return:
 
 **Q5.** RFC 8252 is:
 - A) *OAuth 2.0 for Browser-Based Apps*, an active Internet-Draft
-- B) *OAuth 2.0 for Native Apps*, BCP 212, October 2017
+- B) *OAuth 2.0 Security Best Current Practice*, BCP 240
 - C) *Proof Key for Code Exchange*, Standards Track, September 2015
-- D) *OAuth 2.0 Security Best Current Practice*, BCP 240
+- D) *OAuth 2.0 for Native Apps*, BCP 212, October 2017
 
 ## Tier 2 — Applied reasoning (5)
 
 **Q6.** A team registers their React SPA as a **confidential** client and ships the `client_secret` in the
 JavaScript bundle, "so the token endpoint still authenticates us." What is the problem?
-- A) None, provided the bundle is minified and served over HTTPS
-- B) The secret is readable by anyone who loads the app and is identical for every user, so it authenticates
+- A) The secret is readable by anyone who loads the app and is identical for every user, so it authenticates
   nothing while creating the illusion that it does
+- B) None, provided the bundle is minified and served over HTTPS
 - C) SPAs cannot use the authorization-code grant at all
 - D) The secret should be rotated weekly instead
 

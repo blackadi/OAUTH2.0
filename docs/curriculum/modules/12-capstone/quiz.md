@@ -13,13 +13,13 @@ document in [lab.md](lab.md). Answers — including the complete 25-defect inven
 **Q1.** Meridian's §1 claims FAPI 2.0 compliance on the grounds that PAR, PKCE and DPoP are *supported*. Which
 FAPI 2.0 requirement does that reasoning misread?
 - A) FAPI 2.0 requires mTLS, not DPoP
-- B) Every FAPI 2.0 `shall` is about what the AS **rejects**; supporting a mechanism satisfies nothing
-- C) FAPI 2.0 requires all three plus JARM
+- B) FAPI 2.0 requires all three plus JARM
+- C) Every FAPI 2.0 `shall` is about what the AS **rejects**; supporting a mechanism satisfies nothing
 - D) FAPI 2.0 applies only to confidential clients
 
 **Q2.** Meridian Mobile uses the resource owner password credentials grant. RFC 9700 §2.4 says:
-- A) it SHOULD NOT be used  B) it MUST NOT be used
-- C) it may be used for first-party native apps  D) it is deprecated only for public clients
+- A) it SHOULD NOT be used  B) it is deprecated only for public clients
+- C) it may be used for first-party native apps  D) it MUST NOT be used
 
 **Q3.** Meridian registers `https://*.meridian-health.com/callback`. RFC 9700 §4.1 requires redirect URIs to be
 compared:
@@ -34,9 +34,9 @@ compared:
 **Q5.** In Meridian §11, consent withdrawal calls RFC 7009 token revocation. Per Grant Management §6.5, the
 difference from grant revocation is:
 - A) There is none
-- B) Token revocation discards a credential; the underlying grant survives, so the next authorization request
+- B) Token revocation is asynchronous
+- C) Token revocation discards a credential; the underlying grant survives, so the next authorization request
   is approved with no prompt
-- C) Token revocation is asynchronous
 - D) Grant revocation only applies to refresh tokens
 
 ## Tier 2 — Applied reasoning (5)
@@ -44,16 +44,16 @@ difference from grant revocation is:
 **Q6.** Meridian justifies 24-hour offline-validated access tokens by citing ward tablets that lose
 connectivity. Assess the justification.
 - A) Sound — availability requires offline validation
-- B) The constraint is real, but the conclusion does not follow: shorter lifetimes plus a refresh on
-  reconnect give offline tolerance without a 24-hour revocation lag
+- B) Sound, provided the blocklist syncs nightly
 - C) Unsound — offline validation should never be used
-- D) Sound, provided the blocklist syncs nightly
+- D) The constraint is real, but the conclusion does not follow: shorter lifetimes plus a refresh on
+  reconnect give offline tolerance without a 24-hour revocation lag
 
 **Q7.** Meridian §7 injects `X-User-Id` and `X-Tenant-Id` at the gateway and services trust them. The most
 serious consequence is:
 - A) Header size limits
-- B) Any party that can reach a service without traversing the gateway can impersonate any user in any tenant
-- C) The gateway becomes a single point of failure
+- B) The gateway becomes a single point of failure
+- C) Any party that can reach a service without traversing the gateway can impersonate any user in any tenant
 - D) Services cannot audit correctly
 
 **Q8.** Meridian §8 exchanges the incoming token and the result carries the original `sub`. Which brief
@@ -66,9 +66,9 @@ constraint does this break, and why?
 
 **Q9.** Meridian §9's step-up challenge returns `insufficient_user_authentication` with only an
 `error_description`. What is missing and what does its absence cost?
-- A) `scope` — the client cannot request more scopes
-- B) `acr_values` and/or `max_age` — without them the client is told it failed but not what would succeed,
+- A) `acr_values` and/or `max_age` — without them the client is told it failed but not what would succeed,
   turning a recoverable state into a dead end
+- B) `scope` — the client cannot request more scopes
 - C) `WWW-Authenticate` should be `DPoP`
 - D) A `Retry-After` header
 

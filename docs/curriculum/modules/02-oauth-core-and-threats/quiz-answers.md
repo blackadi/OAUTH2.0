@@ -8,21 +8,21 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 
 **Q1 — D) §4.1.** §3.1 is the authorization *endpoint*, §4.3 is ROPC, §6 is refreshing an access token.
 
-**Q2 — C) `state`.** RFC 6749 §10.12, "Cross-Site Request Forgery." **A is the trap:** `nonce` also binds
+**Q2 — D) `state`.** RFC 6749 §10.12, "Cross-Site Request Forgery." **A is the trap:** `nonce` also binds
 something to a request, but it binds the **ID token** to the authentication request (OIDC Core) — a different
 artifact and a different attack. B (`code_challenge`) binds the *code* to the client instance (PKCE, Module
 03). Confusing these three is the single most common vocabulary failure in OAuth, and Modules 03 and 08 both
 come back to it.
 
-**Q3 — B) `urn:ietf:params:oauth:grant-type:device_code`.** A is the *parameter* name, not the grant type.
+**Q3 — A) `urn:ietf:params:oauth:grant-type:device_code`.** B is the *parameter* name, not the grant type.
 
-**Q4 — B.** Those six are §5.2's token-endpoint codes. **A is the trap** — those are §4.1.2.1's *redirect*
+**Q4 — A.** Those six are §5.2's token-endpoint codes. **B is the trap** — those are §4.1.2.1's *redirect*
 error codes, delivered through the browser. C is RFC 6750 §3.1 (bearer token errors). D is RFC 8628 §3.5
 (device polling). Four different error vocabularies, four different channels.
 
-**Q5 — B.** *Best Current Practice for OAuth 2.0 Security*, BCP 240, January 2025. **A is the trap** — it was
+**Q5 — D.** *Best Current Practice for OAuth 2.0 Security*, BCP 240, January 2025. **A is the trap** — it was
 a long-running draft (`draft-ietf-oauth-security-topics`) and plenty of material still calls it one; it is a
-published BCP. D describes RFC 6819 (Informational, January 2013), which RFC 9700 supersedes in practice.
+published BCP. B describes RFC 6819 (Informational, January 2013), which RFC 9700 supersedes in practice.
 
 ## Tier 2 — Applied reasoning
 
@@ -43,9 +43,9 @@ authentication on the back channel, and the code is single-use. **A is factually
 encrypted; they are opaque references, and opacity is not confidentiality — Module 00). B is irrelevant. D
 confuses an audit side effect with the security property.
 
-**Q9 — B.** The AS re-verifies that the `redirect_uri` in the token request matches the one in the
-authorization request. **A is the shallow trap** — the token is returned in the HTTP response to *this* POST;
-nothing is redirected anywhere at that point. Believing A means believing the token endpoint is a redirecting
+**Q9 — A.** The AS re-verifies that the `redirect_uri` in the token request matches the one in the
+authorization request. **B is the shallow trap** — the token is returned in the HTTP response to *this* POST;
+nothing is redirected anywhere at that point. Believing B means believing the token endpoint is a redirecting
 endpoint, which inverts the whole front/back-channel model.
 
 **Q10 — B.** `state` is a CSRF defense (RFC 9700 §4.7): it stops an attacker who initiates their *own*

@@ -16,13 +16,13 @@ in [quiz-answers.md](quiz-answers.md).
 - D) an active Internet-Draft
 
 **Q2.** RFC 9700 §2.4 says the resource owner password credentials grant:
-- A) SHOULD NOT be used  B) MUST NOT be used  C) MAY be used with PKCE  D) is not mentioned
+- A) MUST NOT be used  B) SHOULD NOT be used  C) MAY be used with PKCE  D) is not mentioned
 
 **Q3.** What does RFC 9700 §2.2.2 require for refresh tokens issued to **public** clients?
 - A) They MUST NOT be issued
-- B) They MUST be sender-constrained **or** use refresh token rotation
+- B) They SHOULD be short-lived
 - C) They MUST be sender-constrained
-- D) They SHOULD be short-lived
+- D) They MUST be sender-constrained **or** use refresh token rotation
 
 **Q4.** Which best describes the implicit grant's status in OAuth 2.1 (draft-15)?
 - A) Explicitly prohibited by a MUST NOT
@@ -40,17 +40,17 @@ in [quiz-answers.md](quiz-answers.md).
 
 **Q6.** An AS advertises `code_challenge_methods_supported: ["S256"]`. What have you learned about whether
 this deployment is safe from authorization-code interception?
-- A) It is safe — PKCE with S256 is supported
-- B) Almost nothing — support is not enforcement; you must test whether a flow succeeds without PKCE
+- A) Almost nothing — support is not enforcement; you must test whether a flow succeeds without PKCE
+- B) It is safe — PKCE with S256 is supported
 - C) It is safe for public clients but not confidential ones
 - D) Nothing, because metadata is never trustworthy
 
 **Q7.** Your three sources disagree: metadata advertises `private_key_jwt`, the client record says
 `client_secret_basic`, and a `client_assertion` request is refused. What goes in the report?
 - A) Nothing — the client record explains it
-- B) A finding that metadata is misleading, plus the observed behaviour as authoritative
+- B) A note that the client needs reconfiguring
 - C) A finding that the AS is non-conformant with RFC 7523
-- D) A note that the client needs reconfiguring
+- D) A finding that metadata is misleading, plus the observed behaviour as authoritative
 
 **Q8.** Rank by severity for an internet-facing AS, and justify: (i) ROPC enabled but no client registered to
 use it; (ii) PKCE supported but not required, with three public clients in production; (iii) `plain` offered

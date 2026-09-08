@@ -12,27 +12,27 @@ explanations in [quiz-answers.md](quiz-answers.md).
 
 **Q2.** Which parameter exists to bind an authorization response to the browser session that started the
 request?
-- A) `nonce`  B) `code_challenge`  C) `state`  D) `client_id`
+- A) `nonce`  B) `code_challenge`  C) `client_id`  D) `state`
 
 **Q3.** The device authorization grant's `grant_type` value is:
-- A) `device_code`
-- B) `urn:ietf:params:oauth:grant-type:device_code`
+- A) `urn:ietf:params:oauth:grant-type:device_code`
+- B) `device_code`
 - C) `urn:ietf:params:oauth:device`
 - D) `urn:openid:params:grant-type:device`
 
 **Q4.** Which set of error codes is defined by RFC 6749 **§5.2** (the token endpoint's JSON error response)?
-- A) `invalid_request`, `unauthorized_client`, `access_denied`, `unsupported_response_type`, `invalid_scope`,
-  `server_error`, `temporarily_unavailable`
-- B) `invalid_request`, `invalid_client`, `invalid_grant`, `unauthorized_client`, `unsupported_grant_type`,
+- A) `invalid_request`, `invalid_client`, `invalid_grant`, `unauthorized_client`, `unsupported_grant_type`,
   `invalid_scope`
+- B) `invalid_request`, `unauthorized_client`, `access_denied`, `unsupported_response_type`, `invalid_scope`,
+  `server_error`, `temporarily_unavailable`
 - C) `invalid_token`, `insufficient_scope`, `invalid_request`
 - D) `authorization_pending`, `slow_down`, `access_denied`, `expired_token`
 
 **Q5.** RFC 9700 is:
 - A) an active Internet-Draft that supersedes RFC 6819
-- B) *Best Current Practice for OAuth 2.0 Security*, BCP 240, published January 2025
+- B) an Informational RFC from 2013
 - C) the OAuth 2.1 framework
-- D) an Informational RFC from 2013
+- D) *Best Current Practice for OAuth 2.0 Security*, BCP 240, published January 2025
 
 ## Tier 2 — Applied reasoning (5)
 
@@ -58,8 +58,8 @@ and no usable browser. Which grant?
 - D) The token endpoint needs something to log for auditing
 
 **Q9.** Why must the client repeat `redirect_uri` in the token request (RFC 6749 §4.1.3)?
-- A) So the authorization server knows where to send the token
-- B) So the AS can verify it matches the value used in the authorization request
+- A) So the AS can verify it matches the value used in the authorization request
+- B) So the authorization server knows where to send the token
 - C) It is a legacy field with no current purpose
 - D) So the browser can be redirected one final time
 

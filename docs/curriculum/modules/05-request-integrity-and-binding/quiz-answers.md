@@ -6,12 +6,12 @@ Each answer explains **why the right answer is right and why the tempting wrong 
 
 ## Tier 1 — Recall
 
-**Q1 — B) 201 Created.** RFC 9126 §2.2: *"the server MUST generate a request URI and provide it in the
+**Q1 — D) 201 Created.** RFC 9126 §2.2: *"the server MUST generate a request URI and provide it in the
 response with a '201' HTTP status code."* **A is the trap** — nearly every other OAuth endpoint returns 200,
 and PAR is the exception because it *creates* a resource.
 
-**Q2 — B) `typ`, `alg`, `jwk`.** §4.2: *"The JOSE Header of a DPoP JWT MUST contain at least the following
-parameters: typ, alg, and jwk."* **A is the trap and a real bug** — `kid` looks like the natural way to
+**Q2 — A) `typ`, `alg`, `jwk`.** §4.2: *"The JOSE Header of a DPoP JWT MUST contain at least the following
+parameters: typ, alg, and jwk."* **B is the trap and a real bug** — `kid` looks like the natural way to
 identify a key, but the AS has never seen this ephemeral key, so a reference is useless. It needs the key
 inline (Break 2 in the lab).
 
@@ -24,20 +24,20 @@ responses, an authorization server supporting this specification MUST indicate i
 iss parameter."* Errors matter because a mix-up can be staged around a failure just as easily as a success —
 and you verified this on a live error redirect in the lab.
 
-**Q5 — B) `DPoP`.** §7.1: *"The scheme name is DPoP."* **D is the dangerous answer** and the subject of Q14:
+**Q5 — D) `DPoP`.** §7.1: *"The scheme name is DPoP."* **B is the dangerous answer** and the subject of Q14:
 an RS that accepts either scheme for a DPoP-bound token has silently discarded the binding.
 
 ## Tier 2 — Applied reasoning
 
-**Q6 — B.** PAR gives confidentiality and integrity by keeping the request off the front channel, but the AS
+**Q6 — A.** PAR gives confidentiality and integrity by keeping the request off the front channel, but the AS
 learns only that *someone who could authenticate as this client* pushed it. JAR's signature is attributable
 and non-repudiable — the client cannot later deny authoring it, and an auditor can verify it independently.
-That is why regulated profiles use both. **A is the shallow trap:** they overlap on integrity, so it is easy
+That is why regulated profiles use both. **B is the shallow trap:** they overlap on integrity, so it is easy
 to conclude they are redundant. C is invented. D is wrong — JAR *may* be signed-then-encrypted (RFC 9101
 §10.1), but signing is the requirement; PAR needs no encryption because the parameters never traverse the
 browser.
 
-**Q7 — B.** The URL carries `client_id` and an opaque `request_uri`. **C is the near-miss worth
+**Q7 — D.** The URL carries `client_id` and an opaque `request_uri`. **C is the near-miss worth
 understanding:** the browser is still very much in the flow — it makes the authorization request and receives
 the redirect — but it no longer carries the request *contents*. A describes a plain authorization request.
 

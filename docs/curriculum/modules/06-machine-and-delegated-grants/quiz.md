@@ -8,12 +8,12 @@ in [quiz-answers.md](quiz-answers.md).
 ## Tier 1 — Recall (5)
 
 **Q1.** RFC 6749 §4.4 states that the client credentials grant type MUST only be used by:
-- A) public clients  B) confidential clients  C) native apps  D) any registered client
+- A) public clients  B) any registered client  C) native apps  D) confidential clients
 
 **Q2.** Which parameter carries a JWT used as an **authorization grant** (RFC 7523 §2.1), and which carries a
 JWT used for **client authentication** (RFC 7523 §2.2)?
-- A) `client_assertion` / `assertion`
-- B) `assertion` / `client_assertion`
+- A) `assertion` / `client_assertion`
+- B) `client_assertion` / `assertion`
 - C) `jwt` / `client_jwt`
 - D) both use `assertion`, distinguished by `grant_type`
 
@@ -27,9 +27,9 @@ impersonation request?
 
 **Q5.** Which parameters does RFC 8693 §2.2.1 mark **REQUIRED** in a successful token exchange response?
 - A) `access_token`, `expires_in`, `scope`
-- B) `access_token`, `token_type`, `issued_token_type`
+- B) `access_token` only
 - C) `access_token`, `refresh_token`, `issued_token_type`
-- D) `access_token` only
+- D) `access_token`, `token_type`, `issued_token_type`
 
 ## Tier 2 — Applied reasoning (5)
 

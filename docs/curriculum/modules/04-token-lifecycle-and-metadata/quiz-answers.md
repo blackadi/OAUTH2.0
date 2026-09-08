@@ -19,7 +19,7 @@ possible, because an ID token carries it too.
 `jti`. `nonce` belongs to ID tokens (OIDC Core) — and reaching for it here is the tell that someone is
 conflating the two token types, which is precisely the confusion `typ: at+jwt` exists to prevent.
 
-**Q4 — B.** *"Its value MUST be an absolute URI… The URI MUST NOT include a fragment component."* **C is
+**Q4 — A.** *"Its value MUST be an absolute URI… The URI MUST NOT include a fragment component."* **C is
 wrong** in an interesting way: §2 explicitly permits multiple occurrences — *"Multiple 'resource' parameters
 MAY be used to indicate that the requested token is intended to be used at multiple resources."* D confuses
 audience restriction with redirect-URI matching; they are unrelated checks.
@@ -29,25 +29,25 @@ B is OIDC Discovery. Three different documents — see Q9.
 
 ## Tier 2 — Applied reasoning
 
-**Q6 — B.** At 20k req/s across 40 pods, introspecting every request adds a network hop to every call and
+**Q6 — D.** At 20k req/s across 40 pods, introspecting every request adds a network hop to every call and
 makes the AS a hard availability dependency for the entire estate. JWTs verified locally against the JWKS
 avoid both. The honest part of the answer is that "promptly" is **not** a property you get for free — it
 equals the token lifetime you choose, so you pick a lifetime that satisfies the requirement (minutes, not
 hours) and optionally introspect only for high-value operations. **A is the trap for the security-minded
 reader:** it gives the strongest revocation story and ignores the stated latency and scale constraints, and
 it couples 40 pods' availability to one service. **C** is the same idea with a lifetime that makes revocation
-meaningless. **D** is the worst of both — the freshness of a JWT with the round trip of introspection, and a
+meaningless. **B** is the worst of both — the freshness of a JWT with the round trip of introspection, and a
 cache that outlives revocation by an unbounded amount.
 
-**Q7 — B.** That is nearly the spec's own wording: issued by this AS, not revoked, within its validity
-window. **A, C, and D are all the same mistake** in three costumes — treating a *validity* statement as an
+**Q7 — A.** That is nearly the spec's own wording: issued by this AS, not revoked, within its validity
+window. **B, C, and D are all the same mistake** in three costumes — treating a *validity* statement as an
 *authorization* decision. C is especially tempting because it feels like it should be implied; it is not,
 which is why `aud` exists and why Exercise 2 in the lab shows a token with no `aud` at all.
 
-**Q8 — B.** RFC 7009 §2.2 requires 200 for a successfully revoked token *or* an invalid one, because
+**Q8 — D.** RFC 7009 §2.2 requires 200 for a successfully revoked token *or* an invalid one, because
 *"invalid tokens do not cause an error response since the client cannot handle such an error in a reasonable
 way."* The security consequence — no oracle — is the reason that ergonomic argument was accepted. A is wrong
-(it is deliberate). C is invented. D is true but trivial, and misses the point.
+(it is deliberate). C is invented. B is true but trivial, and misses the point.
 
 **Q9 — C) protected resource metadata (RFC 9728).** The client is standing in front of an API and does not yet
 know which AS protects it. **A and B are the trap:** they answer "what can *this AS* do" — useful only once
