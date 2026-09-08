@@ -206,10 +206,10 @@ validate the access token, and that the `requestContent` this server synthesises
 > name, the vocabulary of being off, and the vendor result codes that only occur while it is off. Register
 > rows in `03-curriculum-audit.md`; full record in `PROGRESS.md`.
 >
-> **Still open and genuinely a gap, not drift:** the credential issuer has **no JWK Set** (`credentialJwks` /
-> `credentialJwksUri` unset), so `/vci/jwks` and `/vci/jwtissuer` answer 500 and no credential can be issued.
-> Setting it is a service write and needs its own decision. Module 09b now documents that boundary explicitly
-> rather than leaving it invisible.
+> **✅ Closed the same day (VCI-W6), after this paragraph was written.** An operator set `credentialJwks` (one
+> EC P-256 key, `kid: vc-issuer-1`, `alg: ES256`); `/vci/jwks` and `/vci/jwtissuer` now both answer **200**,
+> verified to publish the public half only. Module 09b Exercise 7 was rebuilt a second time around three
+> dated states rather than the two this paragraph describes. See `OID4VCI-1.0.md` F-7.
 
 ### Where the work stands
 
