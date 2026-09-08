@@ -795,9 +795,13 @@ WWW-Authenticate: Bearer error="insufficient_user_authentication",
   acr_values="mfa"
 ```
 
-Then check what this repo does with it: `introspection.controller.ts:142-167` — the `case "FORBIDDEN"` branch — parses Authlete's `WWW-Authenticate`
-for `insufficient_user_authentication` and re-shapes it into JSON carrying `acr_values`/`max_age`, so a
-browser client can read the requirement without parsing an HTTP header.
+Then check what this repo does with it: `introspection.controller.ts`'s `buildStepUpChallenge()` helper (added
+2026-09-08, around line 109) parses Authlete's `WWW-Authenticate` for `insufficient_user_authentication` and
+re-shapes it into JSON carrying `acr_values`/`max_age`, so a browser client can read the requirement without
+parsing an HTTP header. It's called from **both** the `UNAUTHORIZED` case (the real path — this is what
+Authlete actually sends live) and `FORBIDDEN` (kept as a defensive duplicate, in case a future or
+differently-configured Authlete ever sends it that way instead). Earlier revisions of this lab named only a
+`case "FORBIDDEN"` branch at `:142-167` — live testing found that branch was never reached by real traffic.
 
 ```
 half one — acr_values=pwd

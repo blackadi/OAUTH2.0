@@ -420,7 +420,8 @@ better exercise, arrived at by accident. Nothing else in the curriculum depends 
 
 - **Unprotected introspection endpoint.** RFC 7662 §2.1 requires authorization. Without it, anyone can test
   arbitrary strings and learn which are live tokens, plus harvest `sub`, `scope`, and `client_id` for the ones
-  that are. **This repo's endpoint is currently open** — the lab confirms it.
+  that are. **This repo's endpoint used to be open — fixed 2026-08-12** (admin Basic auth on both
+  introspection endpoints, `requireBasicAuth("introspection")`); the lab shows the 401 this now produces.
 - **Distinguishable "unknown token" responses.** If revocation 404s on unknown tokens while 200-ing on real
   ones, it becomes a token-validity oracle. Both specs return the same answer on purpose.
 - **Ignoring `aud`.** An RS that checks only `active` accepts tokens minted for any other API on the same

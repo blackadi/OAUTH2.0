@@ -166,7 +166,7 @@ labelled as a neutral "routing choice," which teaches a learner to replicate it.
 
 > ✅ **FIXED 2026-08-02** across the teaching text — Module 10 (objective, heading, table, the unpacked argument, and the §5.3.2 checklist line), its quiz stem, the capstone key, exam C and its key, the final exam and its key, and the PROGRESS gate. The exam keys now require the exception for full marks and say to deduct for an absolute-ban answer.
 
-> ✅ **FIXED 2026-08-02** in `SPEC-INVENTORY.md` — the row now quotes §5.3.2.1 including *"except in extraordinary circumstances"*. **Module 10, its quiz, exam C and the capstone key still say "forbids"** and remain to be reworded.
+> ✅ **FIXED 2026-08-02** in `SPEC-INVENTORY.md` — the row now quotes §5.3.2.1 including *"except in extraordinary circumstances"*. **This callout previously said Module 10, its quiz, exam C and the capstone key still said "forbids" — that was wrong even at the time relative to the callout above, and re-verified 2026-09-08 against the current text of all four: quiz.md Q9, exam-c.md C12, and capstone `quiz-answers.md` row 10 all correctly read "shall not … except in extraordinary circumstances."** Nothing here remains to be reworded.
 
 | Field | Content |
 |---|---|

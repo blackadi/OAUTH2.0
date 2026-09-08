@@ -202,7 +202,7 @@ job entirely to PKCE.
 | *"shall only issue sender-constrained access tokens"* | Module 05 |
 | *"shall use one of the following methods for sender-constrained access tokens: MTLS …, DPoP"* | Module 05 |
 | *"shall authenticate clients using one of the following methods: MTLS … or private_key_jwt"* | Module 06 |
-| *"shall not expose open redirectors"* | Module 07 — **and this repo's logout endpoint fails it** |
+| *"shall not expose open redirectors"* | Module 07 — **this repo's logout endpoint used to fail it, fixed 2026-08-12** (exact-match validation of `post_logout_redirect_uri` against the client's registered set) |
 | *"shall not use refresh token rotation except in extraordinary circumstances"* | Module 03 — see below |
 | *"shall issue authorization codes with a maximum lifetime of 60 seconds"* | Module 02 |
 | *"shall use PS256, ES256 or EdDSA … for signing"* | **Nowhere until 2026-08-14 — and it is the row this deployment fails most visibly.** See below |

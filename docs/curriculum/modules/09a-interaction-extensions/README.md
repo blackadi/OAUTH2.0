@@ -512,16 +512,20 @@ WWW-Authenticate: Bearer error="insufficient_user_authentication",
 It is an *authentication* problem, so 401 with `WWW-Authenticate` — the header is the whole mechanism, and 403
 has no place to put it.
 
-> **And this deployment is an instance of it, which is worth knowing before you run anything.**
-> `server/src/controllers/introspection.controller.ts` answers the `insufficient_user_authentication` case
-> with **403**. Be precise about what that is, because the reading matters: it is the **AS → resource server**
-> introspection response, where Authlete's action is `FORBIDDEN` and 403 is a defensible mapping for a vendor
-> API. It is **not** RFC 9470 §3's challenge, which is the **resource server → client** response and must be
-> 401. The two are separate messages with separate status codes, and this repo only implements the first —
-> **you write the second.** `docs/STEP-UP-AUTH-TUTORIAL.md` Part 5 conflated them until 2026-08-14, printing
-> the 403 under the heading *"an error conforming to RFC 9470"* with the client-action table hanging off it;
-> it now prints both, side by side, with the boundary drawn. So `curl` returning 403 here does not contradict
-> the ❌ above — but you cannot see that from the status code alone, which is the more general lesson.
+> **This deployment used to be an instance of it, and finding out it wasn't is the more interesting lesson.**
+> Until 2026-09-08, this section said `server/src/controllers/introspection.controller.ts` answers the
+> `insufficient_user_authentication` case with **403** — the **AS → resource server** introspection response,
+> where Authlete's action was assumed to be `FORBIDDEN`, with 403 read as a defensible vendor mapping distinct
+> from RFC 9470 §3's **resource server → client** challenge (which must be 401). **Live testing proved that
+> assumption wrong**: a real login → consent → token exchange → introspection round trip against the actual
+> deployment showed Authlete answers `UNAUTHORIZED`, not `FORBIDDEN`, for this exact scenario. The `403` branch
+> was real code — tested against a mock that shared the same wrong assumption, and never reached by live
+> traffic. **This repo's introspection response is 401 now too**, fixed in `c7c607d` with permanent E2E
+> coverage added in `ee52e8b`; `docs/API.md` and `docs/STEP-UP-AUTH-TUTORIAL.md` Part 5 were corrected the
+> same day. The lesson the ❌ above teaches — 403 has nowhere to put the `WWW-Authenticate` challenge — still
+> holds; what changed is that this repo no longer demonstrates it, it demonstrates the fix instead. **The
+> transferable point survives**: a mocked test that shares its author's wrong assumption about a vendor's
+> behavior will pass right alongside the bug. Only a live round trip against the real dependency catches it.
 
 ---
 
