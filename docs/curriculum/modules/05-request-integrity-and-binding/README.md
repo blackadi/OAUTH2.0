@@ -259,10 +259,20 @@ compares DPoP with mTLS as a design decision. That is what is here.
 ## Where this lives in the code
 
 - **`client/src/services/dpop.service.ts`** — the reference implementation, and the best file in the repo for
-  reading a JWS being built by hand. Line ~64 sets the `jwk` header member; ~53–54 attaches `ath` (computed
-  by `computeAth` at ~20); ~76–78 handles the raw P1363 signature. Every one of the three bugs above is a
+  reading a JWS being built by hand. Line ~90 sets the `jwk` header member; ~52–53 attaches `ath` (computed
+  by `computeAth` at ~20); ~102–103 handles the raw P1363 signature. Every one of the three bugs above is a
   comment away.
 
+  > **They drifted a third time, sometime around 2026-08-23** (`bf46b35`, "dpop_jkt was a kid, not a
+  > thumbprint"), and it took a fourth manual re-check on 2026-09-08 to catch it — the `~89`ish
+  > `check-docs.mjs` form only validates `path.ts:NNN`, and none of these three pointers carry a colon.
+  > The `jwk` line moved from ~64 to **90** and the P1363 line from ~76–78 to **102–103**; `ath` and
+  > `computeAth` barely moved. **This is the fourth time this exact paragraph has gone stale**, which is
+  > itself the finding: an approximate pointer into a file that keeps growing is a maintenance debt that
+  > compounds, not a one-off typo. If this drifts a fifth time, stop re-measuring it by hand and either cite
+  > the enclosing function name only (no line number) or teach `check-docs.mjs` the `~NNN` form the way it
+  > already learned the bare `NNN` form below.
+  >
   > **They drifted again on 2026-08-22**, and this time nothing had to notice by hand: de-duplicating the
   > P-256 key generator shortened the file by six lines, `check-docs.mjs` reported the P1363 pointer as
   > past end-of-file, and all four were re-measured. That is the check earning its place — the same drift,
@@ -273,9 +283,11 @@ compares DPoP with mTLS as a design decision. That is what is here.
   > form carries no colon, so `check-docs.mjs`'s `path.ts:NNN` check never looked at it; it was **CUR-3b-W5**,
   > and teaching the checker this form caught it on the first run. A reference style that no tool validates
   > is a reference style that rots.
-- **`server/src/services/par.service.ts`** — note lines ~29–34: for `client_secret_post` clients the secret is
-  merged **into the `parameters` string**, not sent as a separate field. That is Authlete's PAR API contract,
-  not RFC 9126, and it is exactly the kind of vendor detail worth labelling.
+- **`server/src/services/par.service.ts`** — note lines ~67–71 (moved from ~29–34 after the 9126-W1 fix on
+  2026-09-01 inserted the `rawBody`/JSON-wire-format discriminator above it — re-measured 2026-09-08): for
+  `client_secret_post` clients the secret is merged **into the `parameters` string**, not sent as a separate
+  field. That is Authlete's PAR API contract, not RFC 9126, and it is exactly the kind of vendor detail worth
+  labelling.
 
   > ### Which halves of PAR and JAR this deployment can actually run
   >

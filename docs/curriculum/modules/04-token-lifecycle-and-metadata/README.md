@@ -264,9 +264,9 @@ metadata documents a given consumer needs. That reasoning is here.
   rich object (`existent`, `usable`, `sufficient`, `refreshable`, `scopes`, `grantType`, `consentedClaims`);
   `/api/introspection/standard` returns the RFC 7662 shape. Compare the two responses in the lab — the split
   between "what the spec standardises" and "what a real AS actually knows" is instructive.
-- **`server/src/controllers/introspection.controller.ts`** — around line 47 it parses Authlete's
-  `WWW-Authenticate` for `insufficient_user_authentication` and returns the RFC 9470 step-up challenge. That
-  is Module 09a; note it and move on.
+- **`server/src/controllers/introspection.controller.ts`** — its `buildStepUpChallenge()` helper (around
+  line 109) parses Authlete's `WWW-Authenticate` for `insufficient_user_authentication` and returns the
+  RFC 9470 step-up challenge as JSON. That is Module 09a; note it and move on.
 - **`server/src/routes/revocation.routes.ts`** / **`revocation.service.ts`** — RFC 7009.
 - **`server/src/routes/oauth-as-metadata.routes.ts`** — RFC 8414 at **true root**.
   **`server/src/routes/discovery.routes.ts`** — OIDC discovery under **`/api`**. Two different paths, and
