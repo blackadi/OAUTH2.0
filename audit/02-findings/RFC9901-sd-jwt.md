@@ -59,16 +59,23 @@ specs. The reason is that a decision record answers *"why did you not build this
 answer is *"an authorization server cannot"* — which belongs in the inventory row, not in a decision register.
 Gate 4 can overrule; I would keep the register for genuine choices.
 
-## Finding F-1 — the teaching script is the whole implementation, and it is unaudited (S4)
+## Finding F-1 — the teaching script is the whole implementation, and it is unaudited (S4) — ✅ **AUDITED 2026-08-14 (9901-W2, batch 3c) — 3 defects found and fixed (T2-6)**
 
-`docs/curriculum/scripts/sd-jwt.mjs` (listed in `00-inventory.md` §2 alongside `decode-jwt.mjs` as lab tooling) is
-the only SD-JWT code in the repo. It is a curriculum artifact, not a server component, and:
+> **Status: closed, both halves.** The script was *executed*, not just read, against §§4.2.3/4.2.4/7.3:
+> §4.2.3's disclosure hashing matches the spec's published test vector, §9.3's salts were verified over 200
+> samples (all distinct, all 128 bits), and §4.3.1's `sd_hash` catches replay. Three real defects turned up —
+> the substantive one being a wrong **ACCEPT** on a missing trailing tilde (RFC 9901 requires the last
+> separating tilde MUST NOT be omitted; the script accepted the malformed form anyway) — fixed under T2-6
+> (CUR-3c-W3/W4/W5). The "not covered by any test" half is also closed: `server/tests/unit/utils/sd-jwt.script.test.ts`
+> now exists. The block below is the pre-audit state.
 
-- it is **not covered by any test** — the `scripts/` directory is outside both Vitest configs (`00-inventory.md` §8);
-- it was **not read line-by-line in this entry**. Its correctness against §4.2.3 (disclosure hashing), §4.2.4 (digest embedding) and §7.3 (verifier checks) is a **Phase 3** item, because a script that demonstrates a security format incorrectly teaches the format incorrectly — the same standard applied to `client/src/services/dpop.service.ts`, whose signature-format and `ath` details were checked in B4.
+`docs/curriculum/scripts/sd-jwt.mjs` (listed in `00-inventory.md` §2 alongside `decode-jwt.mjs` as lab tooling) was
+the only SD-JWT code in the repo, pre-audit. It is a curriculum artifact, not a server component, and:
 
-Recorded at S4 because nothing in the running server depends on it; flagged so Phase 3 does not skip it on the
-grounds that this entry "covered" RFC 9901.
+- it was **not covered by any test** (pre-fix) — the `scripts/` directory is outside both Vitest configs (`00-inventory.md` §8);
+- it was **not read line-by-line in this entry**. Its correctness against §4.2.3 (disclosure hashing), §4.2.4 (digest embedding) and §7.3 (verifier checks) was a **Phase 3** item, because a script that demonstrates a security format incorrectly teaches the format incorrectly — the same standard applied to `client/src/services/dpop.service.ts`, whose signature-format and `ath` details were checked in B4.
+
+Recorded at S4 because nothing in the running server depends on it; the flag was honoured — Phase 3 (batch 3c) did not skip it.
 
 ## Documentation delta
 

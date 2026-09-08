@@ -1,7 +1,8 @@
 # RFC 8693 — OAuth 2.0 Token Exchange
 
 - **Verdict:** `PARTIAL` — **deliberate, confirmed, not to be "fixed" in isolation**
-- **Severity:** **S2**
+- **Severity:** ~~**S2**~~ → **S4** — F-1 and F-2 (the two "new" findings, S2/S3) are both fixed (DR-10,
+  8693-W1/W2); what remains is F-3 (S4) and the three deliberately-kept defects themselves
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/TOKEN-EXCHANGE-TUTORIAL.md` (esp. Part 12), `docs/curriculum/modules/06-machine-and-delegated-grants/lab.md` Exercise 6, `AGENTS.md` Deliberate-defects table, `tests/unit/controllers/token-exchange-response.handler.test.ts`
 
@@ -65,9 +66,15 @@ and in the tutorial are stale** — the ⚠️ comment blocks moved them:
 the bounds check while pointing at the wrong code. This is exactly the drift class `AGENTS.md` warns about in
 its documentation-drift section, occurring in `AGENTS.md` itself.
 
-## Finding F-1 — `audience` cannot be forwarded at all, and the docs imply it can (S2, **new**)
+## Finding F-1 — `audience` cannot be forwarded at all, and the docs imply it can (S2, **new**) — ✅ **FIXED 2026-08-14 (8693-W1, ruled under DR-10)**
 
-Part 12's table treats `resource` and `audience` as the same defect with the same fix:
+> **Status: closed.** `docs/TOKEN-EXCHANGE-TUTORIAL.md` now has a dedicated *"`resource` and `audience` look
+> identical from the outside and are not the same defect"* section, distinguishing the forwardable `resource`
+> from the vendor-boundary `audience` exactly as this finding recommended. The characterization test's
+> `it("drops audiences")` case now carries a comment explaining it can never legitimately change (`TokenCreateRequest`
+> has no audience field at all). The table below is the pre-fix state.
+
+Part 12's table treated `resource` and `audience` as the same defect with the same fix (pre-fix):
 
 | Parameter sent | This server | Consequence (as documented) |
 |---|---|---|
@@ -94,22 +101,27 @@ distinct from `resource`'s URI, and there is nowhere to put it.
 2. **The characterization test asserts the impossible-to-change case.** `…handler.test.ts:105-108` — `it("drops audiences")` — will pass forever regardless of any remediation, because there is no field to forward it to. Worth a comment in the test saying so, or the next maintainer reads a green assertion as a live constraint.
 3. **The only routes to an `aud` on an exchanged token are `resources` — which Authlete does map to `aud`, verified live (`modules/04…/lab.md:180-184`) — or `jwtAtClaims`.** And `jwtAtClaims` requires JWT access tokens, which this service does not issue (`accessTokenType = Bearer`, `accessTokenSignAlg` absent — see `RFC9068-…`). So on this deployment, an exchanged token cannot be audience-restricted by the `audience` parameter under any currently available configuration.
 
-## Finding F-2 — Part 12's "Not covered by tests" is now false (S3, **new**)
+## Finding F-2 — Part 12's "Not covered by tests" is now false (S3, **new**) — ✅ **FIXED 2026-08-14 (8693-W2, ruled under DR-10)**
 
-`docs/TOKEN-EXCHANGE-TUTORIAL.md` Part 12:
+> **Status: closed.** The section now opens *"This heading read 'Not covered by tests' until 2026-08-14, and
+> it was true when written"* and explains the characterization test in its place. The stale line-number
+> citation was also corrected — the table below now cites `:47-52` with `:29-34` noted as where earlier
+> revisions pointed. Both halves of this finding are resolved.
+
+`docs/TOKEN-EXCHANGE-TUTORIAL.md` Part 12, pre-fix:
 
 > ### Not covered by tests
 > There is no unit or integration test for `token-exchange-response.handler.ts`. The only automated coverage
 > is one E2E case, and its assertion is `expect([200, 400, 429]).toContain(res.status)`.
 
-That was true when written and is not now: `tests/unit/controllers/token-exchange-response.handler.test.ts`
+That was true when written and was not by 2026-08-14: `tests/unit/controllers/token-exchange-response.handler.test.ts`
 exists — 14 assertions across four blocks, added in `a7d2159` *"test(token-exchange): lock in the handler's
 deliberate gaps so they cannot rot a lab"* — and `AGENTS.md`'s deliberate-defects table already cites it as the
-lock. So the tutorial now understates the repo's own safeguards, in a section whose purpose is to be candid
-about them.
+lock. So the tutorial understated the repo's own safeguards, in a section whose purpose is to be candid
+about them (pre-fix).
 
-Also stale in the same section: it quotes the handler's create-request literal as six lines at `:29-34`; the
-literal is now at `:47-52` and reads `as TokenCreateRequest` with the ⚠️ block above it.
+Also stale in the same section (pre-fix): it quoted the handler's create-request literal as six lines at `:29-34`; the
+literal was by then at `:47-52` and reads `as TokenCreateRequest` with the ⚠️ block above it.
 
 ## Finding F-3 — `scope` is never narrowed, so §2.2.1's conditional REQUIRED is untestable (S4, **new**)
 

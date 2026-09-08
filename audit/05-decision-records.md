@@ -151,10 +151,12 @@ specification and states plainly that it is not runnable here. FAPI 2.0 can be t
 verified"* (FAPI2-W3, inside T2-8). `getStatus` reports the whole profile so it can fail honestly on all eight
 requirements (FAPI2-W4). `FAPI-TUTORIAL.md` gets real transcripts or labels (FAPI2-W6, inside T2-1).
 
-**Measured gap** (`04-remediation-plan.md` §2.2): `require_pushed_authorization_requests: false`;
-`tls_client_certificate_bound_access_tokens: false`; `id_token_signing_alg_values_supported` =
-`HS256, HS512, ES256, HS384` — **`ES256` is permitted by FAPI 2.0 and is available**, while three forbidden HMAC
-algorithms are not withdrawn. That nuance corrects CUR-3b-W9 (T2-12).
+**Measured gap** (`04-remediation-plan.md` §2.2, pre-T1-2): `require_pushed_authorization_requests: false`;
+`tls_client_certificate_bound_access_tokens: false`; `id_token_signing_alg_values_supported` was
+`HS256, HS512, ES256, HS384` — **`ES256` is permitted by FAPI 2.0 and was available**, while three forbidden HMAC
+algorithms were not withdrawn. That nuance corrects CUR-3b-W9 (T2-12). **Now stale per the paragraph above**:
+T1-2's RSA key addition also advertised `RS256` and `PS256`, so both FAPI-permitted algorithms are available;
+the forbidden HMAC algorithms are still not withdrawn.
 
 **Curriculum consequence if Gate 4 enables it instead.** Module 01 Ex 3 and Module 07 §3b reverse. Both modules
 already name `fapiModes` as the cause (3d-F2), so the labs would explain the reversal rather than break
@@ -180,15 +182,18 @@ maps were all verified (VCI-W4 is an explicit no-op). Module 09b teaches VCI and
 The `pre-authorized_code` grant is **already advertised** in `grant_types_supported`
 (`04-remediation-plan.md` §2.2) — so the deployment is already claiming part of this in metadata.
 
-**Why it is sequenced behind DR-11.** VCI-W2 links the AS and the issuer via `credential_issuer` in AS discovery
+**Why it is sequenced behind DR-11** (both executed 2026-08-14; this reasoning is why DR-11 went first, not a
+still-pending dependency). VCI-W2 links the AS and the issuer via `credential_issuer` in AS discovery
 and `authorization_servers` in the issuer document. With the issuer/host mismatch unresolved, that linkage points
 at a host that does not serve the document. **Enabling before DR-11 produces a metadata pair that is internally
 inconsistent** — worse than the current honest absence.
 
-**Measured gap:** `credential_issuer` **ABSENT** from the 62 members.
+**Measured gap (pre-fix):** `credential_issuer` was **ABSENT** from the 62 members. **Now present** — discovery
+went 62 → 64 members when this ruling executed (see `OID4VCI-1.0.md` F-1).
 
-**If declined instead.** `README.md` and `VciSection.tsx` read *"implemented, service flag off"*, and Module 09b
-carries the same banner — theme 2's remedy (T2-8).
+**Superseded — this was the decline branch, not what happened.** `README.md` and `VciSection.tsx` no longer
+read *"implemented, service flag off"*; the feature is enabled (see "Status" above). Kept for the record of
+what the decline path would have looked like.
 
 **Revisit trigger (if declined).** A wallet becomes available, which is also DR-13's trigger.
 

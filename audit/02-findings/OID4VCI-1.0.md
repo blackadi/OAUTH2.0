@@ -196,9 +196,16 @@ Recorded because the code quality here is high and the verdict is about configur
 - **Table-driven action mapping** (`controllers/vci.controller.ts:14-57`, six maps) with an unmapped action falling through to 500. `01-spec-matrix.md` §6 verified the two apparent asymmetries — `BATCH_ISSUE_MAP` lacking `ACCEPTED`, `DEFERRED_ISSUE_MAP` lacking `UNAUTHORIZED` — as **correct**, because the corresponding SDK enums lack those members.
 - The `pre-authorized_code` grant is enabled service-wide and on every client, so the offer half of the flow has real configuration behind it.
 
-## Finding F-7 — the feature is enabled but the credential issuer has no signing key (S4)
+## Finding F-7 — the feature is enabled but the credential issuer has no signing key (S4) — ✅ **FIXED the same day (VCI-W6)**
 
-Probed live 2026-08-14, after DR-03, against service `3693555522`:
+> **Status: closed.** The probe below caught the state between DR-03 (VCI enabled) and VCI-W6 (the credential
+> issuer's signing key configured) — both landed 2026-08-14. An operator set `credentialJwks` (one EC P-256
+> key, `kid: vc-issuer-1`, `alg: ES256`); `GET /api/vci/jwks` and `GET /api/vci/jwtissuer` now both answer
+> **200**, verified to publish the public half only (no `d`/`p`/`q`/`dp`/`dq`/`qi`). Module 09b Exercise 7 was
+> rebuilt around three dated states (`NOT_FOUND` → `INTERNAL_SERVER_ERROR` → `200`) rather than the two the
+> probe below still describes. The table below is the intermediate, now-historical state.
+
+Probed live 2026-08-14, after DR-03 but before VCI-W6, against service `3693555522`:
 
 | Endpoint | Result |
 |---|---|

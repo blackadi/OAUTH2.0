@@ -236,15 +236,16 @@ Profile's alone (`fapi-2_0-security-profile-final.html` 404s — `RESUME.md` §2
 primary source — Module 10 is right and `FAPI-2.0-ATTACKER-MODEL.md`'s prose is wrong. **CUR-3b-W15 is now
 evidenced, not merely argued.**
 
-### 2.4 Still unverified, deliberately
+### 2.4 Still unverified, deliberately (as of 2026-08-11 — two of three since closed, see below)
 
-Three fetches remain unmade, and Phase 5 should not treat them as oversights:
+Three fetches remained unmade at the time this section was written, and Phase 5 was told not to treat them as
+oversights:
 
-| Item | Why it is still open |
+| Item | Why it was still open (2026-08-11) |
 |---|---|
-| **CUR-3b-W12** — RFC 9101 §10.1 vs §6.2 | A section-level question inside a spec whose title/date are already verified. Out of scope for this phase by instruction; one fetch in Phase 5 |
-| **8252-W1** — RFC 8252 §7.3 wording | Same shape. The entry's verdict is confirmed-pending-this |
-| ISO/IEC 18013-5 | **Paywalled.** `MDL-MDOC-ISO18013-5.md` F-1 records why and cites nothing from it. MDL-W2 exists so the curriculum's verification promise carves this case out honestly |
+| ~~**CUR-3b-W12** — RFC 9101 §10.1 vs §6.2~~ | ✅ **Fetched 2026-08-14 (T2-14).** §10.1 is *"Choice of Algorithms"* and carries verbatim the MUST-be-signed sentence Module 05 attributes to it — the Phase 2 entry's §6.2 mapping was the incomplete one. See `RESUME.md` §2.3. |
+| ~~**8252-W1** — RFC 8252 §7.3 wording~~ | ✅ **Fetched 2026-08-14 (T2-14).** §7.3 (*"Loopback Interface Redirection"*) is a **MUST**, not the entry's own `<thinking>` block's "should" — verdict `IMPLEMENTED_VERIFIED` stands, now stronger. See `RESUME.md` §2.3. |
+| ISO/IEC 18013-5 | **Still paywalled.** `MDL-MDOC-ISO18013-5.md` F-1 records why and cites nothing from it. MDL-W2 exists so the curriculum's verification promise carves this case out honestly — this one genuinely remains open. |
 
 ---
 

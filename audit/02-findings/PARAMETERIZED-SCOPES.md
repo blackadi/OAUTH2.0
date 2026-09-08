@@ -4,7 +4,11 @@
 - **Severity:** **S4**
 - **Status:** Not a specification — an Authlete feature (`configuration-reference/tokens-and-claims/using-parameterized-scopes`)
 - **Authlete version:** 3.0
-- **Repo docs under test:** **none** — the feature is never mentioned in `docs/`, `AGENTS.md`, or the curriculum (`00-inventory.md` §10: *"Group B; never mentioned in repo docs"*)
+- **Repo docs under test:** ~~**none** — the feature is never mentioned in `docs/`, `AGENTS.md`, or the
+  curriculum~~ → **✅ documented 2026-08-14 (DR-18, PS-W2/PS-W3).** `docs/API.md` §*Attributes* and
+  `SPEC-INVENTORY.md`'s new **vendor features** section both cover it now, including a dedicated paragraph
+  on the *"accepted but unadvertisable"* taxonomy state this finding's F-2 motivated. (`00-inventory.md` §10's
+  *"never mentioned in repo docs"* was accurate when this entry was written, not now.)
 
 <thinking>
 1. No specification, so no normative requirements. The audit question: is this a gap worth closing, and does it

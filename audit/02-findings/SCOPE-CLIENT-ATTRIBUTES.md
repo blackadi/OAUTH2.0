@@ -104,6 +104,11 @@ Whether to add a scope-management surface is a Gate 4 question. My recommendatio
 already exceed what the curriculum exercises, and the console is the honest place for service-level configuration —
 but the *absence* should be stated rather than left implicit, because two Group B features depend on it.
 
+> **✅ Ruled 2026-08-14 (DR-18): declined, as recommended.** ATTR-W5 (a scope-management surface) and PS-W4
+> (parameterized scopes end to end) are both explicitly declined — "out of proportion: this repo manages no
+> scopes at all." The absence is now stated rather than implicit, per this finding's ask: `docs/API.md` and
+> `SPEC-INVENTORY.md` document both vendor features and label them accordingly (see F-1, F-2 above).
+
 ## Scope recommendation — document both, validate the one that is implemented
 
 Group B requires implementation or justification:
