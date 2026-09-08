@@ -1001,6 +1001,15 @@ string. Work items **CUR-3b-W1** (fix Module 10) and **CUR-3b-W2** (fix the rule
 
 ## 8. Phase 4 — what it has to do, and what it must not re-derive
 
+> **⚠️ This entire section is superseded — checked 2026-09-09.** §8 was written as Phase 4's instructions,
+> before Phase 4 or Phase 5 ran. Both have since run to completion: **Gate 4 approved 2026-08-12**, all four
+> remediation tiers shipped (`04-remediation-plan.md` §1.2 and §7), all 21 decision records ruled
+> (`05-decision-records.md`), and the audit declared closed 2026-08-17 (§0 above). §8.3's punch list and
+> §8.4's tier sequencing read as open work only because nobody added a closing note when the work finished —
+> the line at §1 already said so (*"§8 below is superseded by those two files"*), but it is easy to land on
+> §8 directly and miss that pointer. **Read `04-remediation-plan.md` and `05-decision-records.md` for current
+> status; nothing below this line is an open task.**
+
 Phase 4 is **synthesis and a remediation plan**, written to `audit/04-remediation-plan.md` and
 `audit/05-decision-records.md`. It is still read-and-analyse only; Phase 5 executes, gated on Gate 4.
 
