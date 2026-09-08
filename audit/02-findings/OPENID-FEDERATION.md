@@ -132,18 +132,29 @@ F-1 makes unreachable), or it is simply absent. **Named next action:** fix F-1, 
 statement's `metadata.openid_provider` object for `client_registration_types_supported`. One call after a one-line
 fix, and it also verifies requirements 2 and 4 above, which are currently unverifiable.
 
-## Finding F-3 — the recorded version and date do not match the served document (S3)
+## Finding F-3 — the recorded version and date do not match the served document (S3) — ✅ **RESOLVED under T2-5 (2026-08-14): 1.0 split into two 1.1 documents, not superseded by one**
+
+> **Status: closed, and the answer is more interesting than "which one is right."** `SPEC-INVENTORY.md` now
+> carries three federation rows: **OpenID Federation 1.1** (Final, 5 May 2026, the protocol-independent half
+> — entity statements, trust chains, metadata policy), **OpenID Federation for OpenID Connect 1.1** (Final,
+> Standards Track, same date, the OIDC-specific half — RP/OP/AS metadata, Explicit/Automatic Registration),
+> and **OpenID Federation 1.0** (Final, 17 Feb 2026, "split into the two 1.1 documents above"). **1.1 is a
+> split, not an upgrade** — nothing changed except which document a given feature's text lives in. This
+> repo's entity-configuration endpoint is the 1.1 (protocol-independent) document's §9; its
+> `POST /api/federation/registration` (Explicit Registration) is *Federation for OpenID Connect 1.1*'s. The
+> table below is the pre-resolution state — genuinely inconclusive at the time, not wrong for saying so.
 
 | Source | Version | Status | Date |
 |---|---|---|---|
 | `openid.net/specs/openid-federation-1_0.html`, fetched this session | **1.0** | Final | **17 February 2026** |
 | `SPEC-INVENTORY.md`, `01-spec-matrix.md` §3 | **1.1** | Final | **5 May 2026** |
 
-The canonical URL serves 1.0, Final, 17 Feb 2026. I could not find a 1.1 document, and I am not asserting that
-none exists — the JARM lesson in this very repo (`SPEC-INVENTORY.md:287-288`: `-final.html` served a stale Final
-while the unsuffixed URL served the errata set) is precisely that URL-to-version assumptions are unsafe. But the
-inventory's claim is unsupported by the document at the canonical path, and `01-spec-matrix.md` §3 also asserts
-1.1 *"superseding 1.0"*, which is a stronger claim still.
+The canonical URL served 1.0, Final, 17 Feb 2026, and at the time this was written no 1.1 document could be
+found — not asserted to not exist, since the JARM lesson in this very repo (`SPEC-INVENTORY.md:287-288`:
+`-final.html` served a stale Final while the unsuffixed URL served the errata set) is precisely that
+URL-to-version assumptions are unsafe. The inventory's claim was unsupported by the document at the canonical
+path as then understood, and `01-spec-matrix.md` §3 also asserted 1.1 *"superseding 1.0"*, which is a stronger
+claim still — and turned out to be the wrong word (*split*, not *supersede*).
 
 **This is the third citation defect of one class in this audit** — after Native SSO's draft-07 date
 (`NATIVE-SSO-1.0.md` F-3) and the two the repo already caught itself. All three are dates or versions recorded

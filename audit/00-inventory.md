@@ -4,6 +4,15 @@
 exists so that every later verdict is evaluated against a known Authlete version and a known code
 surface.
 
+> **This cartography is a snapshot dated 2026-08-10 — before nearly all of Tiers 0–3's remediation.**
+> Spot-checking §5 and §6 during a 2026-09-08 sweep found several specific line numbers and behaviours
+> already stale (`jar.controller.ts`, `revocation.controller.ts`, `introspection.controller.ts`,
+> `require-grant-ownership.ts`, `token.operations.service.ts`'s grant-type fallback — fixed inline
+> below) purely by checking files this session's own work had touched. **The rest of §5/§6 was not
+> individually re-verified** — treat every `path:line` in this file as a starting point to re-grep, not
+> a citation to quote. The corresponding `audit/02-findings/*.md` entry for a given spec is more likely
+> to be current than this file's row for the same code.
+
 - **Audit date:** 2026-08-10
 - **Repo:** `/home/blackadi/Documents/OAUTH2.0`, branch `main`, at `b16f5da`
 - **Authlete version pinned:** **3.0** (evidence in §1)
@@ -206,15 +215,22 @@ Client constructed once at `server/src/services/authlete.service.ts:4-7`
 | `joseObject` | `joseVerifyApi` | `services/jwt-verification.service.ts:41` (`mandatoryClaims: ["iss","sub","aud"]`, `signedByClient: true`) |
 | `lifecycle` | `getApiLifecycleHealthcheck` | `services/health.service.ts:38` |
 
-### Raw `fetch()` to Authlete
+### Raw `fetch()` to Authlete — ✅ narrowed to one call (BCL-W6, 2026-08-14)
 
-All in `server/src/services/backchannel-logout.service.ts`:
+Both in `server/src/services/backchannel-logout.service.ts`, and only one is to Authlete:
 
 | Line | Target | Note |
 |---|---|---|
-| `:34` | `${baseUrl}/api/${serviceId}/backchannel/logout/token` (built `:28`) | Authlete called by hand; local response type at `:3-9` with `action: "OK" \| "SERVER_ERROR" \| "CALLER_ERROR"` |
-| `:128` | `${baseUrl}/api/${serviceId}/client/get/list?start=&end=` (built `:127`) | **Duplicates `authleteApi.client.list`** — paginated 100/page at `:122-171`. Not an SDK gap. |
-| `:90` | `tokenRes.backchannelLogoutUri` | Not Authlete — outbound `logout_token` delivery to the RP |
+| `:68` | `${baseUrl}/api/${serviceId}/backchannel/logout/token` | The **one** raw call to Authlete this repo keeps — SDK 1.0.0 exposes no backchannel-logout token API |
+| `:124` | `tokenRes.backchannelLogoutUri` | Not Authlete — outbound `logout_token` delivery to the RP |
+
+**The duplicate that used to sit here is gone.** A second hand-written `fetch()` to `client/get/list` (below,
+pre-fix) duplicated `authleteApi.client.list`'s pagination; BCL-W6 replaced it with the SDK call. Pre-fix
+state, kept for the record:
+
+| Line | Target | Note |
+|---|---|---|
+| `:128` (pre-fix) | `${baseUrl}/api/${serviceId}/client/get/list?start=&end=` | Duplicated `authleteApi.client.list` — not an SDK gap, just a second hand-written call to the same vendor |
 
 Other `fetch()` in the tree: `server/src/utils/jwksClient.ts:30` (configured `JWKS_URI`) and three
 browser-side calls in EJS views. No `axios`, no `node-fetch`, no `http.request` in `server/src`.
@@ -234,14 +250,14 @@ Every branch point, with the action literals handled and the HTTP status each ma
 | `controllers/token.controller.ts` | `:47` | `BAD_REQUEST`→400, `INVALID_CLIENT`→401-or-400, `INTERNAL_SERVER_ERROR`→500, `JWT_BEARER`, `OK`→200, `PASSWORD`, `TOKEN_EXCHANGE`, `NATIVE_SSO`, `ID_TOKEN_REISSUABLE` | 500 text `"Unknown token action"` `:180` |
 | `controllers/token-issue-response.handler.ts` | `:7` | `INTERNAL_SERVER_ERROR`→500, `OK`→200 | 500 `:20` |
 | `controllers/token-fail-response.handler.ts` | `:7` | `INTERNAL_SERVER_ERROR`→500, `BAD_REQUEST`→400 | 500 `:20` |
-| `controllers/token-exchange-response.handler.ts` | `:61` | `OK`→200, `BAD_REQUEST`→400, `FORBIDDEN`→403, `INTERNAL_SERVER_ERROR`→500 | 500 **but still sends the full body** `:96` |
+| `controllers/token-exchange-response.handler.ts` | `:131` (was `:61`) | `OK`→200, `BAD_REQUEST`→400, `FORBIDDEN`→403, `INTERNAL_SERVER_ERROR`→500 | 500 **still sends the full `tokenCreateResponse` body** (B1-3's second site — still open; `revocation.controller.ts`'s matching site was fixed, this one was not) |
 | `controllers/native-sso-response.handler.ts` | `:42` | `OK`→200, `CALLER_ERROR`→400, `INTERNAL_SERVER_ERROR`→500 | 500 `:58` |
 | `services/jwt-verification.service.ts` | `:92` | `OK`, `BAD_REQUEST`→400 | 500 `:104` |
 | `controllers/userinfo.controller.ts` | `:25` | `BAD_REQUEST`→400, `UNAUTHORIZED`→401, `INTERNAL_SERVER_ERROR`→500, `FORBIDDEN`→403, `OK`→200 | 500 `:144` |
 | `controllers/userinfo-issue-response.handler.ts` | `:8` | + `JSON`→200 `application/json`, `JWT`→200 `application/jwt` | 500 `:47` |
-| `controllers/introspection.controller.ts` | `:57` | `BAD_REQUEST`→400, `UNAUTHORIZED`→401, `INTERNAL_SERVER_ERROR`→500, `FORBIDDEN`→403 (RFC 9470 structured body `:84-97`), `OK`→200 | 500 `:107` |
+| `controllers/introspection.controller.ts` | `:152` (was `:57`) | `BAD_REQUEST`→400, `UNAUTHORIZED`→401 (**RFC 9470 structured body now built here, `:159` — this is the real live path, via `buildStepUpChallenge()` at `:109`**), `INTERNAL_SERVER_ERROR`→500, `FORBIDDEN`→401-or-403 (`:181`, defensive duplicate kept in case Authlete ever answers this way for the same content), `OK`→200 | 500 `:204` (was `:107`) — see `RFC9470-step-up-authentication.md` 9470-W1 for why this moved |
 | `controllers/introspection-standard.controller.ts` | `:13` | `BAD_REQUEST`→400, `INTERNAL_SERVER_ERROR`→500, `OK`→200 | 500 `:26` |
-| `controllers/revocation.controller.ts` | `:12` | `OK`→200, `BAD_REQUEST`→400, `INVALID_CLIENT`→401-or-400, `INTERNAL_SERVER_ERROR`→500 | 500 **sending the whole result object** `:51` |
+| `controllers/revocation.controller.ts` | `:12` | `OK`→200, `BAD_REQUEST`→400, `INVALID_CLIENT`→401-or-400, `INTERNAL_SERVER_ERROR`→500 | ✅ **fixed (B1-W4):** `default` now logs and sends a fixed `{error: "server_error"}`, not the whole result object |
 | `controllers/par.controller.ts` | `:11` | SDK enum: `Created`→201, `BadRequest`→400, `Unauthorized`→401, `Forbidden`→403, `PayloadTooLarge`→413, `InternalServerError`→500 | 500 `:18` |
 | `controllers/dcr.controller.ts` | `:20` | `CREATED`→201, `OK`/`UPDATED`→200, `DELETED`→204, `BAD_REQUEST`→400, `UNAUTHORIZED`→401, `INTERNAL_SERVER_ERROR`→500 | 500 `:28` |
 | `controllers/ciba.controller.ts` | `:15,25,34,43` | auth: `USER_IDENTIFICATION`→200 …; issue: `INVALID_TICKET`→400, `OK`→200; fail: `FORBIDDEN`→403 …; complete: `NO_ACTION`/`NOTIFICATION`→200, `SERVER_ERROR`→500 | 500 each `:20,29,38,47` |
@@ -250,7 +266,7 @@ Every branch point, with the action literals handled and the HTTP status each ma
 | `controllers/federation.controller.ts` | `:13,22` | config: `OK`→200 `application/entity-statement+jwt`, `NOT_FOUND`→404; registration: + `BAD_REQUEST`→400 | 500 `:17,27` |
 | `controllers/native-sso.controller.ts` | `:17,26` | `OK`→200, `CALLER_ERROR`→400, `INTERNAL_SERVER_ERROR`→500 / **`SERVER_ERROR`**→500 (different literal) | 500 `:21,30` |
 | `controllers/grant-management.controller.ts` | `:23,77` | `OK`→200/204, `NO_CONTENT`→204, `UNAUTHORIZED`→401, `FORBIDDEN`→403, `NOT_FOUND`→404, `CALLER_ERROR`→400, `AUTHLETE_ERROR`→500 | 500 `:51,100` |
-| `middleware/require-grant-ownership.ts` | `:86` | introspection response: `OK`→proceed, `UNAUTHORIZED`→401, `FORBIDDEN`→403, `BAD_REQUEST`→400; ownership check `:112` → 403 | 500, fails closed `:104` |
+| `middleware/require-grant-ownership.ts` | `:141` (was `:86`) — **extensively rewritten since (9449-W3/GM-W4)**: now uses `extractAccessToken()` (accepts `DPoP` scheme, refuses the §7.2 Bearer+proof downgrade before Authlete is even called) and a shared `authChallenge()` for RFC 6750 §3.1-shaped 401s. See `RFC9449-dpop.md` F-1/F-2 for the fuller account rather than this row, which predates the rewrite | introspection response: `OK`→proceed, `UNAUTHORIZED`→401, `FORBIDDEN`→403, `BAD_REQUEST`→400 | fails closed |
 | `controllers/token.management.controller.ts` | `:21,100,164,219` | create/update/reissue action maps; **revoke switches on `result.resultCode`, not `action`** (`:164`, comment `:162-163`) | 500 each |
 | `controllers/vci.controller.ts` | `:14` `statusForAction()` | 6 table-driven maps `:19-57`; unmapped or missing action ⇒ 500 | fallback 500 |
 
@@ -264,8 +280,11 @@ Every branch point, with the action literals handled and the HTTP status each ma
 
 `controllers/discovery.controller.ts:8` (always 200 at `:13`), `controllers/jwks.controller.ts:8`
 (special-cases SDK `statusCode === 204` → 200 `{keys:[]}` at `:17-21`),
-**`controllers/jar.controller.ts:7` — `res.json(result)` at `:19`, returning the raw Authlete
-response with 200 regardless of `action`**, `controllers/protected-resource-metadata.controller.ts:19`,
+~~**`controllers/jar.controller.ts:7` — `res.json(result)` at `:19`, returning the raw Authlete
+response with 200 regardless of `action`**~~ → ✅ **now branches (B1-1/B1-W1/B1-W2, fixed):**
+`mapActionToStatus()` maps `action` to the right HTTP status and the body is restricted to an
+`EXPOSED_FIELDS` allowlist — this row now belongs in §5's table, not here.
+`controllers/protected-resource-metadata.controller.ts:19`,
 `controllers/health.controller.ts`, `controllers/default.controller.ts:4`,
 `controllers/fapi.controller.ts`.
 
@@ -280,7 +299,7 @@ response with 200 regardless of `action`**, `controllers/protected-resource-meta
 | `urn:ietf:params:oauth:grant-type:jwt-bearer` | `services/token.operations.service.ts:32` |
 | `urn:ietf:params:oauth:grant-type:pre-authorized_code` | `services/token.operations.service.ts:33` |
 | non-URN grant keys (`authorization_code`, `client_credentials`, `password`, `refresh_token`, `implicit`, `token_exchange`, `device_code`) | `services/token.operations.service.ts:25-31` |
-| **`GRANT_TYPE_MAP` fallback → `AUTHORIZATION_CODE` for any unrecognised grant type** | `services/token.operations.service.ts:36` |
+| ~~**`GRANT_TYPE_MAP` fallback → `AUTHORIZATION_CODE` for any unrecognised grant type**~~ → ✅ **fixed (B1-2/B1-W3):** an unmapped or missing `grant_type` now throws `400`; the map itself also gained the missing `CIBA` entry and all five canonical URNs | `services/token.operations.service.ts:56-90` (`normalizeGrantType`, was `:23-37`) |
 | `insufficient_user_authentication` | `controllers/introspection.controller.ts:12,16,82,84,87` (substring match on `responseContent` at `:84`) |
 | `acr_values`, `max_age` (RFC 9470 challenge parsing) | `controllers/introspection.controller.ts:14,18,23,24,82,91,92`; `parseBearerError` `:20-36` |
 | `maxAge` / `acr` / `acrs` / `acrEssential` | `controllers/session.controller.ts:111,121-156,162`; `controllers/authorization.controller.ts:90-92,109`; `services/authorization.service.ts:101-106`; `services/introspection.service.ts:38-43`. Satisfied ACR hard-coded `"pwd"` at `session.controller.ts:111`, `authorization.controller.ts:109` |
@@ -356,17 +375,22 @@ registry, per RP-Initiated Logout §3. `NODE_ENV` is **no longer read** by the l
 
 Only two call sites, both `authleteApi.service.get()` in `controllers/fapi.controller.ts`:
 
-`fapiModes` (`:29,64,71`, via `computeFapiMode` `:5-20` testing `"FAPI2_SECURITY"` and prefix
-`"FAPI2_MESSAGE_SIGNING_"`), `dpopNonceRequired` (`:30,65,72`), `dpopNonceDuration` (`:73`),
-`issuer` (`:70`), `scopeRequired` (`:74`), `refreshTokenKept` (`:75`),
-`refreshTokenIdempotent` (`:76`), `pkceRequired` (`:77`), `parRequired` (`:78`),
-`clientIdMetadataDocumentSupported` (`:31-33,79-81`, read via `as Record<string, unknown>` cast —
-**not in the SDK's typed model**).
+`fapiModes` (via `computeFapiMode`, testing `"FAPI2_SECURITY"` and prefix
+`"FAPI2_MESSAGE_SIGNING_"`), `dpopNonceRequired`, `dpopNonceDuration`,
+`issuer`, `scopeRequired`, `refreshTokenKept`,
+`refreshTokenIdempotent`, `pkceRequired`, `parRequired`,
+~~`clientIdMetadataDocumentSupported` (read via `as Record<string, unknown>` cast — **not in the SDK's
+typed model**)~~ → ✅ **fixed (CIMD-W3):** SDK 1.0.0 *does* model the field in both `Service` and
+`Service$inboundSchema` — the cast was covering nothing, and reading it is now typed access, plus
+`supportedTokenAuthMethods`, `certificateBoundAccessTokens`, `pkceS256Required` and the signing-algorithm
+lists (FAPI2-W4).
 
-`GET /api/fapi/config` additionally returns **hard-coded values it never reads**:
-`requiredClientAuth: "PRIVATE_KEY_JWT"` (`:38`), `parRequired: true` (`:40`),
-`pkceRequired: true` (`:41`), `refreshTokenRotation: false` (`:42`), `scopeRequired: true` (`:43`) —
-which can contradict the live values `/api/fapi/status` reports.
+~~`GET /api/fapi/config` additionally returns **hard-coded values it never reads**:
+`requiredClientAuth: "PRIVATE_KEY_JWT"`, `parRequired: true`,
+`pkceRequired: true`, `refreshTokenRotation: false`, `scopeRequired: true` —
+which can contradict the live values `/api/fapi/status` reports.~~ → ✅ **fixed (FAPI2-W1/W2/W4):** every
+one of these now reads live from `service.get()` instead of being hardcoded — see
+`FAPI-2.0-SECURITY-PROFILE.md`.
 
 ### Client metadata fields settable
 
