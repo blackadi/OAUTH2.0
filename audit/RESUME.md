@@ -1020,11 +1020,16 @@ Phase 4 is **synthesis and a remediation plan**, written to `audit/04-remediatio
 
 ### 8.3 Close these before or during Phase 4 — they are cheap and they close real holes
 
+> **All three rows below are now closed — checked 2026-09-09.** This section was written as a Phase 4 to-do
+> list; Phase 4 has since run and closed every item here (`04-remediation-plan.md` §2.2, §2.3), but this
+> section was never updated to say so, leaving it readable as an open punch list months after the work
+> shipped. Kept for the record rather than deleted, per this audit's convention.
+
 | Item | Why now |
 |---|---|
 | ~~**CUR-3d-W1** — fetch RFC 9846 + RFC 8446 (+ 9110, 9864)~~ | ✅ **Closed 2026-09-08**, under work item **CUR-3a-W4** (§2.3 above) — all three dates confirmed against the RFC Editor and datatracker directly. This row and §2.3's "still unverified" line named the same open fetch under two different IDs; both are now resolved. |
-| **ATT-W5** — one call printing all 62 discovery members | The **only** unprobed fact left (§2.1); settles `challenge_endpoint` / `client_attestation_pop_methods_supported` |
-| **AM-W2** — fetch the unsuffixed `fapi-attacker-model-2_0.html` | Closes the superseded-URL question and one §7 spot-check row |
+| ~~**ATT-W5** — one call printing all 62 discovery members~~ | ✅ **Closed 2026-08-11** (`04-remediation-plan.md` §2.2). The call corroborated **nineteen** other findings in the same response — see that section rather than re-deriving it. |
+| ~~**AM-W2** — fetch the unsuffixed `fapi-attacker-model-2_0.html`~~ | ✅ **Closed 2026-08-11** (`04-remediation-plan.md` §2.3). Both attacker-model URLs serve the same Final, 22 Feb 2025 document; no superseded version exists. |
 
 ### 8.4 Recommended sequencing for the plan itself
 
