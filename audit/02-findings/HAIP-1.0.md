@@ -1,6 +1,7 @@
 # OpenID4VC High Assurance Interoperability Profile 1.0 (HAIP)
 
-- **Verdict:** `OUT_OF_SCOPE` — decision record required at Gate 4
+- **Verdict:** `OUT_OF_SCOPE` — ~~decision record required at Gate 4~~ → **ruled (DR-14): UPHELD, cost-declined**
+  — distinct from OID4VP's ruling (structurally inapplicable, not merely costly), per HAIP-W3
 - **Severity:** **S4**
 - **Status:** OpenID **Final**, **24 December 2025** — verified this session. `SPEC-INVENTORY.md` and `01-spec-matrix.md` §3 carry **no date** for this row; it can now be dated.
 - **Authlete version:** 3.0 (`protocols-and-flows/compliance-profiles/haip-compliant-verifiable-credential-issuance`)
@@ -47,18 +48,27 @@
 | The `nonce_endpoint` | **This server** | not implemented |
 | RFC 8414 metadata | Authlete | served, but not at the issuer identifier |
 
-## Finding F-1 — HAIP is blocked behind a three-link chain, in order (S4)
+## Finding F-1 — HAIP is blocked behind a three-link chain, in order (S4) — ⚠️ **TWO OF THREE LINKS CLOSED SINCE THIS WAS WRITTEN**
 
-This is the useful content of the row. HAIP cannot be reached until each of these is fixed, in sequence:
+> **Status: links 1 and 2 are fixed; link 3 stands, deliberately, and is now the sole blocker.** Link 1 (the
+> issuer/host mismatch) closed 2026-08-14 under DR-11. Link 2 (OID4VCI) closed the same day under DR-03. The
+> chain below described three sequential blockers when written; it is now one: FAPI 2.0, declined for the
+> reason already stated (breaks the RFC 9700 rotation lesson and the retired-grant exercises). HAIP remains
+> `OUT_OF_SCOPE` for this one reason, not three.
+
+This was the useful content of the row when written. HAIP could not be reached until each of these was fixed, in sequence:
 
 ```
 1. B3 issuer/host mismatch      →  the AS's metadata is not retrievable at its issuer identifier,
                                    so requirement 4 fails and OID4VCI's linkage cannot work
+                                   [CLOSED 2026-08-14, DR-11]
 2. OID4VCI enabled + configured →  verifiableCredentialsEnabled, credentialIssuerMetadata,
                                    nonce_endpoint  (requirements 2, 5, 6, 7)
+                                   [CLOSED 2026-08-14, DR-03]
 3. FAPI 2.0 Security Profile    →  one client with private_key_jwt + JWKS, PAR required,
                                    PKCE-S256 required, DPoP required, rotation disabled,
                                    PS256/ES256 only  (requirement 3, and requirement 8 with it)
+                                   [STILL OPEN, by decision — see below]
 ```
 
 Link 3 is the one that makes HAIP genuinely out of reach rather than merely distant: enabling FAPI 2.0 on this

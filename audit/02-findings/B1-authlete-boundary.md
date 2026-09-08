@@ -4,7 +4,8 @@ Not a specification; the contract every later verdict depends on. Audited first 
 re-derive it.
 
 - **Verdict:** `PARTIAL`
-- **Severity:** S2 (highest individual finding in this entry)
+- **Severity:** ~~S2~~ → **S4** — B1-1 and B1-2 (both S2) are fixed; F-9 (S2) is fixed; what remains is B1-3's
+  second site (S4, half-fixed)
 - **Authlete version:** 3.0
 - **Repo docs under test:** `AGENTS.md` (Token endpoint action coverage table), `docs/TICKET-PARAMETER.md`, `docs/ARCHITECTURE.md`, `docs/curriculum/modules/05-request-integrity-and-binding/`
 
@@ -43,9 +44,15 @@ re-derive it.
 | `ticket` is single-use, expires after 24 h, links the two calls | `/get-started/concepts/two-step-api-calls` |
 | *"Do not expose them to user agents such as web browsers — for example, never use a ticket to manage browser sessions."* | same |
 
-## Finding B1-1 — `POST /api/jar/process` ignores `action` entirely
+## Finding B1-1 — `POST /api/jar/process` ignores `action` entirely — ✅ **FIXED**
 
-**Severity S2.** `server/src/controllers/jar.controller.ts:19` is `return res.json(result)` — the raw
+> **Status: closed.** `jar.controller.ts` now maps `action` to the correct HTTP status via
+> `mapActionToStatus()` and restricts the response body to an `EXPOSED_FIELDS` allowlist
+> (`action`, `resultCode`, `resultMessage`, `responseContent`, `scopes`) instead of echoing the raw SDK
+> object — closing both halves: the status-inversion bug and the over-disclosure table below. The block
+> below is the pre-fix state.
+
+**Severity S2.** `server/src/controllers/jar.controller.ts:19` was `return res.json(result)` (pre-fix) — the raw
 Authlete `AuthorizationResponse`, HTTP **200**, for every `action` value. `AuthorizationResponseAction`
 includes `BAD_REQUEST` and `INTERNAL_SERVER_ERROR`
 (`models/authorizationresponse.ts:34-39`), so a request object that fails signature validation, has a
@@ -81,9 +88,15 @@ with `curl -s` — reads a rejected request object as accepted.
 **Aggravating:** no unit test (`controllers/jar.controller.ts` is on the no-test list), and no e2e or
 integration coverage of `/api/jar/process` at all.
 
-## Finding B1-2 — unknown grant types silently become `AUTHORIZATION_CODE`
+## Finding B1-2 — unknown grant types silently become `AUTHORIZATION_CODE` — ✅ **FIXED (B1-W3, completed under batch 3)**
 
-**Severity S2.** `server/src/services/token.operations.service.ts:23-37`:
+> **Status: closed, in two passes.** `normalizeGrantType`'s map now includes all ten `GrantType` members —
+> both the short forms and the canonical URNs, including `urn:openid:params:grant-type:ciba` (batch 3
+> caught that B1-W3's own acceptance criteria named only three additions and missed CIBA entirely). An
+> unmapped or missing `grant_type` now throws `400`, not a silent `AUTHORIZATION_CODE` fallback. The block
+> below is the pre-fix state.
+
+**Severity S2.** `server/src/services/token.operations.service.ts:23-37` (pre-fix):
 
 ```
 const key = raw?.toLowerCase().replace(/[^a-z0-9:._-]/g, "");
@@ -116,12 +129,19 @@ the map with hard-coded values — `token-exchange-response.handler.ts:48` (`"TO
 `jwt-verification.service.ts:82` (`"JWT_BEARER"`). So this is a data-integrity defect on the admin
 surface, not a token-issuance vulnerability.
 
-## Finding B1-3 — `default` branches that echo the Authlete response
+## Finding B1-3 — `default` branches that echo the Authlete response — ⚠️ **HALF FIXED (B1-W4)**
+
+> **Status: one of two sites fixed.** `revocation.controller.ts`'s `default` branch now logs the diagnosis
+> and returns a fixed `{ error: "server_error" }` — comment cites B1-W4 by name, reasoning explicitly from
+> the `/api/jar/process` ticket-leak precedent (B1-1, also since fixed). **`token-exchange-response.handler.ts`'s
+> `default` branch (now around line 166-171) was not touched** — it still `res.status(500).send(tokenCreateResponse)`,
+> the full Authlete object. Both remain latent rather than live (unreachable given the SDK enums), so
+> severity is unchanged, but this finding is not closed until the second site matches the first.
 
 **Severity S4.** Two `default` branches send the whole Authlete object rather than a fixed message:
-`controllers/revocation.controller.ts:54` (`res.status(500).send(result)`) and
+`controllers/revocation.controller.ts:54` (pre-fix; now fixed, see above) (`res.status(500).send(result)`) and
 `controllers/token-exchange-response.handler.ts:96` (500 that still sends the full
-`tokenCreateResponse`). Both are unreachable given the SDK enums — `RevocationResponseAction` has
+`tokenCreateResponse` — **still true**). Both are unreachable given the SDK enums — `RevocationResponseAction` has
 exactly the 4 handled members, `TokenCreateResponseAction` exactly the 4 handled members — so this is a
 latent shape issue, not a live leak. Every other `default` sends a fixed string.
 

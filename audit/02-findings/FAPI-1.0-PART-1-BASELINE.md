@@ -68,9 +68,14 @@ makes it worth recording is how many other findings converge on this one number:
 **One configuration change closes part of four findings**, which is why `GM-W1` / `OIDC-W4` should be read as the
 same item. That convergence is more useful than any of the individual rows.
 
-## Finding F-2 — the deployment cannot report a FAPI 1.0 posture even in principle (S3)
+## Finding F-2 — the deployment cannot report a FAPI 1.0 posture even in principle (S3) — ✅ **FIXED 2026-08-14 (FAPI1-W2)**
 
-`controllers/fapi.controller.ts:5-20`:
+> **Status: closed.** `computeFapiMode`'s domain is now total over the SDK's six-member `FapiMode`:
+> `"fapi1-advanced" | "fapi1-baseline" | "sp" | "ms" | "unknown" | "disabled"`. A service configured for
+> either FAPI 1.0 mode is now reported as such rather than collapsed to `"disabled"`. The block below is the
+> pre-fix state.
+
+`controllers/fapi.controller.ts:5-20` (pre-fix):
 
 ```ts
 const hasSecurityProfile = fapiModes.includes("FAPI2_SECURITY");
@@ -89,9 +94,14 @@ Not exploitable, and unreachable today because `fapiModes` is absent and `servic
 instrument, `SPEC-INVENTORY.md` carries rows for both FAPI 1.0 parts, and Module 10 teaches both — so the
 instrument silently cannot see half of what the curriculum covers.
 
-## Finding F-3 — `AGENTS.md` states the request-object lifetime requirement as 60 **seconds**; the spec says 60 **minutes** (S2)
+## Finding F-3 — `AGENTS.md` states the request-object lifetime requirement as 60 **seconds**; the spec says 60 **minutes** (S2) — ✅ **FIXED 2026-08-14 (FAPI1-W1)**
 
-`AGENTS.md`'s service-flag table, on `nbfOptional: false`:
+> **Status: closed.** The content moved to `docs/agents/authlete-service-config.md` (during the `AGENTS.md`
+> split) and now reads correctly: *"The bound is 60 **minutes**, not 60 seconds"*, with a note that the row
+> read "≤60s" until this fix — "a 60× error in the repo's most-read reference file." The block below is the
+> pre-fix state.
+
+`AGENTS.md`'s service-flag table, on `nbfOptional: false` (pre-fix):
 
 > Enforce request object lifespan **≤60s** for FAPI 1.0 compliance
 

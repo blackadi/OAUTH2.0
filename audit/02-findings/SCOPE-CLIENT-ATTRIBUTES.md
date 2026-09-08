@@ -50,10 +50,14 @@ That is the whole implementation: an array-shaped pass-through with an `as any` 
 | Validating what is written | **This server** | **nothing** — F-1 |
 | Documenting the field | **This server** | nothing — F-2 |
 
-## Finding F-1 — an unvalidated, untyped write path into vendor configuration (S3)
+## Finding F-1 — an unvalidated, untyped write path into vendor configuration (S3) — ✅ **FIXED (ATTR-W1)**
 
-`attributes` is accepted from the request body, checked only for being an array, cast with `as any`, and forwarded
-to Authlete. There is no shape validation (each element should be a key/value pair), no key allowlist, and no size
+> **Status: closed.** `attributes` now goes through `validateOrThrow(clientAttributesSchema, ...)` instead of
+> an `as any` cast, matching the coercion discipline every other field in the mapper already had. The block
+> below is the pre-fix state.
+
+`attributes` was accepted from the request body, checked only for being an array, cast with `as any`, and forwarded
+to Authlete (pre-fix). There was no shape validation (each element should be a key/value pair), no key allowlist, and no size
 bound.
 
 Three reasons this is S3 rather than S4:
@@ -66,9 +70,13 @@ Not exploitable as far as I can establish: the caller must already hold `MGMT_CL
 `requireBasicAuth` fails closed. So this is a robustness and hygiene finding, not a vulnerability — recorded at S3
 because of what the field *is*, not what an attacker could do with it today.
 
-## Finding F-2 — the admin API accepts a field no document describes (S3)
+## Finding F-2 — the admin API accepts a field no document describes (S3) — ✅ **FIXED**
 
-`docs/API.md` documents the client-management endpoints and does not mention `attributes`. Nor does `AGENTS.md`,
+> **Status: closed.** `docs/API.md` now has a dedicated *"The `attributes` field — a vendor namespace, and
+> it is not inert"* section, explaining it is an Authlete feature with no spec basis and warning about the
+> scope-`regex` behavioural case this finding's reasoning #1 raised. The block below is the pre-fix state.
+
+`docs/API.md` documented the client-management endpoints and did not mention `attributes` (pre-fix). Nor did `AGENTS.md`,
 which describes the client-metadata mapper in detail (`00-inventory.md` §7 enumerates the field groups) and lists
 `attributes` only as a bare name in the "arrays incl." group.
 

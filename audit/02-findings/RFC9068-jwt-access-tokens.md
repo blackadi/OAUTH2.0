@@ -87,9 +87,15 @@ tokens**, surfaced through introspection (verified in `modules/04…/lab.md:180-
 lesson *is* runnable here; only the self-contained-token half is not. Those are separable and the lab currently
 lumps them.
 
-## Finding F-2 — the dev-only local JWT is presented as an access token and misses three §2 requirements (S3)
+## Finding F-2 — the dev-only local JWT is presented as an access token and misses three §2 requirements (S3) — ✅ **FIXED 2026-08-14 (9068-W2)**
 
-`utils/createLocalJWT.ts:12-33` mints:
+> **Status: closed.** `typ: at+jwt` is now set explicitly, and `client_id` (required positional parameter,
+> not optional — an optional field would let the specimen stay non-conformant by omission), `jti` (fresh
+> UUID per call) and `scope` (omitted rather than emitted empty) were added. All seven §2.2 REQUIRED claims
+> are now present. §3/§5 (default-`aud`) remain unmet — that is F-3, unaffected by this fix. The table below
+> is the pre-fix state.
+
+`utils/createLocalJWT.ts:12-33` mints (pre-fix shape):
 
 ```ts
 const payload = { iss, sub, aud, iat: now, exp: now + 300 };

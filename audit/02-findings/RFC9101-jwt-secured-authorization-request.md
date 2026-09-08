@@ -58,12 +58,17 @@
 | Handling the resulting `action` | **This server** | ✅ `authorization.controller.ts:32-142`; ❌ `jar.controller.ts:19` |
 | Enabling signed objects at all | Service + client config | `requestObjectRequired`, `requestSignAlg`, `requestUris`, `nbfOptional` |
 
-## Finding F-1 — `POST /api/jar/process` returns 200 for a rejected request object (S2, = B1-1)
+## Finding F-1 — `POST /api/jar/process` returns 200 for a rejected request object (S2, = B1-1) — ✅ **FIXED, see `B1-authlete-boundary.md` B1-1**
+
+> **Status: closed.** `jar.controller.ts` now maps `action` to the correct HTTP status via
+> `mapActionToStatus()` and restricts the response to an allowlist of fields, so RFC 9101 §7's error codes
+> are delivered with the matching status rather than inside a 200, and the `ticket`/`client`/`service`
+> over-disclosure is also fixed. The block below is the pre-fix state.
 
 Already carried as **B1-1**; restated here with the RFC-specific consequence rather than re-counted.
-`jar.controller.ts:19` is `return res.json(result)` for every `action`, so RFC 9101 §7's error codes —
-`invalid_request_object` above all — are delivered inside a **200 OK** body. The endpoint is unauthenticated
-(`jar.routes.ts:7`, `generalLimiter` only) and the body includes the live Authlete `ticket`.
+`jar.controller.ts:19` was `return res.json(result)` for every `action` (pre-fix), so RFC 9101 §7's error codes —
+`invalid_request_object` above all — were delivered inside a **200 OK** body. The endpoint is unauthenticated
+(`jar.routes.ts:7`, `generalLimiter` only) and the body used to include the live Authlete `ticket`.
 
 The RFC-specific sharpening: this is the one endpoint in the repo whose entire purpose is *"did my request
 object validate?"*, and it answers that question only in a field the lab teaches learners to read with
@@ -126,10 +131,15 @@ service is that JAR-by-value works only symmetrically, only for one client.
 FAPI 1.0 Advanced and FAPI 2.0 Message Signing both require asymmetric request objects. `README.md` advertises
 FAPI 2.0 support. Carried to B7 alongside the `fapiModes`-absent finding.
 
-## Finding F-4 — `authorization.service.ts` forwards the whole query object to Authlete (S4)
+## Finding F-4 — `authorization.service.ts` forwards the whole query object to Authlete (S4) — ✅ **FIXED 2026-08-14 (9101-W5)**
+
+> **Status: closed.** `authorization.service.ts` now sends `{ parameters }` and nothing else — a clean
+> object literal, not `req.query` mutated in place. Not exploitable even pre-fix (see below), but a service
+> that silently rewrites the Express request it was handed was a trap for the next reader either way. The
+> block below is the pre-fix state.
 
 ```ts
-// server/src/services/authorization.service.ts:34-39
+// server/src/services/authorization.service.ts:34-39 (pre-fix)
 reqBody.parameters = params.toString();
 const response = await this.authleteApi.authorization.processRequest({
   serviceId: serviceId,

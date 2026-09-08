@@ -35,7 +35,12 @@
 | 6 | *"A successful response MUST use the 200 OK HTTP status code and return a JSON object using the `application/json` content type"* | §3.2 | ✅ `:59` — `.status(200).type("application/json").json(metadata)` |
 | 7 | Normal HTTP caching applies | §7.10 | ✅ `Cache-Control: no-store` at `:58` — conservative but valid |
 
-## Finding F-1 — the well-known URL ignores the resource identifier's path component (S3)
+## Finding F-1 — the well-known URL ignores the resource identifier's path component (S3) — ✅ **FIXED 2026-08-14 (9728-W1)**
+
+> **Status: closed.** `routes/protected-resource-metadata.routes.ts` now also registers
+> `/.well-known/oauth-protected-resource/{*path}`, so the path-suffixed form §3 prescribes for a resource
+> identifier with a path is served correctly rather than falling through to the SPA catch-all. The block
+> below is the pre-fix state.
 
 §3 requires the well-known string to be inserted **between the host and the path**, so a resource
 identifier with a path yields a path-suffixed metadata URL.
@@ -77,9 +82,12 @@ Two clean resolutions, both cheap:
 The second is a one-line env change and is probably right: this deployment stands in for a resource
 server rather than being one, and a path-less identifier is the honest description.
 
-## Finding F-2 — `bearer_methods_supported` understates what the server accepts (S4)
+## Finding F-2 — `bearer_methods_supported` understates what the server accepts (S4) — ✅ **FIXED 2026-08-14 (9728-W2)**
 
-`:45` hardcodes `bearer_methods_supported: ["header"]`. But `utils/dpop.ts:125-129` accepts
+> **Status: closed.** The controller now advertises `bearer_methods_supported: ["header", "body"]`, matching
+> what the server actually accepts. The block below is the pre-fix state.
+
+`:45` hardcoded `bearer_methods_supported: ["header"]` (pre-fix). But `utils/dpop.ts:125-129` accepts
 `access_token` in a form-encoded body — RFC 6750 §2.2, which RFC 9728 §2 calls `"body"`.
 
 The error direction is safe: a client reading `["header"]` uses the header, which works. But the document
@@ -88,10 +96,14 @@ is inaccurate, and a learner comparing metadata to behaviour finds a mismatch. E
 itself says the form method *"SHOULD NOT be used except in application contexts where participating
 browsers do not have access to the `Authorization` request header field."*
 
-## Finding F-3 — the document faithfully advertises a broken authorization server (S2, inherited)
+## Finding F-3 — the document faithfully advertises a broken authorization server (S2, inherited) — ✅ **FIXED 2026-08-14, inherited from `DISCOVERY-rfc8414-oidc-discovery.md` F-1 (DR-11)**
 
-`:44` sets `authorization_servers: [discovery.issuer]`, which on the live service is
-`["https://blackadi.dev"]` — a host from which no discovery document is retrievable
+> **Status: closed with no PRM-side change**, exactly as predicted below. `discovery.issuer` is now the
+> stable, self-consistent host DR-11 aligned everything to, so `authorization_servers` points at an
+> authorization server clients can actually discover.
+
+`:44` sets `authorization_servers: [discovery.issuer]`, which before DR-11 was
+`["https://blackadi.dev"]` — a host from which no discovery document was retrievable
 (`DISCOVERY-rfc8414-oidc-discovery.md` F-1).
 
 This is **not a PRM defect**. Deriving the value from the live discovery document is exactly right, and it
@@ -127,7 +139,7 @@ an authorization server it cannot discover. Fixing 8414-W1 fixes this row with n
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| 9728-W1 | Make the well-known URL match the resource identifier | S | Either set `PROTECTED_RESOURCE_IDENTIFIER` to a path-less identifier (preferred), or add the path-suffixed route. Test: constructing the §3 URL from the advertised `resource` returns the document, not the SPA catch-all. |
-| 9728-W2 | Correct `bearer_methods_supported` | S | Either `["header","body"]`, or drop RFC 6750 §2.2 support and keep `["header"]`. Assert in the existing route test. |
+| 9728-W1 | Make the well-known URL match the resource identifier | S | ✅ **DONE 2026-08-14, T1-19 batch 1.** The path-suffixed route was registered rather than changing `PROTECTED_RESOURCE_IDENTIFIER`. See F-1. |
+| 9728-W2 | Correct `bearer_methods_supported` | S | ✅ **DONE 2026-08-14, T1-19 batch 1.** `["header","body"]`, matching what the server accepts. See F-2. |
 | 9728-W3 | Note the §3 path rule in `AGENTS.md` | S | The PRM bullet states that the well-known URL depends on whether `resource` carries a path |
 | — | `authorization_servers` | — | No PRM work. Closed by `8414-W1`. |

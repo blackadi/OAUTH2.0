@@ -1,6 +1,8 @@
 # mDL / mdoc — ISO/IEC 18013-5
 
-- **Verdict:** `OUT_OF_SCOPE` — decision record required at Gate 4
+- **Verdict:** `OUT_OF_SCOPE` — ~~decision record required at Gate 4~~ → **ruled (DR-15): UPHELD — declined,
+  paywalled.** MDL-W2 added a category for standards whose text is not publicly retrievable, keeping the
+  curriculum's verification promise intact rather than silently exempting this one.
 - **Severity:** **S4**
 - **Status:** **ISO/IEC standard — paywalled, and therefore NOT verified against its primary source.** See the Sources note; this is the only entry in the audit whose specification text I could not read.
 - **Authlete version:** 3.0 — **no `llms.txt` page** (`00-inventory.md` §10: *"Group C; not documented"*)

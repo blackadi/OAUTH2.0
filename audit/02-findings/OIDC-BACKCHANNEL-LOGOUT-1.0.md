@@ -1,6 +1,9 @@
 # OpenID Connect Back-Channel Logout 1.0 incorporating errata set 1
 
-> ## ✅ F-1 AND F-2 CLOSED — 2026-08-13 (T1-14, T1-15)
+> ## ✅ F-1, F-2 AND F-5 CLOSED — 2026-08-13 (T1-14, T1-15)
+>
+> **Mislabelled below until now: this box's second paragraph describes F-5's fix, not F-2's.** Both are
+> in fact closed — see each finding's own heading, now marked.
 >
 > **F-1 — §2.6 is now complete.** All eleven steps run. `jwt.verify` receives `issuer` and `audience` from new
 > configuration; `iat` is bounded to five minutes; `sub`-or-`sid` presence is *required* rather than skipped;
@@ -8,7 +11,7 @@
 > conformant token → 200, and wrong-`iss` / wrong-`aud` / no-`sub`-or-`sid` / `nonce`-present / stale-`iat`
 > each → 400.
 >
-> **F-2 — the endpoint terminated the wrong session, and now terminates the right one.** `req.session.destroy()`
+> **F-5 — the endpoint terminated the wrong session, and now terminates the right one.** `req.session.destroy()`
 > ended the session of the *caller*, which is another OP's server posting server-to-server with no browser
 > cookie. It destroyed nothing, answered 200, and the sending OP believed the user was logged out. Sessions
 > are now looked up by `sub` in the session store (`utils/session-store.ts`). **The two supported stores return
@@ -28,7 +31,7 @@
 > the `sid` gap, neither of which is a live MUST violation.
 
 - **Verdict:** `PARTIAL`
-- **Severity:** **S2**
+- **Severity:** ~~**S2**~~ → **S3** *(2026-08-13, see the banner above — this line was not updated with it)*
 - **Status:** OpenID **Final**, *incorporating errata set 1*, **15 December 2023** — re-verified against the primary source this session
 - **Authlete version:** 3.0 — the API exists (`POST /api/{serviceId}/backchannel/logout/token`); **SDK 1.0.0 does not wrap it** (`01-spec-matrix.md` §5.2)
 - **Repo docs under test:** `docs/BACKCHANNEL-LOGOUT-TUTORIAL.md`, `docs/curriculum/modules/08-oidc-core-and-logout/lab.md` Exercise 6c, `AGENTS.md` Backchannel Logout paragraph
@@ -108,7 +111,7 @@ quotes this sentence and notes Module 08 leans on it — so the repo has the kno
 Missing `aud` is the most exploitable: any party whose key is in the configured JWKS can mint a token that logs
 out any subject at this endpoint, because nothing requires the token to be addressed to *this* RP.
 
-## Finding F-2 — a server misconfiguration is reported as a caller error (S2)
+## Finding F-2 — a server misconfiguration is reported as a caller error (S2) — ✅ **FIXED 2026-08-13 (BCL-W3), see the banner above**
 
 `:45-47` throws when `JWKS_URI` is unset, and the `catch` at `:84-88` returns
 `400 {"error":"invalid_request","error_description":"Invalid logout token"}`. `JWKS_URI` **is** unset on this
@@ -142,7 +145,7 @@ Probe 3: **no client has `backchannelLogoutUri`.** So `deliver-all` iterates all
 demonstrable — and it is what turns `OIDC-RP-INITIATED-LOGOUT-1.0.md` F-3 (an unverified `id_token_hint` driving
 `deliver-all`) from inert into a remote forced-logout primitive. **RPL-W2 must land first.**
 
-## Finding F-5 — the receiver destroys the wrong session (S2)
+## Finding F-5 — the receiver destroys the wrong session (S2) — ✅ **FIXED 2026-08-13 (T1-15), see the banner above**
 
 ```ts
 // controllers/logout.controller.ts:93-100

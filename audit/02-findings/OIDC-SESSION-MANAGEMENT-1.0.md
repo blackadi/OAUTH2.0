@@ -1,6 +1,8 @@
 # OpenID Connect Session Management 1.0
 
-- **Verdict:** `ABSENT` — a decision record is required at Gate 4
+- **Verdict:** `ABSENT` — ~~a decision record is required at Gate 4~~ → **ruled 2026-08-14 (DR-08): decline,
+  bundled with Front-Channel Logout as one decision** — see `OIDC-FRONTCHANNEL-LOGOUT-1.0.md`'s verdict for
+  the shared reasoning. SM-W2 (documentation) shipped 2026-08-14 under T2-5.
 - **Severity:** **S4**
 - **Status:** OpenID **Final**, **12 September 2022** — verified against the primary source this session. **This closes the second of the two undated rows `SPEC-INVENTORY.md:188` flagged.**
 - **Authlete version:** 3.0 — no `llms.txt` page; no vendor surface found

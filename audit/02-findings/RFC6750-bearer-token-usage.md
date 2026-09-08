@@ -62,9 +62,11 @@ This is why the verdict is `IMPLEMENTED_VERIFIED` rather than `UNVERIFIED`: the 
 locally decidable and there is a unit test per function asserting them. No live call is needed, because
 nothing here depends on Authlete's behaviour.
 
-## Finding F-1 — `htu` carries the query string at four of five call sites (S2, **primary home is RFC 9449 / B4**)
+## Finding F-1 — `htu` carries the query string at four of five call sites (S2, **primary home is RFC 9449 / B4**) — ✅ **FIXED 2026-08-13, see `RFC9449-dpop.md` F-1**
 
-Found while auditing this area; recorded here so it is not lost, and carried into B4 for its verdict.
+Found while auditing this area; recorded here so it is not lost, and carried into B4 for its verdict. **Closed
+under 9449-W1/W2** — all five call sites now derive `htu` from `dpopHttpTarget()`. Verdict for this entry is
+unaffected either way (it was never counted here).
 
 `utils/dpop.ts:157-161` provides the correct splitter:
 

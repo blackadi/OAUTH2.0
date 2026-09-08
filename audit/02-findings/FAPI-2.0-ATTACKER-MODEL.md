@@ -34,23 +34,28 @@
 So there is no conformance surface beyond item 3. `DOC_ONLY` is the accurate verdict: the document is referenced
 by the curriculum and there is nothing to implement.
 
-## Finding F-1 — the one implementation-facing statement is unsatisfied, for a reason already recorded (S3)
+## Finding F-1 — the one implementation-facing statement is unsatisfied, for a reason already recorded (S3) — ✅ **FIXED 2026-08-14, see `DISCOVERY-rfc8414-oidc-discovery.md` F-1 (DR-11)**
+
+> **Status: closed.** DR-11 aligned `issuer` and every URL-valued service field to one stable host, so the
+> metadata is now retrievable at the issuer identifier and a client can obtain the token endpoint address
+> from an authoritative source — closing the A1a exposure this entry names. The probe below is the pre-fix
+> state.
 
 The Attacker Model's single normative pointer is that the token endpoint address must come from an authoritative
 source over a protected channel — the defence against **A1a**, an attacker acting as an authorization server, and
 the reason mix-up attacks are in scope.
 
-On this deployment the authoritative source is the AS metadata document, and:
+On this deployment the authoritative source is the AS metadata document, and (pre-fix):
 
 ```
 issuer         = https://blackadi.dev
 token_endpoint = https://cecile-soapsudsy-zoila.ngrok-free.dev/api/token
 ```
 
-The metadata is **not retrievable at the issuer** — B3's finding, sharpened by probe 2 §5. So a client cannot
-obtain the token endpoint address from an authoritative source at all: it must be told the ngrok host out of band,
-which is precisely the position A1a exploits. `RFC9207-issuer-identification.md` F-2 makes the same point from the
-`iss` side: the mechanism is intact, its trust anchor is not.
+The metadata was **not retrievable at the issuer** — B3's finding, sharpened by probe 2 §5. So a client could not
+obtain the token endpoint address from an authoritative source at all: it had to be told the ngrok host out of band,
+which is precisely the position A1a exploits. `RFC9207-issuer-identification.md` F-2 made the same point from the
+`iss` side (also since fixed): the mechanism is intact, its trust anchor is not.
 
 This is not a new finding — it is the B3 issuer/host mismatch, seen through the Attacker Model's lens. Recording it
 here matters for one reason: it converts that mismatch from a metadata-tidiness defect into a **named attacker

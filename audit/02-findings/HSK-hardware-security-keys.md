@@ -50,9 +50,12 @@
 - **The `list` action map correctly omits `NOT_FOUND`.** `HskGetListResponseAction` has exactly `SUCCESS, INVALID_REQUEST, SERVER_ERROR` — verified against the SDK in `01-spec-matrix.md` §6, and one of the four "looks like a bug, is correct" cases from B1. `AGENTS.md` states it explicitly.
 - **A unit test exists** — `tests/unit/services/hsk.service.ts` and `tests/unit/controllers/hsk.controller.ts` are both in the counted set (`00-inventory.md` §8), so this is *better* covered than several documented features.
 
-## Finding F-1 — four key-management endpoints with no user-facing documentation and no inventory row (S3)
+## Finding F-1 — four key-management endpoints with no user-facing documentation and no inventory row (S3) — ✅ **FIXED (HSK-W2)**
 
-`00-inventory.md` §10 recorded it: *"Group C; 4 endpoints implemented, zero docs, zero inventory row."* Confirmed:
+> **Status: closed.** `SPEC-INVENTORY.md` now has a row (*"Hardware Security Keys (HSK) — Authlete only"*)
+> and `docs/API.md` has a dedicated *Hardware Security Keys* section. The block below is the pre-fix state.
+
+`00-inventory.md` §10 recorded it (pre-fix): *"Group C; 4 endpoints implemented, zero docs, zero inventory row."* Confirmed:
 
 - `docs/` — no HSK tutorial, no mention in `docs/API.md`'s endpoint reference, no mention in `docs/README.md`;
 - `docs/curriculum/SPEC-INVENTORY.md` — no row;

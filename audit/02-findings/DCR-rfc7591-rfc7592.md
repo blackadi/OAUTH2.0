@@ -54,9 +54,14 @@ Paired because they share one router, one controller factory and one response bu
 | 10 | Delete success carries `Cache-Control: no-store` and `Pragma: no-cache` | §2.3 | ❌ not set |
 | 11 | Non-existent client → 401 | §3 | ✅ delegated; live `unauthorizedOnClientConfigSupported = True` |
 
-## Finding F-1 — the registration response is not the client information response (S2)
+## Finding F-1 — the registration response is not the client information response (S2) — ✅ **FIXED (T1-11, 7591-W1)**
 
-`controllers/dcr.controller.ts:32-41`:
+> **Status: closed.** The parsed `responseContent` is now the body itself — `client_id`, `client_secret`,
+> `registration_access_token` and the rest of the registered metadata are top-level members, not nested
+> inside Authlete's envelope. `AGENTS.md`'s DCR bullet was already correct; the code now matches it. The
+> block below is the pre-fix state.
+
+`controllers/dcr.controller.ts:32-41` (pre-fix):
 
 ```
 const body = result.responseContent

@@ -88,9 +88,14 @@
 | Content type and action mapping | **This server** | `controllers/federation.controller.ts:13-27` — correct |
 | Enabling registration types | Service configuration | `supportedClientRegistrationTypes` — set |
 
-## Finding F-1 — the entity configuration endpoint always returns 400, at both paths (S2)
+## Finding F-1 — the entity configuration endpoint always returns 400, at both paths (S2) — ✅ **FIXED 2026-08-13 (FED-W1), see the banner above — now 500, not 400**
 
-`services/federation.service.ts:14-16`:
+> **Status: closed as originally scoped.** `{ requestBody: {} }` is in. Both paths now answer 500 naming the
+> missing federation JWK Set (`[A316201]`) instead of 400 blaming the caller — the exact fix this finding
+> asked for. FED-W1's own acceptance criteria (a working entity statement) cannot be met without that JWK
+> Set, which is a separate, deliberately-declined decision (DR-21). The block below is the pre-fix state.
+
+`services/federation.service.ts:14-16` (pre-fix):
 
 ```ts
 const response = await this.authleteApi.federation.configuration({

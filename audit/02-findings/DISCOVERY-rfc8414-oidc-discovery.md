@@ -3,9 +3,9 @@
 Paired in one entry because this deployment serves **one document** at two paths from one handler
 (`controllers/discovery.controller.ts:8`). Each spec gets its own verdict.
 
-- **Verdict — RFC 8414:** `MISCONFIGURED`
-- **Verdict — OIDC Discovery 1.0:** `MISCONFIGURED`
-- **Severity:** **S2** for both
+- **Verdict — RFC 8414:** ~~`MISCONFIGURED`~~ → **`IMPLEMENTED_VERIFIED`**, 2026-08-14 (DR-11, F-1)
+- **Verdict — OIDC Discovery 1.0:** ~~`MISCONFIGURED`~~ → **`IMPLEMENTED_VERIFIED`**, F-1 and F-2 both closed
+- **Severity:** ~~**S2**~~ → **S4** for both — what remains is F-3 (S4, route comment)
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/curriculum/SPEC-INVENTORY.md:114-127`, `docs/API.md`, `docs/MCP-OAUTH-TUTORIAL.md`, `modules/04-token-lifecycle-and-metadata/`
 
@@ -41,9 +41,18 @@ Paired in one entry because this deployment serves **one document** at two paths
 | 5 | *"The `issuer` value returned MUST be identical to the authorization server's issuer identifier value into which the well-known URI string was inserted … If these values are not identical, the data contained in the response MUST NOT be used."* | RFC 8414 §3.3 | ❌ **Unmet — and this is the severe one** |
 | 6 | *"MUST be identical to the Issuer URL that was used as the prefix to `/.well-known/openid-configuration`"* | OIDC Discovery §4.3 | ❌ **Unmet** |
 
-## Finding F-1 — the discovery document is unusable by a conforming client (S2)
+## Finding F-1 — the discovery document is unusable by a conforming client (S2) — ✅ **FIXED 2026-08-14 (DR-11, 8414-W1)**
 
-Live probe (`SERVICE-CONFIG-PROBE.md` §3.7): **`issuer = https://blackadi.dev`**.
+> **Status: closed.** `issuer` and all fourteen URL-valued service fields were aligned to a stable host
+> (`https://oauth2-0-ekh2.onrender.com`) — 15 fields written, 16 changed including `modifiedAt`, 0
+> unexpected. RFC 8414 §3.3 now passes: the generated document's `issuer` matches the host it is served
+> from and all 13 URL members sit under it. A prerequisite surfaced during the write: the public deployment
+> had been pointing at a *different* Authlete service (lacking the RSA key and `private_key_jwt` client
+> other fixes depend on) — `3693555522` was ruled canonical and the deployment repointed at it, without
+> which this fix would have made an unreachable service conformant. `deviceVerificationUri` moved with the
+> same write, closing `RFC8628-…` F-4/8628-W5 as a side effect. The block below is the pre-fix state.
+
+Live probe (`SERVICE-CONFIG-PROBE.md` §3.7, pre-fix): **`issuer = https://blackadi.dev`**.
 
 The document is retrievable only at:
 - `http://localhost:3000/.well-known/oauth-authorization-server` — correct *path*, wrong host
@@ -68,10 +77,15 @@ client "cannot discover this authorization server at all." It says the document 
 *different host* again" without naming it. The probe supplies the value, which turns a general statement
 into a reproducible finding.
 
-## Finding F-2 — OIDC Discovery is served only under `/api` (S2, same root cause)
+## Finding F-2 — OIDC Discovery is served only under `/api` (S2, same root cause) — ✅ **FIXED (8414-W2)**
 
-`GET /api/.well-known/openid-configuration` (`routes/discovery.routes.ts:6`) is the **only** location.
-Even if the host were right, §4.1's construction inserts the well-known string between host and path — it
+> **Status: closed.** `/.well-known/openid-configuration` is now also registered at true root
+> (`rootRouter.get`, same handler), alongside the pre-existing `/api` path kept as a documented alias for
+> existing labs. Combined with F-1's issuer fix, §4.1's construction now resolves correctly. The block
+> below is the pre-fix state.
+
+`GET /api/.well-known/openid-configuration` (`routes/discovery.routes.ts:6`) was the **only** location
+(pre-fix). Even if the host were right, §4.1's construction inserts the well-known string between host and path — it
 never yields an `/api` prefix. RFC 8414's document, by contrast, *is* at the true root
 (`app.ts:170`), so the two paths are non-conformant for different reasons: one host-only, one host + path.
 

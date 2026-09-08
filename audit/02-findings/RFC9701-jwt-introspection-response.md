@@ -1,9 +1,10 @@
 # RFC 9701 — JWT Response for OAuth Token Introspection
 
 - **Verdict:** `PARTIAL`
-- **Severity:** **S2**
+- **Severity:** ~~**S2**~~ → **S3** — F-1 (the 500) and F-3 (missing inventory row) are both fixed; what
+  remains is F-2 (signing algorithm not selectable, defaults to RS256), which was always S3
 - **Authlete version:** **3.0+ required** (stated on Authlete's page, fetched this session)
-- **Repo docs under test:** none exist — RFC 9701 has no row in `SPEC-INVENTORY.md`, no tutorial, and no mention in any of the 102 markdown files
+- **Repo docs under test:** `SPEC-INVENTORY.md` now has a row (F-3); no tutorial or glossary entry yet
 
 <thinking>
 1. RFC 9701's AS-side requirements: the RS signals intent with `Accept:
@@ -54,7 +55,13 @@
 Authlete's page confirms the trigger is the `Accept` header and that *"The AS must handle the response
 action value `JWT`"*, and pins the feature at **Authlete 3.0 or later** — satisfied by the 3.0 pin.
 
-## Finding F-1 — the RFC 9701 success path returns HTTP 500 (S2)
+## Finding F-1 — the RFC 9701 success path returns HTTP 500 (S2) — ✅ **FIXED, confirmed live 2026-08-13**
+
+> **Status: closed.** `introspection-standard.controller.ts` now has a `case "JWT":` branch that sets
+> `Content-Type: application/token-introspection+jwt` and returns `responseContent` verbatim — the
+> second-order defect below (wrong content-type) is fixed too, not just the 500. Verified live:
+> `typ: token-introspection+jwt`, `alg: RS256`, `kid: rsa-1`. `SPEC-INVENTORY.md` now carries this as a
+> **Live** row. The block below is the pre-fix state.
 
 `server/node_modules/@authlete/typescript-sdk/src/models/standardintrospectionresponse.ts:14-18`
 defines `StandardIntrospectionResponseAction` as `INTERNAL_SERVER_ERROR, BAD_REQUEST, OK, JWT`.
@@ -107,9 +114,15 @@ right now it is indistinguishable from an oversight.
 Note this is the same "server-determined fields never come from the body" discipline `AGENTS.md`
 praises elsewhere — applied here by exclusion but not completed by explicit assignment.
 
-## Finding F-3 — an entire supported spec is absent from the documentation (S3)
+## Finding F-3 — an entire supported spec is absent from the documentation (S3) — ✅ **FIXED — `SPEC-INVENTORY.md` now carries a row**
 
-RFC 9701 appears **nowhere** in the repo: no `SPEC-INVENTORY.md` row, no tutorial, no glossary entry,
+> **Status: closed, at least for the inventory half.** `SPEC-INVENTORY.md` now has a row for RFC 9701
+> (Published RFC, January 2025, "New row" per its own changelog), citing this deployment's `case "JWT"` and
+> `httpAcceptHeader` forwarding as live evidence. No tutorial or glossary entry exists yet — this finding's
+> narrower claim (missing from the *inventory*) is resolved; whether a tutorial/glossary entry is still
+> wanted is a separate, smaller question this finding did not originally distinguish.
+
+RFC 9701 appeared **nowhere** in the repo (pre-fix): no `SPEC-INVENTORY.md` row, no tutorial, no glossary entry,
 no module mention. Meanwhile:
 
 - `docs/curriculum/SPEC-INVENTORY.md:3` claims to list *"every specification this curriculum touches."*

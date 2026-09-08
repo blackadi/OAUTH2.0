@@ -1,6 +1,10 @@
 # OpenID Connect Front-Channel Logout 1.0
 
-- **Verdict:** `ABSENT` — a decision record is required at Gate 4
+- **Verdict:** `ABSENT` — ~~a decision record is required at Gate 4~~ → **ruled 2026-08-14 (DR-08): decline,
+  bundled with Session Management as one decision.** Both share the same prerequisite (durable OP session
+  identity, which also gates back-channel logout's `sid` mode and Native SSO — see DR-04, now reversed) and
+  the same grounds. The three documentation consequences DR-08 owed (FCL-W2, FCL-W3, SM-W2) all shipped
+  2026-08-14 under T2-5's 15-item `SPEC-INVENTORY.md` pass.
 - **Severity:** **S4**
 - **Status:** OpenID **Final**, **12 September 2022** — verified against the primary source this session. **This closes one of the two undated rows `SPEC-INVENTORY.md:188` flagged.**
 - **Authlete version:** 3.0 — no `llms.txt` page; the only vendor surface is the client metadata field

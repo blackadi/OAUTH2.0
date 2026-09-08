@@ -2,7 +2,7 @@
 
 - **Verdict:** `PARTIAL`
 - **Severity:** **S2**
-- **Status:** MCP specification, **`draft`** revision as served at `modelcontextprotocol.io/specification/draft/basic/authorization` this session. Not an RFC or an OpenID Final; it profiles OAuth 2.1 (`draft-ietf-oauth-v2-1-13`) plus eight published specs.
+- **Status:** MCP specification, **`draft`** revision as served at `modelcontextprotocol.io/specification/draft/basic/authorization` this session. Not an RFC or an OpenID Final; it profiles OAuth 2.1 (`draft-ietf-oauth-v2-1-13` when this entry was written; **`SPEC-INVENTORY.md`'s own row for the same draft has since moved to `-15`, 2 March 2026 — re-check the current revision before citing either number**) plus eight published specs.
 - **Authlete version:** 3.0 — **no single Authlete page**; a composite of RFC 8414, 9728, 7636, 8707, 9207, 7591 and CIMD
 - **Repo docs under test:** `docs/MCP-OAUTH-TUTORIAL.md`, `README.md`, `client/src/components/mcp/McpSection.tsx`, `client/src/services/mcp.service.ts`, `docs/curriculum/SPEC-INVENTORY.md`
 
@@ -97,15 +97,17 @@ it."* Consequence on a conformant AS: the token request is unaudienced, so the i
 Module 04 Exercise 4 teaches by sending `resource` on **both** requests (`modules/04…/lab.md:163-172`). So the
 lab does it correctly and the MCP service does not.
 
-**(b) `iss` is never validated.** `mcp.service.ts` has no `iss` handling, and the callback that receives the code
-(`client/src/pages/CallbackPage.tsx:38-40`) reads only `code`, `state`, `error`. MCP restates RFC 9207 §2.4 as a
-client **MUST**, adds that the client must record the issuer *before* redirecting, and specifies the four-case
-table for present/absent `iss` against `authorization_response_iss_parameter_supported`. None of that exists.
-Since this AS advertises `authorization_response_iss_parameter_supported = true` and does emit `iss`, the client's
-required action here is unambiguous: compare, and reject on mismatch.
+**(b) `iss` is never validated.** ⚠️ **Fixed 2026-08-22 (`0c1bd79`), for the RFC 9207 half — see
+`RFC9207-issuer-identification.md` F-1.** `CallbackPage.tsx` now reads `iss`, compares its origin against
+the configured API base URL, and rejects on mismatch. This narrows what remains here: MCP's own four-case
+table (present/absent `iss` against `authorization_response_iss_parameter_supported`) is more specific than
+a plain origin comparison, and `mcp.service.ts` itself still has no MCP-specific `iss` handling — the fix
+landed in the shared callback path, not the MCP client. Whether the shared check satisfies MCP's stricter
+wording is unverified; treat this half as narrowed, not closed.
 
-This is the third client-side control the repo teaches and does not implement — with RFC 9207 §2.4 and OIDC Core
-§5.3.2's `sub` check. All three are one work item (**OIDC-W3**).
+This was recorded as the third client-side control the repo teaches and does not implement — with RFC 9207
+§2.4 (now fixed, see above) and OIDC Core §5.3.2's `sub` check (still open — `OIDC-CORE-1.0.md` F-4). Both
+were tracked as one work item (**OIDC-W3**); the `iss` half shipped, the `sub` half did not.
 
 ## Finding F-3 — `registration_endpoint` is absent from discovery while four DCR endpoints exist (S3)
 

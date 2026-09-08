@@ -1,6 +1,8 @@
 # OpenID for Verifiable Presentations 1.0 (OID4VP)
 
-- **Verdict:** `OUT_OF_SCOPE` — decision record required at Gate 4
+- **Verdict:** `OUT_OF_SCOPE` — ~~decision record required at Gate 4~~ → **ruled (DR-13): UPHELD — structurally
+  inapplicable.** An authorization server has no OID4VP obligations at all (three roles — Wallet, Verifier,
+  Credential Issuer — none of which this component is), distinct from HAIP's cost-decline (DR-14).
 - **Severity:** **S4**
 - **Status:** OpenID **Final**, **9 July 2025** — re-verified against the primary source this session
 - **Authlete version:** 3.0 — **no vendor surface**, no `llms.txt` page (`01-spec-matrix.md` §3)

@@ -55,18 +55,28 @@ independently:
 |---|---|---|
 | **support** signed request objects | ~~no client has `jwks`, `jwksUri` or `requestSignAlg`~~ → **satisfied 2026-08-12 (T1-3)**: one client signs request objects with `ES256` against a registered key, verified live, so the non-repudiation objection no longer applies to *this* clause. Still ❌ on **require** — `requestObjectRequired` is false everywhere | `RFC9101-…` F-3 |
 | **require use of** | `requestObjectRequired = false` service-wide and on every client; `require_signed_request_object = false` | `RFC9101-…` requirement 8 |
-| **at the PAR endpoint** | PAR is optional (`parRequired = false`) — and the advertised PAR endpoint cannot accept a conformant PAR request at all, because it requires an Authlete-shaped JSON body | `RFC9126-…` F-1 |
+| **at the PAR endpoint** | ~~PAR is optional (`parRequired = false`) — and the advertised PAR endpoint cannot accept a conformant PAR request at all, because it requires an Authlete-shaped JSON body~~ → **the wire-format half fixed 2026-09-01 (9126-W1)**: `/api/par` now accepts a conformant form-encoded request. `parRequired = false` still stands — PAR itself remains optional here | `RFC9126-…` F-1 |
 
-The third is the one worth dwelling on: even with client keys registered and `requestObjectRequired` set, a
-conformant FAPI client pushing a signed request object to `/api/par` receives
-`400 {"error":"invalid_request","error_description":"Missing required body field: parameters"}`. So §5.3.1 is not
-merely unconfigured here — the endpoint it names is not reachable by the clients the profile is written for.
+The third clause is **partly resolved**: the PAR endpoint now accepts the wire format a conformant client
+sends (9126-W1, 2026-09-01) — the `400 "Missing required body field: parameters"` failure described below no
+longer happens for a form-encoded request. What remains unconfigured is `parRequired`/`requestObjectRequired`
+themselves. So §5.3.1 is no longer blocked by *unreachability*; it is still unconfigured by *decision*.
 
-## Finding F-2 — §5.5.1's mechanism exists in Authlete and is discarded by this server (S2)
+*(Pre-fix description, kept for the record: even with client keys registered and `requestObjectRequired` set,
+a conformant FAPI client pushing a signed request object to `/api/par` received
+`400 {"error":"invalid_request","error_description":"Missing required body field: parameters"}`.)*
+
+## Finding F-2 — §5.5.1's mechanism exists in Authlete and is discarded by this server (S2) — ✅ **FIXED, see `RFC9701-jwt-introspection-response.md` F-1**
+
+> **Status: closed.** `introspection-standard.controller.ts` now has a `case "JWT":` branch returning
+> `responseContent` with `Content-Type: application/token-introspection+jwt` — verified live:
+> `typ: token-introspection+jwt`, `alg: RS256`. This was, as this finding said, the one Message Signing
+> requirement whose failure was a live 500 rather than a disabled flag; it no longer fails. The `none`
+> algorithm advertisement below (a separate, still-open concern) is unaffected.
 
 `StandardIntrospectionResponseAction` has four members — `INTERNAL_SERVER_ERROR`, `BAD_REQUEST`, `OK`, **`JWT`** —
-and `controllers/introspection-standard.controller.ts:13-31` handles three. `JWT` falls to `default` at `:26` and
-returns **HTTP 500** with `"Unknown introspection action from Authlete /introspection"`.
+and `controllers/introspection-standard.controller.ts:13-31` handled three (pre-fix). `JWT` fell to `default` at `:26` and
+returned **HTTP 500** with `"Unknown introspection action from Authlete /introspection"`.
 
 The trigger is reachable and not theoretical: `services/introspection.service.ts:124-127` deliberately forwards
 the caller's `Accept` header as `httpAcceptHeader`, which is exactly how RFC 9701 requests a signed response. So a

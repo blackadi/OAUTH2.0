@@ -21,11 +21,13 @@
 > change.
 >
 > **Still true, and the reason this is not "FIXED".** `/api/device/complete` remains **unauthenticated
-> *within* development** — the gate moved the exposure out of production rather than removing it. And the
-> non-security findings are untouched: **8628-W3** (the `responseContent` wire shape), **8628-W4** (the §3.1
-> form-encoded wire format — deliberately deferred, `04-remediation-plan.md` §7.1), **8628-W5**
-> (`deviceVerificationUri` on an ephemeral tunnel) and **8628-W6** (whether `USER_CODE` is substituted in
-> `deviceVerificationUriComplete` — one of T1-17's unprobed behaviours).
+> *within* development** — the gate moved the exposure out of production rather than removing it. **Of the
+> four non-security findings named as untouched when this banner was written (2026-08-10), three have since
+> closed and one remains open — see the work-items table for detail, not this banner.** ✅ **8628-W3** (the
+> `responseContent` wire shape) shipped 2026-08-14; ✅ **8628-W6** (whether `USER_CODE` is substituted) was
+> established 2026-08-12 and turned out to corroborate W3 directly; ✅ **8628-W5** (`deviceVerificationUri`
+> on an ephemeral tunnel) closed 2026-08-14 as a side effect of DR-11's issuer/host alignment. **Still open:
+> 8628-W4** (the §3.1 form-encoded wire format — deliberately deferred, `04-remediation-plan.md` §7.1).
 >
 > **Severity.** S1 → **S3**: no exploitable path remains in a deployed configuration, and what is left is
 > wire-format conformance plus one development-only gap. Lower than the logout entry's S2 because nothing here
@@ -153,7 +155,10 @@ does not exist in code.
 Third instance of the pattern tabulated in `CIBA-core-1.0.md` F-1 — PAR, CIBA and Device all take Authlete's
 internal request shape on an endpoint the AS advertises as the real one.
 
-## Finding F-2 — the response is Authlete's envelope in camelCase, not §3.2's JSON (S2)
+## Finding F-2 — the response is Authlete's envelope in camelCase, not §3.2's JSON (S2) — ✅ **FIXED 2026-08-14 (8628-W3)**
+
+> **Status: closed.** The 200 body is now exactly `responseContent`, §3.2's snake_case JSON with no
+> `action`/`resultCode`/`resultMessage` envelope — verified by test. The block below is the pre-fix state.
 
 `controllers/device.controller.ts` maps `OK` → 200 and hands the whole Authlete response to `sendApiResponse`;
 `responseContent` appears nowhere in the file (grep: zero occurrences). Per `AGENTS.md` the 200 body carries
@@ -169,9 +174,14 @@ authorization server passes the device authorization response back to the client
 `responseContent`, and the controller ignores it — while `controllers/token.controller.ts:52` and
 `controllers/grant-management.controller.ts:26` in the same codebase do it correctly.
 
-## Finding F-4 — the user-facing verification URI points at an ephemeral tunnel (S2)
+## Finding F-4 — the user-facing verification URI points at an ephemeral tunnel (S2) — ✅ **FIXED 2026-08-14 (DR-11, 8628-W5)**
 
-`deviceVerificationUri = https://cecile-soapsudsy-zoila.ngrok-free.dev/device` (probe 1 §3.9, probe 3).
+> **Status: closed.** DR-11 aligned `issuer` and all fourteen URL-valued service fields to a stable host
+> (`https://oauth2-0-ekh2.onrender.com`), and `deviceVerificationUri` moved with them — not a separate fix,
+> a side effect of the issuer/host mismatch fix (see `DISCOVERY-rfc8414-oidc-discovery.md` F-1). The block
+> below is the pre-fix state.
+
+`deviceVerificationUri = https://cecile-soapsudsy-zoila.ngrok-free.dev/device` (probe 1 §3.9, probe 3, pre-fix).
 
 §3.3 has the device display this URI for the user to visit on a second device. An ngrok free-tier tunnel
 disappears when the process restarts, at which point every device in the field displays a URI that 404s and the
@@ -179,7 +189,12 @@ flow has no recovery path — the user cannot be redirected, because the device 
 Probe 2 §5 established that *all* the service's endpoints are on this tunnel, but this is the one a human is
 asked to type, which makes it the most visible failure.
 
-## Finding F-5 — `verification_uri_complete` carries a literal `USER_CODE` placeholder, and I could not confirm the substitution (S3)
+## Finding F-5 — `verification_uri_complete` carries a literal `USER_CODE` placeholder, and I could not confirm the substitution (S3) — ✅ **ESTABLISHED 2026-08-12 (8628-W6)**
+
+> **Status: closed — it is substituted.** A configured template produced `verificationUriComplete =
+> https://…/device?user_code=TDSHHXCP` against a real code, not a literal placeholder. The concern below did
+> not materialise. As a side effect this also corroborated F-2/8628-W3 directly, since the same response's
+> `responseContent` is exactly §3.2's snake_case shape.
 
 `deviceVerificationUriComplete = https://…/device?user_code=USER_CODE` (probe 3).
 
@@ -231,7 +246,7 @@ verified it against the SDK enums:
 | 8628-W2 | ✅ **DONE 2026-08-10.** Rate-limit the device routes | S | `/api/device/verification` and `POST /device` carry a limiter sized against §5.1's calculation (the RFC's own worked example allows ~5 attempts); a brute-force test shows the lockout. |
 | 8628-W3 | Return `responseContent` at `/api/device/authorization` | S | ✅ **DONE 2026-08-14** (T1-11, under plan mode). The 200 body is exactly §3.2's JSON, snake_case, with no `action`/`resultCode`/`resultMessage`. **Scope the audit did not state, and getting it wrong would have broken two endpoints:** only `DeviceAuthorizationResponse` has a `responseContent` member — `DeviceVerificationResponse` and `DeviceCompleteResponse` have **none** (`grep -c` across the three SDK models: 2, 0, 0), because `/device/verification` and `/device/complete` are internal AS operations with no RFC-defined wire format. Applying the pattern to all three would have sent `undefined`. They keep the envelope, and a test asserts that. `DeviceSection.tsx` reads `user_code`/`device_code`; `DEVICE-FLOW-TUTORIAL.md` and `modules/02…/lab.md` updated — including the tutorial's note that *excused* the defect (*"a production device authorization endpoint would rename them"*), now rewritten as the boundary lesson it was reaching for. The verification/complete **request** bodies stay camelCase, since those are Authlete request fields. |
 | 8628-W4 | Accept the §3.1 wire format | M | Form-encoded accepted; JSON `{parameters}` retained for the SPA. One change with **9126-W1** and **CIBA-W1**. |
-| 8628-W5 | Move `deviceVerificationUri` off the ephemeral tunnel | S | A stable host, or the tutorial states that the device flow's human-facing leg is time-bombed and how to re-point it. |
+| 8628-W5 | Move `deviceVerificationUri` off the ephemeral tunnel | S | ✅ **DONE 2026-08-14, closed by DR-11 as a side effect** of aligning `issuer` and all fourteen URL-valued service fields to a stable host. Not a standalone fix. |
 | 8628-W6 | Establish whether `USER_CODE` is substituted | S | ✅ **DONE 2026-08-12 (T1-17). It is substituted** — a configured template of `https://…/device?user_code=USER_CODE` produced `verificationUriComplete = https://…/device?user_code=TDSHHXCP`. Real templating, not a literal, so the *"drop the field or template it correctly"* branch never opens and F-5's placeholder concern is answered. **One thing the item did not ask for, and it matters to 8628-W3:** the same response's `responseContent` is `{"device_code":…,"user_code":…,"verification_uri":…,"verification_uri_complete":…,"expires_in":600,"interval":5}` — **exactly §3.2's snake_case shape**. Returning it verbatim does not merely tidy the wire format, it *is* the conformant body. Transcript in `PROGRESS.md`, entry 2026-08-12 T1-17. |
 
 **Ordering and gating.** W1 first, and it is small. None of these files is on the `AGENTS.md`

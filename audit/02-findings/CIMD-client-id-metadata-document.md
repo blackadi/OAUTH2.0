@@ -1,8 +1,8 @@
 # OAuth Client ID Metadata Document (CIMD)
 
-- **Verdict:** `MISCONFIGURED`
-- **Severity:** **S3**
-- **Status:** **Active Internet-Draft**, OAuth WG. Current revision is **`draft-ietf-oauth-client-id-metadata-document-02`, last updated 6 July 2026** — verified this session. `SPEC-INVENTORY.md` cites **`-01`** — see F-3.
+- **Verdict:** ~~`MISCONFIGURED`~~ → **`IMPLEMENTED_VERIFIED`**, 2026-08-14 (DR-05, F-1)
+- **Severity:** ~~**S3**~~ → **S4** — what remains is F-2(b) (delegated, still unverifiable) and F-3 (revision citation, see below — also since fixed, `SPEC-INVENTORY.md` now cites `-02`)
+- **Status:** **Active Internet-Draft**, OAuth WG. Current revision is **`draft-ietf-oauth-client-id-metadata-document-02`, last updated 6 July 2026** — verified this session. ~~`SPEC-INVENTORY.md` cites `-01`~~ → **`SPEC-INVENTORY.md` now correctly cites `-02`** — see F-3.
 - **Authlete version:** **3.0.22+** (`01-spec-matrix.md` §2) — the live service's exact patch level is unknown, which matters only here
 - **Repo docs under test:** `docs/MCP-OAUTH-TUTORIAL.md`, `AGENTS.md` CIMD paragraph, `client/src/components/mcp/McpSection.tsx`, `docs/curriculum/modules/09a-interaction-extensions/quiz.md`
 
@@ -49,10 +49,15 @@
 endpoints or client code needed."* That is why there is no server-side code to audit, and it is the correct
 architecture rather than a gap.
 
-## Finding F-1 — CIMD is disabled, and the MCP tutorial's central claim depends on it (S3)
+## Finding F-1 — CIMD is disabled, and the MCP tutorial's central claim depends on it (S3) — ✅ **FIXED 2026-08-14 (DR-05)**
 
-Probe 1 §2 and probe 3: `clientIdMetadataDocumentSupported = false`, and `client_id_metadata_document_supported`
-is absent from the 62-member discovery document.
+> **Status: closed.** `clientIdMetadataDocumentSupported` is now `true` — DR-05 enabled it as part of the same
+> ruling that kept the broader MCP "out of the box" claim qualified (CIMD alone doesn't resolve MCP-OAUTH.md's
+> other findings). `docs/CIMD.md` (added this session) documents the live config. The probe below is the
+> pre-fix state.
+
+Probe 1 §2 and probe 3, pre-fix: `clientIdMetadataDocumentSupported = false`, and `client_id_metadata_document_supported`
+was absent from the discovery document.
 
 `AGENTS.md`'s own flags table sets the expectation correctly — *"Set `true` only if targeting MCP or CIMD-aware
 ecosystems"* — and `docs/MCP-OAUTH-TUTORIAL.md` claims *"this server supports MCP flows out of the box"*
@@ -94,14 +99,22 @@ HTTP redirects when fetching a Client ID Metadata Document — a defence against
 redirects to someone else's metadata. Authlete performs the fetch, so this is entirely vendor behaviour; nothing
 in this repo can test it, and Authlete's CIMD page (fetched in Phase 1) does not state it. Recorded as a
 **delegated MUST with no local evidence**, in the same spirit as RFC 9449 §7.2's delegation at UserInfo — the
-difference being that §7.2 was verified live and this cannot be until the flag is on.
+difference being that §7.2 was verified live and this one has not, even though the flag is now on
+(F-1) — `docs/CIMD.md` (added this session) still marks it `UNVERIFIED against draft-02 §3` for the same
+reason: the fetch happens entirely inside Authlete, so there is no vantage point in this repo to observe it
+from, flag on or not.
 
-## Finding F-3 — the cited draft revision is stale (S4)
+## Finding F-3 — the cited draft revision is stale (S4) — ✅ **FIXED — `SPEC-INVENTORY.md` now cites `-02`**
+
+> **Status: closed for the inventory row.** `SPEC-INVENTORY.md` and `docs/CIMD.md` both correctly cite `-02`
+> (6 July 2026) now. The MCP authorization spec still cites `-00` — that is *its* citation to fix, not this
+> repo's, and `docs/curriculum/modules/09a-interaction-extensions/quiz.md`/`quiz-answers.md` Q20 discuss the
+> two-revision gap between them directly (fixed the same way, this session).
 
 | Source | Revision | Date |
 |---|---|---|
 | `datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/`, fetched this session | **-02** | **6 July 2026** |
-| `SPEC-INVENTORY.md` | **-01** | — |
+| `SPEC-INVENTORY.md` (pre-fix) | **-01** | — |
 | MCP authorization spec (fetched this session) references | **-00** | — |
 
 For an **active** Internet-Draft this matters more than for a published RFC: drafts change normative text between

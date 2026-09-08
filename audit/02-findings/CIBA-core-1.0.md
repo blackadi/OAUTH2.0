@@ -105,9 +105,15 @@ client — written against the OpenID spec — reads `auth_req_id` from the auth
 `undefined`, and cannot poll. The learner's own SPA works, because it was written against the same two-step
 shape.
 
-## Finding F-3 — the `Authorization` header is ignored for client authentication (S3)
+## Finding F-3 — the `Authorization` header is ignored for client authentication (S3) — ✅ **FIXED 2026-08-13 (CIBA-W3)**
 
-`ciba.service.ts:29-33` passes `clientId`/`clientSecret` from the **body** and nothing else. There is no
+> **Status: closed.** `ciba.service.ts` now calls `parseBasicAuth`, with `appendToParams` extracted to
+> `utils/params.ts` so PAR and CIBA share one implementation. Verified live: a `CLIENT_SECRET_BASIC` client
+> now reaches `USER_IDENTIFICATION` via the Basic channel, and body credentials for that same client
+> correctly earn `401 [A157357]` instead of silently succeeding on the wrong channel. The block below is the
+> pre-fix state.
+
+`ciba.service.ts:29-33` passes `clientId`/`clientSecret` from the **body** and nothing else (pre-fix). There is no
 `parseBasicAuth` call, so a client registered for `CLIENT_SECRET_BASIC` — which is what
 [Authlete's CIBA guide recommends](https://developers.authlete.com/guides/flows-and-protocols/grant-types-and-token-flows/how-to-implement-ciba-with-authlete),
 as `AGENTS.md` itself notes — cannot authenticate here at all. It will earn
@@ -118,9 +124,15 @@ in `services/par.service.ts:39-54` exists to prevent.
 noting that this service cannot serve it. The PAR fix was never propagated: `parseBasicAuth` is used by
 `token.service.ts` and `par.service.ts` and by nothing else.
 
-## Finding F-4 — CIBA cannot complete on this deployment, and the curriculum says so precisely (S3, configuration)
+## Finding F-4 — CIBA cannot complete on this deployment, and the curriculum says so precisely (S3, configuration) — ⚠️ **PARTIALLY CLOSED 2026-08-12 (CIBA-W4), one of four clients**
 
-Probe 3, all three clients: **`bcDeliveryMode` absent**, `bcNotificationEndpoint` absent, `bcRequestSignAlg`
+> **Status: partial.** Client `1523514379` now has `bcDeliveryMode: POLL`, and the full CIBA sequence was run
+> end to end on it — `USER_IDENTIFICATION` → `authReqId` → `authorization_pending` → `complete` → token,
+> replay refused. **The other three clients still have no `bcDeliveryMode`**, so the probe below (all three
+> absent) is now wrong about the client this session verified but still accurate about the rest. This
+> finding's severity/scope should be read as "CIBA completes for exactly one client" rather than "for none."
+
+Probe 3, as of 2026-08-10, all three clients: **`bcDeliveryMode` absent**, `bcNotificationEndpoint` absent, `bcRequestSignAlg`
 absent, `bcUserCodeRequired: false` — while all three have the `CIBA` grant type and the service enables all
 three delivery modes (`supportedBackchannelTokenDeliveryModes = ["POLL","PING","PUSH"]`,
 `backchannelAuthReqIdDuration = 600`, `backchannelPollingInterval = 5`).
@@ -139,7 +151,7 @@ One client field makes Exercise 3's success path runnable.
 | Doc claim | Location | Reality | Verdict |
 |---|---|---|---|
 | Four CIBA endpoints, action→status maps, client creds in the body | `AGENTS.md` CIBA paragraph | Matches the code exactly | **Accurate** |
-| "**Recommended Authlete config:** Client Auth Method = `CLIENT_SECRET_BASIC` … backchannel auth endpoint and token endpoint must use the same client auth method" | `AGENTS.md` | The recommendation is Authlete's, and **this server cannot honour it** — it never reads the Basic header — F-3 | `DOC_INCORRECT` / S3 |
+| "**Recommended Authlete config:** Client Auth Method = `CLIENT_SECRET_BASIC` … backchannel auth endpoint and token endpoint must use the same client auth method" | `AGENTS.md` | The recommendation is Authlete's; **this server can now honour it** — F-3, fixed 2026-08-13 | ~~`DOC_INCORRECT` / S3~~ → **Accurate** |
 | The authentication endpoint "returns `USER_IDENTIFICATION` → 200 with `ticket`, `hintType`, `hint`, `deliveryMode`" | `AGENTS.md` | Accurate as a description of this server; silent on the fact that CIBA §7.3 requires `auth_req_id` there | **Accurate but incomplete** / **S2** — F-2 |
 | All four error shapes verified | `modules/09a…/lab.md` Ex 3a/3c | Verified refusals, correctly separated from the unverified success path | **Accurate — exemplary** |
 | `UNVERIFIED` marker naming `bcDeliveryMode` | `lab.md:441-446` | Confirmed still unset by probe 3 | **Accurate** |

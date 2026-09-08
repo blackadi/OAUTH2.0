@@ -26,7 +26,8 @@
 >
 > **Severity unchanged at S2**, and that was decided by evidence rather than by default: 9449-W4 (T1-17) showed
 > `/auth/introspection` enforces `cnf.jkt` even with no proof present (`[A065308]`), so the fail-open case that
-> would have made this S1 does not exist. F-3 and F-4 (the nonce path) are untouched.
+> would have made this S1 does not exist. **F-3 is untouched. F-4 is not** — see F-4's own correction box below;
+> this line was accurate on 2026-08-13 and stale by the next day.
 
 - **Verdict:** `PARTIAL`
 - **Severity:** **S2**
@@ -198,9 +199,17 @@ the SDK as *"Even if the service's `dpopNonceRequired` property is `false`, call
 the expected `nonce` value."* Neither call site uses it. Whether `dpopNonceDuration = 0` means "disabled" or
 "use the default" is not stated on the flags page and does not matter while the boolean is off.
 
-## Finding F-4 — `AGENTS.md` documents the wrong status code for the AS nonce challenge (S2)
+## Finding F-4 — `AGENTS.md` documents the wrong status code for the AS nonce challenge (S2) — ✅ **FIXED 2026-08-14 (T2-14, 9449-W5), confirmed live 2026-08-15 (9449-W6)**
 
-`AGENTS.md`'s **DPoP nonce flow** bullet:
+> **Status: closed.** The bullet moved to `docs/agents/dpop-and-client-auth.md` (during the `AGENTS.md`
+> split) and now carries the correct two-row table — AS: 400 `use_dpop_nonce`, RS: 401 — quoted from §8/§9
+> exactly as this finding demanded, plus the `use_dpop_nonce`-vs-`invalid_dpop_proof` distinction. 9449-W6
+> then produced a real transcript (`dpopNonceRequired: true` for three calls, reverted) confirming both
+> halves live: `BAD_REQUEST` → HTTP 400, and a bogus nonce → `use_dpop_nonce`, not `invalid_dpop_proof`. The
+> dangling `FAPI-TUTORIAL.md` pointer was corrected rather than dropped. The block below is the pre-fix
+> state.
+
+`AGENTS.md`'s **DPoP nonce flow** bullet (this content has since moved to `docs/agents/dpop-and-client-auth.md`):
 
 > First request without nonce → **401** `use_dpop_nonce` error + `DPoP-Nonce` header. Client retries with
 > nonce. Expired nonce → **401** `invalid_dpop_proof` + new nonce. … See `docs/FAPI-TUTORIAL.md`.
@@ -229,7 +238,7 @@ something broken, from the file that is supposed to be authoritative.
 | "Present an ordinary, unbound token under the `DPoP` scheme … and you get `200`… The security property lives on the token's `cnf.jkt`, not on the scheme" | `modules/05…/lab.md:800-808` | Correct, and the right lesson | **Accurate** |
 | ES256 signature must be raw R‖S, not DER | `AGENTS.md`; `client/src/services/dpop.service.ts:76-85` | Matches the code and RFC 7515's JWS ES256 encoding | **Accurate** |
 | `ath` not `sub`; `jwk` required in the header | `AGENTS.md`; `dpop.service.ts:59-61,70` | Matches §4.2 | **Accurate** |
-| Nonce flow: 401 for a missing nonce | `AGENTS.md`'s **DPoP nonce flow** bullet | §8 requires 400 at the AS | `DOC_INCORRECT` / **S2** — F-4 |
+| Nonce flow: 401 for a missing nonce | `AGENTS.md`'s **DPoP nonce flow** bullet | §8 requires 400 at the AS | ~~`DOC_INCORRECT` / **S2** — F-4~~ → **Fixed 2026-08-14, see F-4** |
 | PAR response with `DPoP-Nonce: <serverNonce>` and `{"requestUri":…,"expires_in":90}` | `FAPI-TUTORIAL.md:377-384` | Neither header nor body is producible: nonces are off, and the body is a shape the server never emits | `DOC_INCORRECT` / **S2** (also RFC 9126 F-2) |
 | "First request without nonce → server returns `DPoP-Nonce` header" | `PAR-TUTORIAL.md:428-431` | Omits that §8 makes this a **400 error response**, not a header on success | `DOC_INCORRECT` / S3 |
 | "SPA stores nonces in `sessionStorage` under `dpop_nonce`" | `PAR-TUTORIAL.md:431` | Unexercisable — no nonce is ever issued | `IMPLEMENTED_UNVERIFIED` / S4 |

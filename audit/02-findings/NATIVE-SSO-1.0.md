@@ -1,7 +1,33 @@
 # OpenID Connect Native SSO for Mobile Apps 1.0
 
-- **Verdict:** `MISCONFIGURED`
-- **Severity:** **S2**
+- **Verdict:** ~~`MISCONFIGURED`~~ → **`IMPLEMENTED_VERIFIED`, 2026-09-03 (DR-04 reversed)**
+- **Severity:** ~~**S2**~~ → **closed** — see the banner below. F-1 and F-2 are both resolved; only F-3
+  (the specification-date reconciliation) may still be open.
+
+> ## ✅ ENABLED AND VERIFIED 2026-09-03 (DR-04, `audit/05-decision-records.md`) — F-1 and F-2 closed
+>
+> **`nativeSsoSupported` and the `device_sso` scope were enabled on service `3693555522`.**
+> `scripts/native-sso-verify.mjs` drives both phases end to end: **15 of 15 checks pass**, including public
+> clients and the token-exchange allowlist. `README.md`'s feature table now reads *"Enabled and verified
+> 2026-09-03"* rather than "Working" — F-1's original complaint (the table asserted "Working" while the flag
+> was off) is moot both ways now: the flag is on, and the table language changed to say so precisely.
+>
+> **F-2's central question is answered, and the answer is "no code change was needed."** A fresh `sessionId`
+> per authorization (the code F-2 questioned) turned out to be the *correct* design: Authlete resolves the
+> session from the ID token's `sid` claim, and the Phase 2 exchange carries no cookies at all. F-2's own
+> "named next action" — enable the flag, run the two-app sequence, observe whether a second app can exchange
+> an ID token issued under a previous session — is exactly what DR-04 did.
+>
+> **What enabling it actually found: a real authentication bypass, live behind the flag the whole time this
+> entry called it "declined."** `handleNativeSso` recomputed `deviceSecretHash` from whatever `actor_token`
+> arrived instead of checking it against the bound hash, so 32 random bytes returned **200** with the
+> victim's `sub`/`sid` and an ID token whose `ds_hash` matched the attacker's own secret. Possession of a
+> stolen ID token was sufficient — no device secret needed. **Fixed 2026-09-03**, four unit cases pin it, and
+> `native-sso-response.handler.ts` now compares against the bound hash (`hashesMatch`) rather than
+> re-deriving one from caller input. **The transferable lesson, in DR-04's own words: "a decision not to
+> enable is not a decision not to verify."** The two findings below are the pre-fix, pre-enable record.
+
+
 - **Status:** OpenID **Implementer's Draft, draft 07** — the document served at `openid.net` this session is dated **16 January 2025**. `SPEC-INVENTORY.md` records *"2nd Implementer's Draft (draft 07), approved 2025-10-17"*. **The two dates disagree — see F-3.**
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/NATIVE-SSO-TUTORIAL.md`, `README.md` feature table, `docs/curriculum/SPEC-INVENTORY.md`, `AGENTS.md`
@@ -53,7 +79,7 @@ and `01-spec-matrix.md` §6 confirmed the apparent inconsistency between `native
 (`INTERNAL_SERVER_ERROR` vs `SERVER_ERROR`) is **correct** — the two Authlete APIs genuinely use different
 literals. This is well-built code for a feature that is switched off.
 
-## Finding F-1 — the feature is disabled on the service and `README.md` lists it as "Working" (S2)
+## Finding F-1 — the feature is disabled on the service and `README.md` lists it as "Working" (S2) — ✅ **CLOSED 2026-09-03, see the banner above**
 
 Probe 1 §3.6 and probe 3:
 
@@ -89,7 +115,7 @@ made in `README.md`'s status table — the one place a reader goes specifically 
 Probe 1 §3.6 already tabulated these and deferred them to B6/B7. Native SSO is the B6 member, and its verdict is
 `MISCONFIGURED` — implemented, documented, and contradicted by the service configuration.
 
-## Finding F-2 — the `sid` the AS generates is fresh per authorization, with no session continuity (S3)
+## Finding F-2 — the `sid` the AS generates is fresh per authorization, with no session continuity (S3) — ✅ **ANSWERED 2026-09-03, see the banner above — no code change needed**
 
 `services/authorization.service.ts:133-137`:
 

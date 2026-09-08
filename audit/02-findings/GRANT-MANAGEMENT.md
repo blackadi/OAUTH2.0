@@ -94,7 +94,14 @@ One addition: this is an Authlete-side behaviour, not a repo defect. `grantManag
 satisfied locally, it would mean listing the grant's access tokens and deleting each — `token.management.list` +
 `delete` exist — which is materially more work than shortening a lifetime, for a SHOULD.
 
-## Finding F-2 — the AS advertises five grant-management actions and exercises two (S3)
+## Finding F-2 — the AS advertises five grant-management actions and exercises two (S3) — ✅ **ESTABLISHED 2026-08-12 (GM-W2): the three actions already work, no AS code needed**
+
+> **Status: closed as predicted.** The named next action was run: `grant_management_action=create` on an
+> authorization request → `INTERACTION` + ticket → a code → `grant_id` in the token response, exactly as
+> §5.5 requires, already forwarded verbatim by `token.controller.ts:52`. `GET /api/gm/{grant_id}` through
+> this server → 200 (wrong grant id → 403), the first live exercise of `requireGrantOwnership` against a real
+> grant-bearing token. **No code work was needed — GM-W5 is documentation only.** The block below is the
+> pre-verification state.
 
 Probe 3:
 
@@ -121,7 +128,14 @@ that is probably unnecessary. **Named next action:** one authorization request w
 Three commands settle whether the authorization-request side works, and they would turn Module 10's grant
 material from half a feature into the whole one.
 
-## Finding F-3 — §5.1's confidential-clients-only restriction is not enforced (S3)
+## Finding F-3 — §5.1's confidential-clients-only restriction is not enforced (S3) — ⚠️ **RULED 2026-08-14 (GM-W3) — accepted departure, not fixed**
+
+> **Status: ruled, not closed.** There is no scope-level restriction to apply — both grant-management scopes
+> carry no client-type condition, and the only lever (`requestableScopes` allowlisting) would mean maintaining
+> a full scope allowlist forever on this deployment's two public clients. **Decision: allow public clients,
+> deliberately**, since `require-grant-ownership.ts`'s ownership gate is the compensating control and is
+> stricter than the draft requires. The exposure below is still real and unchanged in code; it is now a
+> recorded, deliberate departure rather than an unnoticed gap.
 
 The draft, §5.1: *"Grant management is restricted to confidential only clients due to security reasons."*
 
@@ -135,11 +149,16 @@ another grant — so this is S3, not S2. But the draft's restriction exists beca
 secret, and a grant-management token in a public client is a revocation capability sitting in a browser or a
 mobile binary. Authlete's scope model can restrict a scope to particular clients; nothing here does.
 
-## Finding F-4 — a second, divergent bearer-token parser (S4)
+## Finding F-4 — a second, divergent bearer-token parser (S4) — ✅ **FIXED 2026-08-13 (GM-W4)**
 
-`services/grant-management.service.ts:47-53` defines its own `extractBearerToken`, distinct from the exported one
-at `middleware/require-grant-ownership.ts:27-33`. Both are case-sensitive on `"Bearer "`, contrary to
-RFC 9110 §11.1; the middleware's version trims and rejects an empty remainder, the service's does not.
+> **Status: closed.** Both hand-rolled copies are gone, replaced by `extractAccessToken()` from `utils/dpop.ts`
+> — which also gave `/api/gm` the `DPoP` scheme and case-insensitive matching as a side effect. Two more
+> divergent parsers found in the same pass were fixed too: `vci.controller.ts` and
+> `middleware/require-basic-auth.ts`'s case-sensitive `"Basic "` match. The block below is the pre-fix state.
+
+`services/grant-management.service.ts:47-53` defined its own `extractBearerToken` (pre-fix), distinct from the exported one
+at `middleware/require-grant-ownership.ts:27-33`. Both were case-sensitive on `"Bearer "`, contrary to
+RFC 9110 §11.1; the middleware's version trimmed and rejected an empty remainder, the service's did not.
 
 This is the third bearer/Basic parser in the codebase, and `AGENTS.md` already has a rule for exactly this:
 *"Do not hand-roll `authorization.split(":")` again."* The DPoP work item **9449-W3** replaces the middleware's

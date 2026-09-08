@@ -129,11 +129,13 @@ surface in this repo has at least `generalLimiter`.
 > **Status:** closed as a consequence of F-1, exactly as this finding predicted. There is no unauthenticated
 > caller to emit it to.
 
-`controllers/introspection.controller.ts:84-97` parses Authlete's `WWW-Authenticate` and returns a
+`controllers/introspection.controller.ts` parses Authlete's `WWW-Authenticate` and returns a
 structured body carrying `acr_values`, `max_age`, `acr` and `auth_time`. That is correct RFC 9470
 behaviour toward a *legitimate* resource server, and an information leak toward anyone else. It is a
 consequence of F-1, not an independent defect, but it raises F-1's impact: the endpoint discloses how
-strongly a user authenticated and when.
+strongly a user authenticated and when. *(The parsing logic named here was at `:84-97` when this finding
+was written; the 2026-09-08 RFC 9470 step-up fix extracted it into a `buildStepUpChallenge()` helper,
+now around line 109 — cited without a line number here since it is not this finding's subject.)*
 
 ## Finding F-3 — hand-rolled Basic-auth decoding, contrary to a documented repo rule (S2) — ✅ **FIXED 2026-08-12, by deletion**
 

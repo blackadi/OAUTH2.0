@@ -63,9 +63,14 @@ not state outright who builds the JWT, so that claim rests on the observed behav
 (`action: LOCATION` with the AS-built content) rather than on the page; recorded as such rather than asserted
 from the vendor documentation.
 
-## Finding F-1 — the AS advertises four JARM response modes that no client can use (S3)
+## Finding F-1 — the AS advertises four JARM response modes that no client can use (S3) — ⚠️ **PARTIALLY CLOSED 2026-08-12 (JARM-W1)**
 
-Probe 2:
+> **Status: partial.** Client `1523514379` now has `authorizationSignAlg: ES256` set — verified live,
+> `response_mode=query.jwt` returns a correctly signed JARM response. The other two clients are unaffected.
+> **Read this as "one of three clients can use it" rather than "no client can.**" The probe below is the
+> pre-fix state (`authorizationSignAlg = <absent>` for all three).
+
+Probe 2 (as of the original probe, before JARM-W1):
 
 ```
 response_modes_supported                   = [query, fragment, form_post, query.jwt, fragment.jwt, form_post.jwt, jwt]

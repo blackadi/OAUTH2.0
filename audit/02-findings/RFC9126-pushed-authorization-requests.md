@@ -1,7 +1,8 @@
 # RFC 9126 — OAuth 2.0 Pushed Authorization Requests
 
 - **Verdict:** `PARTIAL`
-- **Severity:** **S2**
+- **Severity:** ~~**S2**~~ → **S4** *(F-1 fixed 2026-09-01, F-2 fixed under T1-11 — both were the S2
+  findings; F-3 fixed 2026-08-13 under 9449-W1. What remains is F-4 (S4) — see its own section)*
 - **Authlete version:** 3.0 (no minimum stated on the PAR page)
 - **Repo docs under test:** `docs/PAR-TUTORIAL.md`, `docs/FAPI-TUTORIAL.md` Step 3, `docs/curriculum/modules/05-request-integrity-and-binding/lab.md` Exercise 1, `docs/curriculum/SPEC-INVENTORY.md:133`
 
@@ -62,7 +63,12 @@
 | Accepting the RFC wire format | **This server** | `par.service.ts:14-22` — **wrong** |
 | `request_uri` lifetime | Authlete service config | `pushedAuthReqDuration = 600` (probe 2) |
 
-## Finding F-1 — the advertised PAR endpoint cannot accept a conformant PAR request (S2)
+## Finding F-1 — the advertised PAR endpoint cannot accept a conformant PAR request (S2) — ✅ **FIXED 2026-09-01 (9126-W1)**
+
+> **Status: closed.** `/api/par` now accepts a form-encoded `application/x-www-form-urlencoded` body and
+> forwards it verbatim as `parameters` — the JSON `{parameters}` shape stays supported too. Driven by three
+> real OpenID Foundation conformance runs dying at the first PAR call. Verified live: both wire shapes answer
+> `201` with the same enforcement. The block below is the pre-fix state.
 
 RFC 9126 §2.1: the client posts the authorization request parameters to the PAR endpoint in
 `application/x-www-form-urlencoded` form — the same parameters it would otherwise put in the authorization
@@ -105,10 +111,14 @@ boundary: the vendor's envelope should stop at the vendor.
 partner using a standard OAuth library. Every PAR request 400s. The learner then debugs their client, because
 the tutorial they followed told them the JSON shape was correct.
 
-## Finding F-2 — the response body is Authlete's envelope, not RFC 9126 §2.2's (S2)
+## Finding F-2 — the response body is Authlete's envelope, not RFC 9126 §2.2's (S2) — ✅ **FIXED (T1-11)**
+
+> **Status: closed.** `par.controller.ts` now calls `sendSpecBody`, sending §2.2's `{request_uri, expires_in}`
+> body rather than Authlete's envelope — the same `responseContent ?? result` pattern `token.controller.ts`
+> already used. The block below is the pre-fix state.
 
 ```ts
-// server/src/controllers/par.controller.ts:30
+// server/src/controllers/par.controller.ts:30 (pre-fix location)
 sendApiResponse(res, mapActionToStatus(result.action), result);
 ```
 
@@ -135,10 +145,14 @@ Three things are wrong with that as a §2.2 response:
 the repo already knows this pattern — `token.controller.ts:52,62,68` all send `result.responseContent ?? result`.
 PAR is the outlier, not the norm.
 
-## Finding F-3 — the DPoP `htu` sent for PAR includes the query string (S3)
+## Finding F-3 — the DPoP `htu` sent for PAR includes the query string (S3) — ✅ **FIXED 2026-08-13 (9449-W1), see `RFC9449-dpop.md` F-1**
+
+> **Status: closed.** `par.service.ts` now derives `htu` from `dpopHttpTarget()` like the other four call
+> sites. Verified live as part of 9449-W1: a query string no longer breaks proof validation. The block below
+> is the pre-fix state.
 
 ```ts
-// server/src/services/par.service.ts:60-63
+// server/src/services/par.service.ts:60-63 (pre-fix location)
 requestBody.htm = req.method;
 const protocol = req.protocol;
 const host = req.get("host") || "";

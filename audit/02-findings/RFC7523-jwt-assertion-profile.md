@@ -96,10 +96,17 @@ than S4: a non-expiring bearer assertion is a long-lived credential by construct
 (`/tmp/mkassert.mjs`) and the harness (`brk`) at `modules/06…/lab.md:326-341`, so this is a sixth row in an
 existing table.
 
-## Finding F-2 — two fields are assembled for the token-create call and silently discarded (S4)
+## Finding F-2 — two fields are assembled for the token-create call and silently discarded (S4) — ✅ **FIXED 2026-08-14 (T2-17, 7523-W3)**
+
+> **Status: closed.** `6aa6d5c` dropped both inert fields and wired `resources` from the `resource` request
+> parameter (`accessTokenResources` first, `resources` as fallback) instead — see 7523-W3 below for why a
+> literal `audience` field would have been a security defect, not a cleanup. This finding's own account was
+> also corrected in the process: the two fields were inert **twice over**, since
+> `TokenManagementService.create()` never read them even before this fix. The block below is the pre-fix
+> state, kept for the reasoning.
 
 ```ts
-// server/src/services/jwt-verification.service.ts:81-88
+// server/src/services/jwt-verification.service.ts:81-88 (pre-fix location)
 const createRequest = {
   grantType: "JWT_BEARER",
   subject,

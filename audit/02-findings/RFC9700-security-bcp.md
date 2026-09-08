@@ -195,7 +195,7 @@ surface can mint tokens attributed to a grant §2.1.2 says clients SHOULD NOT us
 `SHOULD NOT` binds clients rather than servers, so this is informational. Worth a one-line note in the
 admin API docs rather than a code change.
 
-## Finding F-4 — RESOLVED by live probe; posture now known and partly non-compliant (S2)
+## Finding F-4 — RESOLVED by live probe; posture now known and partly non-compliant (~~S2~~ → **S4**, see the banner above)
 
 `GET /api/{serviceId}/service/get` over raw HTTP returned **HTTP 200 with all 129 fields**
 (`SERVICE-CONFIG-PROBE.md`). So the posture was never unobservable — it is unobservable *through the SDK*,
@@ -218,7 +218,11 @@ The **reporting** defect below stands unchanged, and is now demonstrably worse t
 `/api/fapi/config` hardcodes `pkceRequired: true` and `scopeRequired: true`, while the live service holds
 `False` for both.
 
-## Finding F-4a — the posture is unobservable *through the SDK*, and misreported by the one endpoint that answers (S2)
+## Finding F-4a — the posture is unobservable *through the SDK*, and misreported by the one endpoint that answers (~~S2~~ → **S4**, see the banner above) — ✅ **both halves fixed 2026-08-11/12 (FAPI2-W1, T1-5)**
+
+> **Status: closed.** `SPIFFE_JWT` was withdrawn (T1-5), so `service.get()` no longer throws and the four
+> flags below are readable again; `pkceRequired`/`scopeRequired` were also switched from hardcoded literals
+> to live reads by FAPI2-W1, a day *before* the enum fix. The block below is the pre-fix state.
 
 Requirements #1–#4 are Authlete's to enforce, which is correct delegation. But **this server cannot
 report what Authlete is configured to do**, because the only code path that reads those flags —

@@ -49,9 +49,15 @@
 Nothing else. This is the shortest boundary in the audit, and the verdict is `IMPLEMENTED_VERIFIED` on the
 strength of a reproducible transcript rather than on code inspection.
 
-## Finding F-1 — the repo's own OAuth client ignores `iss` (S3)
+## Finding F-1 — the repo's own OAuth client ignores `iss` (S3) — ✅ **FIXED 2026-08-22 (`0c1bd79`, 9207-W1)**
 
-`client/src/pages/CallbackPage.tsx:38-40` reads exactly three parameters:
+> **Status: closed.** `CallbackPage.tsx` now reads `iss`, compares its **origin** (not a prefix) against the
+> configured API base URL's origin, and rejects the exchange with an error on mismatch — exactly RFC 9207
+> §2.4's MUST. A missing or unparseable `iss` is surfaced as a non-fatal warning rather than silently
+> ignored, which is a deliberate, distinct choice from a hard reject (this AS may not send `iss` at all
+> configurations). The block below is the pre-fix state.
+
+`client/src/pages/CallbackPage.tsx:38-40` read exactly three parameters (pre-fix):
 
 ```ts
 const code = url.searchParams.get('code');
@@ -73,9 +79,13 @@ This SPA talks to one, configured at build time (`client/src/config.ts`), so the
 *this* deployment exploitable. It does mean the repo teaches a defence it does not itself deploy, in a
 codebase learners read as a reference client.
 
-## Finding F-2 — the mechanism is intact; its trust anchor is not (S3, cross-reference)
+## Finding F-2 — the mechanism is intact; its trust anchor is not (S3, cross-reference) — ✅ **FIXED 2026-08-14, see `DISCOVERY-rfc8414-oidc-discovery.md` F-1 (DR-11)**
 
-Probe 2:
+> **Status: closed.** DR-11 aligned `issuer` and all URL-valued service fields to one stable host, so the
+> metadata document is now retrievable at the issuer's own well-known URI — the trust anchor this finding
+> said was missing now exists. The probe below is the pre-fix state.
+
+Probe 2 (pre-fix):
 
 ```
 issuer                 = https://blackadi.dev
