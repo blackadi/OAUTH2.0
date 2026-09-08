@@ -273,9 +273,9 @@ RFC 8252 redirect hardening and the refresh-token rule — neither of which the 
 
 ## Where this lives in the code
 
-- **`client/src/pkce.ts`** — the whole implementation, 33 lines. `generateCodeVerifier()` (line 12) builds a
+- **`client/src/pkce.ts`** — the whole implementation, 27 lines. `generateCodeVerifier()` (line 6) builds a
   64-character verifier from RFC 7636's unreserved set using `crypto.getRandomValues`;
-  `generateCodeChallenge()` (line 23) is the S256 transform: `crypto.subtle.digest('SHA-256', …)` then
+  `generateCodeChallenge()` (line 17) is the S256 transform: `crypto.subtle.digest('SHA-256', …)` then
   base64url. Compare it line by line with §4.1 and §4.2.
   > *A calibrated observation for your code-review muscle:* the verifier uses `randomValues[i] % chars.length`
   > with a 66-character alphabet, and 256 is not a multiple of 66 — so 58 characters are marginally more
@@ -284,9 +284,13 @@ RFC 8252 redirect hardening and the refresh-token rule — neither of which the 
   > exploitable, not worth a CVE — but you should be able to *spot* it and then correctly decline to panic.
   > (Note also that `AGENTS.md` and the spec inventory previously listed this file under
   > `client/src/services/`; it is at `client/src/pkce.ts`.)
-- **`client/src/components/fapi/FapiSection.tsx:134`** and **`components/oidc/ParSection.tsx:41`** (written
-  there; read back at `:34`) — the verifier is stashed in `sessionStorage` across the redirect. Note *where* it lives and ask yourself what an
-  XSS bug would do to it; that question is the heart of Tier 4.
+- **`client/src/components/fapi/use-fapi-flow.ts:134`** and **`components/oidc/ParSection.tsx:66`** (written
+  there; read back at `:56`) — the verifier is stashed in `sessionStorage` across the redirect, via the
+  `writeKey`/`readKey` helpers (`services/session-keys.ts`), not a direct `sessionStorage` call. **Corrected
+  2026-09-08**: this previously named `FapiSection.tsx` for the FAPI-flow write, which has no PKCE code at
+  all — the real write is in that component's hook, `use-fapi-flow.ts`, a different file that happens to
+  share the same line number. Note *where* the verifier lives and ask yourself what an XSS bug would do to
+  it; that question is the heart of Tier 4.
 - **Authlete** performs the §4.6 verification. This server never sees a `code_verifier` except to forward it.
 
 ## Wire-level walkthrough
