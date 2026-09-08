@@ -232,7 +232,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
     'introspect-std': {
       title: 'Introspection (RFC 7662)',
       description:
-        'Introspects an access token following the OAuth 2.0 Token Introspection standard (RFC 7662). Returns a standardized response that is provider-agnostic.',
+        'Introspects an access token following the OAuth 2.0 Token Introspection standard (RFC 7662). Returns a standardized response that is provider-agnostic. Optionally, RFC 9701 lets you ask for that response signed as a JWT instead of plain JSON.',
       params: [
         {
           name: 'Token',
@@ -242,10 +242,18 @@ const docs: Record<string, Record<string, OpDoc>> = {
           name: 'Admin Client ID / Secret',
           desc: 'MGMT_CLIENT_ID / MGMT_CLIENT_SECRET. RFC 7662 §2.1 requires the endpoint to be protected, to prevent token scanning.',
         },
+        {
+          name: 'Request a signed (JWT) response (RFC 9701)',
+          desc: 'Sends Accept: application/token-introspection+jwt instead of asking for JSON. Authlete decides which shape to answer with purely from this request header — there is no body flag for it.',
+        },
+        {
+          name: 'Resource server URI (rsUri)',
+          desc: "Only used when the JWT response is requested. §4 places this value in the response's aud claim, identifying which resource server asked. Required for the JWT form — Authlete refuses with [A404301] if it is missing, which this server passes through as a 400.",
+        },
       ],
       returns:
-        'JSON with active (boolean), sub, scope, client_id, token_type, exp, iat, and other standard fields per RFC 7662. An unknown or revoked token gives 200 with {"active":false} — §2.2 makes an inactive token a result, not an error.',
-      tips: 'Use this for interoperability or when you need a provider-agnostic response. Compare its 200 {"active":false} for an unknown token with the Authlete endpoint\'s 401 for the same input: two correct answers to different questions.',
+        'Plain JSON by default: active (boolean), sub, scope, client_id, token_type, exp, iat, and other standard fields per RFC 7662. An unknown or revoked token gives 200 with {"active":false} — §2.2 makes an inactive token a result, not an error. With the JWT toggle on, the body is instead a compact JWS (typ: token-introspection+jwt) carrying the same claims plus iss, aud and a nested token_introspection object — decode it in the Evidence rail\'s Inspect tab.',
+      tips: 'Use this for interoperability or when you need a provider-agnostic response. Compare its 200 {"active":false} for an unknown token with the Authlete endpoint\'s 401 for the same input: two correct answers to different questions. The JWT form is what lets a resource server trust an introspection response it received over a channel it does not otherwise trust — see RFC 9701 §1.',
     },
     revoke: {
       title: 'Revoke Token',
@@ -944,7 +952,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
     complete: {
       title: 'Complete Device Flow',
       description:
-        'Completes the device flow after the end-user has authenticated and made an authorization decision. The result indicates whether the user AUTHORIZED the request, ACCESS_DENIED it, or if there was a TRANSACTION_FAILED. On AUTHORIZED, Authlete stores the authorization so the device can obtain tokens by polling the token endpoint.',
+        'Completes the device flow after the end-user has authenticated and made an authorization decision. The result indicates whether the user AUTHORIZED the request, ACCESS_DENIED it, or if there was a TRANSACTION_FAILED. On AUTHORIZED, Authlete stores the authorization so the device can obtain tokens by polling the token endpoint. This endpoint stands in for the interactive login/consent step a real deployment would gate behind an authenticated session (RFC 8628 §3.4 assumes a human decides this, not an API caller), so it only answers with NODE_ENV=development set — everywhere else it is a flat 404, on purpose, not a bug in this tool.',
       params: [
         { name: 'User Code', desc: 'The user_code from the device flow initiation.' },
         {
@@ -957,8 +965,8 @@ const docs: Record<string, Record<string, OpDoc>> = {
         },
       ],
       returns:
-        'JSON with action (SUCCESS, ACCESS_DENIED, USER_CODE_NOT_EXIST, USER_CODE_EXPIRED, or SERVER_ERROR) and resultCode/resultMessage.',
-      tips: 'After AUTHORIZED, the device polls the token endpoint with grant_type=urn:ietf:params:oauth:grant-type:device_code and the device_code. Authlete returns tokens once the flow is complete.',
+        'JSON with action (SUCCESS, ACCESS_DENIED, USER_CODE_NOT_EXIST, USER_CODE_EXPIRED, or SERVER_ERROR) and resultCode/resultMessage. A 404 with no body means this deployment is not running in development — the endpoint is disabled by design, not missing.',
+      tips: 'After AUTHORIZED, the device polls the token endpoint with grant_type=urn:ietf:params:oauth:grant-type:device_code and the device_code. Authlete returns tokens once the flow is complete. Only reachable when NODE_ENV=development — see the description above.',
     },
     poll: {
       title: 'Poll Token Endpoint',

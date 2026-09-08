@@ -1,4 +1,4 @@
-import { screen, cleanup, waitFor } from '@testing-library/react';
+import { screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TokenOpsSection } from '@/components/oidc/TokenOpsSection';
 import { tokenService } from '@/services';
@@ -157,8 +157,70 @@ describe('TokenOpsSection — introspection, which is admin-gated', () => {
 
     press(/Introspect \(RFC 7662\)/i);
 
-    const args = (await expectCall(spy, 'the Introspect (RFC 7662) button')) as string[];
-    expect(args).toEqual(['at-bearer-01', 'mgmt-id', 'mgmt-secret']);
+    const args = await expectCall(spy, 'the Introspect (RFC 7662) button');
+    expectSends(args, 'at-bearer-01', 'the token being introspected');
+    expectSends(args, 'mgmt-id', 'RFC 7662 §2.1 requires the endpoint be protected');
+    expectSends(args, 'mgmt-secret', 'RFC 7662 §2.1 requires the endpoint be protected');
+  });
+
+  /**
+   * RFC 9701 — the toggle and the `rsUri` field only exist for the RFC 7662 tab, and the section must
+   * not invent an `rsUri` the user never typed: an empty one sent as `''` would still be *present* in
+   * the options object, which is indistinguishable from a caller who deliberately left it out.
+   */
+  describe('RFC 9701 — asking for a signed introspection response', () => {
+    it('does not send jwtResponse:true or an rsUri until the toggle is checked', async () => {
+      seedTokens({ access_token: 'at-bearer-01' });
+      const spy = vi
+        .spyOn(tokenService, 'introspectionStandard')
+        .mockResolvedValue({ active: true });
+      mountSection(<TokenOpsSection />);
+      fillAdminCredentials();
+
+      press(/Introspect \(RFC 7662\)/i);
+
+      const args = (await expectCall(spy, 'the Introspect (RFC 7662) button')) as [
+        string,
+        string,
+        string,
+        { jwtResponse?: boolean; rsUri?: string },
+      ];
+      expect(args[3]).toEqual({ jwtResponse: false, rsUri: undefined });
+    });
+
+    it('sends jwtResponse:true and the typed rsUri once the toggle and field are used', async () => {
+      seedTokens({ access_token: 'at-bearer-01' });
+      const spy = vi
+        .spyOn(tokenService, 'introspectionStandard')
+        .mockResolvedValue('header.payload.signature');
+      mountSection(<TokenOpsSection />);
+      fillAdminCredentials();
+      press(/Introspect \(RFC 7662\)/i);
+      await expectCall(spy, 'the Introspect (RFC 7662) button');
+      spy.mockClear();
+
+      fireEvent.click(screen.getByLabelText(/Request a signed \(JWT\) response/i));
+      fill(/Resource server URI/i, 'https://api.example.com');
+      press(/Introspect \(RFC 7662\)/i);
+
+      const args = (await expectCall(spy, 'the Introspect (RFC 7662) button')) as [
+        string,
+        string,
+        string,
+        { jwtResponse?: boolean; rsUri?: string },
+      ];
+      expect(args[3]).toEqual({ jwtResponse: true, rsUri: 'https://api.example.com' });
+    });
+
+    it('reveals the rsUri field only once the JWT toggle is checked', () => {
+      seedTokens({ access_token: 'at-bearer-01' });
+      mountSection(<TokenOpsSection />);
+      press(/Introspect \(RFC 7662\)/i);
+
+      expect(screen.queryByLabelText(/Resource server URI/i)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText(/Request a signed \(JWT\) response/i));
+      expect(screen.getByLabelText(/Resource server URI/i)).toBeInTheDocument();
+    });
   });
 });
 

@@ -9,6 +9,7 @@ import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { useUrlState } from '@/hooks/useUrlState';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -71,6 +72,10 @@ function TokenOpsSection() {
   // RFC 9470: Step-up auth validation inputs for Authlete introspection
   const [introspectAcrValues, setIntrospectAcrValues] = useState('');
   const [introspectMaxAge, setIntrospectMaxAge] = useState('');
+
+  // RFC 9701: ask the RFC 7662 endpoint for a signed JWT response instead of plain JSON.
+  const [jwtResponse, setJwtResponse] = useState(false);
+  const [rsUri, setRsUri] = useState('');
 
   // RFC 7662 §2.1 requires the introspection endpoint to be protected. Both endpoints take this
   // deployment's admin credentials — see the note in services/token.service.ts.
@@ -233,7 +238,10 @@ function TokenOpsSection() {
                     );
                   }
                   case 'introspect-std':
-                    return tokenService.introspectionStandard(at!, adminId, adminSecret);
+                    return tokenService.introspectionStandard(at!, adminId, adminSecret, {
+                      jwtResponse,
+                      rsUri: rsUri.trim() || undefined,
+                    });
                   case 'revoke':
                     // Unreachable: revocation is handled above, behind a confirmation. The case stays
                     // so the switch remains exhaustive over `TokenOp` — adding a fifth operation should
@@ -279,6 +287,39 @@ function TokenOpsSection() {
           <p className="text-2xs text-muted-foreground">
             If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns{' '}
             <code>insufficient_user_authentication</code> with the required values.
+          </p>
+        </div>
+      )}
+
+      {activeOp === 'introspect-std' && (
+        <div className="space-y-3 rounded-lg border border-edge-info bg-tint-info p-3">
+          <p className="text-xs font-medium text-info-text">
+            RFC 9701 — JWT Secured Introspection Response
+          </p>
+          <Checkbox
+            label="Request a signed (JWT) response"
+            checked={jwtResponse}
+            onChange={(e) => setJwtResponse(e.target.checked)}
+            hint={
+              <>
+                Sends <code>Accept: application/token-introspection+jwt</code> instead of asking for
+                plain JSON. Authlete decides purely from this header — there is no body flag for it.
+              </>
+            }
+          />
+          {jwtResponse && (
+            <Input
+              label="Resource server URI (rsUri)"
+              value={rsUri}
+              onChange={(e) => setRsUri(e.target.value)}
+              placeholder="https://api.example.com"
+              hint="§4 puts this in the response's aud claim. Required for the JWT form: omitting it earns [A404301] from Authlete, surfaced here as a 400."
+            />
+          )}
+          <p className="text-2xs text-muted-foreground">
+            The response is a compact JWS, not the §2.2 JSON body above — decode it in the Evidence
+            rail's Inspect tab to verify <code>iss</code>, <code>aud</code> and{' '}
+            <code>token_introspection</code>.
           </p>
         </div>
       )}

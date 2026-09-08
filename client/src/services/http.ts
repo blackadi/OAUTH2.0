@@ -66,11 +66,16 @@ async function postBasicAuth(
   clientId: string,
   clientSecret: string,
   schema?: Schema,
+  extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
   return sendForBody({
     method: 'POST',
     url,
-    headers: { 'Content-Type': FORM, Authorization: basic(clientId, clientSecret) },
+    headers: {
+      'Content-Type': FORM,
+      Authorization: basic(clientId, clientSecret),
+      ...extraHeaders,
+    },
     body: params.toString(),
     ...(schema ? { schema } : {}),
   });

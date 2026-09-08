@@ -1,22 +1,19 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { toast } from 'sonner';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { AUTHORIZATION_ENDPOINT, CLIENT_ID, DEFAULT_SCOPES, getRedirectUri } from '@/config';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { JsonBlock } from '@/components/ui/JsonBlock';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
+import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
-import { FlowDiagram } from '@/components/ui/FlowDiagram';
-import { ShieldAlert, ArrowUpCircle } from 'lucide-react';
+import { ArrowUpCircle } from 'lucide-react';
 import { getDoc } from '@/data/operationDocs';
 import { stringMember } from '@/utils/parse-json';
 import { useCredentials } from '@/context/CredentialContext';
 import { HttpError } from '@/services/transport';
+import '@/styles/transcript.css';
 
 interface StepUpChallenge {
   error: string;
@@ -27,15 +24,16 @@ interface StepUpChallenge {
   auth_time?: number;
 }
 
-const flowSteps = [
-  { id: 'introspect', label: 'Introspect' },
-  { id: 'challenge', label: 'Challenge' },
-  { id: 'reauth', label: 'Re-Auth' },
-  { id: 'newtoken', label: 'New Token' },
-];
-
+/**
+ * RFC 9470, rendered as the exchange it is — the same conversion `ParSection` had, and for the same
+ * reason. A form-then-dump shape says nothing about *why* the introspection above resolves into a
+ * front-channel redirect below: the challenge fields on turn 2 are exactly the parameters turn 3 uses,
+ * and a spine makes that visible instead of implied by page order.
+ *
+ * **Behaviour is unchanged.** `handleIntrospect`, the `HttpError.body` challenge read, and `reAuthUrl`'s
+ * construction are the incumbent implementation verbatim; only the markup around them changed.
+ */
 function StepUpSection() {
-  // Was an inline literal, which kept it out of the one registry every other section reads from.
   const doc = getDoc('step-up', 'introspect');
   const { tokenSet } = useToken();
   const at = tokenSet?.access_token;
@@ -51,6 +49,8 @@ function StepUpSection() {
   // held their own copy, and a route change unmounts a section, so it had to be retyped on
   // every navigation.
   const { clientId: adminId, clientSecret: adminSecret } = useCredentials();
+
+  const uid = useId();
 
   const handleIntrospect = async () => {
     setChallenge(null);
@@ -137,151 +137,194 @@ function StepUpSection() {
     return `${AUTHORIZATION_ENDPOINT}?${params.toString()}`;
   })();
 
-  return (
-    <SectionPanel
-      title="Step-Up Authentication"
-      description="RFC 9470 — Test step-up authentication challenges via token introspection"
-      icon={<ShieldAlert className="h-4 w-4" />}
-    >
-      <div className="space-y-4">
-        {doc && <OperationDescription doc={doc} />}
+  const settled = Boolean(result || challenge || error);
 
-        <FlowDiagram
-          steps={flowSteps}
-          currentStep={!challenge ? (loading ? 'introspect' : undefined) : 'challenge'}
-          className="py-2"
-        />
+  return (
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">Step-Up Authentication</h1>
+        <span className="tx-ref">RFC 9470</span>
+      </header>
+
+      <p className="tx-standfirst">
+        A protected resource decides a token&apos;s authentication is not strong enough and names
+        what it needs — an ACR, a maximum authentication age. The client reads that requirement off
+        the refusal and re-authorizes asking for it as a hard requirement, not a preference.
+      </p>
+
+      <div className="tx-body">
+        {doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
+          />
+        )}
 
         {!at && (
-          <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
-            <p className="font-medium">No access token available</p>
-            <p className="mt-1 text-xs text-warning-text">
-              Obtain a token first via Grant Flows, then return here to test step-up challenges.
-            </p>
+          <div className="tx-waiting">
+            <strong>No access token available.</strong> Obtain a token first via Grant Flows, then
+            return here to test step-up challenges.
           </div>
         )}
 
         {at && (
           <>
-            <div className="space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">Introspection Credentials</p>
-              <p className="text-xs text-muted-foreground">
+            {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+            <div className="tx-turn" data-dir="out">
+              <span className="tx-marker" aria-hidden="true" />
+              <div className="tx-turn-head">
+                <span className="tx-turn-label">1 · Client → Server</span>
+                <span className="tx-turn-note">introspecting with requirements</span>
+              </div>
+
+              <p className="tx-hint" style={{ marginBottom: '0.5rem' }}>
                 RFC 7662 §2.1 requires the introspection endpoint to be protected, so this flow
                 needs the deployment&apos;s admin credentials. Without them the server answers{' '}
                 <code>401</code>.
               </p>
+              {/* Shared across ~8 admin-gated sections; not restyled into `.tx` here, since that is a
+                  separate, cross-cutting change rather than something this conversion owns. */}
               <AdminAuth />
-              <p className="text-xs font-medium text-muted-foreground">
-                Protected Resource Requirements
-              </p>
-              <Input
-                label="Required ACR Values (space-separated)"
-                value={requiredAcrs}
-                onChange={(e) => setRequiredAcrs(e.target.value)}
-                placeholder="e.g. urn:mace:incommon:iap:silver"
-              />
-              <Input
-                label="Max Authentication Age (seconds)"
-                type="number"
-                value={maxAge}
-                onChange={(e) => setMaxAge(e.target.value)}
-                placeholder="e.g. 300"
-              />
-              {/* `disabled` reads `loading` directly. It used to be `loading !== null`, and
-                  `useAsyncCall` reports `loading` as a *boolean* — so the comparison was always true
-                  and this button, the only control in the section, was permanently disabled. The
-                  `!== null` idiom belongs to `useDiscriminatedAsyncCall`, whose `loading` is
-                  `T | null`; TypeScript permits a null comparison against any type, so nothing
-                  flagged the copy. Locked by tests/sections.smoke.test.tsx. */}
-              <Button
-                onClick={handleIntrospect}
-                loading={loading}
-                disabled={!at || loading}
-                className="w-full sm:w-auto"
-              >
-                <ShieldAlert className="h-4 w-4 mr-2" />
-                Introspect with Requirements
-              </Button>
+
+              <label className="tx-field" htmlFor={`${uid}-acr`}>
+                <span className="tx-label">Required ACR Values (space-separated)</span>
+                <input
+                  id={`${uid}-acr`}
+                  className="tx-input"
+                  value={requiredAcrs}
+                  onChange={(e) => setRequiredAcrs(e.target.value)}
+                  placeholder="e.g. urn:mace:incommon:iap:silver"
+                />
+              </label>
+              <label className="tx-field" htmlFor={`${uid}-maxage`}>
+                <span className="tx-label">Max Authentication Age (seconds)</span>
+                <input
+                  id={`${uid}-maxage`}
+                  className="tx-input"
+                  type="number"
+                  value={maxAge}
+                  onChange={(e) => setMaxAge(e.target.value)}
+                  placeholder="e.g. 300"
+                />
+              </label>
+
+              <div className="tx-actions">
+                <button
+                  type="button"
+                  className="tx-btn tx-btn-primary"
+                  onClick={handleIntrospect}
+                  disabled={!at || loading}
+                >
+                  {loading && <span className="tx-spin" aria-hidden="true" />}
+                  {loading ? 'Introspecting…' : 'Introspect with Requirements'}
+                </button>
+              </div>
             </div>
 
-            {challenge && (
-              <div className="space-y-3 rounded-lg border border-edge-danger bg-tint-danger p-4">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="h-5 w-5 text-danger-text" />
-                  <p className="text-sm font-medium text-danger-text">
-                    Step-Up Authentication Required
-                  </p>
-                </div>
+            {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+            <div
+              className="tx-turn"
+              data-dir={settled ? 'in' : undefined}
+              data-state={settled ? 'landed' : 'pending'}
+            >
+              <span className="tx-marker" aria-hidden="true" />
+              <div className="tx-turn-head">
+                <span className="tx-turn-label">2 · Server → Client</span>
+                {challenge && (
+                  <span className="tx-turn-note">401 insufficient_user_authentication</span>
+                )}
+                {Boolean(result) && !challenge && <span className="tx-turn-note">200</span>}
+              </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Error:</span>{' '}
-                    <code className="text-danger-text">{challenge.error}</code>
+              {challenge ? (
+                <div className="tx-evidence tx-lands" data-outcome="refused">
+                  <div className="tx-evidence-head">
+                    <span className="tx-evidence-verdict">Step-up authentication required</span>
                   </div>
+                  <span className="tx-datum">
+                    <span className="tx-datum-key">error</span>
+                    <span className="tx-datum-value">{challenge.error}</span>
+                  </span>
                   {challenge.acr && (
-                    <div>
-                      <span className="text-muted-foreground">Current ACR:</span>{' '}
-                      <code className="text-warning-text">{challenge.acr}</code>
-                    </div>
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Current ACR</span>
+                      <span className="tx-datum-value">{challenge.acr}</span>
+                    </span>
                   )}
                   {challenge.auth_time && (
-                    <div>
-                      <span className="text-muted-foreground">Auth Time:</span>{' '}
-                      <code className="text-warning-text">
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Auth Time</span>
+                      <span className="tx-datum-value">
                         {new Date(challenge.auth_time * 1000).toLocaleString()}
-                      </code>
-                    </div>
+                      </span>
+                    </span>
                   )}
                   {challenge.acr_values && (
-                    <div>
-                      <span className="text-muted-foreground">Required ACRs:</span>{' '}
-                      <code className="text-success-text">{challenge.acr_values}</code>
-                    </div>
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Required ACRs</span>
+                      <span className="tx-datum-value">{challenge.acr_values}</span>
+                    </span>
                   )}
                   {challenge.max_age && (
-                    <div>
-                      <span className="text-muted-foreground">Max Age:</span>{' '}
-                      <code className="text-success-text">{challenge.max_age}s</code>
-                    </div>
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Max Age</span>
+                      <span className="tx-datum-value">{challenge.max_age}s</span>
+                    </span>
+                  )}
+                  {challenge.error_description && (
+                    <p className="tx-hint">{challenge.error_description}</p>
                   )}
                 </div>
-
-                {challenge.error_description && (
-                  <p className="text-xs text-danger-text">{challenge.error_description}</p>
-                )}
-
-                {reAuthUrl && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      Re-authorize with stronger authentication requirements:
-                    </p>
-                    <a href={reAuthUrl}>
-                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                        <ArrowUpCircle className="h-4 w-4 mr-2" />
-                        Re-Authenticate with Required ACR
-                      </Button>
-                    </a>
-                    <p className="text-2xs text-muted-foreground">
-                      This opens the authorization endpoint with <code>claims</code> requesting the
-                      required ACR as essential, plus <code>prompt=login</code> to force
-                      re-authentication.
-                    </p>
+              ) : result ? (
+                <div className="tx-evidence tx-lands" data-outcome="issued">
+                  <div className="tx-evidence-head">
+                    <span className="tx-evidence-verdict">Token is sufficient</span>
                   </div>
-                )}
-              </div>
-            )}
+                  <JsonBlock data={result} label="Introspection Result" />
+                </div>
+              ) : error ? (
+                <ErrorExplainer error={error} />
+              ) : (
+                <div className="tx-waiting">
+                  The server answers either a plain introspection result, or a <code>401</code>{' '}
+                  naming the <code>acr_values</code>/<code>max_age</code> it needs. Nothing is sent
+                  until you introspect.
+                </div>
+              )}
+            </div>
 
-            {result && !challenge && <JsonBlock data={result} label="Introspection Result" />}
+            {/* ── Turn 3 ─────────────────────────────────────────────────────── */}
+            <div className="tx-turn" data-state={challenge ? 'landed' : 'pending'}>
+              <span className="tx-marker" aria-hidden="true" />
+              <div className="tx-turn-head">
+                <span className="tx-turn-label">3 · Browser → Server</span>
+                <span className="tx-turn-note">front channel</span>
+              </div>
+
+              {challenge && reAuthUrl ? (
+                <div className="space-y-2">
+                  <p className="tx-hint">
+                    Re-authorize with stronger authentication requirements — the ACR travels as an{' '}
+                    <code>essential</code> claim, not a preference, plus <code>prompt=login</code>{' '}
+                    to force a fresh authentication event:
+                  </p>
+                  <a href={reAuthUrl}>
+                    <button type="button" className="tx-btn tx-btn-primary">
+                      <ArrowUpCircle className="h-4 w-4" style={{ marginRight: '0.4em' }} />
+                      Re-Authenticate with Required ACR
+                    </button>
+                  </a>
+                </div>
+              ) : (
+                <div className="tx-waiting">
+                  A step-up challenge builds this request. Nothing to send until one lands above.
+                </div>
+              )}
+            </div>
           </>
         )}
-
-        {error && !challenge && (
-          <div className="rounded-lg border border-edge-danger bg-tint-danger px-3 py-2">
-            <ErrorExplainer error={error} />
-          </div>
-        )}
       </div>
-    </SectionPanel>
+    </section>
   );
 }
 

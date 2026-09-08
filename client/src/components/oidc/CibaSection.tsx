@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { toast } from 'sonner';
 import { cibaService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
@@ -6,16 +6,12 @@ import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
-import { Select } from '@/components/ui/Select';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { useTraces } from '@/hooks/useTraces';
 import { sequenceProgress, type SequenceStepSpec } from '@/utils/sequence-progress';
+import '@/styles/transcript.css';
 
 type CibaOp = 'authentication' | 'issue' | 'fail' | 'complete' | 'poll';
 
@@ -54,15 +50,27 @@ const CIBA_OPS: { value: CibaOp; label: string }[] = [
   { value: 'poll', label: 'Poll Token' },
 ];
 
+const OP_ENDPOINT: Record<CibaOp, string> = {
+  authentication: '/api/ciba/authentication',
+  issue: '/api/ciba/issue',
+  fail: '/api/ciba/fail',
+  complete: '/api/ciba/complete',
+  poll: '/api/token',
+};
+
 /**
  * CIBA Core is a **sequence**, not a menu.
  *
  * §7.1 pushes the backchannel authentication request, §7.3 answers with an `auth_req_id`, the client
- * then polls the token endpoint, and the OP reports the End-User's decision through `complete`. Rendered
- * as four peer tabs, the ordering — and the fact that each call needs the previous one's output — was
- * invisible. This server splits §7.1/§7.3 into two calls of its own (`authentication` returns Authlete's
- * `ticket`, `issue` turns it into the `auth_req_id`), which is a departure worth *seeing* rather than
- * being surprised by.
+ * then polls the token endpoint, and the OP reports the End-User's decision through `complete`. This
+ * server splits §7.1/§7.3 into two calls of its own (`authentication` returns Authlete's `ticket`,
+ * `issue` turns it into the `auth_req_id`), which is a departure worth *seeing* rather than being
+ * surprised by — the `FlowDiagram` above the tabs states the order, and each tab below is rendered as
+ * the exchange it performs: what you send, what came back.
+ *
+ * **Behaviour is unchanged from the tabbed-card version this replaces.** `handleCall`,
+ * `handlePollToken` and every service call are the incumbent implementation; only the markup changed,
+ * from "form, then a JSON dump underneath" to a two-turn transcript per operation.
  */
 const CIBA_STEPS: SequenceStepSpec[] = [
   {
@@ -124,6 +132,7 @@ function CibaSection() {
   const doc = activeOp ? getDoc('ciba', activeOp) : undefined;
   const traces = useTraces();
   const progress = sequenceProgress(CIBA_STEPS, traces);
+  const uid = useId();
 
   const handleCall = async (fn: () => Promise<unknown>) => {
     const { data, error: err } = await call(fn);
@@ -197,197 +206,319 @@ function CibaSection() {
     }
   };
 
+  const settled = activeOp === 'poll' ? pollResult !== null || pollError !== null : Boolean(result);
+
   return (
-    <SectionPanel
-      title="CIBA (Client-Initiated Backchannel Authentication)"
-      description="OpenID Connect CIBA Core 1.0"
-    >
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">CIBA (Client-Initiated Backchannel Authentication)</h1>
+        <span className="tx-ref">OpenID Connect CIBA Core 1.0</span>
+      </header>
+
+      <p className="tx-standfirst">
+        The client asks the OP to authenticate a user on a device it isn&apos;t talking to right
+        now, and polls for the outcome. This deployment splits §7.1/§7.3 into two calls of its own —
+        pick a step below to see what it sends and what comes back.
+      </p>
+
       {error && <ErrorExplainer error={error} className="mb-3" />}
-
-      {/* The sequence, above the tabs that select a step in it. `FlowDiagram` and the progress
-
-
-          derivation both already existed and were applied to 3 of 20 sections; this is one of the
-
-
-          eight that rendered an ordered protocol as a row of peers. */}
 
       <FlowDiagram
         steps={CIBA_STEPS}
-
         currentStep={progress.currentStep}
-
         completedSteps={progress.completedSteps}
-
         className="mb-3"
       />
 
       <TabBar options={CIBA_OPS} value={activeOp} onChange={setActiveOp} />
 
-      {activeOp && doc && <OperationDescription doc={doc} />}
+      <div className="tx-body">
+        {activeOp && doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
+          />
+        )}
 
-      {activeOp === 'authentication' && (
-        <div className="space-y-3">
-          <Textarea
-            label="Parameters (URL-encoded)"
-            rows={4}
-            value={parameters}
-            onChange={(e) => setParameters(e.target.value)}
-            placeholder="login_hint=admin&scope=openid"
-          />
-          <Input
-            label="Client ID"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            placeholder="your_client_id"
-          />
-          <Input
-            label="Client Secret"
-            type="password"
-            value={clientSecret}
-            onChange={(e) => setClientSecret(e.target.value)}
-            placeholder="your_client_secret"
-          />
-          <Select
-            label="Client Auth Method"
-            value={authMethod}
-            onChange={(e) => setAuthMethod(e.target.value as 'basic' | 'post')}
-            options={[
-              { value: 'basic', label: 'client_secret_basic (Authorization header)' },
-              { value: 'post', label: 'client_secret_post (request body)' },
-            ]}
-          />
-          <p className="text-xs text-muted-foreground">
-            This must match the client&apos;s registered method. Authlete checks <em>where</em> the
-            credentials arrive, not just whether they are correct — the wrong channel returns
-            <code> 401 [A157357]</code>. Authlete&apos;s CIBA guide recommends{' '}
-            <code>client_secret_basic</code>, and the backchannel and token endpoints must use the
-            same method.
-          </p>
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                cibaService.backchannelAuthentication(
-                  authMethod === 'basic' ? { parameters } : { parameters, clientId, clientSecret },
-                  authMethod === 'basic' && clientId ? { clientId, clientSecret } : undefined,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'issue' && (
-        <div className="space-y-3">
-          <Input
-            label="Ticket"
-            value={issueTicket}
-            onChange={(e) => setIssueTicket(e.target.value)}
-            placeholder="ticket from authentication response"
-          />
-          <Button
-            onClick={() => handleCall(() => cibaService.issue(issueTicket))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'fail' && (
-        <div className="space-y-3">
-          <Input
-            label="Ticket"
-            value={failTicket}
-            onChange={(e) => setFailTicket(e.target.value)}
-            placeholder="ticket from authentication response"
-          />
-          <Select
-            label="Reason"
-            options={FAIL_REASONS}
-            value={failReason}
-            onChange={(e) => setFailReason(e.target.value)}
-          />
-          <Button
-            onClick={() => handleCall(() => cibaService.fail(failTicket, failReason))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'complete' && (
-        <div className="space-y-3">
-          <Input
-            label="Ticket"
-            value={completeTicket}
-            onChange={(e) => setCompleteTicket(e.target.value)}
-            placeholder="ticket from authentication response"
-          />
-          <Select
-            label="Result"
-            options={COMPLETE_RESULTS}
-            value={completeResult}
-            onChange={(e) => setCompleteResult(e.target.value)}
-          />
-          <Input
-            label="Subject"
-            value={completeSubject}
-            onChange={(e) => setCompleteSubject(e.target.value)}
-            placeholder="admin"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                cibaService.complete(completeTicket, completeResult, completeSubject),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'poll' && (
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Polls the token endpoint with the{' '}
-            <code className="text-foreground-muted">auth_req_id</code> from the Issue step. In a
-            production CIBA POLL flow, the client polls at the{' '}
-            <code className="text-foreground-muted">interval</code> returned by the Issue endpoint.
-          </p>
-          <Input
-            label="auth_req_id"
-            value={authReqId}
-            onChange={(e) => setAuthReqId(e.target.value)}
-            placeholder="from Issue response"
-          />
-          <div className="flex gap-2 items-center">
-            <Button onClick={handlePollToken} loading={loading}>
-              Poll Token
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Expected interval: {pollInterval}s
-            </span>
-          </div>
-          {pollResult !== null && (
-            <div className="mt-2">
-              <JsonBlock data={pollResult} label="Token Response" />
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        {activeOp && (
+          <div className="tx-turn" data-dir="out">
+            <span className="tx-marker" aria-hidden="true" />
+            <div className="tx-turn-head">
+              <span className="tx-turn-label">1 · Client → Server</span>
+              <span className="tx-turn-note">POST {OP_ENDPOINT[activeOp]}</span>
             </div>
-          )}
-          {pollError && <p className="text-xs text-warning-text">{pollError}</p>}
-        </div>
-      )}
 
-      {activeOp && activeOp !== 'poll' && result ? (
-        <JsonBlock data={result} label="Response" />
-      ) : null}
-    </SectionPanel>
+            {activeOp === 'authentication' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-params`}>
+                  <span className="tx-label">Parameters (URL-encoded)</span>
+                  <textarea
+                    id={`${uid}-params`}
+                    className="tx-textarea"
+                    rows={4}
+                    value={parameters}
+                    onChange={(e) => setParameters(e.target.value)}
+                    placeholder="login_hint=admin&scope=openid"
+                  />
+                </label>
+                <div className="tx-row">
+                  <label className="tx-field" htmlFor={`${uid}-cid`}>
+                    <span className="tx-label">Client ID</span>
+                    <input
+                      id={`${uid}-cid`}
+                      className="tx-input"
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                      placeholder="your_client_id"
+                    />
+                  </label>
+                  <label className="tx-field" htmlFor={`${uid}-secret`}>
+                    <span className="tx-label">Client Secret</span>
+                    <input
+                      id={`${uid}-secret`}
+                      className="tx-input"
+                      type="password"
+                      value={clientSecret}
+                      onChange={(e) => setClientSecret(e.target.value)}
+                      placeholder="your_client_secret"
+                    />
+                  </label>
+                </div>
+                <label className="tx-field" htmlFor={`${uid}-auth`}>
+                  <span className="tx-label">Client Auth Method</span>
+                  <select
+                    id={`${uid}-auth`}
+                    className="tx-select"
+                    value={authMethod}
+                    onChange={(e) => setAuthMethod(e.target.value as 'basic' | 'post')}
+                    aria-describedby={`${uid}-auth-hint`}
+                  >
+                    <option value="basic">client_secret_basic (Authorization header)</option>
+                    <option value="post">client_secret_post (request body)</option>
+                  </select>
+                  <p className="tx-hint" id={`${uid}-auth-hint`}>
+                    This must match the client&apos;s registered method. Authlete checks{' '}
+                    <em>where</em> the credentials arrive, not just whether they are correct — the
+                    wrong channel returns <code>401 [A157357]</code>. Authlete&apos;s CIBA guide
+                    recommends <code>client_secret_basic</code>, and the backchannel and token
+                    endpoints must use the same method.
+                  </p>
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() =>
+                      handleCall(() =>
+                        cibaService.backchannelAuthentication(
+                          authMethod === 'basic'
+                            ? { parameters }
+                            : { parameters, clientId, clientSecret },
+                          authMethod === 'basic' && clientId
+                            ? { clientId, clientSecret }
+                            : undefined,
+                        ),
+                      )
+                    }
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Run
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'issue' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-issue-ticket`}>
+                  <span className="tx-label">Ticket</span>
+                  <input
+                    id={`${uid}-issue-ticket`}
+                    className="tx-input"
+                    value={issueTicket}
+                    onChange={(e) => setIssueTicket(e.target.value)}
+                    placeholder="ticket from authentication response"
+                  />
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() => handleCall(() => cibaService.issue(issueTicket))}
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Run
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'fail' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-fail-ticket`}>
+                  <span className="tx-label">Ticket</span>
+                  <input
+                    id={`${uid}-fail-ticket`}
+                    className="tx-input"
+                    value={failTicket}
+                    onChange={(e) => setFailTicket(e.target.value)}
+                    placeholder="ticket from authentication response"
+                  />
+                </label>
+                <label className="tx-field" htmlFor={`${uid}-fail-reason`}>
+                  <span className="tx-label">Reason</span>
+                  <select
+                    id={`${uid}-fail-reason`}
+                    className="tx-select"
+                    value={failReason}
+                    onChange={(e) => setFailReason(e.target.value)}
+                  >
+                    {FAIL_REASONS.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() => handleCall(() => cibaService.fail(failTicket, failReason))}
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Run
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'complete' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-complete-ticket`}>
+                  <span className="tx-label">Ticket</span>
+                  <input
+                    id={`${uid}-complete-ticket`}
+                    className="tx-input"
+                    value={completeTicket}
+                    onChange={(e) => setCompleteTicket(e.target.value)}
+                    placeholder="ticket from authentication response"
+                  />
+                </label>
+                <label className="tx-field" htmlFor={`${uid}-complete-result`}>
+                  <span className="tx-label">Result</span>
+                  <select
+                    id={`${uid}-complete-result`}
+                    className="tx-select"
+                    value={completeResult}
+                    onChange={(e) => setCompleteResult(e.target.value)}
+                  >
+                    {COMPLETE_RESULTS.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="tx-field" htmlFor={`${uid}-complete-subject`}>
+                  <span className="tx-label">Subject</span>
+                  <input
+                    id={`${uid}-complete-subject`}
+                    className="tx-input"
+                    value={completeSubject}
+                    onChange={(e) => setCompleteSubject(e.target.value)}
+                    placeholder="admin"
+                  />
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() =>
+                      handleCall(() =>
+                        cibaService.complete(completeTicket, completeResult, completeSubject),
+                      )
+                    }
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Run
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'poll' && (
+              <>
+                <p className="tx-hint">
+                  Polls the token endpoint with the <code>auth_req_id</code> from the Issue step. In
+                  a production CIBA POLL flow, the client polls at the <code>interval</code>{' '}
+                  returned by the Issue endpoint.
+                </p>
+                <label className="tx-field" htmlFor={`${uid}-authreqid`}>
+                  <span className="tx-label">auth_req_id</span>
+                  <input
+                    id={`${uid}-authreqid`}
+                    className="tx-input"
+                    value={authReqId}
+                    onChange={(e) => setAuthReqId(e.target.value)}
+                    placeholder="from Issue response"
+                  />
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={handlePollToken}
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Poll Token
+                  </button>
+                  <span className="tx-turn-note">Expected interval: {pollInterval}s</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        {activeOp && (
+          <div
+            className="tx-turn"
+            data-dir={settled ? 'in' : undefined}
+            data-state={settled ? 'landed' : 'pending'}
+          >
+            <span className="tx-marker" aria-hidden="true" />
+            <div className="tx-turn-head">
+              <span className="tx-turn-label">2 · Server → Client</span>
+            </div>
+
+            {activeOp === 'poll' ? (
+              <>
+                {pollResult !== null && <JsonBlock data={pollResult} label="Token Response" />}
+                {pollError && <p className="tx-hint">{pollError}</p>}
+                {pollResult === null && !pollError && (
+                  <div className="tx-waiting">
+                    Nothing polled yet. §11&apos;s normal states —{' '}
+                    <code>authorization_pending</code>, <code>slow_down</code> — are not errors
+                    here; they render above like any other answer.
+                  </div>
+                )}
+              </>
+            ) : result ? (
+              <JsonBlock data={result} label="Response" />
+            ) : (
+              <div className="tx-waiting">Nothing sent yet for this step.</div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

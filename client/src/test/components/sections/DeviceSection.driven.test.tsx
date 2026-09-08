@@ -126,6 +126,23 @@ describe('DeviceSection — verification and completion', () => {
     const args = (await expectCall(spy, 'the Complete Run button')) as string[];
     expect(args).toEqual(['WDJB-MJHT', 'ACCESS_DENIED', 'user-1']);
   });
+
+  /**
+   * The dev-only gate this file's own header comment documents (`middleware/development-only.ts`,
+   * a flat 404 outside `NODE_ENV=development`) used to be nowhere in the UI — a learner running the
+   * hosted debugger would hit an unexplained 404 with no context. This is a doc-only regression lock:
+   * the caveat must render before the Run button, on every visit to this tab, not just the first.
+   */
+  it('warns that Complete only works with NODE_ENV=development before the Run button', async () => {
+    mountSection(<DeviceSection />);
+    await selectOp(/^Complete$/i);
+
+    expect(
+      screen.getByText(/only answers outside your own machine/i),
+      'a learner hitting the hosted debugger should be told why /api/device/complete 404s, not left to guess',
+    ).toBeInTheDocument();
+    expect(screen.getByText('NODE_ENV=development', { selector: 'code' })).toBeInTheDocument();
+  });
 });
 
 describe('DeviceSection — the poll, which keeps going after you stop watching', () => {

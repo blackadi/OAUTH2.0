@@ -1,41 +1,29 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { toast } from 'sonner';
-import { ArrowRightLeft, ShieldAlert, GraduationCap } from 'lucide-react';
+import { ShieldAlert, GraduationCap } from 'lucide-react';
 import { TOKEN_ENDPOINT, CLIENT_ID, CLIENT_SECRET } from '@/config';
 import { useToken } from '@/context/TokenContext';
 import { tokenExchangeService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { useTraces } from '@/hooks/useTraces';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { SplitPane } from '@/components/ui/SplitPane';
 import { RequestBuilder } from '@/components/ui/RequestBuilder';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
-import { sequenceProgress, type SequenceStepSpec } from '@/utils/sequence-progress';
 import type { TokenResponse } from '@/types';
+import '@/styles/transcript.css';
 
 /**
- * RFC 8693 Token Exchange — the one flow the debugger could not send.
- *
- * **Why this section exists.** The server implements the grant, `token.controller.ts` has a
- * `TOKEN_EXCHANGE` branch, and Module 06 teaches it through *three deliberate defects*. The only trace
- * of it in the client was a dropdown option in Token Management. So the curriculum had a lab for a flow
- * the debugger could not exercise — and delegation-versus-impersonation is one of the harder ideas in
- * OAuth, which is exactly the kind that benefits from being sent and read rather than described.
- *
- * **It uses the ordinary token endpoint.** No new server route: `grant_type` is the URN and everything
- * else rides in the same form body, which is worth seeing rather than being told.
+ * RFC 8693 Token Exchange, rendered as the exchange it is — the same conversion `ParSection`,
+ * `StepUpSection`, `CibaSection` and `DeviceSection` had.
  *
  * **The three deliberate defects are surfaced, not hidden.** They are *taught*, and this repo's rule is
  * that fixing them silently breaks a lab. A section that quietly worked around them would teach the
- * opposite of what Module 06 teaches, so the response panel names each one where it appears and says it
+ * opposite of what Module 06 teaches, so the response turn names each one where it appears and says it
  * is intentional. Citations verified against RFC 8693 §2.1 and §2.2.1 on 2026-08-22.
+ *
+ * **Behaviour is unchanged.** `exchange`, `deliberateGaps` and the conditional `actor_token_type` rule
+ * are the incumbent implementation verbatim; only the markup around them changed.
  */
 
 /** RFC 8693 §3 token type identifiers. */
@@ -47,31 +35,11 @@ const TOKEN_TYPES = [
   'urn:ietf:params:oauth:token-type:saml2',
 ];
 
-const STEPS: SequenceStepSpec[] = [
-  {
-    id: 'obtain',
-    label: 'Hold a token',
-    description: 'You need a subject token before you can exchange one.',
-  },
-  {
-    id: 'exchange',
-    label: 'Exchange',
-    description: '§2.1: POST the subject token to the ordinary token endpoint.',
-    endpoint: '/api/token',
-  },
-  {
-    id: 'inspect',
-    label: 'Read the answer',
-    description: '§2.2.1 requires issued_token_type. See whether it is there.',
-  },
-];
-
 function TokenExchangeSection() {
   const { tokenSet } = useToken();
   const { loading, result, error, call } = useAsyncCall<TokenResponse>();
-  const traces = useTraces();
-  const progress = sequenceProgress(STEPS, traces);
   const doc = getDoc('token-ops', 'exchange');
+  const uid = useId();
 
   const [subjectToken, setSubjectToken] = useState(tokenSet?.access_token ?? '');
   const [subjectTokenType, setSubjectTokenType] = useState(TOKEN_TYPES[0]);
@@ -118,144 +86,201 @@ function TokenExchangeSection() {
   const observations = result ? deliberateGaps(result, delegating) : [];
 
   return (
-    <SectionPanel
-      title="Token Exchange (RFC 8693)"
-      description="Trade one token for another — impersonation, or delegation with an actor token"
-      icon={<ArrowRightLeft className="h-4 w-4" />}
-    >
-      <FlowDiagram
-        steps={STEPS}
-        currentStep={progress.currentStep}
-        completedSteps={progress.completedSteps}
-        className="mb-3"
-      />
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">Token Exchange</h1>
+        <span className="tx-ref">RFC 8693</span>
+      </header>
 
-      {error && <ErrorExplainer error={error} className="mb-3" />}
-      {doc && <OperationDescription doc={doc} />}
+      <p className="tx-standfirst">
+        <strong>Impersonation</strong> — send a <code>subject_token</code> alone, and the new token
+        acts <em>as</em> that subject. Nothing records that somebody else did the acting.{' '}
+        <strong>Delegation</strong> — add an <code>actor_token</code>, and the new token says{' '}
+        <em>A acting on behalf of B</em>, which is auditable. RFC 8693 §1.1 draws exactly this
+        distinction, and it is the whole reason the actor token exists.
+      </p>
 
-      {/*
-        Impersonation against delegation is the idea this flow exists for, and it is decided by the
-        presence of one parameter. Stating it before the form beats discovering it from a 400.
-      */}
-      <div className="rounded-lg border border-edge-accent bg-tint-accent p-3 mb-3">
-        <p className="text-xs text-foreground-muted leading-relaxed m-0">
-          <strong className="text-foreground">Impersonation</strong> — send a{' '}
-          <code className="text-accent-text">subject_token</code> alone, and the new token acts
-          <em> as</em> that subject. Nothing records that somebody else did the acting.{' '}
-          <strong className="text-foreground">Delegation</strong> — add an{' '}
-          <code className="text-accent-text">actor_token</code>, and the new token says{' '}
-          <em>A acting on behalf of B</em>, which is auditable. RFC 8693 §1.1 draws exactly this
-          distinction, and it is the whole reason the actor token exists.
-        </p>
-      </div>
+      <div className="tx-body">
+        {error && <ErrorExplainer error={error} className="mb-3" />}
+        {doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
+          />
+        )}
 
-      <SplitPane
-        leftLabel="Request"
-        rightLabel={result ? 'Response' : ''}
-        left={
-          <div className="space-y-3">
-            <div className="space-y-3">
-              <Input
-                label="subject_token (REQUIRED — §2.1)"
-                value={subjectToken}
-                onChange={(e) => setSubjectToken(e.target.value)}
-                placeholder="The token being exchanged. Pre-filled from the vault when one is held."
-              />
-              <Select
-                label="subject_token_type (REQUIRED — §2.1)"
-                value={subjectTokenType}
-                onChange={(e) => setSubjectTokenType(e.target.value)}
-                options={TOKEN_TYPES.map((t) => ({ value: t, label: t }))}
-              />
-            </div>
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-dir="out">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">1 · Client → Server</span>
+            <span className="tx-turn-note">POST {TOKEN_ENDPOINT}</span>
+          </div>
 
-            <div className="rounded-lg border border-border p-3 space-y-3">
-              <p className="text-xs text-muted-foreground m-0">
-                Leave the actor token empty for <strong>impersonation</strong>. Fill it in for{' '}
-                <strong>delegation</strong> — and note that{' '}
-                <code className="text-accent-text">actor_token_type</code> then becomes REQUIRED,
-                and <strong>MUST NOT</strong> be sent without it.
-              </p>
-              <Input
-                label="actor_token (OPTIONAL — §2.1)"
-                value={actorToken}
-                onChange={(e) => setActorToken(e.target.value)}
-                placeholder="Who is doing the acting"
-              />
-              {delegating && (
-                <Select
-                  label="actor_token_type (REQUIRED, because actor_token is present)"
-                  value={actorTokenType}
-                  onChange={(e) => setActorTokenType(e.target.value)}
-                  options={TOKEN_TYPES.map((t) => ({ value: t, label: t }))}
-                />
-              )}
-            </div>
+          <label className="tx-field" htmlFor={`${uid}-subject`}>
+            <span className="tx-label">subject_token (REQUIRED — §2.1)</span>
+            <input
+              id={`${uid}-subject`}
+              className="tx-input"
+              value={subjectToken}
+              onChange={(e) => setSubjectToken(e.target.value)}
+              placeholder="The token being exchanged. Pre-filled from the vault when one is held."
+            />
+          </label>
+          <label className="tx-field" htmlFor={`${uid}-subject-type`}>
+            <span className="tx-label">subject_token_type (REQUIRED — §2.1)</span>
+            <select
+              id={`${uid}-subject-type`}
+              className="tx-select"
+              value={subjectTokenType}
+              onChange={(e) => setSubjectTokenType(e.target.value)}
+            >
+              {TOKEN_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input
-                label="audience (OPTIONAL)"
+          <p className="tx-hint">
+            Leave the actor token empty for <strong>impersonation</strong>. Fill it in for{' '}
+            <strong>delegation</strong> — and note that <code>actor_token_type</code> then becomes
+            REQUIRED, and <strong>MUST NOT</strong> be sent without it.
+          </p>
+          <label className="tx-field" htmlFor={`${uid}-actor`}>
+            <span className="tx-label">actor_token (OPTIONAL — §2.1)</span>
+            <input
+              id={`${uid}-actor`}
+              className="tx-input"
+              value={actorToken}
+              onChange={(e) => setActorToken(e.target.value)}
+              placeholder="Who is doing the acting"
+            />
+          </label>
+          {delegating && (
+            <label className="tx-field" htmlFor={`${uid}-actor-type`}>
+              <span className="tx-label">
+                actor_token_type (REQUIRED, because actor_token is present)
+              </span>
+              <select
+                id={`${uid}-actor-type`}
+                className="tx-select"
+                value={actorTokenType}
+                onChange={(e) => setActorTokenType(e.target.value)}
+              >
+                {TOKEN_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <div className="tx-row">
+            <label className="tx-field" htmlFor={`${uid}-audience`}>
+              <span className="tx-label">audience (OPTIONAL)</span>
+              <input
+                id={`${uid}-audience`}
+                className="tx-input"
                 value={audience}
                 onChange={(e) => setAudience(e.target.value)}
                 placeholder="Logical name of the target service"
               />
-              <Input
-                label="resource (OPTIONAL)"
+            </label>
+            <label className="tx-field" htmlFor={`${uid}-resource`}>
+              <span className="tx-label">resource (OPTIONAL)</span>
+              <input
+                id={`${uid}-resource`}
+                className="tx-input"
                 value={resource}
                 onChange={(e) => setResource(e.target.value)}
                 placeholder="https://api.example.com"
               />
-              <Input
-                label="scope (OPTIONAL)"
+            </label>
+          </div>
+          <div className="tx-row">
+            <label className="tx-field" htmlFor={`${uid}-scope`}>
+              <span className="tx-label">scope (OPTIONAL)</span>
+              <input
+                id={`${uid}-scope`}
+                className="tx-input"
                 value={scope}
                 onChange={(e) => setScope(e.target.value)}
                 placeholder="Narrower than the subject token's"
               />
-              <Input
-                label="requested_token_type (OPTIONAL)"
+            </label>
+            <label className="tx-field" htmlFor={`${uid}-reqtype`}>
+              <span className="tx-label">requested_token_type (OPTIONAL)</span>
+              <input
+                id={`${uid}-reqtype`}
+                className="tx-input"
                 value={requestedTokenType}
                 onChange={(e) => setRequestedTokenType(e.target.value)}
                 placeholder="Defaults to access_token"
               />
-            </div>
+            </label>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input
-                label="Client ID"
+          <div className="tx-row">
+            <label className="tx-field" htmlFor={`${uid}-cid`}>
+              <span className="tx-label">Client ID</span>
+              <input
+                id={`${uid}-cid`}
+                className="tx-input"
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
               />
-              <Input
-                label="Client Secret"
+            </label>
+            <label className="tx-field" htmlFor={`${uid}-secret`}>
+              <span className="tx-label">Client Secret</span>
+              <input
+                id={`${uid}-secret`}
+                className="tx-input"
                 type="password"
                 value={clientSecret}
                 onChange={(e) => setClientSecret(e.target.value)}
                 placeholder="Leave empty for a public client"
               />
-            </div>
-
-            <RequestBuilder
-              method="POST"
-              url={TOKEN_ENDPOINT}
-              headers={{
-                'Content-Type': 'application/x-www-form-urlencoded',
-                ...(clientSecret ? { Authorization: `Basic <${clientId}:secret>` } : {}),
-              }}
-              body={new URLSearchParams(body).toString()}
-            />
-
-            <Button
-              onClick={() => void exchange()}
-              loading={loading}
-              disabled={!subjectToken.trim()}
-            >
-              <ArrowRightLeft className="h-4 w-4 mr-2" />
-              Exchange token
-            </Button>
+            </label>
           </div>
-        }
-        right={
-          result ? (
+
+          <RequestBuilder
+            method="POST"
+            url={TOKEN_ENDPOINT}
+            headers={{
+              'Content-Type': 'application/x-www-form-urlencoded',
+              ...(clientSecret ? { Authorization: `Basic <${clientId}:secret>` } : {}),
+            }}
+            body={new URLSearchParams(body).toString()}
+          />
+
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={() => void exchange()}
+              disabled={!subjectToken.trim() || loading}
+            >
+              {loading && <span className="tx-spin" aria-hidden="true" />}
+              Exchange token
+            </button>
+          </div>
+        </div>
+
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        <div
+          className="tx-turn"
+          data-dir={result ? 'in' : undefined}
+          data-state={result ? 'landed' : 'pending'}
+        >
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">2 · Server → Client</span>
+          </div>
+
+          {result ? (
             <div className="space-y-3">
               {observations.length > 0 && (
                 /**
@@ -267,20 +292,29 @@ function TokenExchangeSection() {
                  * them would teach the opposite of the lesson; one that reported them as bugs would be
                  * wrong. So it reports them as intentional, and says which exercise owns each.
                  */
-                <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 space-y-2">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-warning-text m-0">
-                    <GraduationCap className="h-3.5 w-3.5 shrink-0" />
-                    This response is deliberately non-conformant — Module 06 teaches these
-                  </p>
+                <div className="tx-evidence" data-outcome="refused">
+                  <div className="tx-evidence-head">
+                    <span className="tx-evidence-verdict">
+                      <GraduationCap
+                        className="h-3.5 w-3.5"
+                        style={{
+                          display: 'inline',
+                          verticalAlign: 'text-bottom',
+                          marginRight: '0.35em',
+                        }}
+                      />
+                      This response is deliberately non-conformant — Module 06 teaches these
+                    </span>
+                  </div>
                   {observations.map((o) => (
-                    <p
-                      key={o.title}
-                      className="flex gap-1.5 text-xs text-foreground-muted leading-relaxed m-0"
-                    >
-                      <ShieldAlert className="h-3 w-3 mt-0.5 shrink-0 text-warning-text" />
+                    <p key={o.title} className="tx-hint" style={{ display: 'flex', gap: '0.4rem' }}>
+                      <ShieldAlert
+                        className="h-3 w-3"
+                        style={{ marginTop: '0.15em', flexShrink: 0 }}
+                      />
                       <span>
-                        <strong className="text-foreground">{o.title}</strong> — {o.detail}{' '}
-                        <span className="text-muted-foreground font-mono">({o.spec})</span>
+                        <strong>{o.title}</strong> — {o.detail}{' '}
+                        <span style={{ fontFamily: 'inherit', opacity: 0.75 }}>({o.spec})</span>
                       </span>
                     </p>
                   ))}
@@ -289,15 +323,11 @@ function TokenExchangeSection() {
               <JsonBlock data={result} label="Token Response" />
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full min-h-[120px] rounded-lg border border-dashed border-border bg-muted/20">
-              <p className="text-xs text-muted-foreground">
-                Exchange a token to see the response here
-              </p>
-            </div>
-          )
-        }
-      />
-    </SectionPanel>
+            <div className="tx-waiting">Exchange a token to see the response here.</div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

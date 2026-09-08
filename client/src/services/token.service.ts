@@ -319,19 +319,41 @@ async function introspectForToken(
   });
 }
 
+/**
+ * RFC 9701 — ask for a **signed** introspection response instead of RFC 7662 §2.2's plain JSON.
+ *
+ * Both fields the server actually reads are real HTTP mechanisms, not body conveniences, so both are
+ * named here rather than folded into `token`: `jwtResponse` becomes the `Accept:
+ * application/token-introspection+jwt` request header (§5) — the body carries no flag for this, Authlete
+ * decides purely from the header — and `rsUri` becomes a form parameter that identifies the calling
+ * resource server (§4's `aud`). Omitting `rsUri` while asking for a JWT response earns
+ * `[A404301] The URI of the resource server is required…`, which is why the option is exposed rather
+ * than hardcoded to something plausible-looking.
+ */
+export interface IntrospectionStandardOptions {
+  rsUri?: string;
+  jwtResponse?: boolean;
+}
+
 async function introspectionStandard(
   token: string,
   adminClientId: string,
   adminClientSecret: string,
+  options?: IntrospectionStandardOptions,
 ): Promise<unknown> {
+  const params = new URLSearchParams({ token });
+  if (options?.rsUri) params.set('rsUri', options.rsUri);
+
   return http.postBasicAuth(
     INTROSPECTION_STANDARD_ENDPOINT,
-    new URLSearchParams({ token }),
+    params,
     adminClientId,
     adminClientSecret,
-    // RFC 7662 §2.2's shape. The **Authlete** introspection endpoint above deliberately gets no schema:
-    // it answers a vendor envelope, not §2.2's body, and pinning one would reject correct responses.
-    introspectionSchema,
+    // RFC 7662 §2.2's shape — but only for the plain-JSON response. A JWT response (§5) is a compact
+    // JWS string, not this schema's object, so pinning it here would reject a correct answer; the
+    // Authlete introspection endpoint above gets no schema for the identical reason.
+    options?.jwtResponse ? undefined : introspectionSchema,
+    options?.jwtResponse ? { Accept: 'application/token-introspection+jwt' } : undefined,
   );
 }
 

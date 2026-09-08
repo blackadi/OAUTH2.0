@@ -53,6 +53,14 @@ function ok(data: unknown) {
   } as Response);
 }
 
+function fail(status: number, body: string) {
+  return Promise.resolve({
+    ok: false,
+    status,
+    text: () => Promise.resolve(body),
+  } as Response);
+}
+
 describe('tokenService.exchangeCodeForToken', () => {
   it('sends POST form to TOKEN_ENDPOINT', async () => {
     mockFetch.mockReturnValue(
@@ -226,6 +234,52 @@ describe('tokenService.introspectionStandard', () => {
       },
       body: 'token=tok1',
     });
+  });
+
+  /**
+   * RFC 9701 — the JWT form is selected purely by the `Accept` header (§5), and `rsUri` (§4's `aud`)
+   * is a real form parameter alongside `token`, not an Authlete-only field the server injects.
+   */
+  it('sends Accept: application/token-introspection+jwt and rsUri when jwtResponse is requested', async () => {
+    mockFetch.mockReturnValue(ok('header.payload.signature'));
+    await tokenService.introspectionStandard('tok1', 'mgmt-id', 'mgmt-secret', {
+      jwtResponse: true,
+      rsUri: 'https://api.example.com',
+    });
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/introspection/standard', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: ADMIN_BASIC,
+        Accept: 'application/token-introspection+jwt',
+      },
+      body: 'token=tok1&rsUri=https%3A%2F%2Fapi.example.com',
+    });
+  });
+
+  it('omits rsUri when not supplied, even with jwtResponse on', async () => {
+    mockFetch.mockReturnValue(ok('header.payload.signature'));
+    await tokenService.introspectionStandard('tok1', 'mgmt-id', 'mgmt-secret', {
+      jwtResponse: true,
+    });
+    const [, init] = mockFetch.mock.calls[0];
+    expect((init as { body: string }).body).toBe('token=tok1');
+  });
+
+  it('does not send the Accept override, and stays schema-validated, for the plain JSON path', async () => {
+    mockFetch.mockReturnValue(ok({ active: true }));
+    await tokenService.introspectionStandard('tok1', 'mgmt-id', 'mgmt-secret', {
+      jwtResponse: false,
+    });
+    const [, init] = mockFetch.mock.calls[0];
+    expect((init as { headers: Record<string, string> }).headers.Accept).toBeUndefined();
+  });
+
+  it('rejects when Authlete refuses the JWT form for a missing rsUri — [A404301] surfaced as the raw body', async () => {
+    mockFetch.mockReturnValue(fail(400, '[A404301] The URI of the resource server is required.'));
+    await expect(
+      tokenService.introspectionStandard('tok1', 'mgmt-id', 'mgmt-secret', { jwtResponse: true }),
+    ).rejects.toThrow('[A404301]');
   });
 });
 
