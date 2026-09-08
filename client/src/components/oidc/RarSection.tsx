@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useId } from 'react';
 import { toast } from 'sonner';
 import { rarService } from '@/services';
 import { navigateTo } from '@/services/trace-store';
@@ -7,19 +7,13 @@ import { AUTHORIZATION_ENDPOINT, PAR_ENDPOINT } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { generateKeyPair, createProof } from '@/services/dpop.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
 import type { JWK } from '@/services/crypto-utils';
-import { Checkbox } from '@/components/ui/Checkbox';
+import '@/styles/transcript.css';
 
 const DEFAULT_RAR_JSON = JSON.stringify(
   [
@@ -35,6 +29,15 @@ const DEFAULT_RAR_JSON = JSON.stringify(
   2,
 );
 
+/**
+ * RFC 9396 (RAR), rendered as the exchange it is — the same conversion `ParSection` and its siblings
+ * had. Two distinct routes share the same composed request: direct to the authorization endpoint, or
+ * pushed through PAR first — so the front channel (turn 3) is reached either straight from turn 1 or by
+ * way of turn 2, and both are shown with a state that reflects which happened.
+ *
+ * **Behaviour is unchanged.** Every handler below is the incumbent implementation; only the markup
+ * around them changed.
+ */
 function RarSection() {
   const { loading, error, call } = useAsyncCall();
   const [rarJson, setRarJson] = useState(DEFAULT_RAR_JSON);
@@ -48,6 +51,7 @@ function RarSection() {
   const [pkceVerifier, setPkceVerifier] = useState(() => readKey(SESSION_KEYS.pkceVerifier) || '');
 
   const doc = getDoc('rar', 'push');
+  const uid = useId();
 
   const handleGeneratePkce = useCallback(async () => {
     try {
@@ -207,213 +211,251 @@ function RarSection() {
     }
   })();
 
+  const pushed = usePar && Boolean(parResult);
+
   return (
-    <SectionPanel
-      title="Rich Authorization Requests (RFC 9396)"
-      description="Request granular permissions using authorization_details — structured JSON defining what the client wants to do with the user's resources"
-    >
-      {error && <ErrorExplainer error={error} className="mb-3" />}
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">Rich Authorization Requests</h1>
+        <span className="tx-ref">RFC 9396</span>
+      </header>
 
-      {doc && <OperationDescription doc={doc} />}
+      <p className="tx-standfirst">
+        <code>authorization_details</code> replaces a scope string with structured JSON describing
+        exactly what the client wants to do — the type of access, which resource, which actions.
+        Compose it, then send it either straight to the authorization endpoint or pushed through PAR
+        first.
+      </p>
 
-      <div className="space-y-3">
-        <Textarea
-          label="authorization_details (JSON array)"
-          rows={6}
-          value={rarJson}
-          onChange={(e) => setRarJson(e.target.value)}
-          placeholder='[{ "type": "payment_initiation", "actions": ["initiate", "status"], "locations": ["https://bank.example.com/payments"] }]'
-          error={
-            !isRarJsonValid && rarJson.trim()
-              ? 'Invalid JSON — must be an array of objects each with a "type" string field'
-              : undefined
-          }
-        />
-
-        <Input
-          label="Redirect URI"
-          value={redirectUri}
-          onChange={(e) => setRedirectUri(e.target.value)}
-          placeholder="http://localhost:3001/callback"
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="Client ID"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            placeholder="your_client_id"
+      <div className="tx-body">
+        {error && <ErrorExplainer error={error} className="mb-3" />}
+        {doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
           />
-          <Input
-            label="Scope"
-            value={scope}
-            onChange={(e) => setScope(e.target.value)}
-            placeholder="openid"
-          />
-        </div>
+        )}
 
-        <Input
-          label="Client Secret (for confidential clients)"
-          type="password"
-          value={clientSecret}
-          onChange={(e) => setClientSecret(e.target.value)}
-          placeholder="your_client_secret"
-        />
-
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="secondary" onClick={handleGeneratePkce} size="sm">
-            Generate PKCE + State
-          </Button>
-          {pkceVerifier && (
-            <span
-              className="text-xs text-muted-foreground self-center truncate max-w-[200px]"
-              title={pkceVerifier}
-            >
-              verifier: {pkceVerifier.slice(0, 20)}...
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-dir="out">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">1 · Client → Server</span>
+            <span className="tx-turn-note">
+              {usePar ? `POST ${PAR_ENDPOINT}` : 'built locally, sent via the front channel'}
             </span>
-          )}
-        </div>
+          </div>
 
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <Checkbox checked={usePar} onChange={(e) => setUsePar(e.target.checked)} />
-          Use PAR (recommended for large authorization_details payloads)
-        </label>
+          <label className="tx-field" htmlFor={`${uid}-rar`}>
+            <span className="tx-label">authorization_details (JSON array)</span>
+            <textarea
+              id={`${uid}-rar`}
+              className="tx-textarea"
+              rows={6}
+              value={rarJson}
+              onChange={(e) => setRarJson(e.target.value)}
+              placeholder='[{ "type": "payment_initiation", "actions": ["initiate", "status"], "locations": ["https://bank.example.com/payments"] }]'
+            />
+            {!isRarJsonValid && rarJson.trim() && (
+              <p className="tx-hint" style={{ color: 'var(--t-refused, inherit)' }}>
+                Invalid JSON — must be an array of objects each with a &quot;type&quot; string field
+              </p>
+            )}
+          </label>
 
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <Checkbox checked={useDpop} onChange={(e) => setUseDpop(e.target.checked)} />
-          Use DPoP (sender-constrained token binding)
-        </label>
+          <label className="tx-field" htmlFor={`${uid}-redirect`}>
+            <span className="tx-label">Redirect URI</span>
+            <input
+              id={`${uid}-redirect`}
+              className="tx-input"
+              value={redirectUri}
+              onChange={(e) => setRedirectUri(e.target.value)}
+              placeholder="http://localhost:3001/callback"
+            />
+          </label>
 
-        <div className="flex gap-2 flex-wrap">
-          <Button onClick={handleSendToAuthorize} loading={loading} disabled={!isRarJsonValid}>
-            {usePar ? 'Push PAR + Authorize' : 'Authorize with RAR'}
-          </Button>
-          {usePar && (
-            <Button
-              variant="secondary"
-              onClick={handlePushOnly}
-              loading={loading}
-              disabled={!isRarJsonValid}
+          <div className="tx-row">
+            <label className="tx-field" htmlFor={`${uid}-cid`}>
+              <span className="tx-label">Client ID</span>
+              <input
+                id={`${uid}-cid`}
+                className="tx-input"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                placeholder="your_client_id"
+              />
+            </label>
+            <label className="tx-field" htmlFor={`${uid}-scope`}>
+              <span className="tx-label">Scope</span>
+              <input
+                id={`${uid}-scope`}
+                className="tx-input"
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                placeholder="openid"
+              />
+            </label>
+          </div>
+
+          <label className="tx-field" htmlFor={`${uid}-secret`}>
+            <span className="tx-label">Client Secret (for confidential clients)</span>
+            <input
+              id={`${uid}-secret`}
+              className="tx-input"
+              type="password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              placeholder="your_client_secret"
+            />
+          </label>
+
+          <div className="tx-actions" style={{ marginBottom: '1rem' }}>
+            <button type="button" className="tx-btn" onClick={() => void handleGeneratePkce()}>
+              Generate PKCE + State
+            </button>
+            {pkceVerifier && (
+              <span className="tx-turn-note" title={pkceVerifier}>
+                verifier {pkceVerifier.slice(0, 12)}…
+              </span>
+            )}
+          </div>
+
+          <label className="tx-check">
+            <input type="checkbox" checked={usePar} onChange={(e) => setUsePar(e.target.checked)} />
+            Use PAR (recommended for large authorization_details payloads)
+          </label>
+          <label className="tx-check">
+            <input
+              type="checkbox"
+              checked={useDpop}
+              onChange={(e) => setUseDpop(e.target.checked)}
+            />
+            Use DPoP (sender-constrained token binding)
+          </label>
+
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={() => void handleSendToAuthorize()}
+              disabled={!isRarJsonValid || loading}
             >
-              Push PAR Only
-            </Button>
-          )}
-          {parResult?.request_uri && (
-            <Button variant="secondary" onClick={handleReset} size="sm">
-              Reset
-            </Button>
-          )}
-        </div>
-      </div>
+              {loading && <span className="tx-spin" aria-hidden="true" />}
+              {usePar ? 'Push PAR + Authorize' : 'Authorize with RAR'}
+            </button>
+            {usePar && (
+              <button
+                type="button"
+                className="tx-btn"
+                onClick={() => void handlePushOnly()}
+                disabled={!isRarJsonValid || loading}
+              >
+                Push PAR Only
+              </button>
+            )}
+            {parResult?.request_uri && (
+              <button type="button" className="tx-btn" onClick={handleReset}>
+                Reset
+              </button>
+            )}
+          </div>
 
-      {parResult && !usePar && <JsonBlock data={parResult} label="Response" />}
-      {parResult?.request_uri && (
-        <div className="mt-4 p-3 bg-surface-2 rounded-lg border border-border space-y-2">
-          <p className="text-xs text-foreground-muted font-mono break-all">
-            <span className="text-muted-foreground">request_uri: </span>
-            {parResult.request_uri}
-          </p>
-        </div>
-      )}
-
-      {parResult && <JsonBlock data={parResult} label="PAR Response" />}
-
-      {parsedPreview && !parResult && (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle>RAR Preview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          {parsedPreview && (
+            <div className="tx-evidence" data-outcome="issued" style={{ marginTop: '1rem' }}>
+              <div className="tx-evidence-head">
+                <span className="tx-evidence-verdict">Preview</span>
+              </div>
               {(parsedPreview as Array<Record<string, unknown>>).map((detail, i) => (
-                <div key={i} className="border border-border rounded-lg overflow-hidden">
-                  <div className="bg-surface-2/50 px-3 py-2 border-b border-border flex items-center gap-2">
-                    <Badge>{detail.type as string}</Badge>
-                  </div>
-                  <div className="px-3 py-2 space-y-2 text-xs">
-                    {!!detail.locations && Array.isArray(detail.locations) && (
-                      <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
-                          Locations
-                        </span>
-                        <ul className="list-disc list-inside text-foreground-muted mt-1">
-                          {(detail.locations as string[]).map((loc: string, j: number) => (
-                            <li key={j}>
-                              <code className="text-info-text">{loc}</code>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {!!detail.actions && Array.isArray(detail.actions) && (
-                      <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
-                          Actions
-                        </span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.actions as string[]).map((a: string, j: number) => (
-                            <span
-                              key={j}
-                              className="px-2 py-0.5 bg-tint-accent text-accent-text rounded text-2xs"
-                            >
-                              {a}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {!!detail.datatypes && Array.isArray(detail.datatypes) && (
-                      <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
-                          Data Types
-                        </span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.datatypes as string[]).map((d: string, j: number) => (
-                            <span
-                              key={j}
-                              className="px-2 py-0.5 bg-tint-info text-info-text rounded text-2xs"
-                            >
-                              {d}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {!!detail.identifier && (
-                      <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
-                          Identifier
-                        </span>
-                        <p className="text-foreground-muted mt-1 font-mono">
-                          {detail.identifier as string}
-                        </p>
-                      </div>
-                    )}
-                    {!!detail.privileges && Array.isArray(detail.privileges) && (
-                      <div>
-                        <span className="text-muted-foreground font-semibold uppercase tracking-wider text-2xs">
-                          Privileges
-                        </span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {(detail.privileges as string[]).map((p: string, j: number) => (
-                            <span
-                              key={j}
-                              className="px-2 py-0.5 bg-tint-warning text-warning-text rounded text-2xs"
-                            >
-                              {p}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                <div key={i} style={{ marginBottom: '0.75rem' }}>
+                  <span className="tx-datum-key">{detail.type as string}</span>
+                  {!!detail.locations && Array.isArray(detail.locations) && (
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Locations</span>
+                      <span className="tx-datum-value">
+                        {(detail.locations as string[]).join(', ')}
+                      </span>
+                    </span>
+                  )}
+                  {!!detail.actions && Array.isArray(detail.actions) && (
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Actions</span>
+                      <span className="tx-datum-value">
+                        {(detail.actions as string[]).join(', ')}
+                      </span>
+                    </span>
+                  )}
+                  {!!detail.datatypes && Array.isArray(detail.datatypes) && (
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Data Types</span>
+                      <span className="tx-datum-value">
+                        {(detail.datatypes as string[]).join(', ')}
+                      </span>
+                    </span>
+                  )}
+                  {!!detail.identifier && (
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Identifier</span>
+                      <span className="tx-datum-value">{detail.identifier as string}</span>
+                    </span>
+                  )}
+                  {!!detail.privileges && Array.isArray(detail.privileges) && (
+                    <span className="tx-datum">
+                      <span className="tx-datum-key">Privileges</span>
+                      <span className="tx-datum-value">
+                        {(detail.privileges as string[]).join(', ')}
+                      </span>
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </SectionPanel>
+          )}
+        </div>
+
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        <div
+          className="tx-turn"
+          data-dir={pushed ? 'in' : undefined}
+          data-state={pushed ? 'landed' : 'pending'}
+        >
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">2 · Server → Client</span>
+            {pushed && <span className="tx-turn-note">201 Created</span>}
+          </div>
+
+          {usePar ? (
+            parResult ? (
+              <JsonBlock data={parResult} label="PAR Response" />
+            ) : (
+              <div className="tx-waiting">
+                The server will answer with a <code>request_uri</code> and the seconds it stays
+                valid.
+              </div>
+            )
+          ) : (
+            <div className="tx-waiting">
+              Not used in this mode — the request goes straight to the authorization endpoint in
+              turn 3, with no back-channel push first.
+            </div>
+          )}
+        </div>
+
+        {/* ── Turn 3 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">3 · Browser → Server</span>
+            <span className="tx-turn-note">front channel</span>
+          </div>
+          <div className="tx-waiting">
+            {usePar
+              ? 'Pushing succeeds and carries a request_uri, and this happens automatically.'
+              : 'Pressing Authorize with RAR leaves the application here, carrying the authorization_details in the query string.'}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -1,17 +1,15 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { toast } from 'sonner';
 import { backchannelLogoutService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
 import { useCredentials } from '@/context/CredentialContext';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { decodeJwt } from '@/utils/jwt';
+import '@/styles/transcript.css';
 
 /**
  * The logout token's payload, or a message to render in its place.
@@ -28,6 +26,14 @@ function decodeJwtPayload(token: string): Record<string, unknown> | string {
   }
 }
 
+/**
+ * Back-Channel Logout, rendered as the exchange it is — the same conversion `ParSection` and its
+ * siblings had. One request shape, three ways to fire it, and a response that comes back in three
+ * different observable forms depending on which one ran.
+ *
+ * **Behaviour is unchanged.** `handleCall` and every service call are the incumbent implementation;
+ * only the markup around them changed.
+ */
 function BackchannelLogoutSection() {
   const [clientIdentifier, setClientIdentifier] = useState('');
   const [subject, setSubject] = useState('');
@@ -45,6 +51,7 @@ function BackchannelLogoutSection() {
    */
   const [activeOp, setActiveOp] = useState<'issue' | 'deliver' | 'deliver-all' | null>(null);
   const doc = activeOp ? getDoc('backchannel-logout', activeOp) : undefined;
+  const uid = useId();
 
   const handleCall = async (
     op: 'issue' | 'deliver' | 'deliver-all',
@@ -67,119 +74,170 @@ function BackchannelLogoutSection() {
   const isArrayResult = Array.isArray(result);
 
   return (
-    <SectionPanel title="Backchannel Logout" description="OpenID Connect Back-Channel Logout 1.0">
-      <div className="space-y-3">
-        <AdminAuth />
-        <Input
-          label="Client Identifier"
-          value={clientIdentifier}
-          onChange={(e) => setClientIdentifier(e.target.value)}
-          placeholder="client_id or client_id_alias (required for issue/deliver)"
-        />
-        <Input
-          label="Subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder="End-user subject"
-        />
-        <Input
-          label="Session ID"
-          value={sessionId}
-          onChange={(e) => setSessionId(e.target.value)}
-          placeholder="Session identifier — alternative to subject"
-        />
-      </div>
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">Back-Channel Logout</h1>
+        <span className="tx-ref">OpenID Connect Back-Channel Logout 1.0</span>
+      </header>
 
-      {doc && <OperationDescription doc={doc} className="mb-3" />}
+      <p className="tx-standfirst">
+        The OP tells a client&apos;s back channel directly that a session ended, with no browser
+        involved — a signed logout token instead of a redirect. One request shape, three ways to
+        send it: mint the token alone, mint and deliver it to one client, or deliver to every client
+        the subject or session touches.
+      </p>
 
-      {error && <ErrorExplainer error={error} className="mb-3" />}
+      <div className="tx-body">
+        {error && <ErrorExplainer error={error} className="mb-3" />}
+        {doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
+          />
+        )}
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          disabled={!mgmtAuth || !clientIdentifier || loading}
-          loading={loading}
-          onClick={() =>
-            handleCall('issue', () =>
-              backchannelLogoutService.issue({ clientIdentifier, subject, sessionId }, mgmtAuth),
-            )
-          }
-        >
-          Issue Token
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={!mgmtAuth || !clientIdentifier || loading}
-          loading={loading}
-          onClick={() =>
-            handleCall('deliver', () =>
-              backchannelLogoutService.deliver({ clientIdentifier, subject, sessionId }, mgmtAuth),
-            )
-          }
-        >
-          Issue & Deliver
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={!mgmtAuth || (!subject && !sessionId) || loading}
-          loading={loading}
-          onClick={() =>
-            handleCall('deliver-all', () =>
-              backchannelLogoutService.deliverAll({ subject, sessionId }, mgmtAuth),
-            )
-          }
-        >
-          Issue & Deliver All
-        </Button>
-      </div>
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-dir="out">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">1 · Client → Server</span>
+          </div>
 
-      {result && !hasTokenResult && !isArrayResult ? (
-        <JsonBlock data={result} label="Response" />
-      ) : null}
+          <AdminAuth />
+          <label className="tx-field" htmlFor={`${uid}-cid`}>
+            <span className="tx-label">Client Identifier</span>
+            <input
+              id={`${uid}-cid`}
+              className="tx-input"
+              value={clientIdentifier}
+              onChange={(e) => setClientIdentifier(e.target.value)}
+              placeholder="client_id or client_id_alias (required for issue/deliver)"
+            />
+          </label>
+          <label className="tx-field" htmlFor={`${uid}-subject`}>
+            <span className="tx-label">Subject</span>
+            <input
+              id={`${uid}-subject`}
+              className="tx-input"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="End-user subject"
+            />
+          </label>
+          <label className="tx-field" htmlFor={`${uid}-session`}>
+            <span className="tx-label">Session ID</span>
+            <input
+              id={`${uid}-session`}
+              className="tx-input"
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              placeholder="Session identifier — alternative to subject"
+            />
+          </label>
 
-      {hasTokenResult && (
-        <div className="space-y-3">
-          <details className="rounded-lg border border-border overflow-hidden" open>
-            <summary className="px-3 py-2 text-xs font-semibold cursor-pointer bg-muted/20 select-none">
-              Raw Response
-            </summary>
-            <JsonBlock data={result} className="m-0" />
-          </details>
-          <details className="rounded-lg border border-border overflow-hidden" open>
-            <summary className="px-3 py-2 text-xs font-semibold cursor-pointer bg-muted/20 select-none">
-              Decoded Logout Token (JWT Payload)
-            </summary>
-            {typeof decodedLogoutToken === 'string' ? (
-              <p className="text-xs text-danger-text p-3">{decodedLogoutToken}</p>
-            ) : (
-              <JsonBlock data={decodedLogoutToken} className="m-0" />
-            )}
-            <p className="text-xs text-muted-foreground px-3 pb-2">
-              The logout token is a JWT with{' '}
-              <code className="text-accent-text">typ: &quot;logout+jwt&quot;</code> and an{' '}
-              <code className="text-accent-text">events</code> claim containing{' '}
-              <code className="text-accent-text">
-                http://schemas.openid.net/event/backchannel-logout
-              </code>
-              .
-            </p>
-          </details>
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              disabled={!mgmtAuth || !clientIdentifier || loading}
+              onClick={() =>
+                handleCall('issue', () =>
+                  backchannelLogoutService.issue(
+                    { clientIdentifier, subject, sessionId },
+                    mgmtAuth,
+                  ),
+                )
+              }
+            >
+              {loading && activeOp === 'issue' && <span className="tx-spin" aria-hidden="true" />}
+              Issue Token
+            </button>
+            <button
+              type="button"
+              className="tx-btn"
+              disabled={!mgmtAuth || !clientIdentifier || loading}
+              onClick={() =>
+                handleCall('deliver', () =>
+                  backchannelLogoutService.deliver(
+                    { clientIdentifier, subject, sessionId },
+                    mgmtAuth,
+                  ),
+                )
+              }
+            >
+              {loading && activeOp === 'deliver' && <span className="tx-spin" aria-hidden="true" />}
+              Issue &amp; Deliver
+            </button>
+            <button
+              type="button"
+              className="tx-btn"
+              disabled={!mgmtAuth || (!subject && !sessionId) || loading}
+              onClick={() =>
+                handleCall('deliver-all', () =>
+                  backchannelLogoutService.deliverAll({ subject, sessionId }, mgmtAuth),
+                )
+              }
+            >
+              {loading && activeOp === 'deliver-all' && (
+                <span className="tx-spin" aria-hidden="true" />
+              )}
+              Issue &amp; Deliver All
+            </button>
+          </div>
         </div>
-      )}
 
-      {isArrayResult && (
-        <div className="space-y-3">
-          <details className="rounded-lg border border-border overflow-hidden" open>
-            <summary className="px-3 py-2 text-xs font-semibold cursor-pointer bg-muted/20 select-none">
-              Deliver-All Results ({(result as unknown[]).length} clients processed)
-            </summary>
-            <JsonBlock data={result} className="m-0" />
-          </details>
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        <div
+          className="tx-turn"
+          data-dir={result ? 'in' : undefined}
+          data-state={result ? 'landed' : 'pending'}
+        >
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">2 · Server → Client</span>
+          </div>
+
+          {hasTokenResult ? (
+            <div className="space-y-3">
+              <details className="tx-evidence" open>
+                <summary style={{ cursor: 'pointer' }}>
+                  <span className="tx-evidence-verdict">Raw Response</span>
+                </summary>
+                <JsonBlock data={result} className="m-0" />
+              </details>
+              <details className="tx-evidence" open>
+                <summary style={{ cursor: 'pointer' }}>
+                  <span className="tx-evidence-verdict">Decoded Logout Token (JWT Payload)</span>
+                </summary>
+                {typeof decodedLogoutToken === 'string' ? (
+                  <p className="tx-hint">{decodedLogoutToken}</p>
+                ) : (
+                  <JsonBlock data={decodedLogoutToken} className="m-0" />
+                )}
+                <p className="tx-hint">
+                  The logout token is a JWT with <code>typ: &quot;logout+jwt&quot;</code> and an{' '}
+                  <code>events</code> claim containing{' '}
+                  <code>http://schemas.openid.net/event/backchannel-logout</code>.
+                </p>
+              </details>
+            </div>
+          ) : isArrayResult ? (
+            <details className="tx-evidence" open>
+              <summary style={{ cursor: 'pointer' }}>
+                <span className="tx-evidence-verdict">
+                  Deliver-All Results ({(result as unknown[]).length} clients processed)
+                </span>
+              </summary>
+              <JsonBlock data={result} className="m-0" />
+            </details>
+          ) : result ? (
+            <JsonBlock data={result} label="Response" />
+          ) : (
+            <div className="tx-waiting">Nothing sent yet.</div>
+          )}
         </div>
-      )}
-    </SectionPanel>
+      </div>
+    </section>
   );
 }
 

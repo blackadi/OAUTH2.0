@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { toast } from 'sonner';
 import { dcrService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
@@ -6,10 +6,6 @@ import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
@@ -18,6 +14,7 @@ import { useTraces } from '@/hooks/useTraces';
 import { sequenceProgress, type SequenceStepSpec } from '@/utils/sequence-progress';
 import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { useCredentials } from '@/context/CredentialContext';
+import '@/styles/transcript.css';
 
 type DcrOp = 'register' | 'get' | 'update' | 'delete';
 
@@ -42,13 +39,20 @@ const DCR_OPS: { value: DcrOp; label: string }[] = [
   { value: 'delete', label: 'Delete' },
 ];
 
+const OP_ENDPOINT: Record<DcrOp, string> = {
+  register: '/api/client/dcr/register',
+  get: '/api/client/dcr/get',
+  update: '/api/client/dcr/update',
+  delete: '/api/client/dcr/delete',
+};
+
 /**
- * `register` is not one option of four — it is the one that makes the other three possible.
+ * DCR, rendered as the exchange it is — the same conversion `ParSection` and its siblings had.
+ * `register` is not one option of four — it is the one that makes the other three possible, which is
+ * what `FlowDiagram` above the tabs states and each turn below re-states for whichever step is active.
  *
- * RFC 7591 §3 registers the client and returns a **registration access token**; RFC 7592 §2.1–2.3 then
- * require that token for read, update and delete. So the three management operations are strictly
- * downstream of registration, and a row of peer tabs implied they were alternatives you could pick in
- * any order.
+ * **Behaviour is unchanged.** `handleCall` and every service call are the incumbent implementation;
+ * only the markup around them changed.
  */
 const DCR_STEPS: SequenceStepSpec[] = [
   {
@@ -107,6 +111,7 @@ function DcrSection() {
   const traces = useTraces();
   const progress = sequenceProgress(DCR_STEPS, traces);
   const { confirm, dialog } = useConfirmedAction();
+  const uid = useId();
 
   const handleCall = async (fn: () => Promise<unknown>) => {
     const { data, error: err } = await call(fn);
@@ -137,148 +142,235 @@ function DcrSection() {
   };
 
   return (
-    <SectionPanel
-      title="Dynamic Client Registration (RFC 7591)"
-      description="Register and manage clients dynamically"
-    >
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">Dynamic Client Registration</h1>
+        <span className="tx-ref">RFC 7591 / RFC 7592</span>
+      </header>
+
+      <p className="tx-standfirst">
+        A client registers itself and gets back a registration access token — the credential the
+        other three operations need. Pick a step below to see what it sends and what comes back.
+      </p>
+
       <AdminAuth label="Admin" />
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
-      {/* The sequence, above the tabs that select a step in it. `FlowDiagram` and the progress
-
-
-          derivation both already existed and were applied to 3 of 20 sections; this is one of the
-
-
-          eight that rendered an ordered protocol as a row of peers. */}
-
       <FlowDiagram
         steps={DCR_STEPS}
-
         currentStep={progress.currentStep}
-
         completedSteps={progress.completedSteps}
-
         className="mb-3"
       />
 
       <TabBar options={DCR_OPS} value={activeOp} onChange={setActiveOp} />
 
-      {activeOp && doc && <OperationDescription doc={doc} />}
-
-      {activeOp === 'register' && (
-        <div className="space-y-3">
-          <Textarea
-            label="Client Metadata (JSON)"
-            rows={10}
-            value={regJson}
-            onChange={(e) => setRegJson(e.target.value)}
-            placeholder='{"client_name":"My App","redirect_uris":["http://localhost:3001/callback"],"grant_types":["AUTHORIZATION_CODE"]}'
+      <div className="tx-body">
+        {activeOp && doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
           />
-          <Button
-            onClick={() => handleCall(() => dcrService.dcrRegister({ json: regJson }, auth))}
-            loading={loading}
+        )}
+
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        {activeOp && (
+          <div className="tx-turn" data-dir="out">
+            <span className="tx-marker" aria-hidden="true" />
+            <div className="tx-turn-head">
+              <span className="tx-turn-label">1 · Client → Server</span>
+              <span className="tx-turn-note">POST {OP_ENDPOINT[activeOp]}</span>
+            </div>
+
+            {activeOp === 'register' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-reg`}>
+                  <span className="tx-label">Client Metadata (JSON)</span>
+                  <textarea
+                    id={`${uid}-reg`}
+                    className="tx-textarea"
+                    rows={10}
+                    value={regJson}
+                    onChange={(e) => setRegJson(e.target.value)}
+                    placeholder='{"client_name":"My App","redirect_uris":["http://localhost:3001/callback"],"grant_types":["AUTHORIZATION_CODE"]}'
+                  />
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() =>
+                      handleCall(() => dcrService.dcrRegister({ json: regJson }, auth))
+                    }
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Run
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'get' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-get-cid`}>
+                  <span className="tx-label">Client ID</span>
+                  <input
+                    id={`${uid}-get-cid`}
+                    className="tx-input"
+                    value={getClientId}
+                    onChange={(e) => setGetClientId(e.target.value)}
+                    placeholder="client_id from registration"
+                  />
+                </label>
+                <label className="tx-field" htmlFor={`${uid}-get-token`}>
+                  <span className="tx-label">Registration Access Token</span>
+                  <input
+                    id={`${uid}-get-token`}
+                    className="tx-input"
+                    value={getToken}
+                    onChange={(e) => setGetToken(e.target.value)}
+                    placeholder="registration_access_token from registration"
+                  />
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() => handleCall(() => dcrService.dcrGet(getToken, getClientId))}
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Run
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'update' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-upd-cid`}>
+                  <span className="tx-label">Client ID</span>
+                  <input
+                    id={`${uid}-upd-cid`}
+                    className="tx-input"
+                    value={updateClientId}
+                    onChange={(e) => setUpdateClientId(e.target.value)}
+                    placeholder="client_id from registration"
+                  />
+                </label>
+                <label className="tx-field" htmlFor={`${uid}-upd-token`}>
+                  <span className="tx-label">Registration Access Token</span>
+                  <input
+                    id={`${uid}-upd-token`}
+                    className="tx-input"
+                    value={updateToken}
+                    onChange={(e) => setUpdateToken(e.target.value)}
+                    placeholder="registration_access_token from registration"
+                  />
+                </label>
+                <label className="tx-field" htmlFor={`${uid}-upd-json`}>
+                  <span className="tx-label">Updated Client Metadata (JSON)</span>
+                  <textarea
+                    id={`${uid}-upd-json`}
+                    className="tx-textarea"
+                    rows={10}
+                    value={updateJson}
+                    onChange={(e) => setUpdateJson(e.target.value)}
+                    placeholder='{"client_name":"Updated Name","redirect_uris":["http://localhost:3001/callback"]}'
+                  />
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() =>
+                      handleCall(() =>
+                        dcrService.dcrUpdate(updateJson, updateToken, updateClientId),
+                      )
+                    }
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Run
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'delete' && (
+              <>
+                <label className="tx-field" htmlFor={`${uid}-del-cid`}>
+                  <span className="tx-label">Client ID</span>
+                  <input
+                    id={`${uid}-del-cid`}
+                    className="tx-input"
+                    value={deleteClientId}
+                    onChange={(e) => setDeleteClientId(e.target.value)}
+                    placeholder="client_id from registration"
+                  />
+                </label>
+                <label className="tx-field" htmlFor={`${uid}-del-token`}>
+                  <span className="tx-label">Registration Access Token</span>
+                  <input
+                    id={`${uid}-del-token`}
+                    className="tx-input"
+                    value={deleteToken}
+                    onChange={(e) => setDeleteToken(e.target.value)}
+                    placeholder="registration_access_token from registration"
+                  />
+                </label>
+                {/* RFC 7592 §2.3 deregistration is permanent at the authorization server. Same reasoning
+                    as Client Management: the identifier has to be typed back before the button will
+                    fire. */}
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn"
+                    disabled={!deleteClientId.trim() || !deleteToken.trim() || loading}
+                    onClick={() =>
+                      confirm({
+                        title: 'Deregister this client permanently?',
+                        body: `Client ${deleteClientId} will be deleted at the authorization server (RFC 7592 §2.3). Its registration access token dies with it, so this cannot be undone from here.`,
+                        confirmLabel: 'Deregister client',
+                        requireTyped: deleteClientId.trim(),
+                        run: () =>
+                          handleCall(() => dcrService.dcrDelete(deleteToken, deleteClientId)),
+                      })
+                    }
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {dialog}
+
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        {activeOp && (
+          <div
+            className="tx-turn"
+            data-dir={result ? 'in' : undefined}
+            data-state={result ? 'landed' : 'pending'}
           >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'get' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={getClientId}
-            onChange={(e) => setGetClientId(e.target.value)}
-            placeholder="client_id from registration"
-          />
-          <Input
-            label="Registration Access Token"
-            value={getToken}
-            onChange={(e) => setGetToken(e.target.value)}
-            placeholder="registration_access_token from registration"
-          />
-          <Button
-            onClick={() => handleCall(() => dcrService.dcrGet(getToken, getClientId))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'update' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={updateClientId}
-            onChange={(e) => setUpdateClientId(e.target.value)}
-            placeholder="client_id from registration"
-          />
-          <Input
-            label="Registration Access Token"
-            value={updateToken}
-            onChange={(e) => setUpdateToken(e.target.value)}
-            placeholder="registration_access_token from registration"
-          />
-          <Textarea
-            label="Updated Client Metadata (JSON)"
-            rows={10}
-            value={updateJson}
-            onChange={(e) => setUpdateJson(e.target.value)}
-            placeholder='{"client_name":"Updated Name","redirect_uris":["http://localhost:3001/callback"]}'
-          />
-          <Button
-            onClick={() =>
-              handleCall(() => dcrService.dcrUpdate(updateJson, updateToken, updateClientId))
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'delete' && (
-        <div className="space-y-3">
-          <Input
-            label="Client ID"
-            value={deleteClientId}
-            onChange={(e) => setDeleteClientId(e.target.value)}
-            placeholder="client_id from registration"
-          />
-          <Input
-            label="Registration Access Token"
-            value={deleteToken}
-            onChange={(e) => setDeleteToken(e.target.value)}
-            placeholder="registration_access_token from registration"
-          />
-          {/* RFC 7592 §2.3 deregistration is permanent at the authorization server. Same reasoning as
-              Client Management: the identifier has to be typed back before the button will fire. */}
-          <Button
-            variant="danger"
-            disabled={!deleteClientId.trim() || !deleteToken.trim()}
-            onClick={() =>
-              confirm({
-                title: 'Deregister this client permanently?',
-                body: `Client ${deleteClientId} will be deleted at the authorization server (RFC 7592 §2.3). Its registration access token dies with it, so this cannot be undone from here.`,
-                confirmLabel: 'Deregister client',
-                requireTyped: deleteClientId.trim(),
-                run: () => handleCall(() => dcrService.dcrDelete(deleteToken, deleteClientId)),
-              })
-            }
-            loading={loading}
-          >
-            Delete
-          </Button>
-        </div>
-      )}
-
-      {dialog}
-
-      {result ? <JsonBlock data={result} label="Response" /> : null}
-    </SectionPanel>
+            <span className="tx-marker" aria-hidden="true" />
+            <div className="tx-turn-head">
+              <span className="tx-turn-label">2 · Server → Client</span>
+            </div>
+            {result ? (
+              <JsonBlock data={result} label="Response" />
+            ) : (
+              <div className="tx-waiting">Nothing sent yet for this step.</div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

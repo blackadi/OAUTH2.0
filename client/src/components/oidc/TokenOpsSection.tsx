@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useToken } from '@/context/TokenContext';
@@ -7,11 +7,8 @@ import type { JWK } from '@/services/crypto-utils';
 import { CLIENT_ID } from '@/config';
 import { useDiscriminatedAsyncCall } from '@/hooks/useAsyncCall';
 import { useUrlState } from '@/hooks/useUrlState';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc } from '@/data/operationDocs';
@@ -19,6 +16,7 @@ import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { SESSION_KEYS, readKey, readJsonKey } from '@/services/session-keys';
 import { useCredentials } from '@/context/CredentialContext';
+import '@/styles/transcript.css';
 
 type TokenOp = 'userinfo' | 'introspect' | 'introspect-std' | 'revoke';
 
@@ -37,6 +35,21 @@ const OPS: { key: TokenOp; label: string }[] = [
   { key: 'revoke', label: 'Revoke Token' },
 ];
 
+const OP_ENDPOINT: Record<TokenOp, string> = {
+  userinfo: '/api/userinfo',
+  introspect: '/api/introspection',
+  'introspect-std': '/api/introspection/standard',
+  revoke: '/api/revocation',
+};
+
+/**
+ * Token Operations, rendered as the exchange it is — the same conversion `ParSection` and its siblings
+ * had. Four operations on a held token, each with a different presentation scheme and a different
+ * credential, which is exactly what a form-then-dump shape used to hide.
+ *
+ * **Behaviour is unchanged.** `handleCall` and every service call are the incumbent implementation;
+ * only the markup around them changed.
+ */
 function TokenOpsSection() {
   const { tokenSet, isDpopBound } = useToken();
   const at = tokenSet?.access_token;
@@ -86,6 +99,7 @@ function TokenOpsSection() {
 
   const doc = activeOp ? getDoc('token-ops', activeOp) : undefined;
   const { confirm, dialog } = useConfirmedAction();
+  const uid = useId();
 
   const handleCall = async (label: TokenOp, fn: () => Promise<unknown>) => {
     setActiveOp(label);
@@ -98,236 +112,304 @@ function TokenOpsSection() {
   };
 
   return (
-    <SectionPanel title="Token Operations" description="Inspect, introspect, and manage tokens">
-      {error && <ErrorExplainer error={error} className="mb-3" />}
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">Token Operations</h1>
+        <span className="tx-ref">Inspect, introspect, and manage tokens</span>
+      </header>
 
-      {!at && (
-        <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
-          <p className="font-medium">No access token available</p>
-          <p className="mt-1 text-xs text-warning-text">
-            Obtain a token first via the Grant Flows section (Authorization Code, Client
-            Credentials, etc.), then return here.
-          </p>
-          <Link to="/auth-flows">
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2 border-edge-warning text-warning-text hover:bg-tint-warning-strong"
-            >
-              Go to Grant Flows
-            </Button>
-          </Link>
-        </div>
-      )}
+      <div className="tx-body">
+        {error && <ErrorExplainer error={error} className="mb-3" />}
 
-      {at && (
-        <div className="rounded-lg border border-edge-success bg-tint-success p-2 text-xs text-success-text">
-          Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
-          {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
-              so it is stated rather than left to be discovered. */}
-          {/*
-            Names UserInfo *and* Introspect (Authlete), because both are refused for a bound token
-            presented without a proof and only the first was ever mentioned — which is how the
-            introspection button came to fail with `[A065308]` and no explanation. Introspect (RFC
-            7662) is called out as still working: it checks no binding, so it is the honest fallback
-            rather than a second dead end.
-          */}
-          <span className="ml-2 text-success-text">
-            {isDpopBound
-              ? dpopKey
-                ? '· sender-constrained, so UserInfo and Introspect (Authlete) both send a DPoP proof'
-                : '· sender-constrained, but no DPoP key is in this session — UserInfo and Introspect (Authlete) will be refused; Introspect (RFC 7662) checks no binding and still works'
-              : '· bearer token, presented with the Bearer scheme'}
-          </span>
-        </div>
-      )}
+        {!at && (
+          <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
+            <p className="font-medium">No access token available</p>
+            <p className="mt-1 text-xs text-warning-text">
+              Obtain a token first via the Grant Flows section (Authorization Code, Client
+              Credentials, etc.), then return here.
+            </p>
+            <Link to="/auth-flows">
+              <button type="button" className="tx-btn" style={{ marginTop: '0.5rem' }}>
+                Go to Grant Flows
+              </button>
+            </Link>
+          </div>
+        )}
 
-      {/**
-       * The credentials, **above** the buttons, because they used to be below them.
-       *
-       * This block was inside `activeOp === 'introspect' || activeOp === 'introspect-std'` — and
-       * `activeOp` is set by the very click that fires the request. So the fields appeared only
-       * *after* the first introspection had already gone out without them, which the section's own
-       * prose says answers `401` and never reaches Authlete. A control that appears only after the
-       * failure it prevents is not a control, and on an endpoint carrying a 20/min limiter and real
-       * vendor quota that wasted call is not free.
-       *
-       * The revocation client credentials were worse than late — they were **unreachable in time**.
-       * `setActiveOp` runs only inside `handleCall`, and the revoke path returns before reaching it,
-       * so the fields rendered *after the token had already been revoked*. And even given the chance,
-       * editing them then would have changed nothing: `confirm({ … run })` captures the values at
-       * press time, so an edit made while the dialog is open is discarded. Both pairs therefore live
-       * here, above the controls that use them, where they can be set before anything fires.
-       *
-       * These are two different credentials and not interchangeable: the admin pair authenticates
-       * *this deployment* at the introspection endpoints (RFC 7662 §2.1), and the client pair
-       * authenticates *the client the token belongs to* at revocation (RFC 7009 §2.1).
-       */}
-      {at && (
-        <div className="space-y-3">
-          <AdminAuth />
-          <Input
-            label="Revocation Client ID"
-            value={revClientId}
-            onChange={(e) => setRevClientId(e.target.value)}
-            placeholder="The client the token belongs to"
-          />
-          <Input
-            label="Revocation Client Secret"
-            type="password"
-            value={revClientSecret}
-            onChange={(e) => setRevClientSecret(e.target.value)}
-            placeholder="Client secret for revocation auth"
-          />
-        </div>
-      )}
+        {at && (
+          <div className="rounded-lg border border-edge-success bg-tint-success p-2 text-xs text-success-text">
+            Access token loaded: <code className="font-mono">{at.slice(0, 20)}...</code>
+            {/* Which scheme it must be presented with is the difference between a 200 and [A089311],
+                so it is stated rather than left to be discovered. */}
+            {/*
+              Names UserInfo *and* Introspect (Authlete), because both are refused for a bound token
+              presented without a proof and only the first was ever mentioned — which is how the
+              introspection button came to fail with `[A065308]` and no explanation. Introspect (RFC
+              7662) is called out as still working: it checks no binding, so it is the honest fallback
+              rather than a second dead end.
+            */}
+            <span className="ml-2 text-success-text">
+              {isDpopBound
+                ? dpopKey
+                  ? '· sender-constrained, so UserInfo and Introspect (Authlete) both send a DPoP proof'
+                  : '· sender-constrained, but no DPoP key is in this session — UserInfo and Introspect (Authlete) will be refused; Introspect (RFC 7662) checks no binding and still works'
+                : '· bearer token, presented with the Bearer scheme'}
+            </span>
+          </div>
+        )}
 
-      <div className="flex flex-wrap gap-2">
-        {OPS.map((op) => (
-          <Button
-            key={op.key}
-            variant={activeOp === op.key ? 'default' : 'outline'}
-            size="sm"
-            disabled={!at || loading !== null}
-            loading={loading === op.key}
-            onClick={() => {
-              /**
-               * Revocation is the one operation here that destroys something, and RFC 7009 §2.1 makes
-               * it apply to the whole grant when the server chooses to: revoking an access token may
-               * take the refresh token with it. The other three read.
-               */
-              if (op.key === 'revoke') {
-                // Select the operation before asking, so the docs panel describes what is about to
-                // happen while the confirmation is on screen. `handleCall` — which is what normally
-                // sets this — only runs after the user confirms.
-                setActiveOp('revoke');
-                confirm({
-                  title: 'Revoke this access token?',
-                  body: 'The token is revoked at the authorization server and stops working immediately. RFC 7009 §2.1 permits the server to revoke the whole grant, so the refresh token issued alongside it may go too. This cannot be undone from here.',
-                  confirmLabel: 'Revoke token',
-                  run: () =>
-                    void handleCall('revoke', () =>
-                      tokenService.revocation(
-                        at!,
-                        revClientId || undefined,
-                        revClientSecret || undefined,
-                        'access_token',
-                      ),
-                    ),
-                });
-                return;
-              }
-              void handleCall(op.key, () => {
-                switch (op.key) {
-                  case 'userinfo':
-                    return fetchUserinfo();
-                  case 'introspect': {
-                    const opts: { acrValues?: string; maxAge?: number } = {};
-                    if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();
-                    if (introspectMaxAge.trim()) opts.maxAge = Number(introspectMaxAge.trim());
-                    // `introspectForToken`, not `introspection`: Authlete's resource-server-facing
-                    // API checks the binding of a sender-constrained token and refuses without the
-                    // proof (`[A065308]`). The scheme decision lives in the service, beside the
-                    // identical one for UserInfo, rather than being made a third time here.
-                    return tokenService.introspectForToken(
-                      at!,
-                      isDpopBound,
-                      adminId,
-                      adminSecret,
-                      Object.keys(opts).length ? opts : undefined,
-                    );
-                  }
-                  case 'introspect-std':
-                    return tokenService.introspectionStandard(at!, adminId, adminSecret, {
-                      jwtResponse,
-                      rsUri: rsUri.trim() || undefined,
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-dir="out">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">1 · Client → Server</span>
+            {at && activeOp && <span className="tx-turn-note">POST {OP_ENDPOINT[activeOp]}</span>}
+          </div>
+
+          {/**
+           * The credentials, **above** the buttons, because they used to be below them.
+           *
+           * This block was inside `activeOp === 'introspect' || activeOp === 'introspect-std'` — and
+           * `activeOp` is set by the very click that fires the request. So the fields appeared only
+           * *after* the first introspection had already gone out without them, which the section's
+           * own prose says answers `401` and never reaches Authlete. A control that appears only
+           * after the failure it prevents is not a control, and on an endpoint carrying a 20/min
+           * limiter and real vendor quota that wasted call is not free.
+           *
+           * The revocation client credentials were worse than late — they were **unreachable in
+           * time**. `setActiveOp` runs only inside `handleCall`, and the revoke path returns before
+           * reaching it, so the fields rendered *after the token had already been revoked*. And even
+           * given the chance, editing them then would have changed nothing: `confirm({ … run })`
+           * captures the values at press time, so an edit made while the dialog is open is discarded.
+           * Both pairs therefore live here, above the controls that use them, where they can be set
+           * before anything fires.
+           *
+           * These are two different credentials and not interchangeable: the admin pair
+           * authenticates *this deployment* at the introspection endpoints (RFC 7662 §2.1), and the
+           * client pair authenticates *the client the token belongs to* at revocation (RFC 7009
+           * §2.1).
+           */}
+          {at && (
+            <>
+              <AdminAuth />
+              <label className="tx-field" htmlFor={`${uid}-rev-cid`}>
+                <span className="tx-label">Revocation Client ID</span>
+                <input
+                  id={`${uid}-rev-cid`}
+                  className="tx-input"
+                  value={revClientId}
+                  onChange={(e) => setRevClientId(e.target.value)}
+                  placeholder="The client the token belongs to"
+                />
+              </label>
+              <label className="tx-field" htmlFor={`${uid}-rev-secret`}>
+                <span className="tx-label">Revocation Client Secret</span>
+                <input
+                  id={`${uid}-rev-secret`}
+                  className="tx-input"
+                  type="password"
+                  value={revClientSecret}
+                  onChange={(e) => setRevClientSecret(e.target.value)}
+                  placeholder="Client secret for revocation auth"
+                />
+              </label>
+            </>
+          )}
+
+          <div className="tx-actions">
+            {OPS.map((op) => (
+              <button
+                key={op.key}
+                type="button"
+                className={op.key === activeOp ? 'tx-btn tx-btn-primary' : 'tx-btn'}
+                disabled={!at || loading !== null}
+                onClick={() => {
+                  /**
+                   * Revocation is the one operation here that destroys something, and RFC 7009 §2.1
+                   * makes it apply to the whole grant when the server chooses to: revoking an access
+                   * token may take the refresh token with it. The other three read.
+                   */
+                  if (op.key === 'revoke') {
+                    // Select the operation before asking, so the docs panel describes what is about
+                    // to happen while the confirmation is on screen. `handleCall` — which is what
+                    // normally sets this — only runs after the user confirms.
+                    setActiveOp('revoke');
+                    confirm({
+                      title: 'Revoke this access token?',
+                      body: 'The token is revoked at the authorization server and stops working immediately. RFC 7009 §2.1 permits the server to revoke the whole grant, so the refresh token issued alongside it may go too. This cannot be undone from here.',
+                      confirmLabel: 'Revoke token',
+                      run: () =>
+                        void handleCall('revoke', () =>
+                          tokenService.revocation(
+                            at!,
+                            revClientId || undefined,
+                            revClientSecret || undefined,
+                            'access_token',
+                          ),
+                        ),
                     });
-                  case 'revoke':
-                    // Unreachable: revocation is handled above, behind a confirmation. The case stays
-                    // so the switch remains exhaustive over `TokenOp` — adding a fifth operation should
-                    // be a compile error here, not a silent `undefined`.
-                    throw new Error('revoke is handled by the confirmation path above');
-                }
-              });
-            }}
-          >
-            {op.label}
-          </Button>
-        ))}
-      </div>
+                    return;
+                  }
+                  void handleCall(op.key, () => {
+                    switch (op.key) {
+                      case 'userinfo':
+                        return fetchUserinfo();
+                      case 'introspect': {
+                        const opts: { acrValues?: string; maxAge?: number } = {};
+                        if (introspectAcrValues.trim()) opts.acrValues = introspectAcrValues.trim();
+                        if (introspectMaxAge.trim()) opts.maxAge = Number(introspectMaxAge.trim());
+                        // `introspectForToken`, not `introspection`: Authlete's resource-server-facing
+                        // API checks the binding of a sender-constrained token and refuses without the
+                        // proof (`[A065308]`). The scheme decision lives in the service, beside the
+                        // identical one for UserInfo, rather than being made a third time here.
+                        return tokenService.introspectForToken(
+                          at!,
+                          isDpopBound,
+                          adminId,
+                          adminSecret,
+                          Object.keys(opts).length ? opts : undefined,
+                        );
+                      }
+                      case 'introspect-std':
+                        return tokenService.introspectionStandard(at!, adminId, adminSecret, {
+                          jwtResponse,
+                          rsUri: rsUri.trim() || undefined,
+                        });
+                      case 'revoke':
+                        // Unreachable: revocation is handled above, behind a confirmation. The case
+                        // stays so the switch remains exhaustive over `TokenOp` — adding a fifth
+                        // operation should be a compile error here, not a silent `undefined`.
+                        throw new Error('revoke is handled by the confirmation path above');
+                    }
+                  });
+                }}
+              >
+                {loading === op.key && <span className="tx-spin" aria-hidden="true" />}
+                {op.label}
+              </button>
+            ))}
+          </div>
 
-      {activeOp && doc && <OperationDescription doc={doc} />}
-
-      {(activeOp === 'introspect' || activeOp === 'introspect-std') && (
-        <p className="text-xs text-muted-foreground">
-          RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints take
-          this deployment&apos;s admin credentials. Without them the server answers <code>401</code>{' '}
-          and never reaches Authlete.
-        </p>
-      )}
-
-      {activeOp === 'introspect' && (
-        <div className="space-y-3 rounded-lg border border-edge-info bg-tint-info p-3">
-          <p className="text-xs font-medium text-info-text">
-            RFC 9470 Step-Up Authentication Validation
-          </p>
-          <Input
-            label="ACR Values (space-separated)"
-            value={introspectAcrValues}
-            onChange={(e) => setIntrospectAcrValues(e.target.value)}
-            placeholder="e.g. pwd urn:mace:incommon:iap:silver"
-          />
-          <Input
-            label="Max Authentication Age (seconds)"
-            type="number"
-            value={introspectMaxAge}
-            onChange={(e) => setIntrospectMaxAge(e.target.value)}
-            placeholder="e.g. 3600"
-          />
-          <p className="text-2xs text-muted-foreground">
-            If the token's ACR doesn't match or auth_time exceeds max_age, Authlete returns{' '}
-            <code>insufficient_user_authentication</code> with the required values.
-          </p>
-        </div>
-      )}
-
-      {activeOp === 'introspect-std' && (
-        <div className="space-y-3 rounded-lg border border-edge-info bg-tint-info p-3">
-          <p className="text-xs font-medium text-info-text">
-            RFC 9701 — JWT Secured Introspection Response
-          </p>
-          <Checkbox
-            label="Request a signed (JWT) response"
-            checked={jwtResponse}
-            onChange={(e) => setJwtResponse(e.target.checked)}
-            hint={
-              <>
-                Sends <code>Accept: application/token-introspection+jwt</code> instead of asking for
-                plain JSON. Authlete decides purely from this header — there is no body flag for it.
-              </>
-            }
-          />
-          {jwtResponse && (
-            <Input
-              label="Resource server URI (rsUri)"
-              value={rsUri}
-              onChange={(e) => setRsUri(e.target.value)}
-              placeholder="https://api.example.com"
-              hint="§4 puts this in the response's aud claim. Required for the JWT form: omitting it earns [A404301] from Authlete, surfaced here as a 400."
+          {activeOp && doc && (
+            <OperationDescription
+              doc={doc}
+              className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
             />
           )}
-          <p className="text-2xs text-muted-foreground">
-            The response is a compact JWS, not the §2.2 JSON body above — decode it in the Evidence
-            rail's Inspect tab to verify <code>iss</code>, <code>aud</code> and{' '}
-            <code>token_introspection</code>.
-          </p>
+
+          {(activeOp === 'introspect' || activeOp === 'introspect-std') && (
+            <p className="tx-hint">
+              RFC 7662 §2.1 requires the introspection endpoint to be protected, so both endpoints
+              take this deployment&apos;s admin credentials. Without them the server answers{' '}
+              <code>401</code> and never reaches Authlete.
+            </p>
+          )}
+
+          {activeOp === 'introspect' && (
+            <div className="tx-evidence" data-outcome="issued">
+              <div className="tx-evidence-head">
+                <span className="tx-evidence-verdict">
+                  RFC 9470 Step-Up Authentication Validation
+                </span>
+              </div>
+              <label className="tx-field" htmlFor={`${uid}-acr`}>
+                <span className="tx-label">ACR Values (space-separated)</span>
+                <input
+                  id={`${uid}-acr`}
+                  className="tx-input"
+                  value={introspectAcrValues}
+                  onChange={(e) => setIntrospectAcrValues(e.target.value)}
+                  placeholder="e.g. pwd urn:mace:incommon:iap:silver"
+                />
+              </label>
+              <label className="tx-field" htmlFor={`${uid}-maxage`}>
+                <span className="tx-label">Max Authentication Age (seconds)</span>
+                <input
+                  id={`${uid}-maxage`}
+                  className="tx-input"
+                  type="number"
+                  value={introspectMaxAge}
+                  onChange={(e) => setIntrospectMaxAge(e.target.value)}
+                  placeholder="e.g. 3600"
+                />
+              </label>
+              <p className="tx-hint">
+                If the token&apos;s ACR doesn&apos;t match or auth_time exceeds max_age, Authlete
+                returns <code>insufficient_user_authentication</code> with the required values.
+              </p>
+            </div>
+          )}
+
+          {activeOp === 'introspect-std' && (
+            <div className="tx-evidence" data-outcome="issued">
+              <div className="tx-evidence-head">
+                <span className="tx-evidence-verdict">
+                  RFC 9701 — JWT Secured Introspection Response
+                </span>
+              </div>
+              <Checkbox
+                label="Request a signed (JWT) response"
+                checked={jwtResponse}
+                onChange={(e) => setJwtResponse(e.target.checked)}
+                hint={
+                  <>
+                    Sends <code>Accept: application/token-introspection+jwt</code> instead of asking
+                    for plain JSON. Authlete decides purely from this header — there is no body flag
+                    for it.
+                  </>
+                }
+              />
+              {jwtResponse && (
+                <label
+                  className="tx-field"
+                  htmlFor={`${uid}-rsuri`}
+                  style={{ marginTop: '0.5rem' }}
+                >
+                  <span className="tx-label">Resource server URI (rsUri)</span>
+                  <input
+                    id={`${uid}-rsuri`}
+                    className="tx-input"
+                    value={rsUri}
+                    onChange={(e) => setRsUri(e.target.value)}
+                    placeholder="https://api.example.com"
+                  />
+                  <p className="tx-hint">
+                    §4 puts this in the response&apos;s aud claim. Required for the JWT form:
+                    omitting it earns [A404301] from Authlete, surfaced here as a 400.
+                  </p>
+                </label>
+              )}
+              <p className="tx-hint">
+                The response is a compact JWS, not the §2.2 JSON body above — decode it in the
+                Evidence rail&apos;s Inspect tab to verify <code>iss</code>, <code>aud</code> and{' '}
+                <code>token_introspection</code>.
+              </p>
+            </div>
+          )}
         </div>
-      )}
 
-      {dialog}
+        {dialog}
 
-      {result ? <JsonBlock data={result} label="Response" /> : null}
-    </SectionPanel>
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        {at && activeOp && (
+          <div
+            className="tx-turn"
+            data-dir={result ? 'in' : undefined}
+            data-state={result ? 'landed' : 'pending'}
+          >
+            <span className="tx-marker" aria-hidden="true" />
+            <div className="tx-turn-head">
+              <span className="tx-turn-label">2 · Server → Client</span>
+            </div>
+            {result ? (
+              <JsonBlock data={result} label="Response" />
+            ) : (
+              <div className="tx-waiting">Nothing sent yet for this operation.</div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

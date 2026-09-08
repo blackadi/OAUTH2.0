@@ -1,18 +1,16 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { toast } from 'sonner';
 import { federationService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
-import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
 import { useCredentials } from '@/context/CredentialContext';
+import '@/styles/transcript.css';
 
 type FederationOp = 'configuration' | 'registration';
 
@@ -24,6 +22,13 @@ const FEDERATION_OPS: { value: FederationOp; label: string }[] = [
   { value: 'registration', label: 'Registration' },
 ];
 
+/**
+ * OpenID Federation, rendered as the exchange it is — the same conversion `ParSection` and its
+ * siblings had.
+ *
+ * **Behaviour is unchanged.** `handleCall` and every service call are the incumbent implementation;
+ * only the markup around them changed.
+ */
 function FederationSection() {
   // The management credential is shared for the page rather than owned here: eight sections
   // held their own copy, and a route change unmounts a section, so it had to be retyped on
@@ -45,6 +50,7 @@ function FederationSection() {
 
   const auth = authId && authSecret ? btoa(`${authId}:${authSecret}`) : '';
   const doc = activeOp ? getDoc('federation', activeOp) : undefined;
+  const uid = useId();
 
   const handleCall = async (fn: () => Promise<unknown>) => {
     const { data, error: err } = await call(fn);
@@ -56,68 +62,138 @@ function FederationSection() {
   };
 
   return (
-    <SectionPanel
-      title="OpenID Federation 1.0"
-      description="Entity configuration and registration endpoints for OIDC Federation"
-    >
-      {error && <ErrorExplainer error={error} className="mb-3" />}
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">OpenID Federation</h1>
+        <span className="tx-ref">OpenID Federation 1.0 / 1.1</span>
+      </header>
+
+      <p className="tx-standfirst">
+        Entities prove who they are and how they are trusted by chaining signed statements up to a
+        common trust anchor, instead of registering out of band with every party they talk to.
+      </p>
 
       <TabBar options={FEDERATION_OPS} value={activeOp} onChange={setActiveOp} />
 
-      {activeOp && doc && <OperationDescription doc={doc} />}
-
-      {activeOp === 'configuration' && (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Fetch the entity configuration JWT for this authorization server. This endpoint is
-            public (no auth required).
-          </p>
-          <Button
-            onClick={() => handleCall(() => federationService.getConfiguration())}
-            loading={loading}
-          >
-            Fetch Configuration
-          </Button>
-        </div>
-      )}
-
-      {activeOp === 'registration' && (
-        <div className="space-y-3">
-          <AdminAuth label="Admin" />
-          <Textarea
-            label="Entity Configuration (JWT)"
-            rows={6}
-            value={entityConfiguration}
-            onChange={(e) => setEntityConfiguration(e.target.value)}
-            placeholder="Paste the entity configuration JWT of the RP to register"
+      <div className="tx-body">
+        {error && <ErrorExplainer error={error} className="mb-3" />}
+        {activeOp && doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
           />
-          <p className="text-xs text-muted-foreground">— or —</p>
-          <Textarea
-            label="Trust Chain (JSON)"
-            rows={6}
-            value={trustChain}
-            onChange={(e) => setTrustChain(e.target.value)}
-            placeholder='["jwt1","jwt2",...]'
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                federationService.register(
-                  entityConfiguration ? { entityConfiguration } : { trustChain },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-            disabled={!entityConfiguration && !trustChain}
-          >
-            Register
-          </Button>
-        </div>
-      )}
+        )}
 
-      {result ? <JsonBlock data={result} label="Response" /> : null}
-    </SectionPanel>
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        {activeOp && (
+          <div className="tx-turn" data-dir="out">
+            <span className="tx-marker" aria-hidden="true" />
+            <div className="tx-turn-head">
+              <span className="tx-turn-label">1 · Client → Server</span>
+              <span className="tx-turn-note">
+                {activeOp === 'configuration'
+                  ? 'GET /api/federation/configuration — public'
+                  : 'POST /api/federation/registration'}
+              </span>
+            </div>
+
+            {activeOp === 'configuration' && (
+              <>
+                <div className="rounded-lg border border-edge-warning bg-tint-warning p-3 text-sm text-warning-text">
+                  <p className="font-medium">This deployment cannot answer this call yet.</p>
+                  <p className="mt-1 text-xs">
+                    A signed entity configuration needs a federation JWK Set, and this service has
+                    none configured. Expect <code>500</code> with{' '}
+                    <code>[A316201] federation JWK Set is not configured</code> rather than a
+                    document — that is a missing configuration step, not a bug in this tool. On a
+                    deployment that has one, this returns a raw JWT (
+                    <code>application/entity-statement+jwt</code>), which is why the response below
+                    is not wrapped in the usual JSON block.
+                  </p>
+                </div>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() => handleCall(() => federationService.getConfiguration())}
+                    disabled={loading}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Fetch Configuration
+                  </button>
+                </div>
+              </>
+            )}
+
+            {activeOp === 'registration' && (
+              <>
+                <AdminAuth label="Admin" />
+                <label className="tx-field" htmlFor={`${uid}-entity`}>
+                  <span className="tx-label">Entity Configuration (JWT)</span>
+                  <textarea
+                    id={`${uid}-entity`}
+                    className="tx-textarea"
+                    rows={6}
+                    value={entityConfiguration}
+                    onChange={(e) => setEntityConfiguration(e.target.value)}
+                    placeholder="Paste the entity configuration JWT of the RP to register"
+                  />
+                </label>
+                <p className="tx-hint">— or —</p>
+                <label className="tx-field" htmlFor={`${uid}-chain`}>
+                  <span className="tx-label">Trust Chain (JSON)</span>
+                  <textarea
+                    id={`${uid}-chain`}
+                    className="tx-textarea"
+                    rows={6}
+                    value={trustChain}
+                    onChange={(e) => setTrustChain(e.target.value)}
+                    placeholder='["jwt1","jwt2",...]'
+                  />
+                </label>
+                <div className="tx-actions">
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() =>
+                      handleCall(() =>
+                        federationService.register(
+                          entityConfiguration ? { entityConfiguration } : { trustChain },
+                          auth,
+                        ),
+                      )
+                    }
+                    disabled={loading || (!entityConfiguration && !trustChain)}
+                  >
+                    {loading && <span className="tx-spin" aria-hidden="true" />}
+                    Register
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        {activeOp && (
+          <div
+            className="tx-turn"
+            data-dir={result ? 'in' : undefined}
+            data-state={result ? 'landed' : 'pending'}
+          >
+            <span className="tx-marker" aria-hidden="true" />
+            <div className="tx-turn-head">
+              <span className="tx-turn-label">2 · Server → Client</span>
+            </div>
+            {result ? (
+              <JsonBlock data={result} label="Response" />
+            ) : (
+              <div className="tx-waiting">Nothing sent yet.</div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

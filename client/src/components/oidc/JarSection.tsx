@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { toast } from 'sonner';
 import { processJar, type JarProcessResult } from '@/services/jar.service';
 import {
@@ -7,18 +7,14 @@ import {
   type SigningKeyPair,
 } from '@/services/client-assertion.service';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { SectionPanel } from '@/components/layout/SectionPanel';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
+import { OperationDescription } from '@/components/ui/OperationDescription';
 import { useCredentials } from '@/context/CredentialContext';
 import { getDoc } from '@/data/operationDocs';
 import { parseJsonObject } from '@/utils/parse-json';
+import '@/styles/transcript.css';
 
 function base64UrlEncode(data: ArrayBuffer | Uint8Array): string {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
@@ -85,6 +81,15 @@ async function createRequestObject(
   return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
 }
 
+/**
+ * RFC 9101 (JAR), rendered as the exchange it is — the same conversion `ParSection` and its siblings
+ * had, adapted for the two steps here that are not an exchange at all. Key generation and signing are
+ * local `crypto.subtle` calls with no server on the other end, so they are turns 1 and 2 labelled
+ * **Local** rather than a channel direction; only turns 3 and 4 are the actual client/server pair.
+ *
+ * **Behaviour is unchanged.** Every handler below is the incumbent implementation; only the markup
+ * around them changed.
+ */
 function JarSection() {
   const { loading, result, error, call } = useAsyncCall();
   const [keyPair, setKeyPair] = useState<SigningKeyPair | null>(null);
@@ -94,6 +99,7 @@ function JarSection() {
   const [jarResult, setJarResult] = useState<JarProcessResult | null>(null);
 
   const doc = getDoc('jar', 'process');
+  const uid = useId();
   // Shared with every other admin section on the page, so entering them once is enough.
   const { clientId: authId, clientSecret: authSecret } = useCredentials();
   const auth = authId && authSecret ? btoa(`${authId}:${authSecret}`) : '';
@@ -176,140 +182,196 @@ function JarSection() {
   const canProcess = !!signedJwt && !!clientId && !!auth;
 
   return (
-    <SectionPanel
-      title="JWT Secured Authorization Requests (RFC 9101)"
-      description="Build, sign, and test JWT-secured authorization requests (JAR). Generate an ES256 key pair, craft the JWT claims, sign the request object, and send it to Authlete for validation."
-    >
-      {/* JAR errors are among the most cryptic on this deployment — `[A005328]` for a bad signature —
-          and this was one of only two sections that showed the raw string and no explanation, while
-          `AUTHLETE_NOTES` has an entry for exactly that code. */}
-      {error && <ErrorExplainer error={String(error)} className="mb-3" />}
+    <section className="tx">
+      <header className="tx-masthead">
+        <h1 className="tx-title">JWT Secured Authorization Requests</h1>
+        <span className="tx-ref">RFC 9101</span>
+      </header>
 
-      {doc && <OperationDescription doc={doc} />}
+      <p className="tx-standfirst">
+        The authorization parameters travel inside a signed JWT instead of loose query parameters,
+        so the server can verify who assembled the request and that nothing in it was altered in
+        transit. Build the key, sign the object, then send it.
+      </p>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>1. Key Management</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Generate an ES256 (ECDSA P-256) key pair. The public key must be registered in the
-            Authlete Console under Client → JWK Set for Authlete to validate the JWT signature.
+      <div className="tx-body">
+        {/* JAR errors are among the most cryptic on this deployment — `[A005328]` for a bad signature —
+            and this was one of only two sections that showed the raw string and no explanation, while
+            `AUTHLETE_NOTES` has an entry for exactly that code. */}
+        {error && <ErrorExplainer error={String(error)} className="mb-3" />}
+        {doc && (
+          <OperationDescription
+            doc={doc}
+            className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
+          />
+        )}
+
+        {/* ── Turn 1 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">1 · Local — key pair</span>
+            <span className="tx-turn-note">ES256 (ECDSA P-256), never leaves the browser</span>
+          </div>
+
+          <p className="tx-hint">
+            The public key must be registered in the Authlete Console under Client → JWK Set for
+            Authlete to validate the signature below.
           </p>
-          <div className="flex gap-2">
-            <Button onClick={handleGenerateKey} loading={loading} size="sm">
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={() => void handleGenerateKey()}
+            >
+              {loading && !keyPair && <span className="tx-spin" aria-hidden="true" />}
               Generate ES256 Key Pair
-            </Button>
+            </button>
             {keyPair && (
-              <Button variant="secondary" onClick={handleReset} size="sm">
+              <button type="button" className="tx-btn" onClick={handleReset}>
                 Reset
-              </Button>
+              </button>
             )}
           </div>
           {keyPair && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-warning-text mb-1">
-                  Register this JWK Set in Authlete Console → Client → JWK Set Content
-                </p>
-                <Textarea
-                  label="Public JWK Set"
+            <div className="tx-row">
+              <label className="tx-field" htmlFor={`${uid}-pubjwk`}>
+                <span className="tx-label">Public JWK Set</span>
+                <textarea
+                  id={`${uid}-pubjwk`}
+                  className="tx-textarea"
                   rows={6}
                   value={getJwkSetDisplay(keyPair.publicKey)}
                   readOnly
                 />
+              </label>
+              <div className="tx-evidence" data-outcome="issued">
+                <div className="tx-evidence-head">
+                  <span className="tx-evidence-verdict">Private Key (JWK, redacted)</span>
+                </div>
+                <JsonBlock data={{ ...keyPair.privateKey, d: '***present***' }} />
               </div>
-              <JsonBlock
-                data={{ ...keyPair.privateKey, d: '***present***' }}
-                label="Private Key (JWK, redacted)"
-              />
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>2. Build & Sign JWT</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Edit the JWT claims below. Required claims:{' '}
-            <code className="text-foreground-muted">iss</code> (client ID),
-            <code className="text-foreground-muted"> aud</code> (Authlete service issuer URL),
-            <code className="text-foreground-muted"> response_type</code>,{' '}
-            <code className="text-foreground-muted"> client_id</code>,
-            <code className="text-foreground-muted"> redirect_uri</code>. Include{' '}
-            <code className="text-foreground-muted">exp</code>,
-            <code className="text-foreground-muted"> nbf</code>,{' '}
-            <code className="text-foreground-muted"> jti</code> for replay protection.
+        {/* ── Turn 2 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-state={signedJwt ? 'landed' : 'pending'}>
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">2 · Local — sign</span>
+          </div>
+
+          <p className="tx-hint">
+            Required claims: <code>iss</code> (client ID), <code>aud</code> (Authlete service issuer
+            URL), <code>response_type</code>, <code>client_id</code>, <code>redirect_uri</code>.
+            Include <code>exp</code>, <code>nbf</code>, <code>jti</code> for replay protection.
           </p>
-          <Textarea
-            label="JWT Claims (JSON)"
-            rows={12}
-            value={claimsJson}
-            onChange={(e) => setClaimsJson(e.target.value)}
-            placeholder='{"iss":"client-id","aud":"http://localhost:3000","response_type":"code",...}'
-          />
-          <div className="flex gap-2">
-            <Button onClick={handleSign} loading={loading} size="sm" disabled={!canSign}>
+          <label className="tx-field" htmlFor={`${uid}-claims`}>
+            <span className="tx-label">JWT Claims (JSON)</span>
+            <textarea
+              id={`${uid}-claims`}
+              className="tx-textarea"
+              rows={12}
+              value={claimsJson}
+              onChange={(e) => setClaimsJson(e.target.value)}
+              placeholder='{"iss":"client-id","aud":"http://localhost:3000","response_type":"code",...}'
+            />
+          </label>
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={() => void handleSign()}
+              disabled={!canSign}
+            >
               Sign Request Object
-            </Button>
+            </button>
           </div>
           {signedJwt && (
-            <div>
-              <Textarea label="Signed Request Object (JWT)" rows={4} value={signedJwt} readOnly />
-            </div>
+            <label className="tx-field" htmlFor={`${uid}-signed`}>
+              <span className="tx-label">Signed Request Object (JWT)</span>
+              <textarea
+                id={`${uid}-signed`}
+                className="tx-textarea"
+                rows={4}
+                value={signedJwt}
+                readOnly
+              />
+            </label>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>3. Process JAR</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Send the signed request object to Authlete for validation. The response is a five-field
-            allowlist — <code className="text-foreground-muted">action</code>,{' '}
-            <code className="text-foreground-muted">resultCode</code>,{' '}
-            <code className="text-foreground-muted">resultMessage</code>,{' '}
-            <code className="text-foreground-muted">responseContent</code> and{' '}
-            <code className="text-foreground-muted">scopes</code>.
-          </p>
-          <p className="text-xs text-muted-foreground">
+        {/* ── Turn 3 ─────────────────────────────────────────────────────── */}
+        <div className="tx-turn" data-dir="out">
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">3 · Client → Server</span>
+            <span className="tx-turn-note">POST /api/jar/process</span>
+          </div>
+
+          <p className="tx-hint">
             Admin credentials are required here, and the reason is a field you will <em>not</em> see
-            below: Authlete&apos;s authorization response carries a{' '}
-            <code className="text-foreground-muted">ticket</code>, and a ticket is a credential —
-            whoever holds one can drive an authorization to completion. The endpoint drops it, and
-            no longer answers anonymous callers at all.
+            below: Authlete&apos;s authorization response carries a <code>ticket</code>, and a
+            ticket is a credential — whoever holds one can drive an authorization to completion. The
+            endpoint drops it, and no longer answers anonymous callers at all.
           </p>
           <AdminAuth />
-          <Input
-            label="Client ID"
-            value={clientId}
-            onChange={(e) => setClientId(e.target.value)}
-            placeholder="your_client_id"
-          />
-          <Button onClick={handleProcess} loading={loading} disabled={!canProcess}>
-            Process JAR
-          </Button>
+          <label className="tx-field" htmlFor={`${uid}-cid`}>
+            <span className="tx-label">Client ID</span>
+            <input
+              id={`${uid}-cid`}
+              className="tx-input"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder="your_client_id"
+            />
+          </label>
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={() => void handleProcess()}
+              disabled={!canProcess}
+            >
+              {loading && !!keyPair && <span className="tx-spin" aria-hidden="true" />}
+              Process Request
+            </button>
+          </div>
+        </div>
+
+        {/* ── Turn 4 ─────────────────────────────────────────────────────── */}
+        <div
+          className="tx-turn"
+          data-dir={jarResult || result ? 'in' : undefined}
+          data-state={jarResult || result ? 'landed' : 'pending'}
+        >
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">4 · Server → Client</span>
+          </div>
+
           {/*
             `requestObjectPayload` used to be decoded and rendered here. It can no longer arrive: since
             2026-08-13 the endpoint returns a five-field allowlist, because the full Authlete response
-            carried a `ticket` — a credential — and this panel was the reason nobody noticed the rest of it
-            was being shipped to the browser too. `resultMessage` and `scopes` are the pedagogical payload
-            now, and both are inside `jarResult`.
+            carried a `ticket` — a credential — and this panel was the reason nobody noticed the rest of
+            it was being shipped to the browser too. `resultMessage` and `scopes` are the pedagogical
+            payload now, and both are inside `jarResult`.
           */}
-          {jarResult && (
-            <div className="space-y-4">
-              <JsonBlock data={jarResult} label="Authlete Response" />
+          {jarResult ? (
+            <JsonBlock data={jarResult} label="Authlete Response" />
+          ) : result !== null ? (
+            <JsonBlock data={result} label="Response" />
+          ) : (
+            <div className="tx-waiting">
+              The response is a five-field allowlist — <code>action</code>, <code>resultCode</code>,{' '}
+              <code>resultMessage</code>, <code>responseContent</code> and <code>scopes</code>.
+              Nothing is sent until you process a signed request object.
             </div>
           )}
-          {result !== null && !jarResult && <JsonBlock data={result} label="Response" />}
-        </CardContent>
-      </Card>
-    </SectionPanel>
+        </div>
+      </div>
+    </section>
   );
 }
 
