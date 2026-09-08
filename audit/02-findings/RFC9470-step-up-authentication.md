@@ -1,7 +1,14 @@
 # RFC 9470 — OAuth 2.0 Step Up Authentication Challenge Protocol
 
-- **Verdict:** `PARTIAL`
-- **Severity:** **S3** — was S2 with a latent **S1** (F-3). **The latent S1 is retired**, not downgraded: the change that would have activated it (`OIDC-W1`) was built correctly instead, on 2026-08-12. What remains is documentation (F-4's citations, 9470-W1/W4/W6)
+- **Verdict:** `RESOLVED` — **updated 2026-09-08**, see F-1's correction box. The `❌ 403` status below (line 36
+  as originally written) reflected the AS→RS response as it stood through 2026-08-14; live testing on
+  2026-09-08 found Authlete never sends `FORBIDDEN` for this scenario at all, and the code now answers 401
+  end to end. Left as `❌` rather than rewritten, because it is what the requirement's status *was* at the
+  point every other row in this table was last checked — F-1's box carries the current truth.
+- **Severity:** **S3** — was S2 with a latent **S1** (F-3). **The latent S1 is retired**, not downgraded: the
+  change that would have activated it (`OIDC-W1`) was built correctly instead, on 2026-08-12. What remained
+  after that was documentation (F-4's citations, 9470-W1/W4/W6) — **all now DONE**; nothing in this finding
+  is open as of 2026-09-08.
 - **Authlete version:** 3.0
 - **Repo docs under test:** `docs/STEP-UP-AUTH-TUTORIAL.md` (esp. Parts 4–6), `docs/curriculum/modules/09a-interaction-extensions/README.md:304`, `AGENTS.md` RFC 9470 paragraph, `docs/curriculum/SPEC-INVENTORY.md`
 
@@ -60,6 +67,19 @@ though it is currently unreachable.
 
 ## Finding F-1 — the step-up challenge is a 403 where §3 requires 401 (S2)
 
+> **Superseded 2026-09-08 — read 9470-W1's update before this narrative.** Everything below describes the
+> state through the 2026-08-14 fix (T2-11), which corrected the *tutorial's* conflation while leaving
+> `introspection.controller.ts` itself mapping Authlete's `FORBIDDEN` action to 403 for this scenario — a
+> mapping this finding called "defensible" below. Live testing on 2026-09-08 proved that reasoning wrong on
+> its own terms: Authlete never actually sends `FORBIDDEN` for an ACR/`max_age`-insufficient token, it sends
+> `UNAUTHORIZED`. The 403 branch was real, mocked, and unreachable by live traffic — so the "defensible
+> vendor mapping" was dead code, not a considered trade-off. Fixed in `c7c607d`: both the AS→RS response
+> (now correctly 401 for the real `UNAUTHORIZED` path, with the old `FORBIDDEN` branch kept only as a
+> defensive duplicate) and the RS→client response the tutorial describes are 401. Permanent E2E coverage in
+> `ee52e8b`. `docs/API.md` and `docs/STEP-UP-AUTH-TUTORIAL.md` Part 5 were corrected the same day. The code
+> citation below (`:84-96`) is also stale — the current logic is `buildStepUpChallenge()` at line 109,
+> called from both the `UNAUTHORIZED` case (~line 159, the live path) and `FORBIDDEN` (~line 181, defensive).
+
 `introspection.controller.ts:84-96` answers the `insufficient_user_authentication` case with **403** and a JSON
 body, and `docs/STEP-UP-AUTH-TUTORIAL.md` Part 5 prints that twice under the heading *"it returns an error
 conforming to RFC 9470"*:
@@ -75,12 +95,13 @@ RFC 9470 §3's two examples are both `HTTP/1.1 401 Unauthorized`, and the sectio
 is deliberate in the RFC: RFC 6750 §3.1 assigns 403 to `insufficient_scope`, and `insufficient_user_authentication`
 is about the *authentication* being inadequate, which is 401 territory.
 
-**Being fair about what this endpoint is.** `/api/introspection` is Authlete's proprietary introspection API,
-called by a resource server, and Authlete's action here is `FORBIDDEN`. Mapping `FORBIDDEN` → 403 *for the
-introspection response to the RS* is a defensible reading of the vendor contract. The defect is the conflation:
-the tutorial presents this exact response as the challenge **the protected resource sends to the client**, and
-its "What the client learns" table (`:238-244`) tells the reader the *client* consumes these fields. At that
-point the status code is the RS→client status, and it must be 401.
+**Being fair about what this endpoint is** *(2026-08-14 reasoning, superseded — see the box above)*.
+`/api/introspection` is Authlete's proprietary introspection API, called by a resource server, and Authlete's
+action here is `FORBIDDEN`. Mapping `FORBIDDEN` → 403 *for the introspection response to the RS* is a
+defensible reading of the vendor contract. The defect is the conflation: the tutorial presents this exact
+response as the challenge **the protected resource sends to the client**, and its "What the client learns"
+table (`:238-244`) tells the reader the *client* consumes these fields. At that point the status code is the
+RS→client status, and it must be 401.
 
 **Failure scenario.** A learner builds a resource server from Part 5, returning 403 with the challenge header.
 A conformant client — and most client libraries, which only inspect `WWW-Authenticate` on a 401 — never parses
@@ -242,7 +263,7 @@ aware; this parser is not.
 | 9470-W3 | **Fix the `prompt=none` handling and the fabricated event together** | M | ✅ **DONE 2026-08-12 (T1-7), with OIDC-W1 as one change.** `NO_INTERACTION` is handled per Authlete's contract (decide, then issue or fail; OIDC Core §3.1.2.6 errors — `login_required` / `consent_required` / `interaction_required` / `account_selection_required`), **and** the `stepUp` fallback is deleted rather than carried over: no session context ⇒ `login_required`, never an invented `acr`/`auth_time`. `acrs`/`acrEssential`/`maxAge` are checked on this path too. **Do not ship the first half alone.** |
 | 9470-W4 | Fix the six section citations | S | ✅ **DONE 2026-08-14 (T2-14).** Two code comments — `session.controller.ts` and **`utils/step-up.ts`**, which the item did not name because the file did not exist when it was written (T1-7 extracted the shared check there) — both `§2` → **`§4`**. Two tutorial diagram labels, `§2` and `§3` → **`§4`**. The stale `AGENTS.md` line reference went with T2-10. **Both code edits are comment-only, so the plan-mode requirement for `session.controller.ts` does not apply** — `CLAUDE.md` exempts a semantics-free edit, and a citation in a comment is exactly that; the check the comment describes is untouched. **Why the old numbers were wrong is worth keeping:** §2 is *Protocol Overview*, which is narrative and has nothing to check against, and **§3 is the challenge — a message this code never sends.** Citing §3 for a *check* is the same AS/RS conflation that Part 5 of the tutorial exists to fix, one layer down, which is why 9470-W1 and this item read better shipped together. The tutorial now states the mapping explicitly: **§4** for request handling, **§6** for claim conveyance (§6.1 JWT / §6.2 introspection — only §6.2 available here), **§3** only where a challenge is emitted. |
 | 9470-W5 | Set `supportedAcrs` and advertise `acr_values_supported` | S | ✅ **DONE 2026-08-12 (T1-6)** — `["pwd","mfa"]`; `acr_values_supported` now appears in discovery. **Both halves verified live**: `acr_values=pwd` succeeds and the value reaches the ID token *and* introspection; an **essential** `acr` of `mfa` is refused with `unmet_authentication_requirements` / `[A060305]`, **no code issued**. That second half is the first live confirmation that this deployment refuses rather than approximating — the failure mode **T1-7** rebuilt `utils/step-up.ts` to prevent. **`mfa` was registered deliberately although nothing can satisfy it**: an *unregistered* value fails earlier and for a different reason, so registering it is what makes the essential-ACR refusal path reachable. ⚠️ **The `readOnly` trap:** `supportedAcrs` is marked `readOnly: true` in the vendored 3.0.16 schema and Authlete **accepted and persisted the write anyway** — `SERVICE-CONFIG-PROBE.md` §15. |
-| 9470-W6 | Make `parseBearerError` quoted-string aware | S | An `error_description` containing a comma survives intact; test covers it. |
+| 9470-W6 | Make `parseBearerError` quoted-string aware | S | ✅ **DONE 2026-08-14 (`960fcd6`).** An `error_description` containing a comma survives intact — the parser now scans for quote boundaries and only treats a comma as a field separator outside them, honouring backslash escapes per RFC 9110 §5.6.4. `introspection.controller.ts:53-64`'s comment cites this item by name. Test covers it (`introspection.controller.test.ts`, the "keeps a comma inside a quoted error_description intact" and "honours a backslash-escaped quote" cases). |
 | **9470-W7** | **The fifth carrier of F-1, found 2026-08-14 while shipping T2-11** | S | ✅ **DONE the same day.** `docs/DATA-FLOWS.md`'s step-up sequence diagram drew **`RS-->>C: 403 Forbidden`** with the `insufficient_user_authentication` challenge on it — F-1's defect verbatim, and the RS→client arrow that 3c-F6 identified as the sharpest form of it. Now `401`, with a note above the diagram distinguishing the `AL-->>RS` 403 from it. **Why no earlier pass saw it:** F-1 searched `STEP-UP-AUTH-TUTORIAL.md`, batch 3c searched the nine tutorials, batch 3b searched the modules, and `DATA-FLOWS.md` is none of those — it is a top-level architecture document that redraws every flow in the repo. **The transferable rule: a defect stated as a *status code on a particular arrow* recurs wherever that arrow is drawn, so grep the shape (`insufficient_user_authentication` beside a status) across `docs/` rather than auditing per-document.** Doing that also confirmed three documents have it **right** — `GLOSSARY.md` says 401, and `API.md` plus `StepUpSection.tsx` describe the *introspection* 403, which is correct. ~~**No longer correct as of 2026-09-08**~~ — the introspection 403 itself turned out to be wrong (see 9470-W1's update); `API.md` now says 401, matching what was live all along. |
 
 **Ordering and gating.** **W3 is the priority and must be planned as one change** — `controllers/session.controller.ts`

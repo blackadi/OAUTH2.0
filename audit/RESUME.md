@@ -793,8 +793,10 @@ same RFC 9101 document settled the precedence rule as **§6.3** and caught a mis
 owed.**
 
 **Not fetched, deliberately:** ISO/IEC 18013-5 (paywalled — `MDL-MDOC-ISO18013-5.md` F-1 records why and cites
-nothing from it). **Still unverified:** RFC 8446 and RFC 9110 dates cited at `modules/00…/README.md:87-88`
-(work item **CUR-3a-W4**).
+nothing from it). **CUR-3a-W4 — closed 2026-09-08.** All three dates at `modules/00…/README.md:87-88` were
+fetched and confirmed exact: RFC 9846 is July 2026 and its header lists RFC 8446 among the RFCs it obsoletes;
+RFC 8446 itself is August 2018; RFC 9110 is STD 97, June 2022, per `rfc-editor.org/info/std97`. Nothing left
+unverified in this line.
 
 ### 2.4 URL traps found
 
@@ -1020,7 +1022,7 @@ Phase 4 is **synthesis and a remediation plan**, written to `audit/04-remediatio
 
 | Item | Why now |
 |---|---|
-| **CUR-3d-W1** — fetch RFC 9846 + RFC 8446 (+ 9110, 9864) | The largest remaining hole in citation coverage. `SPEC-INVENTORY.md` instructs *"cite RFC 9846 instead"* on an obsoletion this audit never verified, and Module 00 contradicts it. Four fetches |
+| ~~**CUR-3d-W1** — fetch RFC 9846 + RFC 8446 (+ 9110, 9864)~~ | ✅ **Closed 2026-09-08**, under work item **CUR-3a-W4** (§2.3 above) — all three dates confirmed against the RFC Editor and datatracker directly. This row and §2.3's "still unverified" line named the same open fetch under two different IDs; both are now resolved. |
 | **ATT-W5** — one call printing all 62 discovery members | The **only** unprobed fact left (§2.1); settles `challenge_endpoint` / `client_attestation_pop_methods_supported` |
 | **AM-W2** — fetch the unsuffixed `fapi-attacker-model-2_0.html` | Closes the superseded-URL question and one §7 spot-check row |
 
