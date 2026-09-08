@@ -667,11 +667,23 @@ Two consequences beyond Module 10:
    describe the pre-fix code in their work items (RPL-W1 proposes replacing prefix matching; the device entry
    records *"no `NODE_ENV` gate"*). Phase 4 must re-verify both against the working tree rather than the
    entries.
-2. **The fix is not what RPL-W1 asked for**, and the difference is on record in `AGENTS.md`: RP-Initiated
+2. ~~**The fix is not what RPL-W1 asked for**, and the difference is on record in `AGENTS.md`: RP-Initiated
    Logout §3 requires exact matching against per-client registered `post_logout_redirect_uris`, no client here
    registers any, so the deployment kept an env-driven allowlist and recorded the departure. RPL-W2 (verify
    `id_token_hint`), RPL-W3 (the §2 confirmation MUST) and RPL-W4 (register the URIs) are untouched. The S1 is
-   downgraded, not closed.
+   downgraded, not closed.~~
+
+   > **✅ SUPERSEDED, same day (T0-4, 2026-08-12) — verified against the current code 2026-09-09.** This
+   > paragraph described the 2026-08-10 origin-allowlist fix, which T0-4 already replaced *before this batch
+   > was even written*: `logout.service.ts`'s `isAllowedPostLogoutRedirectUri` now does exactly what RPL-W1
+   > asked for — `===` against a per-client registry (`POST_LOGOUT_REDIRECT_URIS`, `{clientId: string[]}`),
+   > with an empty set (nothing registered) refused per §3. The departure from §3 is now *where the registry
+   > lives* (an env var, because Authlete 3.0 has no client field for it — recorded as **F-4**), not *how the
+   > comparison works*. **RPL-W1, RPL-W4 and RPL-W5 are closed** (`04-remediation-plan.md`, Tier 0). Only
+   > RPL-W2 and RPL-W3 were ever separately tracked, and both closed earlier the same week (T0-2, T0-3). 47
+   > unit tests in `logout.service.test.ts` cover the exact-match registry, including the two payloads that
+   > defeated the original prefix-matching bug — confirmed passing 2026-09-09. `AGENTS.md`'s own description
+   > had drifted to describe the superseded origin-allowlist version; fixed in the same pass as this note.
 
 ### 3b-F13 — Module 10 counts the attacker archetypes correctly and this audit's own entry does not (S4, against the audit)
 
@@ -756,7 +768,7 @@ now without a curriculum decision**, which is the row nobody had identified, and
 | 3b-F6 | The mTLS decline's revisit conditions describe RFC 9440's mechanism without naming it | S4 | addition |
 | 3b-F7 | Exercise 6a's `issued_token_type` framing survived the §5.1 correction; an addition is available | S4 | **positive** |
 | 3b-F8 | Module 06's lab is a third carrier of the stale handler line numbers | = 8693-W3 | `DOC_INCORRECT` |
-| 3b-F9 | **Five Module 10 claims made stale by the remediation; Module 08 updated, Module 10 not** | S3 | **new class** |
+| 3b-F9 | **Five Module 10 claims made stale by the remediation; Module 08 updated, Module 10 not** — ✅ closed, CUR-3b-W1 | S3 | **new class** |
 | 3b-F10 | Module 09a teaches RFC 9470's 401 requirement that this deployment violates, unconnected | S3 | **Omission** |
 | 3b-F11 | Exercise 4 does not teach the fabricated `prompt=none` event; 9470-W3 stays a forward dependency | S4 | **positive** |
 | 3b-F12 | Module 09a is a second carrier of the unconfirmed Native SSO date | = NSSO-W3 | `DOC_INCORRECT` |
@@ -795,14 +807,15 @@ otherwise (`lab.md:23-35`); Module 06 lists three console settings with the exer
 (`lab.md:22-34`); Module 09a's Exercise 1 has the learner *derive* the capability set from configuration before
 requesting anything, which is the strongest version of this in the curriculum.
 
-**One caveat, and it is 3b-F9's:** Module 10's inbound edge from Module 08 is now stale in three of its five
-uses. Dependency order is sound; the content crossing one edge is not.
+~~**One caveat, and it is 3b-F9's:** Module 10's inbound edge from Module 08 is now stale in three of its five
+uses. Dependency order is sound; the content crossing one edge is not.~~ ✅ **Closed — CUR-3b-W1 shipped; all
+five uses now current** (verified 2026-09-09). No caveat remains on this edge.
 
 ## Work items from batch 3b
 
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
-| CUR-3b-W1 | **Re-point Module 10 at the fixed logout endpoint** | S | All five references (`README.md:205`; `lab.md:81-91,501,508-509,547` — **re-anchored by content 2026-08-12; the previous numbers pointed at three unrelated lines**) reflect the 2026-08-10 fix *and its 2026-08-12 supersession by T0-4*, in Module 08's style: what it used to do, why it passed, what it does now. Exercise 1's A1 question survives as history — it is still the right answer about the *old* endpoint and still the best illustration of the weakest-attacker point. 3b-F9. **Highest-value item in the batch.** |
+| CUR-3b-W1 | **Re-point Module 10 at the fixed logout endpoint** | S | ✅ **DONE — verified 2026-09-09.** All five references (`README.md:205`; `lab.md:81-91,501,508-509,547`) reflect the 2026-08-10 fix *and its 2026-08-12 supersession by T0-4*, in Module 08's style: what it used to do, why it passed, what it does now. `lab.md:541` reads **"PASS since 2026-08-12"**; `:565-575` names the exact-match-registry rule directly. Exercise 1's A1 question survives as history — it is still the right answer about the *old* endpoint and still the best illustration of the weakest-attacker point. 3b-F9. **Highest-value item in the batch.** |
 | CUR-3b-W2 | **Add the grep step to the remediation checklist** | S | `AGENTS.md`'s *"grep the curriculum for the symptom you changed"* rule gains: search for the **phrase** naming the defect, not only the error string, and check every module that cross-references the one you edited. Names Module 08→Module 10 as the worked example. 3b-F9. |
 | CUR-3b-W3 | Fix the RFC 9101 §5 → §6.3 citations | S | ✅ **DONE 2026-08-14 (T2-14), with a correction the criterion did not know about.** Module 05's README paragraph and `quiz-answers.md` Q12 now cite **§6.3** (*Request Parameter Assembly and Validation*) — **and the quoted sentence was also wrong**: the RFC reads *"the parameters in the Request Object"*, and the repo had *"the parameters **included** in"*. Verified against `rfc9101.txt`, where the phrase occurs **exactly once**. §5 is *Authorization Request*, where a request is **passed**; §6.3 is where the server **assembles and validates** it, which is the only place a precedence rule could live — worth stating because it makes the right section memorable rather than arbitrary. **The lab had it right all along**, so the lesson and the lab disagreed for a fortnight and the lab was correct; the README now says so. The three correct §5 citations for the request *shape* were left alone, as instructed. 3b-F2. |
 | CUR-3b-W4 | Fix the `dpop.service.ts` pointers | S | ✅ **ALREADY SATISFIED — verified 2026-08-14 (T2-10), and by a better fix than the criterion asked for.** Module 05 no longer carries *any* `dpop.service.ts:NNN` reference: `README.md` cites the file as a bare path and `lab.md` describes the behaviour in prose. So the two past-EOF pointers 3b-F4 found are gone by **deletion rather than renumbering**, which is the more durable outcome for a file that had drifted twice. The four values the criterion names were checked against the current file anyway and are all correct (`:70` jwk header, `:26` `computeAth`, `:60` `payload.ath`, `:76-84` raw P1363) — they remain accurate in `AGENTS.md` and `RFC9449-dpop.md`, which do still cite them. 3b-F4. |
@@ -1314,7 +1327,7 @@ the one batch 3b found broken in content (3b-F9). The order is right; what cross
 | CUR-3c-W11 | Extend `check-docs.mjs` to endpoint paths | M | ✅ **DONE 2026-08-14, and the M was right.** **997 endpoint paths are now checked** against the routes `server/src/routes/*.ts` actually mounts, reading `raw` rather than stripped text because *a fenced curl block is exactly where a reader copies from.* It took four doc conventions before the signal was usable — a `/*` wildcard prefix, a brace list (`/{issue,deliver,deliver-all}`), a `:id`/`{id}` parameter, and an endpoint **stem** named without its parameters (`/api/client/update` for `/client/update/:clientId`) — plus a `NOT_OUR_ROUTES` list for the two APIs that are deliberately not ours: Module 11's invented `/api/accounts/…` for teaching BOLA, and Authlete's own `/api/auth/…` and `/api/lifecycle/healthcheck`. **Accepting stems weakens it on purpose**: `/api/client` alone now passes, because the alternative was rejecting the repo's own convention, and what still gets caught is what matters. It caught one real defect — ~~`PUT /api/client/:clientId`~~ in two documents, where the route is **`PATCH /api/client/update/:clientId`**: wrong method *and* wrong path, in the finding entry for `CLIENT-UPDATE-FIELD-LOSS` and in `PROGRESS.md`. |
 | CUR-3c-W12 | Correct the two Phase 2 line references this pass re-anchored | S | ✅ **DONE 2026-08-14 (T2-10) — by removing the line numbers, because both replacements were obsolete before they were ever applied.** T2-1 and T2-11 added header boxes and restructured Part 5 of the step-up tutorial, so `:391` and `:182-183` are as wrong now as `:390` and `:186-188` were. **Seven tutorial citations across the two findings now name a *section*** — *"Part 4 → Step 3: Push Authorization Request"*, *"Part 5 → What the client learns"* — which is `04-remediation-plan.md` §6.3's option (b) applied to findings rather than to `PROGRESS.md`. **The general rule this settles: never cite a line number in a file you are actively rewriting.** A section heading survives insertion above it; a line number does not. |
 | CUR-3c-W13 | Correct deferred item 4's premise | S | ✅ **DONE 2026-08-14 (T2-17), and re-derived rather than transcribed.** The premise was indeed wrong — there is **no** separate VCI tutorial, VCI being taught inside Module 09b. **But this row's own replacement value had gone stale before it was applied**: it says *"Module 09b has one marker"*, and DR-03 enabled verifiable credentials on 2026-08-14, after which Exercise 7 was rebuilt and the module now carries **four** `UNVERIFIED` references, none of them the `lab.md:556` originally cited. Corrected in `RESUME.md` §4 with the count dated. **The transferable point: a correction that quotes a live value inherits that value's half-life**, and an undated one reads as authoritative long after it stops being true — which is the defect this row exists to fix, recurring inside the fix. |
-| CUR-3c-W14 | Index the orphaned documents | S | `MCP-OAUTH-TUTORIAL.md`, `TICKET-PARAMETER.md`, `AUDIT-PASS-A/B.md` and `CHANGELOG.md` appear in the tutorial index or are explicitly marked internal. Carried from `00-inventory.md` §9; two lines. |
+| CUR-3c-W14 | Index the orphaned documents | S | ✅ **DONE — verified 2026-09-09.** `docs/README.md:61` lists `MCP-OAUTH-TUTORIAL.md` in the tutorial table; `:70` lists `TICKET-PARAMETER.md` as **Reference**; `:73`/`:74` mark `AUDIT-PASS-A/B.md` and `CHANGELOG.md` **Internal**, each with a one-line reason. All four accounted for. |
 
 ---
 
@@ -1467,7 +1480,7 @@ curriculum.
 | ID | Item | Effort | Acceptance criteria |
 |---|---|---|---|
 | CUR-3d-W1 | **Widen CUR-3a-W4 to the obsoletion question** | S | ✅ **DONE 2026-08-14 (T2-4), re-confirmed 2026-09-08.** RFC 9846 fetched and confirmed as `rfc8446bis` (Jul 2026, obsoletes RFC 8446, same wire version); `SPEC-INVENTORY.md` and `modules/00…/README.md` now agree, with Module 00 carrying the reconciling note. RFC 9110 (3a-F4) and RFC 9864 both settled in the same pass. 3d-F3. |
-| CUR-3d-W2 | **Widen CUR-3b-W1 to `final-exam-answers.md:227-229`** | S | ⚠️ **Partially done.** The answer key already carries a dated parenthetical (`:230-233`) noting the fix shipped 2026-08-12 and took three versions rather than one line. **Still open:** the parenthetical does not correct the "(exact comparison against a registered set)" clause — the shipped fix is an env-driven **origin** allowlist, a documented RP-Initiated Logout §3 departure (3b-F9), not exact matching against per-client registered `post_logout_redirect_uris`. 3d-F4. |
+| CUR-3d-W2 | **Widen CUR-3b-W1 to `final-exam-answers.md:227-229`** | S | ✅ **DONE, and my own 2026-09-08 note above was wrong — corrected 2026-09-09.** I had flagged the exam key's "(exact comparison against a registered set)" clause as inaccurate, reasoning from 3b-F9's now-superseded description of an origin allowlist. **The current code is genuinely an exact string match against a per-client registered set** (`isAllowedPostLogoutRedirectUri`, `===` against `POST_LOGOUT_REDIRECT_URIS`) — T0-4 shipped this the same day (2026-08-12) as the fix 3b-F9 described, and 3b-F9 simply predates it. So the exam key's clause was correct all along; only the "one-line fix" half needed the caveat it already has (`:230-233`). Nothing left to fix here. 3d-F4. |
 | CUR-3d-W3 | **Close CUR-3a-W5 as already satisfied, and correct 3a-F5** | S | ✅ **DONE** — reflected in 3a-F5/3d-F2 above; both modules already name `fapiModes`. The forward dependency on **FAPI2-W5** is the part that carries into Phase 4. 3d-F2. |
 | CUR-3d-W4 | Correct batch 3c's Module 07 graph note | S | ✅ **DONE** — done in this file (dependency-order table under batch 3a/3b, and 3d-F1 above); listed so Phase 4 does not re-derive it. 3d-F1. |
 

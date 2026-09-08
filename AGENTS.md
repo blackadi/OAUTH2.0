@@ -85,7 +85,7 @@ docker compose up -d prometheus grafana
 3. The `server` reads `.env` via `dotenv` (called in `src/config/app.config.ts` only)
 4. Config validation fails fast on startup — missing `SESSION_SECRET`, `AUTHLETE_BEARER_TOKEN`, `AUTHLETE_BASE_URL`, or `AUTHLETE_SERVICE_ID` throws immediately
 5. Demo users default to `admin:password` if `AUTH_USERS` env var is not set. Set `AUTH_USERS=subject:username:password:name;sub2:user2:pass2:Name2` for custom users
-6. Logout endpoint validates `post_logout_redirect_uri` by **parsed origin, exactly** — see the RP-Initiated Logout note under **Quirks & gotchas**. `LOGOUT_REDIRECT_URI` matches as a full URI; `ALLOWED_ORIGINS` entries match by origin. Prefix matching was an open redirect and is gone
+6. Logout endpoint validates `post_logout_redirect_uri` by **exact string match against a per-client registry** (`POST_LOGOUT_REDIRECT_URIS`, `{clientId: string[]}`) — see the RP-Initiated Logout note under **Quirks & gotchas**. `ALLOWED_ORIGINS` and `LOGOUT_REDIRECT_URI` authorise nothing here (CORS and the "Return to application" link only). *(This superseded the origin-based comparison this line used to describe — see `docs/agents/quirks.md` for what changed and why.)*
 7. Client `.env` should set `VITE_CLIENT_ID`, `VITE_REDIRECT_URI` — defaults to `your_client_id` placeholder. **Leave `VITE_CLIENT_SECRET` empty**: the SPA's own client is public, and the literal `your_client_secret` is recognised as a placeholder and treated as absent (`secretOrEmpty` in `client/src/config.ts`) — see the public-client bullet under **DPoP & Client Auth**
 8. Optional Redis: `docker compose up -d` + set `REDIS_URL=redis://localhost:6379` in `server/.env`
 
