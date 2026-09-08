@@ -2,6 +2,7 @@ import { screen, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StepUpSection } from '@/components/oidc/StepUpSection';
 import { tokenService } from '@/services';
+import { HttpError } from '@/services/transport';
 import {
   mountSection,
   fill,
@@ -41,6 +42,23 @@ const CHALLENGE = JSON.stringify({
   max_age: '300',
   acr: 'pwd',
 });
+
+/**
+ * A real `HttpError`, matching what `transport.ts` actually throws (`body` is the parsed JSON, `raw` the
+ * original text) — not a bare `Error`. The component reads the challenge off `error.body`, which a plain
+ * `Error` never has, so tests must construct the same shape the real transport layer produces.
+ */
+function httpError(status: number, body: unknown, raw?: string): HttpError {
+  return new HttpError({
+    ok: false,
+    status,
+    statusText: '',
+    headers: {},
+    body,
+    raw: raw ?? JSON.stringify(body),
+    durationMs: 0,
+  });
+}
 
 describe('StepUpSection — the introspection that asks for requirements', () => {
   it('offers nothing without a token, and says where to get one', () => {
@@ -105,7 +123,9 @@ describe('StepUpSection — the introspection that asks for requirements', () =>
 describe('StepUpSection — the challenge, and what it builds', () => {
   it('reads the challenge fields off the refusal rather than guessing them', async () => {
     seedTokens({ access_token: 'at-stepup-01' });
-    vi.spyOn(tokenService, 'introspection').mockRejectedValue(new Error(CHALLENGE));
+    vi.spyOn(tokenService, 'introspection').mockRejectedValue(
+      httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
+    );
     mountSection(<StepUpSection />);
     fillAdminCredentials();
     press(/Introspect with Requirements/i);
@@ -124,7 +144,9 @@ describe('StepUpSection — the challenge, and what it builds', () => {
    */
   it('asks for the ACR as an essential claim, not as a preference', async () => {
     seedTokens({ access_token: 'at-stepup-01' });
-    vi.spyOn(tokenService, 'introspection').mockRejectedValue(new Error(CHALLENGE));
+    vi.spyOn(tokenService, 'introspection').mockRejectedValue(
+      httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
+    );
     mountSection(<StepUpSection />);
     fillAdminCredentials();
     press(/Introspect with Requirements/i);
@@ -146,7 +168,9 @@ describe('StepUpSection — the challenge, and what it builds', () => {
 
   it('carries max_age and prompt=login, so a cached session cannot satisfy the step-up', async () => {
     seedTokens({ access_token: 'at-stepup-01' });
-    vi.spyOn(tokenService, 'introspection').mockRejectedValue(new Error(CHALLENGE));
+    vi.spyOn(tokenService, 'introspection').mockRejectedValue(
+      httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
+    );
     mountSection(<StepUpSection />);
     fillAdminCredentials();
     press(/Introspect with Requirements/i);
@@ -169,7 +193,7 @@ describe('StepUpSection — the challenge, and what it builds', () => {
   it('does not manufacture a challenge from an unrelated failure', async () => {
     seedTokens({ access_token: 'at-stepup-01' });
     vi.spyOn(tokenService, 'introspection').mockRejectedValue(
-      new Error('<!doctype html><html><body>502 Bad Gateway</body></html>'),
+      httpError(502, null, '<!doctype html><html><body>502 Bad Gateway</body></html>'),
     );
     mountSection(<StepUpSection />);
     fillAdminCredentials();
@@ -189,9 +213,10 @@ describe('StepUpSection — the challenge, and what it builds', () => {
   it('does not treat a plain 401 as a step-up requirement', async () => {
     seedTokens({ access_token: 'at-stepup-01' });
     vi.spyOn(tokenService, 'introspection').mockRejectedValue(
-      new Error(
-        '{"error":"invalid_client","error_description":"Basic authentication is required."}',
-      ),
+      httpError(401, {
+        error: 'invalid_client',
+        error_description: 'Basic authentication is required.',
+      }),
     );
     mountSection(<StepUpSection />);
     fillAdminCredentials();

@@ -102,10 +102,10 @@ Authlete-specific token introspection (non-standard). **Admin Basic auth require
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `acrValues` | string | Space-separated required ACR values. Returns 403 if token's ACR doesn't match |
-| `maxAge` | number | Maximum authentication age in seconds. Returns 403 if token's `auth_time` + `maxAge` < now |
+| `acrValues` | string | Space-separated required ACR values. Returns 401 if token's ACR doesn't match |
+| `maxAge` | number | Maximum authentication age in seconds. Returns 401 if token's `auth_time` + `maxAge` < now |
 
-**Response:** 200 with token info, or 403 with `insufficient_user_authentication` error (RFC 9470) including `acr_values`/`max_age` challenge.
+**Response:** 200 with token info, or **401** with `insufficient_user_authentication` error (RFC 9470) including `acr_values`/`max_age` challenge. Live-verified 2026-09-08: Authlete answers this scenario with `action: "UNAUTHORIZED"`, not `FORBIDDEN` — `insufficient_user_authentication` is a 401-class failure per RFC 6750 §3.1 (a new authentication event is needed, not a different grant), unlike `insufficient_scope`, which is legitimately 403.
 
 ### `POST /api/introspection/standard`
 RFC 7662 standard token introspection. **Admin Basic auth required.**

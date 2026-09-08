@@ -89,7 +89,37 @@ describe("IntrospectionController — RFC 9470 step-up", () => {
     )
   })
 
-  it("returns 403 with structured step-up challenge on insufficient_user_authentication (ACR)", async () => {
+  // Live-verified 2026-09-08: Authlete answers an ACR-insufficient token with UNAUTHORIZED, not FORBIDDEN
+  // as this test used to mock. See buildStepUpChallenge's comment in the controller.
+  it("returns 401 with structured step-up challenge on insufficient_user_authentication (ACR)", async () => {
+    const wwwAuth = 'Bearer error="insufficient_user_authentication",error_description="ACR mismatch",error_uri="https://docs.authlete.com/#A341302",acr_values="urn:mace:incommon:iap:silver"'
+    mocks.mockProcess.mockResolvedValue({
+      action: "UNAUTHORIZED",
+      responseContent: wwwAuth,
+      acr: "pwd",
+      authTime: 1700000000,
+    })
+    const req = mockReq()
+    const res = mockRes()
+    const next = mockNext()
+
+    await introspectionController.handleIntrospection(req, res, next)
+
+    expect(res.status).toHaveBeenCalledWith(401)
+    expect(res.setHeader).toHaveBeenCalledWith("WWW-Authenticate", wwwAuth)
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: "insufficient_user_authentication",
+        acr_values: "urn:mace:incommon:iap:silver",
+        acr: "pwd",
+        auth_time: 1700000000,
+      })
+    )
+  })
+
+  // Defensive branch: if Authlete ever sends this content under FORBIDDEN instead (a different version or
+  // config), the response must still be the RFC-correct 401, not a raw-text 403.
+  it("returns 401 with structured step-up challenge when FORBIDDEN carries insufficient_user_authentication", async () => {
     const wwwAuth = 'Bearer error="insufficient_user_authentication",error_description="ACR mismatch",error_uri="https://docs.authlete.com/#A341302",acr_values="urn:mace:incommon:iap:silver"'
     mocks.mockProcess.mockResolvedValue({
       action: "FORBIDDEN",
@@ -103,8 +133,7 @@ describe("IntrospectionController — RFC 9470 step-up", () => {
 
     await introspectionController.handleIntrospection(req, res, next)
 
-    expect(res.status).toHaveBeenCalledWith(403)
-    expect(res.setHeader).toHaveBeenCalledWith("WWW-Authenticate", wwwAuth)
+    expect(res.status).toHaveBeenCalledWith(401)
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         error: "insufficient_user_authentication",
@@ -124,7 +153,7 @@ describe("IntrospectionController — RFC 9470 step-up", () => {
       'Bearer error="insufficient_user_authentication",' +
       'error_description="Authentication is insufficient, please re-authenticate with a stronger method",' +
       'acr_values="urn:mace:incommon:iap:silver",max_age="300"'
-    mocks.mockProcess.mockResolvedValue({ action: "FORBIDDEN", responseContent: wwwAuth })
+    mocks.mockProcess.mockResolvedValue({ action: "UNAUTHORIZED", responseContent: wwwAuth })
     const req = mockReq()
     const res = mockRes()
     const next = mockNext()
@@ -147,7 +176,7 @@ describe("IntrospectionController — RFC 9470 step-up", () => {
     const wwwAuth =
       'Bearer error="insufficient_user_authentication",' +
       'error_description="the \\"acr\\" claim did not match, try again",max_age="60"'
-    mocks.mockProcess.mockResolvedValue({ action: "FORBIDDEN", responseContent: wwwAuth })
+    mocks.mockProcess.mockResolvedValue({ action: "UNAUTHORIZED", responseContent: wwwAuth })
     const req = mockReq()
     const res = mockRes()
     const next = mockNext()
@@ -162,10 +191,10 @@ describe("IntrospectionController — RFC 9470 step-up", () => {
     )
   })
 
-  it("returns 403 with structured step-up challenge on insufficient_user_authentication (max_age)", async () => {
+  it("returns 401 with structured step-up challenge on insufficient_user_authentication (max_age)", async () => {
     const wwwAuth = 'Bearer error="insufficient_user_authentication",error_description="auth_time too old",max_age="600"'
     mocks.mockProcess.mockResolvedValue({
-      action: "FORBIDDEN",
+      action: "UNAUTHORIZED",
       responseContent: wwwAuth,
       acr: "pwd",
       authTime: 1700000000,
@@ -176,7 +205,7 @@ describe("IntrospectionController — RFC 9470 step-up", () => {
 
     await introspectionController.handleIntrospection(req, res, next)
 
-    expect(res.status).toHaveBeenCalledWith(403)
+    expect(res.status).toHaveBeenCalledWith(401)
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         error: "insufficient_user_authentication",

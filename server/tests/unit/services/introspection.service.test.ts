@@ -29,7 +29,9 @@ describe("IntrospectionService", () => {
     })
 
     it("passes acrValues and maxAge for RFC 9470 step-up validation", async () => {
-      const mockResponse = { action: "FORBIDDEN", responseContent: "insufficient_user_authentication" }
+      // Live-verified 2026-09-08: Authlete answers this scenario with UNAUTHORIZED, not FORBIDDEN. This
+      // test only asserts the request shape sent to Authlete, but the mock is kept accurate regardless.
+      const mockResponse = { action: "UNAUTHORIZED", responseContent: "insufficient_user_authentication" }
       vi.mocked(mockApi.introspection.process).mockResolvedValue(mockResponse as any)
 
       const req = {

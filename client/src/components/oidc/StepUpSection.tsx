@@ -14,8 +14,9 @@ import { AdminAuth } from '@/components/layout/AdminAuth';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ShieldAlert, ArrowUpCircle } from 'lucide-react';
 import { getDoc } from '@/data/operationDocs';
-import { parseJsonObject, stringMember } from '@/utils/parse-json';
+import { stringMember } from '@/utils/parse-json';
 import { useCredentials } from '@/context/CredentialContext';
+import { HttpError } from '@/services/transport';
 
 interface StepUpChallenge {
   error: string;
@@ -53,46 +54,56 @@ function StepUpSection() {
 
   const handleIntrospect = async () => {
     setChallenge(null);
+    let detectedChallenge: StepUpChallenge | null = null;
     const { data, error: err } = await call(async () => {
       const opts: { acrValues?: string; maxAge?: number } = {};
       if (requiredAcrs.trim()) opts.acrValues = requiredAcrs.trim();
       if (maxAge.trim()) opts.maxAge = Number(maxAge.trim());
-      return tokenService.introspection(
-        at!,
-        adminId,
-        adminSecret,
-        Object.keys(opts).length ? opts : undefined,
-      );
+      try {
+        return await tokenService.introspection(
+          at!,
+          adminId,
+          adminSecret,
+          Object.keys(opts).length ? opts : undefined,
+        );
+      } catch (e) {
+        /**
+         * The RFC 9470 challenge, read off the actual response body — not the composite display string.
+         *
+         * This used to be `parseJsonObject(err)` where `err` was `useAsyncCall`'s already-stringified
+         * `describeError()` output (`"{status}{statusText} · {WWW-Authenticate} · {body}"`), which is
+         * never valid JSON on its own — so the challenge was never detected, regardless of what the server
+         * returned. `HttpError.body` is the actual parsed JSON body; read the challenge from there, inside
+         * this try/catch, then re-throw so `call()`'s normal error-string/toast handling still runs.
+         */
+        if (e instanceof HttpError) {
+          const body = e.body;
+          if (
+            body &&
+            typeof body === 'object' &&
+            !Array.isArray(body) &&
+            stringMember(body, 'error') === 'insufficient_user_authentication'
+          ) {
+            detectedChallenge = {
+              error: 'insufficient_user_authentication',
+              error_description: stringMember(body, 'error_description'),
+              acr_values: stringMember(body, 'acr_values'),
+              max_age: stringMember(body, 'max_age'),
+              acr: stringMember(body, 'acr'),
+            };
+          }
+        }
+        throw e;
+      }
     });
 
     if (data) {
       toast.success('Token is sufficient — no step-up required');
       setChallenge(null);
+    } else if (detectedChallenge) {
+      setChallenge(detectedChallenge);
+      toast.error('Step-up authentication required');
     } else if (err) {
-      // Try to parse the error for step-up challenge details
-      try {
-        /**
-         * The RFC 9470 challenge, checked rather than assumed.
-         *
-         * This was `JSON.parse(err)` — `any` — with `parsed.error` read off it and the whole object then
-         * handed to `setChallenge`, so `StepUpChallenge` described a shape nothing verified. The error
-         * string here is whatever the server sent, and on this deployment that is sometimes an HTML page.
-         */
-        const parsed = parseJsonObject(err);
-        if (stringMember(parsed, 'error') === 'insufficient_user_authentication') {
-          setChallenge({
-            error: 'insufficient_user_authentication',
-            error_description: stringMember(parsed, 'error_description'),
-            acr_values: stringMember(parsed, 'acr_values'),
-            max_age: stringMember(parsed, 'max_age'),
-            acr: stringMember(parsed, 'acr'),
-          });
-          toast.error('Step-up authentication required');
-          return;
-        }
-      } catch {
-        // Not JSON — generic error
-      }
       toast.error(err);
     }
   };

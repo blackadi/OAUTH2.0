@@ -79,14 +79,16 @@ describe('error shape', () => {
   });
 
   it('carries the status and headers as fields', async () => {
+    // 401, not 403: insufficient_user_authentication is a 401-class failure (RFC 9470/6750 §3.1) —
+    // matches the server's live-verified behavior as of 2026-09-08.
     mockFetch.mockReturnValue(
-      response(403, '{"error":"insufficient_user_authentication"}', {
+      response(401, '{"error":"insufficient_user_authentication"}', {
         'www-authenticate': 'Bearer acr_values="urn:example:silver"',
       }),
     );
     await expect(send({ method: 'POST', url: 'u' })).rejects.toBeInstanceOf(HttpError);
     await expect(send({ method: 'POST', url: 'u' })).rejects.toMatchObject({
-      status: 403,
+      status: 401,
       headers: { 'www-authenticate': 'Bearer acr_values="urn:example:silver"' },
     });
   });

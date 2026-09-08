@@ -97,6 +97,35 @@ function parseBearerError(responseContent: string): {
   return result;
 }
 
+/**
+ * RFC 9470 / RFC 6750 §3.1: `insufficient_user_authentication` is an authentication-strength failure — the
+ * remedy is a new authentication event, not a different grant — so it is 401-class regardless of which
+ * Authlete `action` happens to carry it. **Live-verified 2026-09-08**: Authlete answers an ACR/`max_age`
+ * -insufficient token with `action: "UNAUTHORIZED"`, not `FORBIDDEN` as this code previously assumed — the
+ * assumption was never reached by real traffic, only by the unit tests that mocked it. Called from both the
+ * `UNAUTHORIZED` and `FORBIDDEN` cases below so a future/differently-configured Authlete response is still
+ * reshaped correctly either way.
+ */
+function buildStepUpChallenge(
+  responseContent: string,
+  acr?: string,
+  authTime?: number
+): Record<string, unknown> | null {
+  if (!responseContent.includes("insufficient_user_authentication")) return null;
+  const parsed = parseBearerError(responseContent);
+  return {
+    error: parsed.error || "insufficient_user_authentication",
+    error_description: parsed.error_description || "",
+    error_uri: responseContent.match(/error_uri="([^"]+)"/)?.[1] || "",
+    // RFC 9470 parameters — the client uses these to re-authorize
+    ...(parsed.acr_values ? { acr_values: parsed.acr_values } : {}),
+    ...(parsed.max_age ? { max_age: parsed.max_age } : {}),
+    // Also include the token metadata Authlete returned
+    acr,
+    auth_time: authTime,
+  };
+}
+
 export const introspectionController = {
   handleIntrospection: async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -127,11 +156,21 @@ export const introspectionController = {
           res.setHeader("Pragma", "no-cache");
           return res.status(400).send(result.responseContent ?? "");
 
-        case "UNAUTHORIZED":
+        case "UNAUTHORIZED": {
           res.setHeader("WWW-Authenticate", result.responseContent ?? "");
           res.setHeader("Cache-Control", "no-store");
           res.setHeader("Pragma", "no-cache");
+
+          // RFC 9470: this is the real path — Authlete answers an ACR/max_age-insufficient token with
+          // UNAUTHORIZED, not FORBIDDEN. See buildStepUpChallenge's comment.
+          const challenge = result.responseContent
+            ? buildStepUpChallenge(result.responseContent, result.acr, result.authTime)
+            : null;
+          if (challenge) return res.status(401).json(challenge);
+
+          // Plain UNAUTHORIZED (e.g. invalid_token) — unchanged passthrough.
           return res.status(401).send(result.responseContent ?? "");
+        }
 
         case "INTERNAL_SERVER_ERROR":
           res.setHeader("WWW-Authenticate", result.responseContent ?? "");
@@ -144,25 +183,17 @@ export const introspectionController = {
           res.setHeader("Cache-Control", "no-store");
           res.setHeader("Pragma", "no-cache");
 
-          // RFC 9470: Parse the responseContent to detect step-up auth challenges.
-          // Authlete returns insufficient_user_authentication with acr_values or max_age
-          // so the client knows how to re-authorize.
-          if (result.responseContent?.includes("insufficient_user_authentication")) {
-            const parsed = parseBearerError(result.responseContent);
-            return res.status(403).json({
-              error: parsed.error || "insufficient_user_authentication",
-              error_description: parsed.error_description || "",
-              error_uri: result.responseContent.match(/error_uri="([^"]+)"/)?.[1] || "",
-              // RFC 9470 parameters — the client uses these to re-authorize
-              ...(parsed.acr_values ? { acr_values: parsed.acr_values } : {}),
-              ...(parsed.max_age ? { max_age: parsed.max_age } : {}),
-              // Also include the token metadata Authlete returned
-              acr: result.acr,
-              auth_time: result.authTime,
-            });
-          }
+          // Defensive duplicate of the UNAUTHORIZED case above: not the live path (Authlete sends
+          // UNAUTHORIZED for this), but insufficient_user_authentication is 401-class per RFC 9470/6750
+          // §3.1 regardless of which action wraps it, so a future/differently-configured Authlete response
+          // is still reshaped and given the RFC-correct status rather than silently falling through as
+          // plain FORBIDDEN text.
+          const challenge = result.responseContent
+            ? buildStepUpChallenge(result.responseContent, result.acr, result.authTime)
+            : null;
+          if (challenge) return res.status(401).json(challenge);
 
-          // Non-step-up FORBIDDEN (e.g. insufficient_scope)
+          // Non-step-up FORBIDDEN (e.g. insufficient_scope) — unchanged passthrough.
           return res.status(403).send(result.responseContent);
         }
 

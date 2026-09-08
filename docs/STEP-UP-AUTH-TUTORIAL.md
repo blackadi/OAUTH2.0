@@ -81,8 +81,10 @@ sequenceDiagram
 
 **That arrow is a `401`, and it is the single most important number in this tutorial.** RFC 9470 §3's two
 examples are both `401 Unauthorized`; 403 appears nowhere in the section. It read `403` here until
-2026-08-14 — see [Part 5](#part-5-the-step-up-challenge-response) for why the distinction is load-bearing and
-which response in this repo legitimately *is* a 403.
+2026-08-14 — see [Part 5](#part-5-the-step-up-challenge-response) for the full story, including a second
+correction on 2026-09-08: this server's own `/api/introspection` was *also* believed to answer with a `403`
+for this scenario, and live testing proved that wrong too. Every step-up response in this repo is a `401`
+now; there is no 403 case left for this scenario at all.
 
 ---
 
@@ -271,8 +273,12 @@ sequenceDiagram
 
 ## Part 5: The Step-Up Challenge Response
 
-**There are two different responses here, they have different status codes, and conflating them breaks the
-protocol.** This Part used to print only the first one and label it the second.
+**There are two different responses here, and — corrected 2026-09-08 — they now carry the *same* status
+code, for the same reason.** This Part used to document Response 1 as a `403`, on the assumption that
+Authlete's action for an ACR/`max_age`-insufficient token is `FORBIDDEN`. **Live testing proved that
+assumption wrong**: Authlete answers with `action: "UNAUTHORIZED"`, and the code had a real, unreachable
+`FORBIDDEN`-shaped branch that four unit tests locked in by mocking the scenario that never happens live.
+Both are now `401`.
 
 ```mermaid
 sequenceDiagram
@@ -282,8 +288,8 @@ sequenceDiagram
 
     C->>RS: GET /resource + access token
     RS->>AS: POST /api/introspection
-    AS-->>RS: 403 + JSON (acr_values / max_age)
-    Note over AS,RS: Response 1 — AS to RS.<br/>Authlete's FORBIDDEN, re-shaped as JSON
+    AS-->>RS: 401 + JSON (acr_values / max_age)
+    Note over AS,RS: Response 1 — AS to RS.<br/>Authlete's UNAUTHORIZED, re-shaped as JSON
     RS-->>C: 401 + WWW-Authenticate
     Note over RS,C: Response 2 — RS to client.<br/>THIS is RFC 9470 §3's challenge
 ```
@@ -292,55 +298,61 @@ sequenceDiagram
 |---|---|---|
 | who → who | **AS → resource server** | **resource server → client** |
 | what it is | this repo's introspection API answering "is this token strong enough?" | RFC 9470 §3's **challenge** |
-| status | **403** — Authlete's action is `FORBIDDEN`, and 403 is a defensible mapping for a vendor introspection API | **401**, and §3 gives no alternative |
-| governed by | Authlete's contract | RFC 9470 §3, RFC 6750 §3 |
+| status | **401** — Authlete's action is `UNAUTHORIZED` (live-verified 2026-09-08), and `insufficient_user_authentication` is 401-class per RFC 6750 §3.1 regardless | **401**, and §3 gives no alternative |
+| governed by | RFC 9470 §3, RFC 6750 §3 (same as Response 2 — there is no separate "vendor contract" carve-out) | RFC 9470 §3, RFC 6750 §3 |
 | where it lives | `server/src/controllers/introspection.controller.ts` | **your resource server — this repo does not implement one** |
 
 ### Response 1 — what `/api/introspection` returns to a resource server
 
 The AS re-shapes Authlete's `WWW-Authenticate` string into JSON, so a browser-based resource server can read
-the requirement without parsing an HTTP header.
+the requirement without parsing an HTTP header. **Captured live 2026-09-08**, against a real token issued by
+the interactive login flow (`acr: "pwd"`):
 
-**ACR mismatch:**
+**ACR mismatch** (`acrValues: ["mfa"]`):
 
 ```text
-HTTP/1.1 403 Forbidden
+HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer error="insufficient_user_authentication",
-  error_description="[A341302] The authentication context class 'pwd'
-  is insufficient. User authentication must satisfy one of
-  [urn:mace:incommon:iap:silver]",
-  acr_values="urn:mace:incommon:iap:silver"
+  error_description="[A341302] The authentication context class 'pwd' of the user authentication that the
+  authorization server performed during the course of issuing the access token is insufficient. User
+  authentication of an access token must satisfy one of [mfa] to access the protected resource.",
+  acr_values="mfa"
 Content-Type: application/json
 
 {
   "error": "insufficient_user_authentication",
-  "error_description": "...",
+  "error_description": "[A341302] The authentication context class 'pwd' of the user authentication that the authorization server performed during the course of issuing the access token is insufficient. User authentication of an access token must satisfy one of [mfa] to access the protected resource.",
   "error_uri": "https://docs.authlete.com/#A341302",
-  "acr_values": "urn:mace:incommon:iap:silver",
+  "acr_values": "mfa",
   "acr": "pwd",
-  "auth_time": 1700000000
+  "auth_time": 1788812534
 }
 ```
 
-**Max age exceeded:**
+**Max age exceeded** (`maxAge: 1`):
 
 ```text
-HTTP/1.1 403 Forbidden
+HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer error="insufficient_user_authentication",
-  error_description="[A340301] The authentication time is too old.
-  Re-authentication is needed.",
-  max_age="600"
+  error_description="[A340301] The time of the user authentication that the authorization server performed
+  during the course of issuing the access token is too old, so re-authentication is needed. The maximum
+  authentication age (max_age) required by the protected resource is 1.",
+  max_age="1"
 Content-Type: application/json
 
 {
   "error": "insufficient_user_authentication",
-  "error_description": "...",
+  "error_description": "[A340301] The time of the user authentication that the authorization server performed during the course of issuing the access token is too old, so re-authentication is needed. The maximum authentication age (max_age) required by the protected resource is 1.",
   "error_uri": "https://docs.authlete.com/#A340301",
-  "max_age": "600",
+  "max_age": "1",
   "acr": "pwd",
-  "auth_time": 1700000000
+  "auth_time": 1788812534
 }
 ```
+
+A plain invalid/unrecognized token is unaffected by this fix and still answers `401` with the raw
+`Bearer error="invalid_token"` text, unreshaped — the JSON reshaping applies only when the content actually
+contains `insufficient_user_authentication`.
 
 ### Response 2 — the 401 challenge your resource server must send
 
@@ -361,7 +373,8 @@ WWW-Authenticate: Bearer error="insufficient_user_authentication",
 > to `insufficient_scope` — *"the token is valid, you are simply not allowed this"*. RFC 9470's
 > `insufficient_user_authentication` says something different: *"the **authentication** behind this token is
 > not strong or recent enough"*, which is 401 territory, because the remedy is a new authentication event
-> rather than a different grant.
+> rather than a different grant. That reasoning is exactly why Response 1 turned out to be 401 too, once
+> checked — it was never a "vendor API can defensibly pick 403" situation, that framing was the mistake.
 >
 > **The failure is silent and total.** Most client libraries only inspect `WWW-Authenticate` on a **401**. Send
 > 403 and a conformant client never parses the header, never learns `acr_values`, and never re-authorizes — so
@@ -372,7 +385,16 @@ WWW-Authenticate: Bearer error="insufficient_user_authentication",
 > **Until 2026-08-14 this Part printed Response 1 twice, under the heading *"an error conforming to RFC
 > 9470"*, with the client-action table hanging off it** — and the sequence diagram in Part 1 drew the 403 as
 > an explicit `RS-->>C` arrow, which is exactly the relationship §3 governs. A learner following either would
-> have built a step-up loop that cannot start.
+> have built a step-up loop that cannot start. **A second, deeper instance of the same mistake was found and
+> fixed 2026-09-08**: even after that correction, this repo's own `/api/introspection` (Response 1) was still
+> coded and documented as answering `403` — reachable-looking code, `403`-asserting unit tests, all of it
+> exercising a scenario Authlete never actually produces. Live testing (a real login → consent → token
+> exchange → introspection round trip, not a mock) is what caught it; the mocked unit tests could not, because
+> they mocked the very assumption that was wrong. The client's own step-up UI (`StepUpSection.tsx`) had a
+> second, independent bug on top of this — it parsed the *entire* displayed error string as JSON instead of
+> the actual response body, which could never succeed regardless of what the server returned. Both are fixed
+> together; see `server/src/controllers/introspection.controller.ts`'s `buildStepUpChallenge` and
+> `client/src/components/oidc/StepUpSection.tsx`'s `handleIntrospect`.
 
 ### What the client learns — from Response 2
 
@@ -484,8 +506,8 @@ The `/auth/introspection` API accepts two validation parameters:
 
 | Parameter | Authlete behavior |
 |-----------|-------------------|
-| `acrValues` | Checks if the token's ACR is in the list. Returns `FORBIDDEN` with `insufficient_user_authentication` + `acr_values` if not |
-| `maxAge` | Checks if `auth_time` + `maxAge` < now. Returns `FORBIDDEN` with `insufficient_user_authentication` + `max_age` if exceeded |
+| `acrValues` | Checks if the token's ACR is in the list. Returns `UNAUTHORIZED` with `insufficient_user_authentication` + `acr_values` if not (live-verified 2026-09-08 — not `FORBIDDEN`, which this table said until then) |
+| `maxAge` | Checks if `auth_time` + `maxAge` < now. Returns `UNAUTHORIZED` with `insufficient_user_authentication` + `max_age` if exceeded |
 
 The `responseContent` from Authlete contains a pre-formatted `WWW-Authenticate` header value that the server relays to the client.
 
@@ -514,7 +536,7 @@ When ACR can't be satisfied, the server calls `/auth/authorization/fail` with `r
 | `src/services/authorization.service.ts:59` | Passes `acr`/`authTime` from `session.stepUp` to Authlete |
 | `src/controllers/authorization.controller.ts:55` | Stores `acrs`, `acrEssential`, `maxAge` from Authlete in session |
 | `src/controllers/session.controller.ts:59` | Checks ACR/maxAge requirements on login; sets `stepUp` in session |
-| `src/controllers/introspection.controller.ts:142-167` | The `case "FORBIDDEN"` branch — parses `insufficient_user_authentication` into structured JSON (`parseBearerError`, defined at `:45`). This row read `:114` until 2026-08-14, which is the *validation-error* branch |
+| `src/controllers/introspection.controller.ts` | `buildStepUpChallenge` (a shared helper, since 2026-09-08) parses `insufficient_user_authentication` into structured JSON, called from **both** the `UNAUTHORIZED` case (the real, live path) and the `FORBIDDEN` case (defensive — Authlete has never been observed to send it that way). `parseBearerError` (unchanged) does the actual `WWW-Authenticate` parsing. This row previously named only the `FORBIDDEN` branch, before live testing found that branch is never reached |
 | `src/services/introspection.service.ts:38` | Passes `acrValues`/`maxAge` to Authlete introspection API |
 | `src/controllers/device.controller.ts:87` | Passes `acr`/`authTime` to device flow complete |
 | `src/controllers/ciba.controller.ts:106` | Passes `acr`/`authTime` to CIBA complete |
@@ -534,8 +556,8 @@ When ACR can't be satisfied, the server calls `/auth/authorization/fail` with `r
 | File | Tests |
 |------|-------|
 | `tests/unit/utils/createLocalJWT.test.ts` | JWT with `acr`/`auth_time` claims (8 tests) |
-| `tests/unit/services/introspection.service.test.ts` | `acrValues`/`maxAge` pass-through (4 tests) |
-| `tests/unit/controllers/introspection.controller.test.ts` | Step-up challenge parsing, plus the §2.1 auth gate (7 tests) |
+| `tests/unit/services/introspection.service.test.ts` | `acrValues`/`maxAge` pass-through, plus unrelated introspection-service cases in the same file (8 tests total) |
+| `tests/unit/controllers/introspection.controller.test.ts` | Step-up challenge parsing (both the `UNAUTHORIZED` and defensive `FORBIDDEN` paths), plus the §2.1 auth gate and the other action cases (10 tests total) |
 
 ### Standards
 
@@ -576,9 +598,14 @@ When ACR can't be satisfied, the server calls `/auth/authorization/fail` with `r
 
 ### 3. Not returning structured error responses
 
-**Wrong:** Returning generic 403 without `acr_values` or `max_age` — the client doesn't know what to re-authorize with.
+**Wrong:** Returning a generic `401`/`403` without `acr_values` or `max_age` — the client doesn't know what to
+re-authorize with. Also wrong, and the mistake this repo actually made until 2026-09-08: parsing
+`responseContent` only under a `FORBIDDEN` action, on the assumption that's what Authlete sends for this —
+it isn't; it sends `UNAUTHORIZED`, so a check written only for `FORBIDDEN` silently never fires.
 
-**Right:** Parse Authlete's `responseContent` and include `acr_values`/`max_age` in the JSON response body.
+**Right:** Parse Authlete's `responseContent` for `insufficient_user_authentication` **regardless of which
+action carries it**, and include `acr_values`/`max_age` in a `401` JSON response body — see
+`buildStepUpChallenge` in `introspection.controller.ts`.
 
 ### 4. Forgetting `prompt=login` on re-authorization
 
