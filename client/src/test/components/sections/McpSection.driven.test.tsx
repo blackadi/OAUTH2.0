@@ -444,6 +444,91 @@ describe('McpSection — the authorization survives the redirect', () => {
   });
 });
 
+describe('McpSection — the three regressions the second critique found', () => {
+  /**
+   * `<fieldset disabled>` disables every descendant form control, and the `HelpPopover` trigger
+   * inside each step's `OperationDescription` was one of them. Measured on arrival: four Help
+   * buttons, all four disabled, all four inside gated steps, a forced click opening nothing — so the
+   * params, returns and tips were unreachable on exactly the steps still gated. That defeated the
+   * reason `fieldset` was chosen over `inert`: the wizard renders all six steps at once so the whole
+   * flow can be *read* before any of it is run.
+   */
+  it('keeps the help affordance reachable on a gated step', () => {
+    mountSection(<McpSection />);
+    const gated = document.getElementById('mcp-step-5');
+    expect(gated).toHaveAttribute('aria-disabled', 'true');
+
+    const help = within(gated!).getByRole('button', { name: /help/i });
+    expect(help, 'a read affordance is not a form control').not.toBeDisabled();
+    // Enabled is not clickable: the card carries `pointer-events-none`, so the explainer has to opt
+    // back in or the button is keyboard-operable and mouse-dead. jsdom cannot compute the property
+    // from a utility class, so this asserts the opt-in that a real click proved was needed.
+    expect(help.closest('[class*="pointer-events-auto"]')).not.toBeNull();
+    // The form controls it sits beside must still be gated.
+    expect(within(gated!).getByRole('button', { name: /^Fetch UserInfo$/i })).toBeDisabled();
+  });
+
+  it('leaves no help button disabled anywhere on arrival', () => {
+    mountSection(<McpSection />);
+    const helps = screen.getAllByRole('button', { name: /help/i });
+    expect(helps.length).toBeGreaterThan(0);
+    for (const h of helps) expect(h).not.toBeDisabled();
+  });
+
+  /**
+   * Step 2 is optional and the card says to skip it, so the you-are-here marker must not point back
+   * at it. `currentStep` was the *first* incomplete step, which on the recommended path reported
+   * "Register: current" while "Authorize: completed" — and carried `aria-current="step"` with it.
+   */
+  it('does not point the diagram at the optional step once a later one is done', async () => {
+    vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
+    mountSection(<McpSection />);
+    press(/Fetch Metadata/i);
+    await screen.findByText(/DCR Supported/i);
+    press(/Build Authorization URL/i);
+    await screen.findByText(/\/api\/authorization\?/);
+
+    const current = document.querySelector('[aria-current="step"]');
+    expect(current, 'something must be current').not.toBeNull();
+    expect(current).not.toHaveTextContent(/Register/i);
+    // The next thing actually outstanding is the token exchange.
+    expect(current).toHaveTextContent(/Token/i);
+  });
+
+  /**
+   * Step 3 promises the callback exchanges the code; step 4 asks the reader to paste one. Both are
+   * true of different legs, and nothing said which leg you were on.
+   */
+  it('says the callback already exchanged the code, when it did', () => {
+    sessionStorage.setItem(
+      'token_response',
+      JSON.stringify({ access_token: 'from-callback', token_type: 'Bearer' }),
+    );
+    mountSection(<McpSection />);
+    expect(
+      within(document.getElementById('mcp-step-4')!).getByText(
+        /callback already exchanged a code/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing of the sort when the reader typed the code themselves', async () => {
+    vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
+    mountSection(<McpSection />);
+    press(/Fetch Metadata/i);
+    await screen.findByText(/DCR Supported/i);
+    press(/Build Authorization URL/i);
+    await screen.findByText(/\/api\/authorization\?/);
+    fill(/Authorization Code \(from callback\)/i, 'typed-by-hand');
+
+    expect(
+      within(document.getElementById('mcp-step-4')!).queryByText(/callback already exchanged/i),
+    ).toBeNull();
+    // And step 4 no longer tells you to fetch a code the redirect would have handled.
+    expect(screen.queryByText(/bring the code back from the callback/i)).toBeNull();
+  });
+});
+
 describe('McpSection — the wizard remembers what it did before the redirect', () => {
   /**
    * Steps 2 and 3 gate on the discovery document and step 4 on the built URL, and both lived only in

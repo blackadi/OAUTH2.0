@@ -8,7 +8,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { FlowDiagram, type FlowStep } from '@/components/ui/FlowDiagram';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { getDoc } from '@/data/operationDocs';
+import { getDoc, type OpDoc } from '@/data/operationDocs';
 import { stepState } from '@/utils/step-state';
 import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { CLIENT_ID } from '@/config';
@@ -90,9 +90,24 @@ function wizardProgress(flow: McpFlow): { completedSteps: string[]; currentStep?
     ['userinfo', Boolean(flow.userinfoResult)],
     ['introspect', Boolean(flow.introspectResult)],
   ];
+  /**
+   * Back-filled from the last step that actually happened, not "every step whose flag is set".
+   *
+   * `currentStep` was the *first* incomplete step, and step 2 is optional — the card says so and
+   * tells the reader to skip it. So on the path the section recommends (discover, skip, authorize)
+   * the diagram reported "Register: current" and "Authorize: completed": the you-are-here marker
+   * pointing backwards at the step it had just told you not to take, and `aria-current="step"` with
+   * it, so a screen reader was misdirected too.
+   *
+   * Back-filling is the same rule `utils/sequence-progress.ts` applies for the same reason — a later
+   * success implies the earlier steps happened or were not needed, because these protocols cannot be
+   * entered in the middle. A step that was skipped rather than run is therefore shown as behind you
+   * rather than ahead of you, which is what it is.
+   */
+  const lastDone = done.reduce((last, [, ok], i) => (ok ? i : last), -1);
   return {
-    completedSteps: done.filter(([, ok]) => ok).map(([id]) => id),
-    currentStep: done.find(([, ok]) => !ok)?.[0],
+    completedSteps: done.slice(0, lastDone + 1).map(([id]) => id),
+    currentStep: done[lastDone + 1]?.[0],
   };
 }
 
@@ -144,6 +159,20 @@ interface StepCardProps {
   /** Badges and the spinner — whatever the step says about itself beside its name. */
   status?: ReactNode;
   /**
+   * The operation's explainer, rendered outside the `fieldset`.
+   *
+   * It used to be the first of `children`, and `<fieldset disabled>` disables *every* descendant form
+   * control — including the `HelpPopover` trigger inside it. Measured on arrival: four Help buttons,
+   * all four disabled, all four inside gated steps, a forced click opening nothing. So the params,
+   * returns and tips were unreachable on exactly the steps whose content is still gated.
+   *
+   * That defeated the reason `fieldset` was chosen over `inert` in the first place — the docblock
+   * below says the wizard renders all six steps at once "precisely so the whole flow can be read
+   * before any of it is run", and reading it includes the popover. A read affordance is not a form
+   * control, so it belongs on the other side of the gate.
+   */
+  doc?: OpDoc;
+  /**
    * What the reader has to do first, shown only while the step is gated.
    *
    * A step that says "not yet" without saying "not yet until what" has told the reader they are stuck
@@ -155,7 +184,7 @@ interface StepCardProps {
   children: ReactNode;
 }
 
-function StepCard({ id, ready, title, status, blockedBy, children }: StepCardProps) {
+function StepCard({ id, ready, title, status, doc, blockedBy, children }: StepCardProps) {
   return (
     <Card id={id} tabIndex={-1} variant="bordered" {...stepState(ready, 'mb-3')}>
       {/* The title is set here rather than at six call sites, which is how step 6 came to render at
@@ -169,7 +198,18 @@ function StepCard({ id, ready, title, status, blockedBy, children }: StepCardPro
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {!ready && blockedBy && <p className="text-xs text-muted-foreground mb-3">{blockedBy}</p>}
+        {/* `max-w-prose`: this renders five times and exceeded on three of them. The paragraph four
+            lines below got the measure, with a docblock about this exact problem, and the shared one
+            here was missed. */}
+        {!ready && blockedBy && (
+          <p className="text-xs text-muted-foreground mb-3 max-w-prose">{blockedBy}</p>
+        )}
+        {/* `pointer-events-auto` because `stepState` puts `pointer-events-none` on the whole gated
+            card. Taking the explainer out of the `fieldset` made its Help trigger enabled and
+            keyboard-operable, and it was still unclickable by mouse — reachable one way and not the
+            other is worse than consistently either. Found by driving a real click; the enabled-state
+            assertion alone passed. */}
+        {doc && <OperationDescription doc={doc} className="mb-3 pointer-events-auto" />}
         <fieldset disabled={!ready} className="contents">
           {children}
         </fieldset>
@@ -349,14 +389,12 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       {/* ── Step 3: Authorize ──────────────────────────── */}
       <StepCard
         id="mcp-step-3"
+        doc={getDoc('mcp', 'authorize-url')}
         ready={Boolean(flow.asData)}
         title="Step 3: Authorize (PKCE + Resource)"
         blockedBy="Run Step 1 first — the authorization URL is built from the endpoints in the AS metadata."
         status={flow.authUrl ? <Badge variant="success">URL Built</Badge> : null}
       >
-        {getDoc('mcp', 'authorize-url') && (
-          <OperationDescription doc={getDoc('mcp', 'authorize-url')!} className="mb-3" />
-        )}
         <div className="space-y-3">
           <Input
             label="Redirect URI"
@@ -396,9 +434,10 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       {/* ── Step 4: Token Exchange ─────────────────────── */}
       <StepCard
         id="mcp-step-4"
+        doc={getDoc('mcp', 'token-exchange')}
         ready={Boolean(flow.authUrl)}
         title="Step 4: Token Exchange"
-        blockedBy="Build the authorization URL in Step 3 first, then bring the code back from the callback."
+        blockedBy="Build the authorization URL in Step 3 first."
         status={
           <>
             {flow.tokenResult && <Badge variant="success">Done</Badge>}
@@ -406,10 +445,16 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           </>
         }
       >
-        {getDoc('mcp', 'token-exchange') && (
-          <OperationDescription doc={getDoc('mcp', 'token-exchange')!} className="mb-3" />
-        )}
         <div className="space-y-3">
+          {/* Step 3 promises the callback exchanges the code, and this step asks you to paste one.
+              Both are true — of different legs — and nothing said which you were on. `tokenResult`
+              with no code typed here means the redirect leg already did it. */}
+          {flow.tokenResult && !flow.code && (
+            <p className="text-xs text-muted-foreground max-w-prose">
+              The callback already exchanged a code for the token below. These fields are for a code
+              you obtained some other way — by opening the authorization URL yourself, say.
+            </p>
+          )}
           <Input
             label="Authorization Code (from callback)"
             value={flow.code}
@@ -435,6 +480,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       {/* ── Step 5: UserInfo ───────────────────────────── */}
       <StepCard
         id="mcp-step-5"
+        doc={getDoc('mcp', 'userinfo')}
         ready={Boolean(flow.tokenResult)}
         title="Step 5: Fetch UserInfo"
         blockedBy="Exchange a code for an access token in Step 4 first."
@@ -445,9 +491,6 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           </>
         }
       >
-        {getDoc('mcp', 'userinfo') && (
-          <OperationDescription doc={getDoc('mcp', 'userinfo')!} className="mb-3" />
-        )}
         <div className="space-y-3">
           <Button
             onClick={flow.stepUserinfo}
@@ -463,6 +506,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       {/* ── Step 6: Introspect ─────────────────────────── */}
       <StepCard
         id="mcp-step-6"
+        doc={getDoc('mcp', 'introspect')}
         ready={Boolean(flow.tokenResult)}
         title="Step 6: Introspect Token"
         blockedBy="Exchange a code for an access token in Step 4 first."
@@ -474,9 +518,6 @@ function McpWizard({ flow }: { flow: McpFlow }) {
         }
       >
         <div className="space-y-3">
-          {getDoc('mcp', 'introspect') && (
-            <OperationDescription doc={getDoc('mcp', 'introspect')!} />
-          )}
           <Button
             onClick={flow.stepIntrospect}
             loading={flow.loading === 'Introspect'}
