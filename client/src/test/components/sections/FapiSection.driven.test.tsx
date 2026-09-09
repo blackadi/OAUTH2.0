@@ -126,6 +126,55 @@ describe('FapiSection — the config panel', () => {
     expect(await screen.findByText(/FAPI mode unrecognised/i)).toBeInTheDocument();
     expect(screen.queryByText(/FAPI Disabled/i)).not.toBeInTheDocument();
   });
+
+  /**
+   * `unknown` is itself a recognised key in `FAPI_MODE_BADGES` — it has its own label and variant. The
+   * badge's own literal fallback (a mode string that matches no key in the map at all, not even
+   * `unknown`) is a third, distinct case and had no test.
+   */
+  it('falls back to the literal mode string when it matches no badge at all', async () => {
+    vi.spyOn(fapiService, 'getConfig').mockResolvedValue({ ...CONFIG, mode: 'totally-bogus-mode' });
+    mountSection(<FapiSection />);
+    press(/Fetch Config/i);
+
+    expect(await screen.findByText('FAPI mode: totally-bogus-mode')).toBeInTheDocument();
+  });
+
+  it('shows DPoP and CIMD as enabled when the live config says so', async () => {
+    vi.spyOn(fapiService, 'getConfig').mockResolvedValue({
+      ...CONFIG,
+      dpopEnabled: true,
+      cimdSupported: true,
+    });
+    mountSection(<FapiSection />);
+    press(/Fetch Config/i);
+
+    expect(await screen.findByText('DPoP Enabled')).toBeInTheDocument();
+    expect(screen.getByText('CIMD Enabled')).toBeInTheDocument();
+  });
+
+  it('shows DPoP and CIMD as disabled when the live config says so', async () => {
+    vi.spyOn(fapiService, 'getConfig').mockResolvedValue({
+      ...CONFIG,
+      dpopEnabled: false,
+      cimdSupported: false,
+    });
+    mountSection(<FapiSection />);
+    press(/Fetch Config/i);
+
+    expect(await screen.findByText('DPoP Disabled')).toBeInTheDocument();
+    expect(screen.getByText('CIMD Disabled')).toBeInTheDocument();
+  });
+
+  it('explains a config-fetch failure instead of leaving the panel blank', async () => {
+    vi.spyOn(fapiService, 'getConfig').mockRejectedValue(
+      new Error('{"error":"server_error","error_description":"[A999999] unavailable"}'),
+    );
+    mountSection(<FapiSection />);
+    press(/Fetch Config/i);
+
+    expect(await screen.findByText(/What does this mean\?|Hide explanation/i)).toBeInTheDocument();
+  });
 });
 
 describe('FapiSection — the live status panel', () => {
@@ -136,6 +185,17 @@ describe('FapiSection — the live status panel', () => {
     press(/Fetch Status/i);
 
     await expectReadsBack(/"hardened": true/, 'the live status response');
+  });
+
+  it('leaves the status panel empty on a failed fetch rather than rendering nothing changed', async () => {
+    vi.spyOn(fapiService, 'getStatus').mockRejectedValue(new Error('server_error'));
+    mountSection(<FapiSection />);
+    press(/Fetch Status/i);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Fetch Status/i })).toBeEnabled(),
+    );
+    expect(screen.queryByText(/"hardened"/)).not.toBeInTheDocument();
   });
 });
 
@@ -173,6 +233,32 @@ describe('FapiSection — the DPoP Key Utilities card', () => {
     press(/Create DPoP Proof JWT/i);
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('signing failed'));
+  });
+
+  /**
+   * Both catch blocks narrow with `err instanceof Error ? err.message : '<generic fallback>'` — a
+   * thrown non-Error value (a rejected promise can reject with anything) takes the fallback branch,
+   * which neither test above exercises.
+   */
+  it('falls back to a generic message when key generation throws something that is not an Error', async () => {
+    vi.spyOn(dpopService, 'generateKeyPair').mockRejectedValueOnce('not an Error instance');
+    const toastError = vi.spyOn(toast, 'error');
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to generate key pair'));
+  });
+
+  it('falls back to a generic message when proof creation throws something that is not an Error', async () => {
+    vi.spyOn(dpopService, 'createProof').mockRejectedValueOnce('not an Error instance');
+    const toastError = vi.spyOn(toast, 'error');
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+    await screen.findByText('Public Key (JWK)');
+
+    press(/Create DPoP Proof JWT/i);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to create proof'));
   });
 
   it('computes ath from the token held in the vault', async () => {
