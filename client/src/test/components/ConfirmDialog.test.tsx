@@ -84,6 +84,155 @@ describe('ConfirmDialog', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it('ignores a key that is neither Escape nor Tab', () => {
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        open
+        title="t"
+        body="b"
+        confirmLabel="Do it"
+        onConfirm={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.keyDown(document, { key: 'a' });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  describe('the backdrop', () => {
+    it('cancels when the backdrop itself is clicked', () => {
+      const onCancel = vi.fn();
+      render(
+        <ConfirmDialog
+          open
+          title="t"
+          body="b"
+          confirmLabel="Do it"
+          onConfirm={vi.fn()}
+          onCancel={onCancel}
+        />,
+      );
+      // The dialog is the direct child of the backdrop, so its parent IS the backdrop element.
+      const backdrop = screen.getByRole('dialog').parentElement!;
+      fireEvent.mouseDown(backdrop, { target: backdrop });
+      expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not cancel when a click lands inside the panel', () => {
+      const onCancel = vi.fn();
+      render(
+        <ConfirmDialog
+          open
+          title="t"
+          body="b"
+          confirmLabel="Do it"
+          onConfirm={vi.fn()}
+          onCancel={onCancel}
+        />,
+      );
+      // A real click inside bubbles from the panel, so `e.target` is never the backdrop itself.
+      fireEvent.mouseDown(screen.getByRole('dialog'));
+      expect(onCancel).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the Tab trap — an unguarded destructive dialog you can tab out of is one you can confirm without reading', () => {
+    it('wraps Tab from the last focusable control back to the first', () => {
+      render(
+        <ConfirmDialog
+          open
+          title="t"
+          body="b"
+          confirmLabel="Do it"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      const confirm = screen.getByRole('button', { name: 'Do it' });
+
+      confirm.focus();
+      expect(confirm).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      expect(cancel).toHaveFocus();
+    });
+
+    it('wraps Shift+Tab from the first focusable control back to the last', () => {
+      render(
+        <ConfirmDialog
+          open
+          title="t"
+          body="b"
+          confirmLabel="Do it"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      const confirm = screen.getByRole('button', { name: 'Do it' });
+
+      cancel.focus();
+      expect(cancel).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+      expect(confirm).toHaveFocus();
+    });
+
+    it('leaves focus alone on a Tab that is not at either end', () => {
+      render(
+        <ConfirmDialog
+          open
+          title="Delete client?"
+          body="Permanent."
+          confirmLabel="Delete client"
+          requireTyped="1523514379"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      // The selector excludes disabled controls, and Confirm starts disabled — so typing the correct
+      // value first is what actually makes Cancel the *middle* of three focusable controls (input,
+      // Cancel, Confirm). Skipping this step made Cancel the *last* one instead, which is a different,
+      // also-real case: see the test below.
+      fireEvent.change(screen.getByLabelText(/to confirm/i), {
+        target: { value: '1523514379' },
+      });
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      cancel.focus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      // Not trapped: jsdom does not move focus on Tab by itself, so the assertion is only that the
+      // component's own handler did not force focus elsewhere — it stayed exactly where it was.
+      expect(cancel).toHaveFocus();
+    });
+
+    /**
+     * **Found while writing the test above.** A disabled Confirm button is excluded from the trap
+     * entirely (the selector is `button:not([disabled])`), so before anything is typed the trap has
+     * only two stops — input and Cancel — and Cancel is the *last* one, not the middle one. Tabbing
+     * from it wraps to the input, not to a disabled button nobody could reach anyway.
+     */
+    it('excludes the disabled Confirm button from the trap until the typed value is correct', () => {
+      render(
+        <ConfirmDialog
+          open
+          title="Delete client?"
+          body="Permanent."
+          confirmLabel="Delete client"
+          requireTyped="1523514379"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      const input = screen.getByLabelText(/to confirm/i);
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      expect(screen.getByRole('button', { name: 'Delete client' })).toBeDisabled();
+
+      cancel.focus();
+      fireEvent.keyDown(document, { key: 'Tab' });
+      expect(input).toHaveFocus();
+    });
+  });
+
   describe('requireTyped — the friction that makes you read which object you are destroying', () => {
     function renderTyped(onConfirm = vi.fn()) {
       render(

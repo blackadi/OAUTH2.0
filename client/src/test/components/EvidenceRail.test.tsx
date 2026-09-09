@@ -1,6 +1,6 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { EvidenceRail } from '@/components/layout/EvidenceRail';
 import { TokenProvider } from '@/context/TokenContext';
 import { RAIL_WIDTH } from '@/services/preferences';
@@ -150,5 +150,58 @@ describe('the resize handle', () => {
     screen.getByRole('separator', { name: 'Resize the evidence rail' }).focus();
     await userEvent.keyboard('{ArrowUp}{Enter}a');
     expect(props.onWidthChange).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The drag path, not just the keyboard one — `onPointerDown` had no test at all. It tracks the
+   * pointer against the *window's* right edge rather than a delta from the drag's start, which is the
+   * point of the design note above it: this is the assertion that the handle actually reports
+   * `window.innerWidth - clientX`, not merely that pressing it does something.
+   */
+  describe('dragging', () => {
+    const setPointerCapture = vi.fn();
+    // jsdom does not implement `setPointerCapture` at all — calling the real (absent) method throws.
+    beforeAll(() => {
+      Element.prototype.setPointerCapture = setPointerCapture;
+    });
+
+    it('captures the pointer and reports width from the window edge on move', () => {
+      const props = renderRail();
+      const handle = screen.getByRole('separator', { name: 'Resize the evidence rail' });
+
+      fireEvent.pointerDown(handle, { pointerId: 7 });
+      expect(setPointerCapture).toHaveBeenCalledWith(7);
+
+      Object.defineProperty(window, 'innerWidth', { writable: true, value: 1200 });
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 800 }));
+      expect(props.onWidthChange).toHaveBeenCalledWith(400);
+    });
+
+    it('stops reporting width once the pointer is released', () => {
+      const props = renderRail();
+      const handle = screen.getByRole('separator', { name: 'Resize the evidence rail' });
+
+      fireEvent.pointerDown(handle, { pointerId: 1 });
+      window.dispatchEvent(new PointerEvent('pointerup'));
+      vi.mocked(props.onWidthChange).mockClear();
+
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 500 }));
+      expect(props.onWidthChange).not.toHaveBeenCalled();
+    });
+
+    it('clamps the reported width at both ends', () => {
+      const props = renderRail();
+      const handle = screen.getByRole('separator', { name: 'Resize the evidence rail' });
+      Object.defineProperty(window, 'innerWidth', { writable: true, value: 1200 });
+
+      fireEvent.pointerDown(handle, { pointerId: 1 });
+      // A huge clientX makes the rail's implied width negative — clamped to the minimum, not negative.
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 1190 }));
+      expect(props.onWidthChange).toHaveBeenLastCalledWith(RAIL_WIDTH.min);
+
+      // clientX at 0 makes the implied width the full window — clamped to the maximum.
+      window.dispatchEvent(new PointerEvent('pointermove', { clientX: 0 }));
+      expect(props.onWidthChange).toHaveBeenLastCalledWith(RAIL_WIDTH.max);
+    });
   });
 });

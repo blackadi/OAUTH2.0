@@ -82,3 +82,47 @@ describe('deviceService.complete', () => {
     });
   });
 });
+
+/**
+ * `pollToken` had no test at all — every one of its three branches (public client, `client_secret_post`,
+ * `client_secret_basic`) was unexercised, on the call that actually redeems a device code for a token.
+ */
+describe('deviceService.pollToken', () => {
+  it('sends grant_type and device_code as a public client, with no credential at all', async () => {
+    mockFetch.mockResolvedValue(ok({ access_token: 'at' }));
+    await deviceService.pollToken('device-code-1', 'cid');
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('http://localhost:3000/api/token');
+    const params = new URLSearchParams((init as { body: string }).body);
+    expect(params.get('grant_type')).toBe('urn:ietf:params:oauth:grant-type:device_code');
+    expect(params.get('device_code')).toBe('device-code-1');
+    expect(params.get('client_id')).toBe('cid');
+    expect(params.has('client_secret')).toBe(false);
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBeUndefined();
+  });
+
+  it('sends the secret in the body for client_secret_post, not as a Basic header', async () => {
+    mockFetch.mockResolvedValue(ok({ access_token: 'at' }));
+    await deviceService.pollToken('device-code-1', 'cid', 'csecret', 'post');
+
+    const [, init] = mockFetch.mock.calls[0];
+    const params = new URLSearchParams((init as { body: string }).body);
+    expect(params.get('client_secret')).toBe('csecret');
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBeUndefined();
+  });
+
+  it('sends the secret as a Basic header for client_secret_basic, and defaults to it', async () => {
+    mockFetch.mockResolvedValue(ok({ access_token: 'at' }));
+    // No fourth argument — `authMethod` defaults to 'basic'.
+    await deviceService.pollToken('device-code-1', 'cid', 'csecret');
+
+    const [, init] = mockFetch.mock.calls[0];
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe(
+      `Basic ${btoa('cid:csecret')}`,
+    );
+    const params = new URLSearchParams((init as { body: string }).body);
+    // The secret authenticates the request over the header; it must not also ride in the body.
+    expect(params.has('client_secret')).toBe(false);
+  });
+});

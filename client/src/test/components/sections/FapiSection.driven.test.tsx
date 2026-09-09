@@ -1,11 +1,13 @@
 import { screen, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { toast } from 'sonner';
 import { FapiSection } from '@/components/fapi/FapiSection';
 import { fapiService, parService } from '@/services';
 import { getTraces, clearTraces } from '@/services/trace-store';
 import { SESSION_KEYS } from '@/services/session-keys';
 import {
   mountSection,
+  fill,
   press,
   stubNavigation,
   expectCall,
@@ -16,7 +18,8 @@ import {
   seedFapiSigningKey,
 } from '@/test/helpers/drive-section';
 import { tokenService } from '@/services';
-import { generateKeyPair } from '@/services/dpop.service';
+import * as dpopService from '@/services/dpop.service';
+const { generateKeyPair } = dpopService;
 
 /**
  * The FAPI 2.0 wizard — where the third dead-flow class was found, and where **no component test
@@ -125,6 +128,144 @@ describe('FapiSection — the config panel', () => {
   });
 });
 
+describe('FapiSection — the live status panel', () => {
+  it('fetches and renders the live status, which had no test at all', async () => {
+    vi.spyOn(fapiService, 'getStatus').mockResolvedValue({ hardened: true, dpopEnabled: false });
+    mountSection(<FapiSection />);
+
+    press(/Fetch Status/i);
+
+    await expectReadsBack(/"hardened": true/, 'the live status response');
+  });
+});
+
+/**
+ * The "DPoP Key Utilities" card — a standalone proof generator for testing against any endpoint,
+ * separate from the wizard below it. It had no test at all: `handleCreateProof`'s body and every
+ * proof-parameter input (htm/htu/ath/nonce) were unexercised.
+ */
+describe('FapiSection — the DPoP Key Utilities card', () => {
+  it('generates a key pair and shows the public key, with the private key redacted', async () => {
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+
+    await expectReadsBack(/"kty": "EC"/, 'the generated public key');
+    expect(screen.getByText(/\*\*\*present\*\*\*/)).toBeInTheDocument();
+  });
+
+  it('reports a key-generation failure instead of leaving the button silently stuck', async () => {
+    vi.spyOn(dpopService, 'generateKeyPair').mockRejectedValueOnce(new Error('no WebCrypto'));
+    const toastError = vi.spyOn(toast, 'error');
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('no WebCrypto'));
+    expect(screen.queryByText('Public Key (JWK)')).not.toBeInTheDocument();
+  });
+
+  it('reports a proof-creation failure instead of leaving the button silently stuck', async () => {
+    vi.spyOn(dpopService, 'createProof').mockRejectedValueOnce(new Error('signing failed'));
+    const toastError = vi.spyOn(toast, 'error');
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+    await screen.findByText('Public Key (JWK)');
+
+    press(/Create DPoP Proof JWT/i);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('signing failed'));
+  });
+
+  it('computes ath from the token held in the vault', async () => {
+    seedTokens({ access_token: 'utility-card-token' });
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+    await screen.findByText('Public Key (JWK)');
+
+    press(/Compute ath from Token/i);
+
+    const expected = new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode('utility-card-token')),
+    );
+    let binary = '';
+    for (const byte of expected) binary += String.fromCharCode(byte);
+    const b64url = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+
+    await waitFor(() =>
+      expect((screen.getByLabelText(/ath \(optional\)/i) as HTMLInputElement).value).toBe(b64url),
+    );
+  });
+
+  it('does not crash and leaves ath empty when no token is stored', async () => {
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+    await screen.findByText('Public Key (JWK)');
+
+    press(/Compute ath from Token/i);
+
+    expect((screen.getByLabelText(/ath \(optional\)/i) as HTMLInputElement).value).toBe('');
+  });
+
+  it('creates a DPoP proof JWT carrying the entered htm/htu/ath/nonce, and it verifies', async () => {
+    mountSection(<FapiSection />);
+    press(/Generate DPoP Key Pair \(ES256\)/i);
+    await screen.findByText('Public Key (JWK)');
+
+    fill(/HTTP Method \(htm\)/i, 'GET');
+    fill(/HTTP URI \(htu\)/i, 'https://rs.example/userinfo');
+    fill(/ath \(optional\)/i, 'manual-ath-value');
+    fill(/Nonce \(optional\)/i, 'manual-nonce-value');
+    press(/Create DPoP Proof JWT/i);
+
+    const jwt = await waitFor(() => {
+      const el = screen.getByLabelText(/DPoP Proof JWT/i) as HTMLTextAreaElement;
+      expect(el.value).toContain('.');
+      return el.value;
+    });
+
+    const [rawHeader, rawPayload] = jwt.split('.');
+    const decode = (segment: string) => {
+      const padded = segment.replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(padded + '='.repeat((4 - (padded.length % 4)) % 4))) as Record<
+        string,
+        unknown
+      >;
+    };
+    const header = decode(rawHeader);
+    const payload = decode(rawPayload);
+
+    expect(header.typ).toBe('dpop+jwt');
+    expect(payload.htm).toBe('GET');
+    expect(payload.htu).toBe('https://rs.example/userinfo');
+    expect(payload.ath).toBe('manual-ath-value');
+    expect(payload.nonce).toBe('manual-nonce-value');
+
+    const publicKeyPre = screen.getByText('Public Key (JWK)').closest('div')
+      ?.nextElementSibling as HTMLPreElement;
+    const publicJwk = JSON.parse(publicKeyPre.textContent ?? '{}') as JsonWebKey;
+    const key = await crypto.subtle.importKey(
+      'jwk',
+      publicJwk,
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify'],
+    );
+    const segmentBytes = (segment: string) => {
+      const padded = segment.replace(/-/g, '+').replace(/_/g, '/');
+      const binary = atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
+      const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    };
+    const ok = await crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      key,
+      segmentBytes(jwt.split('.')[2]),
+      new TextEncoder().encode(`${rawHeader}.${rawPayload}`),
+    );
+    expect(ok).toBe(true);
+  });
+});
+
 describe('FapiSection — the test flow wizard', () => {
   it('holds step 1 closed until both keys exist, because a FAPI 2.0 PAR needs both', async () => {
     mountSection(<FapiSection />);
@@ -132,6 +273,36 @@ describe('FapiSection — the test flow wizard', () => {
 
     await generateBothKeys();
     expect(screen.getByRole('button', { name: /Push PAR/i })).toBeEnabled();
+  });
+
+  /**
+   * The three setup fields (Client ID, Redirect URI, Scopes) are pre-filled from env defaults but are
+   * real, editable inputs — every other case in this file leaves them at their default, which is why
+   * `flow.setClientId`/`setRedirectUri`/`setScopes` had no test invoking them at all. This edits all
+   * three and confirms the edited values are what actually gets signed into the request object, not
+   * just what the field displays.
+   */
+  it('signs the edited Client ID, Redirect URI and Scopes into the request object', async () => {
+    const spy = vi
+      .spyOn(parService, 'pushedAuthorizationWithDpop')
+      .mockResolvedValue({ data: PAR_201 });
+    mountSection(<FapiSection />);
+
+    fill(/^Client ID$/i, 'edited-client-id');
+    fill(/^Redirect URI$/i, 'https://edited.example/callback');
+    fill(/Scopes \(incl\. fapi2=sp scope\)/i, 'openid edited_scope');
+    await generateBothKeys();
+    press(/Push PAR/i);
+
+    const args = await expectCall(spy, 'the Push PAR button');
+    const [body] = args as [{ parameters: string }];
+    const requestObject = new URLSearchParams(body.parameters).get('request');
+    const [, rawPayload] = requestObject!.split('.');
+    const claims = JSON.parse(decodeB64Url(rawPayload)) as Record<string, unknown>;
+
+    expect(claims.client_id).toBe('edited-client-id');
+    expect(claims.redirect_uri).toBe('https://edited.example/callback');
+    expect(claims.scope).toBe('openid edited_scope');
   });
 
   it('pushes a SIGNED REQUEST OBJECT carrying private_key_jwt, PKCE S256 and a state', async () => {
