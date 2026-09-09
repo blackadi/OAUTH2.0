@@ -444,6 +444,73 @@ describe('McpSection — the authorization survives the redirect', () => {
   });
 });
 
+describe('McpSection — the wizard remembers what it did before the redirect', () => {
+  /**
+   * Steps 2 and 3 gate on the discovery document and step 4 on the built URL, and both lived only in
+   * `useState` — which the navigation to the authorization endpoint discards. Measured on return from
+   * a *successful* callback, before this: steps 2, 3 and 4 announcing `aria-disabled` and telling the
+   * reader to "Run Step 1 first", while steps 5 and 6 were live off the token that had survived in
+   * `TokenContext`. A section that has forgotten it discovered the authorization server while still
+   * holding the token it obtained from it.
+   *
+   * It only became reachable when step 3 started leaving through `navigateTo`; the previous
+   * `target="_blank"` never unmounted the hook.
+   */
+  const PROGRESS = {
+    issuer: 'http://localhost:3000',
+    asData: AS_METADATA,
+    authUrl: 'http://localhost:3000/api/authorization?response_type=code&client_id=x',
+  };
+
+  it('restores the discovery document and the built URL on mount', () => {
+    sessionStorage.setItem('mcp_wizard_progress', JSON.stringify(PROGRESS));
+    mountSection(<McpSection />);
+
+    // The two gates that had been lost.
+    expect(document.getElementById('mcp-step-2')).not.toHaveAttribute('aria-disabled');
+    expect(document.getElementById('mcp-step-3')).not.toHaveAttribute('aria-disabled');
+    expect(document.getElementById('mcp-step-4')).not.toHaveAttribute('aria-disabled');
+    // And what the reader can see of it, so a restored gate cannot be an empty card.
+    expect(
+      within(document.getElementById('mcp-step-1')!).getByText(/DCR Supported/i),
+    ).toBeInTheDocument();
+    expect(
+      within(document.getElementById('mcp-step-3')!).getByText(/\/api\/authorization\?/),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the steps gated when there is no snapshot to restore', () => {
+    mountSection(<McpSection />);
+    expect(document.getElementById('mcp-step-2')).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById('mcp-step-4')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  /** The snapshot's shape, so reading it back is checked rather than `any`. */
+  type Snapshot = { issuer?: string; asData?: { issuer?: string } | null; authUrl?: string };
+  const readSnapshot = (): Snapshot =>
+    JSON.parse(sessionStorage.getItem('mcp_wizard_progress')!) as Snapshot;
+
+  it('writes the snapshot when a step changes what the later ones gate on', async () => {
+    vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
+    mountSection(<McpSection />);
+    expect(sessionStorage.getItem('mcp_wizard_progress')).toBeNull();
+
+    press(/Fetch Metadata/i);
+    await screen.findByText(/DCR Supported/i);
+    const afterDiscovery = readSnapshot();
+    // Read from the response, not from the closure's stale copy of state.
+    expect(afterDiscovery.asData?.issuer).toBe(AS_METADATA.issuer);
+    expect(afterDiscovery.authUrl).toBe('');
+
+    press(/Build Authorization URL/i);
+    await screen.findByText(/\/api\/authorization\?/);
+    const afterBuild = readSnapshot();
+    expect(afterBuild.authUrl).toContain('/api/authorization?');
+    // The earlier half must survive the second write.
+    expect(afterBuild.asData?.issuer).toBe(AS_METADATA.issuer);
+  });
+});
+
 describe('McpSection — rebuilding the authorization asks first', () => {
   /**
    * A fresh verifier per authorization request is correct (RFC 7636 §7.1), so the code that belonged
@@ -557,14 +624,23 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     expect(gated!.className).not.toMatch(/\bshadow-card\b/);
   });
 
-  it('leaves a reachable step on the shadow variant with no dashed edge', () => {
+  /**
+   * Ready and gated now differ by border *style*, not by border-versus-shadow.
+   *
+   * Every step is bordered since the `nested-cards` finding: `SectionPanel` and each `Card` painted
+   * the same `bg-card` ground at the same radius, so the shadow meant to separate them was — by
+   * DESIGN.md's own measurement — near-black on a near-black ground. A hairline separates them; the
+   * style says whether the step can be attempted.
+   */
+  it('leaves a reachable step solid-bordered with no dashed edge and no shadow', () => {
     mountSection(<McpSection />);
     const ready = document.getElementById('mcp-step-1');
     expect(ready).not.toBeNull();
 
     expect(ready).not.toHaveAttribute('aria-disabled');
-    expect(ready!.className).toMatch(/\bshadow-card\b/);
+    expect(ready!.className).toMatch(/\bborder\b(?!-)/);
     expect(ready!.className).not.toMatch(/\bborder-dashed\b/);
+    expect(ready!.className).not.toMatch(/\bshadow-card\b/);
   });
 
   /**
@@ -707,7 +783,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     const step2 = document.getElementById('mcp-step-2');
     expect(step2).not.toHaveAttribute('aria-disabled');
     expect(step2!.className).not.toMatch(/\bborder-dashed\b/);
-    expect(step2!.className).toMatch(/\bshadow-card\b/);
+    expect(step2!.className).toMatch(/\bborder\b(?!-)/);
     // And the controls come back with it — the fieldset has to release them, not just the styling.
     expect(within(step2!).getByLabelText(/CIMD URL \(for CIMD flow\)/i)).not.toBeDisabled();
   });

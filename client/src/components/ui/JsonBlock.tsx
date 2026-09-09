@@ -64,7 +64,20 @@ function JsonBlock({ data, className, label }: JsonBlockProps) {
       */}
       <pre
         key={formatted}
-        className="animate-reveal bg-code p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap break-all border border-border"
+        /**
+         * `max-h-96` and a vertical scroll, not just `overflow-x-auto`.
+         *
+         * The well grew to whatever the server sent. This deployment's discovery document has 67
+         * members and rendered at roughly 1,600px, so on the MCP section a successful lookup pushed
+         * the entire six-step wizard below it — running a lookup appeared to move the flow somewhere
+         * else. Capping the well keeps the response where the reader left it, and every other JSON
+         * surface in the app inherits the same bound.
+         *
+         * A scroll rather than a collapse: this is the payload the section exists to show, so it must
+         * stay readable in place. `24rem` is deep enough for a normal token or introspection response
+         * to need no scrolling at all.
+         */
+        className="animate-reveal bg-code p-4 rounded-lg max-h-96 overflow-auto text-sm font-mono whitespace-pre-wrap break-all border border-border"
       >
         {formatted}
       </pre>

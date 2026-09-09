@@ -5,6 +5,7 @@ import { JsonBlock } from '@/components/ui/JsonBlock';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { FlowDiagram, type FlowStep } from '@/components/ui/FlowDiagram';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { getDoc } from '@/data/operationDocs';
@@ -40,6 +41,62 @@ function StepError({ flow, steps }: { flow: McpFlow; steps: McpStep[] }) {
 }
 
 /**
+ * The six steps as a map, above the six cards.
+ *
+ * MCP is the longest sequence in this application and was the only multi-step section with no
+ * diagram — six cards spanning some 2,000px with nothing saying where in the protocol the reader
+ * is, in a product that had already built the component and shipped it to five shorter flows.
+ */
+const MCP_STEPS: FlowStep[] = [
+  { id: 'discover', label: 'Discover AS', description: 'Read the metadata and its capabilities.' },
+  {
+    id: 'register',
+    label: 'Register',
+    description: 'Optional — CIMD URL, or DCR with admin credentials.',
+  },
+  {
+    id: 'authorize',
+    label: 'Authorize',
+    description: 'An S256 challenge plus the RFC 8707 resource.',
+  },
+  { id: 'token', label: 'Token', description: 'Exchange the code, repeating the resource.' },
+  { id: 'userinfo', label: 'UserInfo', description: 'Who approved the access.' },
+  {
+    id: 'introspect',
+    label: 'Introspect',
+    description: 'RFC 7662 — what the token actually carries.',
+  },
+];
+
+/**
+ * Progress read from the wizard's own state, not from the request trace.
+ *
+ * A deliberate departure from `sequenceProgress`, which every other diagram in the app uses. That
+ * helper matches a step to the endpoint whose successful call completes it, against the *global*
+ * trace — and MCP's last three steps call `/api/token`, `/api/userinfo` and `/api/introspection`,
+ * the same generic endpoints every other section calls. A reader who obtained a token in Grant
+ * Flows would arrive here to find steps 4 to 6 already ticked. `DeviceSection` and the rest do not
+ * have this problem because their endpoints are theirs alone.
+ *
+ * Reading the same values the cards gate on also means the diagram and the per-card "Done" badges
+ * cannot disagree, which two sources of truth eventually would.
+ */
+function wizardProgress(flow: McpFlow): { completedSteps: string[]; currentStep?: string } {
+  const done: Array<[string, boolean]> = [
+    ['discover', Boolean(flow.asData)],
+    ['register', flow.clientId !== CLIENT_ID],
+    ['authorize', Boolean(flow.authUrl)],
+    ['token', Boolean(flow.tokenResult)],
+    ['userinfo', Boolean(flow.userinfoResult)],
+    ['introspect', Boolean(flow.introspectResult)],
+  ];
+  return {
+    completedSteps: done.filter(([, ok]) => ok).map(([id]) => id),
+    currentStep: done.find(([, ok]) => !ok)?.[0],
+  };
+}
+
+/**
  * One step of the wizard, gated or not.
  *
  * **Why the variant moves with the state.** `stepState` sets `border-dashed` — a border *style* — and
@@ -55,6 +112,15 @@ function StepError({ flow, steps }: { flow: McpFlow; steps: McpStep[] }) {
  * inside `stepState` is deliberate — that helper is also spread onto plain `<div>`s in
  * `FapiTestFlow`, which carry their own `border-t` and would take a `variant` prop React would then
  * warn about on a DOM element.
+ *
+ * **Every step is bordered, ready or not**, which is the second half of the same finding. The
+ * detector reported seven `nested-cards`: `SectionPanel` paints `rounded-xl border bg-card` and each
+ * step painted `rounded-xl bg-card` inside it — the same ground and the same radius at two levels, so
+ * six steps read as one undifferentiated wall and the shadow that was meant to separate them is, by
+ * DESIGN.md's own measurement, "near-black against a near-black ground and almost invisible". A
+ * hairline is what actually separates them, and it is the system's north star anyway: a ruled
+ * rectangle. Ready and gated then differ by border *style* — solid against dashed — plus the recessed
+ * fill and the disabled controls.
  *
  * **The `fieldset` closes the other half of "not yet".** `pointer-events-none` stops a mouse and
  * nothing else, so a gated step's controls stayed in the tab order and stayed typeable: measured on
@@ -91,12 +157,7 @@ interface StepCardProps {
 
 function StepCard({ id, ready, title, status, blockedBy, children }: StepCardProps) {
   return (
-    <Card
-      id={id}
-      tabIndex={-1}
-      variant={ready ? 'default' : 'bordered'}
-      {...stepState(ready, 'mb-3')}
-    >
+    <Card id={id} tabIndex={-1} variant="bordered" {...stepState(ready, 'mb-3')}>
       {/* The title is set here rather than at six call sites, which is how step 6 came to render at
           18px against its siblings' 14px: one `text-sm` was missing and nothing could see it. */}
       <CardHeader>
@@ -155,10 +216,14 @@ function McpWizard({ flow }: { flow: McpFlow }) {
       {/* `font-semibold`, matching the steps: at `font-medium` the container rendered lighter than
           the six headings inside it, which is a rank inversion rather than a rank. */}
       <h2 className="text-sm font-semibold text-foreground mb-3">Full MCP Flow Wizard</h2>
-      <p className="text-xs text-muted-foreground mb-4">
+      {/* `max-w-prose`: this ran to ~153 characters a line, the one line-length finding the detector
+          attributed to this file while every sibling caption already carried the measure. */}
+      <p className="text-xs text-muted-foreground mb-4 max-w-prose">
         Walk through the complete MCP OAuth 2.1 flow step by step: discover the AS, register a
         client, authorize, exchange tokens, and fetch user info.
       </p>
+
+      <FlowDiagram {...wizardProgress(flow)} steps={MCP_STEPS} className="mb-4" />
 
       {/* ── Step 1: Discovery ─────────────────────────── */}
       <StepCard

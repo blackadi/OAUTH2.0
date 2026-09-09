@@ -7,7 +7,14 @@ import { API_BASE_URL, CLIENT_ID, REDIRECT_URI, DEFAULT_SCOPES } from '@/config'
 import { createPkcePair } from '@/pkce';
 import { useCredentials } from '@/context/CredentialContext';
 import { useToken } from '@/context/TokenContext';
-import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
+import {
+  SESSION_KEYS,
+  readKey,
+  readJsonKey,
+  writeKey,
+  removeKey,
+  clearDpopKeys,
+} from '@/services/session-keys';
 import { navigateTo } from '@/services/trace-store';
 
 /**
@@ -63,7 +70,33 @@ export interface CimdMetadata {
   [key: string]: unknown;
 }
 
+/**
+ * What has to outlive the redirect for the wizard to still make sense on the way back.
+ *
+ * Steps 2 and 3 gate on `asData` and step 4 on `authUrl`, and both were plain `useState` — so a
+ * reader returning from a *successful* authorization was told to "Run Step 1 first" by three cards
+ * while steps 5 and 6 ran off the token that had survived in `TokenContext`. Measured on return:
+ * steps 2, 3 and 4 announcing `aria-disabled`, 5 and 6 live. A section that has forgotten it
+ * discovered the authorization server while still holding the token it got from it is the defect
+ * `use-fapi-flow.ts` records for its own key pairs.
+ *
+ * This could not happen before the wizard left through `navigateTo`: step 3 opened the URL in a new
+ * tab, so this hook was never unmounted. Making the same-tab redirect the primary path is what made
+ * the gap reachable, which is why the two changes belong together.
+ *
+ * `issuer` travels with them because steps 5 and 6 fall back to it when the metadata names no
+ * endpoint.
+ */
+interface WizardProgress {
+  issuer: string;
+  asData: AsMetadata | null;
+  authUrl: string;
+}
+
 export function useMcpFlow() {
+  /** Read once, at mount, so the three lazy initialisers below cannot disagree with each other. */
+  const [restored] = useState(() => readJsonKey<WizardProgress>(SESSION_KEYS.mcpWizard));
+
   const {
     loading,
     error,
@@ -83,8 +116,8 @@ export function useMcpFlow() {
    */
   const { tokenSet } = useToken();
 
-  const [wizIssuer, setWizIssuer] = useState(API_BASE_URL);
-  const [wizAsData, setWizAsData] = useState<AsMetadata | null>(null);
+  const [wizIssuer, setWizIssuer] = useState(() => restored?.issuer ?? API_BASE_URL);
+  const [wizAsData, setWizAsData] = useState<AsMetadata | null>(() => restored?.asData ?? null);
   const [wizCimdUrl, setWizCimdUrl] = useState('');
   const [wizCimdData, setWizCimdData] = useState<CimdMetadata | null>(null);
   const [wizClientId, setWizClientId] = useState(CLIENT_ID);
@@ -114,13 +147,35 @@ export function useMcpFlow() {
   );
   // No `wizPkcePair` state: it was written on every authorize step and never read. `wizCodeVerifier` below
   // holds the only half the token exchange needs, and the challenge is consumed inline by the URL builder.
-  const [wizAuthUrl, setWizAuthUrl] = useState('');
+  const [wizAuthUrl, setWizAuthUrl] = useState(() => restored?.authUrl ?? '');
   const [wizTokenResult, setWizTokenResult] = useState<Record<string, unknown> | null>(null);
   const [wizUserinfoResult, setWizUserinfoResult] = useState<Record<string, unknown> | null>(null);
 
   const auth = authId && authSecret ? btoa(`${authId}:${authSecret}`) : '';
   const [wizIntrospectResult, setWizIntrospectResult] = useState<Record<string, unknown> | null>(
     null,
+  );
+
+  /**
+   * Write the snapshot the redirect will need.
+   *
+   * Called from the two steps that change what the later steps gate on, rather than from an effect
+   * watching the values: a `setState`-shaped effect is the cascading render
+   * `react-hooks/set-state-in-effect` exists to reject, and there are exactly two moments that matter.
+   */
+  const saveProgress = useCallback(
+    (next: Partial<WizardProgress>) => {
+      writeKey(
+        SESSION_KEYS.mcpWizard,
+        JSON.stringify({
+          issuer: wizIssuer,
+          asData: wizAsData,
+          authUrl: wizAuthUrl,
+          ...next,
+        } satisfies WizardProgress),
+      );
+    },
+    [wizIssuer, wizAsData, wizAuthUrl],
   );
 
   const wizStepDiscover = useCallback(async () => {
@@ -130,11 +185,13 @@ export function useMcpFlow() {
     if (data) {
       const asData = data as AsMetadata;
       setWizAsData(asData);
+      // `asData` explicitly rather than from state: this closure still holds the previous value.
+      saveProgress({ issuer: wizIssuer, asData });
       toast.success('AS metadata loaded');
     } else {
       toast.error(err);
     }
-  }, [wizIssuer, wizCall]);
+  }, [wizIssuer, wizCall, saveProgress]);
 
   const wizStepCimd = useCallback(async () => {
     if (!wizCimdUrl) {
@@ -282,8 +339,17 @@ export function useMcpFlow() {
       state,
     });
     setWizAuthUrl(authUrl);
+    saveProgress({ authUrl });
     toast.success('Authorization URL built — authorize, or open it yourself');
-  }, [wizIssuer, wizClientId, wizClientSecret, wizRedirectUri, wizScopes, wizResource]);
+  }, [
+    wizIssuer,
+    wizClientId,
+    wizClientSecret,
+    wizRedirectUri,
+    wizScopes,
+    wizResource,
+    saveProgress,
+  ]);
 
   /**
    * Leave for the authorization endpoint.

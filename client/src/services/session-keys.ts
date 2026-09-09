@@ -63,6 +63,22 @@ export const SESSION_KEYS = {
   fapiSigningPublicKey: 'fapi_signing_pub_jwk',
 
   /**
+   * What the MCP wizard had established before it left for the authorization server.
+   *
+   * The discovery document and the built authorization URL are what steps 2 to 4 gate on, and both
+   * lived only in `useMcpFlow`'s `useState` — which the redirect discards. Measured on return from a
+   * successful callback: steps 2, 3 and 4 announced `aria-disabled` and told the reader to "Run Step 1
+   * first" while steps 5 and 6 were live off the token that *had* survived, in `TokenContext`. A
+   * section that has forgotten it discovered the authorization server while still holding the token it
+   * obtained from it is the same defect `use-fapi-flow.ts` records for its key pairs.
+   *
+   * One key rather than one per field: this is a single snapshot of one wizard's progress, not a set of
+   * credentials with independent lifetimes, and `resetSession` sweeps it either way. Nothing here is
+   * sensitive — the discovery document is public and the authorization URL was in the address bar.
+   */
+  mcpWizard: 'mcp_wizard_progress',
+
+  /**
    * Where the browser was when it left for the authorization server, so the callback can send you back.
    *
    * Owned by `navigateTo` in `trace-store.ts`, which is already the single place the app leaves — the
