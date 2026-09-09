@@ -180,6 +180,11 @@ export const FAPI_STATUS_ENDPOINT = `${API_BASE_URL}/api/fapi/status`;
 export const NATIVE_SSO_PROCESS_ENDPOINT = `${API_BASE_URL}/api/nativesso`;
 export const NATIVE_SSO_LOGOUT_ENDPOINT = `${API_BASE_URL}/api/nativesso/logout`;
 
+export const HSK_CREATE_ENDPOINT = `${API_BASE_URL}/api/hsk/create`;
+export const HSK_LIST_ENDPOINT = `${API_BASE_URL}/api/hsk/list`;
+export const HSK_GET_ENDPOINT = `${API_BASE_URL}/api/hsk/get`;
+export const HSK_DELETE_ENDPOINT = `${API_BASE_URL}/api/hsk/delete`;
+
 /**
  * `MCP_AS_METADATA_ENDPOINT` is gone: it had **zero** consumers anywhere in `src/`.
  *

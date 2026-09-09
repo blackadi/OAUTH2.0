@@ -149,6 +149,54 @@ const docs: Record<string, Record<string, OpDoc>> = {
       tips: 'This is a broader action than revoking one token (`POST /api/revocation`): it ends the whole shared session, for every app that joined it via Native SSO.',
     },
   },
+  hsk: {
+    create: {
+      title: 'HSK — Create',
+      description:
+        'Registers a key handle for a key that already exists on a Hardware Security Module. Authlete never receives or sees the private key material — it holds only the handle, the public half, and enough metadata to use the key on your behalf.',
+      params: [
+        { name: 'kty', desc: 'The key type — EC or RSA. Required.' },
+        {
+          name: 'hsmName',
+          desc: 'The identifier for the HSM behind the Authlete server (e.g. "google"). Required.',
+        },
+        {
+          name: 'use',
+          desc: 'sig for signing/verification, enc for encryption/decryption. Optional — omit to leave it unset.',
+        },
+        { name: 'kid', desc: 'Key ID for the key on the HSM. Optional.' },
+        {
+          name: 'alg',
+          desc: 'The algorithm the HSM uses this key with (e.g. ES256 for signing, RSA-OAEP-256 for encryption). Optional, but the request fails if the HSM does not actually support it.',
+        },
+      ],
+      returns:
+        'The vendor envelope with a handle — a base64url-encoded 256-bit value Authlete assigns — plus the public key and the fields you sent.',
+      tips: "This is a vendor feature, not a specification: no OAuth or OIDC document defines an HSK API. This deployment has no real HSM configured, so expect this to fail — what it fails with (Authlete's own kty/use/alg validation) is the useful part.",
+    },
+    list: {
+      title: 'HSK — List',
+      description: 'Lists every key handle registered on this service.',
+      params: [],
+      returns: 'The vendor envelope with an array of key handles.',
+      tips: 'Run Create first to have something to list — an empty array here just means none are registered yet.',
+    },
+    get: {
+      title: 'HSK — Get',
+      description: 'Reads one key handle by its identifier.',
+      params: [{ name: 'handle', desc: 'From a Create or List response. Required.' }],
+      returns:
+        'The vendor envelope with that one key handle, or a 404 action if it does not exist.',
+    },
+    delete: {
+      title: 'HSK — Delete',
+      description:
+        'Removes a key handle from the Authlete service permanently. This is destructive in a stronger sense than most confirmed actions here: it reaches the vendor service, not just this server, and there is no undo from this app.',
+      params: [{ name: 'handle', desc: 'From a Create or List response. Required.' }],
+      returns: 'The vendor envelope. A successful delete is 204 No Content.',
+      tips: 'If anything was configured to sign or decrypt with this handle, it stops being able to the moment this succeeds.',
+    },
+  },
   'grant-mgmt': {
     query: {
       title: 'Query a Grant',

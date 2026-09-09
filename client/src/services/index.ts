@@ -17,3 +17,5 @@ export { mcpService } from './mcp.service';
 export { tokenExchangeService } from './token-exchange.service';
 export { nativeSsoService } from './native-sso.service';
 export type { NativeSsoProcessBody } from './native-sso.service';
+export { hskService } from './hsk.service';
+export type { HskCreateBody } from './hsk.service';

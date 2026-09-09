@@ -82,6 +82,7 @@ export const SURFACES: Surface[] = [
   { path: '/client-mgmt', name: 'client-mgmt', cls: 'doing', ready: H1 },
   { path: '/grant-mgmt', name: 'grant-mgmt', cls: 'doing', ready: H1 },
   { path: '/health', name: 'health', cls: 'doing', ready: H1 },
+  { path: '/hsk', name: 'hsk', cls: 'doing', ready: H1 },
 ];
 
 export const READING = SURFACES.filter((s) => s.cls === 'reading');

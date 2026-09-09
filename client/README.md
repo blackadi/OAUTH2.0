@@ -33,6 +33,7 @@ A comprehensive interactive debugging dashboard for learning, testing, and debug
   - [22. Token Exchange (RFC 8693)](#22-token-exchange-rfc-8693)
   - [23. Reference — the reading surface](#23-reference--the-reading-surface)
   - [24. Native SSO (OpenID Native SSO 1.0)](#24-native-sso-openid-native-sso-10)
+  - [25. Hardware Security Keys (HSK)](#25-hardware-security-keys-hsk)
 - [Server Status Indicator](#server-status-indicator)
 - [Key Distinctions](#key-distinctions)
 - [Troubleshooting](#troubleshooting)
@@ -479,6 +480,29 @@ not by the client's own secret.
 flatten Authlete's response into the spec-shaped body: it sends the whole
 `{resultCode, resultMessage, action, responseContent, idToken}` envelope, with `responseContent` as a
 JSON string. The panel shows the envelope as it arrives and decodes `responseContent` alongside it.
+
+### 25. Hardware Security Keys (HSK)
+
+A vendor feature, not a specification — no OAuth or OIDC document defines an HSK API. These four
+endpoints wrap `authleteApi.hardwareSecurityKeys.*`: a key already provisioned on a Hardware Security
+Module is registered by an opaque `handle` rather than exported, so Authlete can sign or decrypt with it
+without the private key material ever leaving the module. This section previously had no client caller
+at all — the routes existed, tested, admin-gated, and unreachable from the debugger.
+
+Four operations, all gated by the same `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` credential DCR, Federation
+registration and Native SSO use:
+
+- **Create** — `kty` and `hsmName` are required; `use`, `kid` and `alg` are optional. This deployment has
+  no real HSM behind it, so a genuine call is expected to fail — what it fails *with* (Authlete's own
+  `kty`/`use`/`alg` compatibility check) is the useful part, and it runs before anything reaches a module
+  that isn't there.
+- **List** — every key handle registered on the service.
+- **Get** — one handle by identifier.
+- **Delete** — the one operation here with no undo at all, in a stronger sense than the app's other
+  confirmed deletes: it removes the handle **at the Authlete service**, not merely local state, so
+  anything configured to sign or decrypt with it stops working immediately. It goes through the same
+  typed-confirmation dialog (`useConfirmedAction`) `ClientManagementSection` and `DcrSection` use for
+  their own irreversible actions.
 
 ---
 

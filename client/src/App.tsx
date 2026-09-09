@@ -28,6 +28,7 @@ import {
   BookOpen,
   ArrowRightLeft,
   Link2,
+  KeySquare,
 } from 'lucide-react';
 
 const AuthFlowsSection = lazy(() => import('@/components/auth/AuthFlowsSection'));
@@ -108,6 +109,9 @@ const StepUpSection = lazy(() =>
 const NativeSsoSection = lazy(() =>
   import('@/components/oidc/NativeSsoSection').then((m) => ({ default: m.NativeSsoSection })),
 );
+const HskSection = lazy(() =>
+  import('@/components/admin/HskSection').then((m) => ({ default: m.HskSection })),
+);
 
 export type SectionId =
   | 'auth-flows'
@@ -128,6 +132,7 @@ export type SectionId =
   | 'vci'
   | 'native-sso'
   | 'admin'
+  | 'hsk'
   | 'client-mgmt'
   | 'grant-mgmt'
   | 'health'
@@ -275,6 +280,12 @@ const SECTIONS: SectionGroup[] = [
         path: '/health',
         icon: <HeartPulse className="h-4 w-4" />,
       },
+      {
+        id: 'hsk',
+        label: 'Hardware Security Keys',
+        path: '/hsk',
+        icon: <KeySquare className="h-4 w-4" />,
+      },
     ],
   },
 ];
@@ -300,6 +311,7 @@ const sectionComponents: Record<SectionId, React.FC> = {
   vci: VciSection,
   'native-sso': NativeSsoSection,
   admin: AdminSection,
+  hsk: HskSection,
   'client-mgmt': ClientManagementSection,
   'grant-mgmt': GrantManagementSection,
   health: HealthSection,
