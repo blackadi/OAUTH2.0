@@ -1,13 +1,10 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useUrlState } from '@/hooks/useUrlState';
 import { toast } from 'sonner';
 import { mcpService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
-import { SectionPanel } from '@/components/layout/SectionPanel';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { AdminAuth } from '@/components/layout/AdminAuth';
@@ -15,6 +12,7 @@ import { getDoc } from '@/data/operationDocs';
 import { API_BASE_URL } from '@/config';
 import { useMcpFlow } from './use-mcp-flow';
 import { McpWizard } from './McpWizard';
+import '@/styles/transcript.css';
 
 /**
  * MCP — three discovery lookups, then the full flow.
@@ -40,12 +38,21 @@ interface Lookup {
   buttonLabel: string;
   /** What succeeded, for the toast. */
   success: string;
+  /**
+   * The path this lookup actually fetches, for the turn's note.
+   *
+   * A transcript turn names the exchange it performs — that is the information a card never carried.
+   * Discovery has two: `fetchAsMetadata` tries RFC 8414's path and falls back to OIDC Discovery's, so
+   * the note says the one it asks for first.
+   */
+  wellKnown: string;
   run: (url: string) => Promise<unknown>;
 }
 
 const LOOKUPS: Lookup[] = [
   {
     value: 'discovery',
+    wellKnown: '/.well-known/oauth-authorization-server',
     label: 'AS Metadata',
     inputLabel: 'Issuer URL',
     placeholder: 'http://localhost:3000',
@@ -57,6 +64,7 @@ const LOOKUPS: Lookup[] = [
   },
   {
     value: 'resource-metadata',
+    wellKnown: '/.well-known/oauth-protected-resource',
     label: 'Protected Resource',
     inputLabel: 'Resource URL',
     placeholder: 'http://localhost:3000',
@@ -67,6 +75,7 @@ const LOOKUPS: Lookup[] = [
   },
   {
     value: 'cimd',
+    wellKnown: 'the CIMD URL itself — the document is the client_id',
     label: 'CIMD Metadata',
     inputLabel: 'CIMD URL',
     placeholder: 'https://myapp.com/.well-known/oauth-client',
@@ -95,6 +104,7 @@ function McpSection() {
    * three collapsed. `useUrlState` validates the incoming value, so `?op=nonsense` selects nothing rather
    * than asking `getDoc('mcp', …)` for an entry that does not exist.
    */
+  const uid = useId();
   const [activeOp, setActiveOp] = useUrlState<McpOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
   /** One URL per lookup, keyed by operation — they are different addresses, so they are not shared. */
@@ -114,51 +124,99 @@ function McpSection() {
   };
 
   return (
-    <SectionPanel
-      title="MCP (Model Context Protocol) OAuth 2.1"
-      description="Test MCP authorization flows — discovery, CIMD registration, and full PKCE + resource indicator flow"
-    >
+    <section className="tx">
+      {/* `h1`, for the same reason `SectionPanel` used one: this is the title of the page a route
+          renders. `SectionPanel` is gone rather than wrapped — `.tx` declares its own palette and
+          chrome, and `ParSection` establishes that the two do not nest. */}
+      <header className="tx-masthead">
+        <h1 className="tx-title">MCP (Model Context Protocol) OAuth 2.1</h1>
+        <span className="tx-ref">MCP Authorization · OAuth 2.1 · RFC 8707</span>
+      </header>
+
+      <p className="tx-standfirst">
+        Three metadata lookups, then the authorization flow end to end — discovery, CIMD or DCR
+        registration, PKCE with a resource indicator, and the token it produces.
+      </p>
+
       <AdminAuth label="Admin (for DCR)" />
 
-      {/* The three lookups below share one result pane, so they share one explainer, and it belongs
+      <div className="tx-body">
+        {/* The three lookups below share one result pane, so they share one explainer, and it belongs
           here — above the tab bar that owns all three. The wizard's failures used to render here too,
           for want of a way to name the step that produced them; they now render inside that step. See
           `StepError` in `McpWizard.tsx` for what the old placement measured. */}
-      {error && <ErrorExplainer error={error} className="mb-3" />}
+        {error && <ErrorExplainer error={error} className="mb-3" />}
 
-      <TabBar
-        options={LOOKUPS.map(({ value, label }) => ({ value, label }))}
-        value={activeOp}
-        onChange={setActiveOp}
-        panelId={LOOKUP_PANEL_ID}
-      />
+        <TabBar
+          options={LOOKUPS.map(({ value, label }) => ({ value, label }))}
+          value={activeOp}
+          onChange={setActiveOp}
+          panelId={LOOKUP_PANEL_ID}
+        />
 
-      {/* One region for all three lookups, because all three share one result pane — and rendered
+        {/* One region for all three lookups, because all three share one result pane — and rendered
           unconditionally, so the `aria-controls` on every tab resolves even with nothing selected.
           Before this the tabs announced as tabs and the content they revealed was related to them by
           nothing a screen reader could hear: the page held zero `role="tabpanel"` elements. */}
-      <div {...tabPanelProps(LOOKUP_PANEL_ID, activeOp)}>
-        {activeOp && doc && <OperationDescription doc={doc} />}
-
-        {lookup && (
-          <div className="space-y-3">
-            <Input
-              label={lookup.inputLabel}
-              value={urls[lookup.value] ?? ''}
-              onChange={(e) => setUrls((prev) => ({ ...prev, [lookup.value]: e.target.value }))}
-              placeholder={lookup.placeholder}
-            />
-            <Button onClick={() => void runLookup(lookup)} loading={loading}>
-              {lookup.buttonLabel}
-            </Button>
+        <div
+          className="tx-turn"
+          data-dir={result ? 'in' : 'out'}
+          data-state={activeOp ? undefined : 'pending'}
+          {...tabPanelProps(LOOKUP_PANEL_ID, activeOp)}
+        >
+          <span className="tx-marker" aria-hidden="true" />
+          <div className="tx-turn-head">
+            <span className="tx-turn-label">Metadata · Client → Server</span>
+            {lookup && <span className="tx-turn-note">GET {lookup.wellKnown}</span>}
           </div>
-        )}
 
-        {result ? <JsonBlock data={result} label="Response" /> : null}
+          {activeOp && doc && (
+            <OperationDescription
+              doc={doc}
+              className="tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0"
+            />
+          )}
+
+          {lookup ? (
+            <>
+              <label className="tx-field" htmlFor={`${uid}-url`}>
+                <span className="tx-label">{lookup.inputLabel}</span>
+                <input
+                  id={`${uid}-url`}
+                  className="tx-input"
+                  value={urls[lookup.value] ?? ''}
+                  onChange={(e) => setUrls((prev) => ({ ...prev, [lookup.value]: e.target.value }))}
+                  placeholder={lookup.placeholder}
+                />
+              </label>
+              <div className="tx-actions">
+                <button
+                  type="button"
+                  className="tx-btn tx-btn-primary"
+                  onClick={() => void runLookup(lookup)}
+                  disabled={loading}
+                >
+                  {loading && <span className="tx-spin" aria-hidden="true" />}
+                  {lookup.buttonLabel}
+                </button>
+              </div>
+            </>
+          ) : (
+            /* The empty state the critique measured: three inert chips over 35px of nothing, saying
+             neither what these are nor what to do. DESIGN.md: an empty state says what to do next. */
+            <div className="tx-waiting">
+              Pick a document above. Each is fetched from a well-known path and rendered as it
+              arrived — the authorization server&apos;s metadata, an MCP server&apos;s
+              protected-resource metadata, or a client&apos;s own CIMD document.
+            </div>
+          )}
+
+          {result ? <JsonBlock data={result} label="Response" /> : null}
+        </div>
+
+        <McpWizard flow={flow} />
       </div>
-
-      <McpWizard flow={flow} />
-    </SectionPanel>
+    </section>
   );
 }
 
