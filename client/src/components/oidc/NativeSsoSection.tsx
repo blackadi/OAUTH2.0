@@ -7,7 +7,7 @@ import { useCredentials } from '@/context/CredentialContext';
 import { nativeSsoService, type NativeSsoProcessBody } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
@@ -68,6 +68,9 @@ function decodedResponseContent(result: unknown): unknown {
   }
 }
 
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const NATIVE_SSO_PANEL_ID = 'native-sso-panel';
+
 function NativeSsoSection() {
   const { tokenSet } = useToken();
   const { basicAuth: auth, isComplete } = useCredentials();
@@ -120,9 +123,9 @@ function NativeSsoSection() {
         bound to the shared authentication session rather than to either app's tokens.
       </p>
 
-      <TabBar options={OPS} value={activeOp} onChange={setActiveOp} />
+      <TabBar options={OPS} value={activeOp} onChange={setActiveOp} panelId={NATIVE_SSO_PANEL_ID} />
 
-      <div className="tx-body">
+      <div className="tx-body" {...tabPanelProps(NATIVE_SSO_PANEL_ID, activeOp)}>
         {error && <ErrorExplainer error={error} className="mb-3" />}
         {activeOp && doc && (
           <OperationDescription

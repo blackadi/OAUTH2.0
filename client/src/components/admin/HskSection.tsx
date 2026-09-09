@@ -11,7 +11,7 @@ import { hskService, type HskCreateBody } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { useConfirmedAction } from '@/hooks/useConfirmedAction';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { AdminAuth } from '@/components/layout/AdminAuth';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -58,6 +58,9 @@ const OP_METHOD: Record<HskOp, string> = {
   delete: 'DELETE',
 };
 
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const HSK_PANEL_ID = 'hsk-panel';
+
 function HskSection() {
   const { basicAuth: auth, isComplete } = useCredentials();
   const [activeOp, setActiveOp] = useUrlState<HskOp>('op', ALL_OPS);
@@ -103,9 +106,9 @@ function HskSection() {
         behalf, and the private key material never leaves the module.
       </p>
 
-      <TabBar options={OPS} value={activeOp} onChange={setActiveOp} />
+      <TabBar options={OPS} value={activeOp} onChange={setActiveOp} panelId={HSK_PANEL_ID} />
 
-      <div className="tx-body">
+      <div className="tx-body" {...tabPanelProps(HSK_PANEL_ID, activeOp)}>
         {error && <ErrorExplainer error={error} className="mb-3" />}
         {activeOp && doc && (
           <OperationDescription

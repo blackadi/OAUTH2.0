@@ -130,6 +130,54 @@ describe('every section mounts and offers a control', () => {
 
 // ── regression locks ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The tabs/panel wiring, swept across every section rather than asserted twenty times.
+ *
+ * `TabBar` had `role="tab"` and `aria-selected` but no `aria-controls`, and the application rendered
+ * **zero** `role="tabpanel"` elements — so a screen reader announced "tab, selected", the content
+ * changed, and nothing said the two events were related. `tabPanelProps` wires both halves, and the
+ * failure mode of wiring them by hand is a reference that points at nothing: an `aria-controls` or
+ * `aria-labelledby` naming an id that is not in the document reads identically to a correct one in
+ * the source and is invisible to typecheck, lint and every other gate here.
+ *
+ * Living in the smoke file is deliberate: it renders all twenty sections already, so one test covers
+ * every current tab list and any future one for free.
+ */
+describe('every tab list points at a panel that exists', () => {
+  it.each(SECTIONS)('%s', (_name, node) => {
+    mount(node);
+
+    const tabs = screen.queryAllByRole('tab');
+    for (const tab of tabs) {
+      const controls = tab.getAttribute('aria-controls');
+      expect(
+        controls,
+        `a tab in this section declares no panel: "${tab.textContent}"`,
+      ).toBeTruthy();
+      expect(
+        document.getElementById(controls!),
+        `aria-controls="${controls}" resolves to nothing`,
+      ).not.toBeNull();
+    }
+
+    for (const panel of screen.queryAllByRole('tabpanel')) {
+      const labelledBy = panel.getAttribute('aria-labelledby');
+      // Absent is correct when no tab is selected; present-but-dangling never is.
+      if (labelledBy) {
+        expect(
+          document.getElementById(labelledBy),
+          `aria-labelledby="${labelledBy}" resolves to nothing`,
+        ).not.toBeNull();
+      }
+      // A panel must not contain the tab list that controls it.
+      expect(panel.querySelector('[role="tablist"]')).toBeNull();
+    }
+
+    // A section with tabs has a panel, and vice versa — one without the other is a half-migration.
+    expect(screen.queryAllByRole('tabpanel').length > 0).toBe(tabs.length > 0);
+  });
+});
+
 describe('Step-Up: the primary control is reachable (F-02)', () => {
   it('is enabled when an access token is present', () => {
     mount(<StepUpSection />);

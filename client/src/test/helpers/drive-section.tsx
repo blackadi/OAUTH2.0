@@ -151,8 +151,20 @@ export async function selectOp(label: string | RegExp): Promise<void> {
  * only one of the two exists and the test silently fills the wrong field, so prefer `/^Client ID$/i` or a
  * plain string, and let the ambiguity be an error rather than a coin flip.
  */
+/**
+ * The `selector` is not decoration: `fill` means "type into the field with this label", so matching
+ * anything that is not a form control is always a bug in the query.
+ *
+ * It became load-bearing when the tab lists gained real `role="tabpanel"` regions. The APG labels a
+ * panel by its own tab, so a section whose tab and whose field share a name — Grant Flows has both a
+ * `Refresh Token` tab and a `Refresh Token` field — now has two elements with that accessible name,
+ * and a bare `getByLabelText` throws on the ambiguity. Restricting the query here fixes every caller
+ * at once rather than annotating them one at a time.
+ */
 export function fill(label: string | RegExp, value: string): void {
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  fireEvent.change(screen.getByLabelText(label, { selector: 'input, textarea, select' }), {
+    target: { value },
+  });
 }
 
 /** Fill several fields at once. */

@@ -149,13 +149,25 @@ test.describe('the light palette, on every route', () => {
           out.push(`transparent text: ${transparentText.slice(0, 3).join(', ')}`);
         }
 
+        /**
+         * `:not(:disabled)`, not `:not([disabled])`.
+         *
+         * The attribute selector reads only what is written on the element, and a control inside a
+         * disabled `<fieldset>` carries no attribute of its own while being every bit as inoperable —
+         * `.focus()` on it is a no-op, so `before === now` and the loop below reported it as a control
+         * with no focus indicator. `McpWizard` gates its unreachable steps exactly that way, which
+         * produced **11 false findings on `/mcp`**, every one of them a legitimately disabled field.
+         *
+         * `:disabled` is the effective state, so it still covers the plain attribute case: nothing
+         * that used to be measured stops being measured, and links never match it at all.
+         */
         const selector = [
           'main a[href]',
-          'main button:not([disabled])',
-          'main input:not([disabled])',
-          'main select',
-          'main textarea',
-          'main [tabindex="0"]',
+          'main button:not(:disabled)',
+          'main input:not(:disabled)',
+          'main select:not(:disabled)',
+          'main textarea:not(:disabled)',
+          'main [tabindex="0"]:not(:disabled)',
         ].join(', ');
         const unfocusable: string[] = [];
         for (const el of Array.from(document.querySelectorAll<HTMLElement>(selector)).slice(

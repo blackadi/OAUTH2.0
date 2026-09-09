@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -32,6 +32,9 @@ import { ALL_OPS, GROUPS, VCI_OPS, VC_STEPS, toOpGroup, type VciOp } from './vci
  * What is left here is what the three genuinely share: the tab bars, the flow diagram, one result pane
  * and one error banner.
  */
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const VCI_PANEL_ID = 'vci-panel';
+
 function VciSection() {
   const [activeOp, setActiveOp] = useUrlState<VciOp>('op', ALL_OPS);
   const { loading, result, error, call } = useAsyncCall();
@@ -147,6 +150,7 @@ function VciSection() {
             }))}
             value={activeOp}
             onChange={setActiveOp}
+            panelId={VCI_PANEL_ID}
           />
         </div>
       ))}
@@ -154,28 +158,30 @@ function VciSection() {
       {/* Error banner */}
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
-      {/* Operation docs */}
-      {activeOp && doc && <OperationDescription doc={doc} />}
+      <div {...tabPanelProps(VCI_PANEL_ID, activeOp)}>
+        {/* Operation docs */}
+        {activeOp && doc && <OperationDescription doc={doc} />}
 
-      {/* Split Pane: config left / response right */}
-      {activeOp && (
-        <SplitPane
-          leftLabel="Configuration"
-          rightLabel="Response"
-          left={<div className="space-y-3">{panel(activeOp)}</div>}
-          right={
-            result ? (
-              <JsonBlock data={result} />
-            ) : (
-              <div className="flex items-center justify-center h-32 rounded-lg border border-dashed border-border text-xs text-muted-foreground">
-                Run an operation to see the response here
-              </div>
-            )
-          }
-        />
-      )}
+        {/* Split Pane: config left / response right */}
+        {activeOp && (
+          <SplitPane
+            leftLabel="Configuration"
+            rightLabel="Response"
+            left={<div className="space-y-3">{panel(activeOp)}</div>}
+            right={
+              result ? (
+                <JsonBlock data={result} />
+              ) : (
+                <div className="flex items-center justify-center h-32 rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                  Run an operation to see the response here
+                </div>
+              )
+            }
+          />
+        )}
 
-      {!activeOp && !!result && <JsonBlock data={result} label="Response" className="mt-4" />}
+        {!activeOp && !!result && <JsonBlock data={result} label="Response" className="mt-4" />}
+      </div>
     </SectionPanel>
   );
 }

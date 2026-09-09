@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { PanelRightClose } from 'lucide-react';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { TracePanel } from '@/components/trace/TracePanel';
 import { JwsScratchpad } from '@/components/ui/JwsScratchpad';
 import { RAIL_WIDTH, clampRailWidth, type RailTab } from '@/services/preferences';
@@ -43,6 +43,9 @@ interface EvidenceRailProps {
   tokenVault: React.ReactNode;
   traceCount: number;
 }
+
+/** Ties the rail's tabs to the region they reveal — see `tabPanelProps`. */
+const RAIL_PANEL_ID = 'evidence-rail-panel';
 
 function EvidenceRail({
   open,
@@ -127,6 +130,7 @@ function EvidenceRail({
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
           <TabBar
             label="Evidence"
+            panelId={RAIL_PANEL_ID}
             value={tab}
             onChange={onTabChange}
             options={[
@@ -165,7 +169,7 @@ function EvidenceRail({
           scratchpad holds text a person can see. What unmounting buys is one `role="region"` in the tree
           at a time.
         */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden" {...tabPanelProps(RAIL_PANEL_ID, tab)}>
           {tab === 'tokens' && <div className="h-full overflow-y-auto p-3">{tokenVault}</div>}
           {tab === 'trace' && <TracePanel open onClose={onClose} variant="pane" />}
           {tab === 'inspect' && <JwsScratchpad />}

@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { deviceService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -88,6 +88,9 @@ const DEVICE_STEPS: SequenceStepSpec[] = [
     endpoint: '/api/token',
   },
 ];
+
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const DEVICE_PANEL_ID = 'device-panel';
 
 function DeviceSection() {
   /**
@@ -270,9 +273,14 @@ function DeviceSection() {
         className="mb-3"
       />
 
-      <TabBar options={DEVICE_OPS} value={activeOp} onChange={setActiveOp} />
+      <TabBar
+        options={DEVICE_OPS}
+        value={activeOp}
+        onChange={setActiveOp}
+        panelId={DEVICE_PANEL_ID}
+      />
 
-      <div className="tx-body">
+      <div className="tx-body" {...tabPanelProps(DEVICE_PANEL_ID, activeOp)}>
         {activeOp && doc && (
           <OperationDescription
             doc={doc}

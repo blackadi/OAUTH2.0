@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -67,6 +67,17 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  /**
+   * Per instance, because the id was the literal `help-popover-panel` for every one of them.
+   *
+   * Two defects in one attribute. A page carries several of these — four on `/mcp`, one per operation
+   * — so every trigger claimed to control the *same* element; and the panel is portalled only while
+   * open, so for the whole time a popover is closed, which is nearly always, `aria-controls` pointed
+   * at an id that was not in the document. Measured on `/mcp`: four dangling references, all of them
+   * this. `aria-controls` is now emitted only when there is something to point at, which is what
+   * `aria-expanded` is already saying.
+   */
+  const panelId = useId();
 
   const [{ top, left, width, height }, setPosition] = useState({
     top: 0,
@@ -165,7 +176,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
         className="flex items-center justify-center w-5 h-5 rounded-full border border-accent bg-transparent text-accent-text cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         aria-label="Help"
         aria-expanded={open}
-        aria-controls="help-popover-panel"
+        aria-controls={open ? panelId : undefined}
       >
         <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <text x="8" y="12" textAnchor="middle" fontSize="11" fill="currentColor" fontWeight="600">
@@ -176,7 +187,7 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
       {open &&
         createPortal(
           <div
-            id="help-popover-panel"
+            id={panelId}
             ref={panelRef}
             role="dialog"
             aria-modal="true"

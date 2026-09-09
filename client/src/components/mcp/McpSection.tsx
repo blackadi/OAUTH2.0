@@ -3,7 +3,7 @@ import { useUrlState } from '@/hooks/useUrlState';
 import { toast } from 'sonner';
 import { mcpService } from '@/services';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -77,6 +77,9 @@ const LOOKUPS: Lookup[] = [
   },
 ];
 
+/** Ties the three tabs to the region they reveal — see `tabPanelProps`. */
+const LOOKUP_PANEL_ID = 'mcp-lookup-panel';
+
 /** The tab values, for `useUrlState` to validate `?op=` against rather than trusting it. */
 const ALL_OPS: readonly McpOp[] = LOOKUPS.map((l) => l.value);
 
@@ -117,37 +120,42 @@ function McpSection() {
     >
       <AdminAuth label="Admin (for DCR)" />
 
+      {/* The three lookups below share one result pane, so they share one explainer, and it belongs
+          here — above the tab bar that owns all three. The wizard's failures used to render here too,
+          for want of a way to name the step that produced them; they now render inside that step. See
+          `StepError` in `McpWizard.tsx` for what the old placement measured. */}
       {error && <ErrorExplainer error={error} className="mb-3" />}
-      {/* The wizard's failures were a bare `<p>` while the tabs directly above used the explainer — the
-          same PED-08 defect closed in JAR and FAPI, still open in one half of this one section. An
-          `[A157303]` here means the exchange presented client-authentication data for a public client,
-          and `[A157357]` means the credentials arrived on the wrong channel; both have answers written
-          down in this repo and neither is guessable from the raw string. */}
-      {flow.error && <ErrorExplainer error={String(flow.error)} className="mb-3" />}
 
       <TabBar
         options={LOOKUPS.map(({ value, label }) => ({ value, label }))}
         value={activeOp}
         onChange={setActiveOp}
+        panelId={LOOKUP_PANEL_ID}
       />
 
-      {activeOp && doc && <OperationDescription doc={doc} />}
+      {/* One region for all three lookups, because all three share one result pane — and rendered
+          unconditionally, so the `aria-controls` on every tab resolves even with nothing selected.
+          Before this the tabs announced as tabs and the content they revealed was related to them by
+          nothing a screen reader could hear: the page held zero `role="tabpanel"` elements. */}
+      <div {...tabPanelProps(LOOKUP_PANEL_ID, activeOp)}>
+        {activeOp && doc && <OperationDescription doc={doc} />}
 
-      {lookup && (
-        <div className="space-y-3">
-          <Input
-            label={lookup.inputLabel}
-            value={urls[lookup.value] ?? ''}
-            onChange={(e) => setUrls((prev) => ({ ...prev, [lookup.value]: e.target.value }))}
-            placeholder={lookup.placeholder}
-          />
-          <Button onClick={() => void runLookup(lookup)} loading={loading}>
-            {lookup.buttonLabel}
-          </Button>
-        </div>
-      )}
+        {lookup && (
+          <div className="space-y-3">
+            <Input
+              label={lookup.inputLabel}
+              value={urls[lookup.value] ?? ''}
+              onChange={(e) => setUrls((prev) => ({ ...prev, [lookup.value]: e.target.value }))}
+              placeholder={lookup.placeholder}
+            />
+            <Button onClick={() => void runLookup(lookup)} loading={loading}>
+              {lookup.buttonLabel}
+            </Button>
+          </div>
+        )}
 
-      {result ? <JsonBlock data={result} label="Response" /> : null}
+        {result ? <JsonBlock data={result} label="Response" /> : null}
+      </div>
 
       <McpWizard flow={flow} />
     </SectionPanel>

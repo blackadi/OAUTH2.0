@@ -6,6 +6,9 @@ import { parseJsonObject, stringMember } from '@/utils/parse-json';
 import { API_BASE_URL, CLIENT_ID, REDIRECT_URI, DEFAULT_SCOPES } from '@/config';
 import { createPkcePair } from '@/pkce';
 import { useCredentials } from '@/context/CredentialContext';
+import { useToken } from '@/context/TokenContext';
+import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
+import { navigateTo } from '@/services/trace-store';
 
 /**
  * The MCP OAuth 2.1 flow, as one hook.
@@ -22,6 +25,19 @@ import { useCredentials } from '@/context/CredentialContext';
  * from nowhere, so the `mcp.introspect` doc entry had no surface to render on. Keeping the sequence in
  * one file is what makes a missing hand-off visible.
  */
+
+/**
+ * The six asynchronous operations the wizard can run, as a closed set.
+ *
+ * These strings were already the discriminator passed to `wizCall`, but the hook was instantiated at
+ * `<string>`, so `flow.loading === 'Dsicover AS'` compiled and simply never matched. They are now a
+ * union because `McpWizard` maps each one back to the card it belongs to, and a typo in that map would
+ * silently render a failure under the wrong step — the exact defect this placement change exists to
+ * end. Step 3 has no entry: building the authorization URL is local work and cannot fail against a
+ * server.
+ */
+export type McpStep =
+  'Discover AS' | 'Fetch CIMD' | 'DCR Register' | 'Exchange Code' | 'Fetch UserInfo' | 'Introspect';
 
 export interface AsMetadata {
   issuer?: string;
@@ -48,10 +64,24 @@ export interface CimdMetadata {
 }
 
 export function useMcpFlow() {
-  const { loading, error, call: wizCall } = useDiscriminatedAsyncCall<string>();
+  const {
+    loading,
+    error,
+    errorLabel: wizErrorLabel,
+    call: wizCall,
+  } = useDiscriminatedAsyncCall<McpStep>();
   // The management credential is shared for the page rather than owned here: eight sections held their
   // own copy, and a route change unmounts a section, so it had to be retyped on every navigation.
   const { clientId: authId, clientSecret: authSecret } = useCredentials();
+  /**
+   * The token set the *callback* obtained, when it was the callback that obtained one.
+   *
+   * `CallbackPage` writes its exchange into `TokenContext` rather than into this hook, so without
+   * reading it back the wizard would authorize successfully and then show steps 5 and 6 still gated —
+   * a flow that dead-ends one step after its hardest moment. `useToken` is the app's owner of the
+   * current token set and `use-fapi-flow.ts` already reads it for the same reason.
+   */
+  const { tokenSet } = useToken();
 
   const [wizIssuer, setWizIssuer] = useState(API_BASE_URL);
   const [wizAsData, setWizAsData] = useState<AsMetadata | null>(null);
@@ -70,7 +100,18 @@ export function useMcpFlow() {
   const [wizScopes, setWizScopes] = useState(DEFAULT_SCOPES);
   const [wizResource, setWizResource] = useState('');
   const [wizCode, setWizCode] = useState('');
-  const [wizCodeVerifier, setWizCodeVerifier] = useState('');
+  /**
+   * A lazy initialiser, not `''`: leaving for the authorization endpoint destroys this hook, and the
+   * copy in session storage is the only one that survives it.
+   *
+   * The same shape as `use-fapi-flow.ts`'s key-pair restore, and for the same reason its docblock
+   * records — a section that had forgotten everything it had done while `sessionStorage` still held
+   * every byte of it. Before this the wizard only survived because step 3 opened the URL in a *new*
+   * tab; a reader who followed it in this one lost the verifier and could never complete step 4.
+   */
+  const [wizCodeVerifier, setWizCodeVerifier] = useState(
+    () => readKey(SESSION_KEYS.pkceVerifier) ?? '',
+  );
   // No `wizPkcePair` state: it was written on every authorize step and never read. `wizCodeVerifier` below
   // holds the only half the token exchange needs, and the challenge is consumed inline by the URL builder.
   const [wizAuthUrl, setWizAuthUrl] = useState('');
@@ -163,9 +204,73 @@ export function useMcpFlow() {
     }
   }, [auth, wizRedirectUri, wizScopes, wizCall]);
 
+  /**
+   * Build the authorization URL, and write down everything the callback will need.
+   *
+   * **Two defects closed here.**
+   *
+   * *One:* this minted a fresh PKCE pair on every click and dropped the previous verifier on the
+   * floor. Click it twice while holding a code and step 4 failed with `invalid_grant` — correctly
+   * explained, by a message with no visible connection to the click that caused it. A fresh verifier
+   * per authorization request is right (RFC 7636 §7.1 SHOULD), so the fix is not to reuse one: it is
+   * to discard the code that went with the old one, here, visibly, rather than leaving a value in the
+   * field that cannot be exchanged. `McpWizard` asks first when there is a code to lose.
+   *
+   * *Two:* the verifier and the state existed only in this hook, so this was the one flow in the
+   * application that could not survive its own redirect — while its default `redirectUri` is this
+   * SPA's `/callback`. `AuthorizationCodePanel`, `ParSection`, `RarSection` and the FAPI wizard all
+   * write the same keys before leaving; MCP not doing so is why a code landing on `/callback` from
+   * here was refused with "No stored `state` to compare against", and why step 4 asks for a
+   * hand-copied code at all.
+   *
+   * **Every write has an else-remove branch**, which is the rule `AuthorizationCodePanel` learned the
+   * hard way: a stale `authz_client_secret` left behind by a missing else produced an unexplainable
+   * `[A157303]`. Absence has to be written down to be absent.
+   */
   const wizStepAuthorize = useCallback(async () => {
     const pair = await createPkcePair();
     setWizCodeVerifier(pair.codeVerifier);
+    writeKey(SESSION_KEYS.pkceVerifier, pair.codeVerifier);
+    // The code that belonged to the previous challenge. It cannot be exchanged against this one.
+    setWizCode('');
+
+    /**
+     * `crypto.randomUUID()`, not `mcp-${Date.now()}`.
+     *
+     * This state was write-only until now — generated, sent, never compared — so its predictability
+     * cost nothing. `CallbackPage` validates it fail-closed, so from here it is the CSRF binding for
+     * this flow, and a timestamp is guessable. Every other generator in the client already uses
+     * `randomUUID`; this was the one that did not.
+     */
+    const state = crypto.randomUUID();
+    writeKey(SESSION_KEYS.oauthState, state);
+
+    writeKey(SESSION_KEYS.authzClientId, wizClientId);
+    // Public client with PKCE is the MCP shape, but DCR may hand back a secret anyway (see
+    // `wizClientSecret`), and the exchange must present it when it exists and nothing when it does not.
+    if (wizClientSecret) writeKey(SESSION_KEYS.authzClientSecret, wizClientSecret);
+    else removeKey(SESSION_KEYS.authzClientSecret);
+
+    // RFC 8707. Sending `resource` on the authorization request alone changes nothing observable; the
+    // token request's copy is what restricts the issued token's `aud`, and the callback reads it here.
+    if (wizResource) writeKey(SESSION_KEYS.authzResource, wizResource);
+    else removeKey(SESSION_KEYS.authzResource);
+
+    /**
+     * Clear the keys that would silently pick a different exchange.
+     *
+     * `CallbackPage` chooses between three exchange shapes by the **presence** of `dpop_private_key`
+     * and `fapi_signing_private_key`, so a reader who visited the FAPI section earlier in the same tab
+     * still has a signing key sitting there — and this flow's public-client exchange would quietly
+     * become a `private_key_jwt` one. That is not a hypothetical: it is verbatim the defect
+     * `services/session-keys.ts` was written to end, and it is why that module owns every key.
+     *
+     * MCP OAuth 2.1 is a public client with PKCE: no DPoP proof, no client assertion. `clearDpopKeys`
+     * covers the four DPoP keys and deliberately not the two FAPI ones, so those are named here.
+     */
+    clearDpopKeys();
+    removeKey(SESSION_KEYS.fapiSigningKey);
+    removeKey(SESSION_KEYS.fapiSigningPublicKey);
 
     const authUrl = mcpService.buildAuthorizationUrl({
       issuer: wizIssuer,
@@ -174,11 +279,32 @@ export function useMcpFlow() {
       scope: wizScopes,
       codeChallenge: pair.codeChallenge,
       resource: wizResource || undefined,
-      state: `mcp-${Date.now()}`,
+      state,
     });
     setWizAuthUrl(authUrl);
-    toast.success('Authorization URL built — open in browser');
-  }, [wizIssuer, wizClientId, wizRedirectUri, wizScopes, wizResource]);
+    toast.success('Authorization URL built — authorize, or open it yourself');
+  }, [wizIssuer, wizClientId, wizClientSecret, wizRedirectUri, wizScopes, wizResource]);
+
+  /**
+   * Leave for the authorization endpoint.
+   *
+   * `navigateTo` rather than a bare assignment or a `target="_blank"` anchor. It is the single place
+   * this application leaves the front channel: it records the outbound hop, so the run shows up in the
+   * trace panel and in `SequenceView`, and it writes `return_to` so the callback can offer the way
+   * back. A new tab was the previous behaviour and it is the one shape that defeats the persistence
+   * above — session storage is per-tab, so the verifier would not be there when the callback looked.
+   *
+   * `#mcp-step-4` is where the reader needs to be afterwards, and it is the step nobody reached; the
+   * anchor is already on that card and `useHashScroll` scrolls and focuses it.
+   */
+  const wizGoAuthorize = useCallback(() => {
+    if (!wizAuthUrl) return;
+    navigateTo(
+      wizAuthUrl,
+      'mcp authorize (PKCE + resource) — front channel, browser leaves for the authorization endpoint',
+      '/mcp#mcp-step-4',
+    );
+  }, [wizAuthUrl]);
 
   const wizStepToken = useCallback(async () => {
     if (!wizCode || !wizCodeVerifier) {
@@ -216,8 +342,19 @@ export function useMcpFlow() {
     wizCall,
   ]);
 
+  /**
+   * The token this wizard is working with, from whichever half of the flow produced it.
+   *
+   * Step 4's own exchange fills `wizTokenResult`; authorizing through the callback fills
+   * `TokenContext` instead. Steps 5 and 6 need one answer to "is there a token yet", and gating them
+   * on the local copy alone is what would leave them greyed out immediately after a successful
+   * authorization.
+   */
+  const wizEffectiveToken: Record<string, unknown> | null =
+    wizTokenResult ?? (tokenSet as Record<string, unknown> | null);
+
   const wizStepUserinfo = useCallback(async () => {
-    const accessToken = (wizTokenResult as Record<string, unknown>)?.access_token as string;
+    const accessToken = (wizEffectiveToken as Record<string, unknown>)?.access_token as string;
     if (!accessToken) {
       toast.error('No access token available — complete token exchange first');
       return;
@@ -232,7 +369,7 @@ export function useMcpFlow() {
     } else {
       toast.error(err);
     }
-  }, [wizTokenResult, wizAsData, wizIssuer, wizCall]);
+  }, [wizEffectiveToken, wizAsData, wizIssuer, wizCall]);
 
   /**
    * Introspect the token the wizard just obtained.
@@ -246,7 +383,7 @@ export function useMcpFlow() {
    * management credentials, so without them the answer is 401 and nothing else.
    */
   const wizStepIntrospect = useCallback(async () => {
-    const accessToken = (wizTokenResult as Record<string, unknown>)?.access_token as string;
+    const accessToken = (wizEffectiveToken as Record<string, unknown>)?.access_token as string;
     if (!accessToken) {
       toast.error('No access token available — complete token exchange first');
       return;
@@ -267,11 +404,18 @@ export function useMcpFlow() {
     } else {
       toast.error(err);
     }
-  }, [wizTokenResult, wizAsData, wizIssuer, authId, authSecret, wizCall]);
+  }, [wizEffectiveToken, wizAsData, wizIssuer, authId, authSecret, wizCall]);
 
   return {
     loading,
     error,
+    /**
+     * Which step `error` came from, so the card that failed is the card that explains it.
+     *
+     * `loading` cannot answer this — it is cleared in the hook's `finally`, so by the time a failure
+     * renders it is already `null`.
+     */
+    failedStep: wizErrorLabel,
     /** Every field the six cards render, and the setters for the ones a user can type into. */
     issuer: wizIssuer,
     setIssuer: setWizIssuer,
@@ -292,7 +436,7 @@ export function useMcpFlow() {
     codeVerifier: wizCodeVerifier,
     setCodeVerifier: setWizCodeVerifier,
     authUrl: wizAuthUrl,
-    tokenResult: wizTokenResult,
+    tokenResult: wizEffectiveToken,
     userinfoResult: wizUserinfoResult,
     introspectResult: wizIntrospectResult,
     /** `auth` is exposed so the wizard can disable the DCR button without re-deriving it. */
@@ -301,6 +445,8 @@ export function useMcpFlow() {
     stepCimd: wizStepCimd,
     stepDcr: wizStepDcr,
     stepAuthorize: wizStepAuthorize,
+    /** Leaves the app for the authorization endpoint. Only meaningful once `authUrl` exists. */
+    goAuthorize: wizGoAuthorize,
     stepToken: wizStepToken,
     stepUserinfo: wizStepUserinfo,
     stepIntrospect: wizStepIntrospect,

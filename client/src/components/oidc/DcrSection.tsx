@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { dcrService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { FlowDiagram } from '@/components/ui/FlowDiagram';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -80,6 +80,9 @@ const DCR_STEPS: SequenceStepSpec[] = [
     endpoint: '/api/client/dcr/delete',
   },
 ];
+
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const DCR_PANEL_ID = 'dcr-panel';
 
 function DcrSection() {
   // The management credential is shared for the page rather than owned here: eight sections
@@ -164,9 +167,9 @@ function DcrSection() {
         className="mb-3"
       />
 
-      <TabBar options={DCR_OPS} value={activeOp} onChange={setActiveOp} />
+      <TabBar options={DCR_OPS} value={activeOp} onChange={setActiveOp} panelId={DCR_PANEL_ID} />
 
-      <div className="tx-body">
+      <div className="tx-body" {...tabPanelProps(DCR_PANEL_ID, activeOp)}>
         {activeOp && doc && (
           <OperationDescription
             doc={doc}

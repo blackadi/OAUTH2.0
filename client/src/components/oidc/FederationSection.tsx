@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { federationService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
@@ -29,6 +29,9 @@ const FEDERATION_OPS: { value: FederationOp; label: string }[] = [
  * **Behaviour is unchanged.** `handleCall` and every service call are the incumbent implementation;
  * only the markup around them changed.
  */
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const FEDERATION_PANEL_ID = 'federation-panel';
+
 function FederationSection() {
   // The management credential is shared for the page rather than owned here: eight sections
   // held their own copy, and a route change unmounts a section, so it had to be retyped on
@@ -73,9 +76,14 @@ function FederationSection() {
         common trust anchor, instead of registering out of band with every party they talk to.
       </p>
 
-      <TabBar options={FEDERATION_OPS} value={activeOp} onChange={setActiveOp} />
+      <TabBar
+        options={FEDERATION_OPS}
+        value={activeOp}
+        onChange={setActiveOp}
+        panelId={FEDERATION_PANEL_ID}
+      />
 
-      <div className="tx-body">
+      <div className="tx-body" {...tabPanelProps(FEDERATION_PANEL_ID, activeOp)}>
         {error && <ErrorExplainer error={error} className="mb-3" />}
         {activeOp && doc && (
           <OperationDescription

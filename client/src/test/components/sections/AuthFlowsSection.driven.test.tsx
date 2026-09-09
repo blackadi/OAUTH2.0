@@ -140,7 +140,9 @@ describe('AuthFlowsSection — client authentication that matches the client', (
     mountSection(<AuthFlowsSection />);
     await selectOp(/Refresh Token/i);
 
-    expect(screen.getByLabelText(/^Refresh Token$/i)).toHaveValue('rt-from-an-earlier-grant');
+    expect(screen.getByLabelText(/^Refresh Token$/i, { selector: 'input' })).toHaveValue(
+      'rt-from-an-earlier-grant',
+    );
   });
 
   it('carries the credentials the user typed on the password grant', async () => {
@@ -232,7 +234,7 @@ describe('AuthFlowsSection — the selected grant is addressable', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByLabelText(/^Refresh Token$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Refresh Token$/i, { selector: 'input' })).toBeInTheDocument();
   });
 
   it('writes the tab back to the URL, so the link is the state', async () => {

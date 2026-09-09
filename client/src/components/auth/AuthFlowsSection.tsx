@@ -4,7 +4,7 @@ import { useToken } from '@/context/TokenContext';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { useTraces } from '@/hooks/useTraces';
 import { authorizationCodeProgress, twoStepProgress } from '@/utils/flow-progress';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { TokenOutcome } from '@/components/ui/TokenOutcome';
 import { OperationDescription } from '@/components/ui/OperationDescription';
@@ -38,6 +38,9 @@ const grantIcons: Record<GrantType, React.ReactNode> = {
   refresh_token: <RefreshCw className="h-4 w-4" />,
   jwt_bearer: <FileText className="h-4 w-4" />,
 };
+
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const GRANT_PANEL_ID = 'grant-flows-panel';
 
 const AuthFlowsSection: React.FC = () => {
   const { tokenSet, setTokenSet } = useToken();
@@ -118,47 +121,59 @@ const AuthFlowsSection: React.FC = () => {
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TabBar options={GRANTS} value={grantType} onChange={setGrantType} />
+          <TabBar
+            options={GRANTS}
+            value={grantType}
+            onChange={setGrantType}
+            panelId={GRANT_PANEL_ID}
+          />
         </div>
 
-        <FlowDiagram
-          steps={flowSteps[grantType]}
-          currentStep={progress.currentStep}
-          completedSteps={progress.completedSteps}
-          className="py-2"
-        />
+        {/* `space-y-4` is carried onto the panel, not decoration: the parent's `space-y-4` spaces
+            only its *direct* children, so wrapping these in a region collapsed every gap inside it.
+            Caught by the `grant flows at 1440px` screenshot, which is the only gate that could. */}
+        <div className="space-y-4" {...tabPanelProps(GRANT_PANEL_ID, grantType)}>
+          <FlowDiagram
+            steps={flowSteps[grantType]}
+            currentStep={progress.currentStep}
+            completedSteps={progress.completedSteps}
+            className="py-2"
+          />
 
-        {error && <ErrorExplainer error={error} />}
+          {error && <ErrorExplainer error={error} />}
 
-        {doc && <OperationDescription doc={doc} />}
+          {doc && <OperationDescription doc={doc} />}
 
-        <SplitPane
-          leftLabel="Configuration"
-          rightLabel={displayResult ? 'Response' : ''}
-          left={
-            <div className="space-y-4">
-              <AuthorizationCodePanel active={grantType === 'authorization_code'} />
-              <BackChannelGrantPanels
-                grantType={grantType}
-                loading={loading}
-                initialRefreshToken={tokenSet?.refresh_token || ''}
-                onSubmit={handleCall}
-              />
-            </div>
-          }
-          right={
-            displayResult ? (
-              /* Was a bare `JsonBlock`. The flow completed and the tool went quiet — no statement of
+          <SplitPane
+            leftLabel="Configuration"
+            rightLabel={displayResult ? 'Response' : ''}
+            left={
+              <div className="space-y-4">
+                <AuthorizationCodePanel active={grantType === 'authorization_code'} />
+                <BackChannelGrantPanels
+                  grantType={grantType}
+                  loading={loading}
+                  initialRefreshToken={tokenSet?.refresh_token || ''}
+                  onSubmit={handleCall}
+                />
+              </div>
+            }
+            right={
+              displayResult ? (
+                /* Was a bare `JsonBlock`. The flow completed and the tool went quiet — no statement of
                  what was now held, no inspector for the ID token it had just obtained, and nothing
                  saying where to spend it. See `TokenOutcome`. */
-              <TokenOutcome tokens={displayResult} />
-            ) : (
-              <div className="flex items-center justify-center h-full min-h-[120px] rounded-lg border border-dashed border-border bg-muted/20">
-                <p className="text-xs text-muted-foreground">Run a flow to see the response here</p>
-              </div>
-            )
-          }
-        />
+                <TokenOutcome tokens={displayResult} />
+              ) : (
+                <div className="flex items-center justify-center h-full min-h-[120px] rounded-lg border border-dashed border-border bg-muted/20">
+                  <p className="text-xs text-muted-foreground">
+                    Run a flow to see the response here
+                  </p>
+                </div>
+              )
+            }
+          />
+        </div>
       </div>
     </SectionPanel>
   );

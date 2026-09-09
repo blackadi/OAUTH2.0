@@ -16,7 +16,23 @@
  * **What replaces it.** A recessed surface plus a dashed edge, which reads as "not yet" without
  * touching a single glyph's contrast — and `aria-disabled`, which says the same thing to assistive
  * technology, where an opacity never did. `pointer-events-none` stays, because that was the only part
- * of the original doing functional work.
+ * of the original doing functional work — but note what it is *not*: it stops a mouse and leaves the
+ * tab order alone, so a caller whose step contains focusable controls has to disable them as well.
+ * `McpWizard`'s `StepCard` does that with a disabled `fieldset`; `FapiTestFlow`'s steps do it by
+ * disabling the one button each of them holds.
+ *
+ * **The caller has to supply the border *width*.** `border-dashed` is a style and nothing else, so on
+ * an element with no width it resolves to `border-top-width: 0px` and half of the treatment above
+ * silently does not exist. That is exactly what happened to the five gated MCP steps, which were
+ * `<Card>`s on the shadow-bearing default variant: the dashed edge never rendered and the whole state
+ * rested on `bg-muted/30`, about 2% luminance from a ready card on the light palette. `FapiTestFlow`'s
+ * two steps were fine throughout, because they are plain `<div>`s that already carry `border-t`.
+ *
+ * The width is left to the caller rather than added here because the two callers need different
+ * widths — a full box on a card, one top rule on a divider-separated block — and because a `Card`
+ * must also drop its shadow to take a border at all (DESIGN.md: one or the other, never both), which
+ * is a `variant` this helper cannot set without React warning about an unknown prop on the `<div>`
+ * callers. `McpWizard`'s `StepCard` is where that pairing is made for cards.
  */
 
 export interface StepStateAttrs {

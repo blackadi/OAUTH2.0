@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { useConfirmedAction } from '@/hooks/useConfirmedAction';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -38,6 +38,9 @@ import {
  * because *what this sends and where* is what a reader comes looking for, and splitting it from its
  * inputs is how the two drift.
  */
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const CLIENT_MGMT_PANEL_ID = 'client-mgmt-panel';
+
 function ClientManagementSection() {
   // The management credential is shared for the page rather than owned here: eight sections held their
   // own copy, and a route change unmounts a section, so it had to be retyped on every navigation.
@@ -102,7 +105,13 @@ function ClientManagementSection() {
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
-      <TabBar options={tabsFor('basic')} value={activeOp} onChange={setActiveOp} disabled={!auth} />
+      <TabBar
+        options={tabsFor('basic')}
+        value={activeOp}
+        onChange={setActiveOp}
+        disabled={!auth}
+        panelId={CLIENT_MGMT_PANEL_ID}
+      />
 
       <span className="text-xs text-muted-foreground">Advanced:</span>
       <TabBar
@@ -110,34 +119,37 @@ function ClientManagementSection() {
         value={activeOp}
         onChange={setActiveOp}
         disabled={!auth}
+        panelId={CLIENT_MGMT_PANEL_ID}
       />
 
-      {activeOp && doc && <OperationDescription doc={doc} />}
+      <div {...tabPanelProps(CLIENT_MGMT_PANEL_ID, activeOp)}>
+        {activeOp && doc && <OperationDescription doc={doc} />}
 
-      {operation && (
-        <div className="space-y-3">
-          {operation.fields.map((field) => (
-            <OperationInput
-              key={`${operation.value}:${field.name}`}
-              field={field}
-              value={values[field.name] ?? ''}
-              onChange={(value) => setField(field.name, value)}
-            />
-          ))}
-          <Button
-            variant={operation.variant}
-            disabled={missingRequired(operation) || loading}
-            loading={loading}
-            onClick={() => runOperation(operation)}
-          >
-            {operation.runLabel ?? 'Run'}
-          </Button>
-        </div>
-      )}
+        {operation && (
+          <div className="space-y-3">
+            {operation.fields.map((field) => (
+              <OperationInput
+                key={`${operation.value}:${field.name}`}
+                field={field}
+                value={values[field.name] ?? ''}
+                onChange={(value) => setField(field.name, value)}
+              />
+            ))}
+            <Button
+              variant={operation.variant}
+              disabled={missingRequired(operation) || loading}
+              loading={loading}
+              onClick={() => runOperation(operation)}
+            >
+              {operation.runLabel ?? 'Run'}
+            </Button>
+          </div>
+        )}
 
-      {dialog}
+        {dialog}
 
-      {result ? <JsonBlock data={result} label="Response" /> : null}
+        {result ? <JsonBlock data={result} label="Response" /> : null}
+      </div>
     </SectionPanel>
   );
 }

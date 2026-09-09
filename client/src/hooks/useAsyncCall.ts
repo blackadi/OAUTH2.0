@@ -106,10 +106,21 @@ function useDiscriminatedAsyncCall<Label extends string, Result = unknown>() {
   const [loading, setLoading] = useState<Label | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Which operation produced `error`, kept after `loading` has been cleared.
+   *
+   * The hook discriminated the *pending* call and not the failed one, so a section with six buttons
+   * knew a request had failed and not which button. That is why the MCP wizard rendered its explainer
+   * at the top of the section: with `loading` back to `null` in `finally`, the failing step was no
+   * longer nameable, and the only placement that was always true was the one furthest from the
+   * control — measured at 1,894px from the button, more than two viewport heights.
+   */
+  const [errorLabel, setErrorLabel] = useState<Label | null>(null);
 
   const call = useCallback(
     async (label: Label, fn: () => Promise<Result>): Promise<CallResult<Result>> => {
       setError(null);
+      setErrorLabel(null);
       setResult(null);
       setLoading(label);
       announce(`Sending ${label} request…`, 'polite');
@@ -121,6 +132,7 @@ function useDiscriminatedAsyncCall<Label extends string, Result = unknown>() {
       } catch (e: unknown) {
         const msg = describeError(e);
         setError(msg);
+        setErrorLabel(label);
         announceOutcome(false, `${label}: ${msg}`);
         return { data: null, error: msg };
       } finally {
@@ -134,9 +146,10 @@ function useDiscriminatedAsyncCall<Label extends string, Result = unknown>() {
     setLoading(null);
     setResult(null);
     setError(null);
+    setErrorLabel(null);
   }, []);
 
-  return { loading, result, error, call, reset };
+  return { loading, result, error, errorLabel, call, reset };
 }
 
 /**

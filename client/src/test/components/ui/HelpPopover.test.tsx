@@ -14,6 +14,47 @@ import { HelpPopover } from '@/components/ui/HelpPopover';
 
 afterEach(cleanup);
 
+/**
+ * `aria-controls` has to name something that is in the document.
+ *
+ * It was the literal string `help-popover-panel` on every instance and was emitted whether or not the
+ * panel existed. So a page with four of these — `/mcp` has one per operation — had four triggers all
+ * claiming the same element, and while closed, which is nearly always, all four pointed at nothing.
+ * Measured on `/mcp`: four dangling references, every one of them this component.
+ */
+describe('HelpPopover — the panel reference resolves or is absent', () => {
+  it('emits no aria-controls while closed', () => {
+    render(<HelpPopover title="Alpha" description="a" />);
+    expect(screen.getByRole('button', { name: 'Help' })).not.toHaveAttribute('aria-controls');
+  });
+
+  it('points at the real panel once open', async () => {
+    render(<HelpPopover title="Alpha" description="a" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Help' }));
+    const controls = screen.getByRole('button', { name: 'Help' }).getAttribute('aria-controls');
+    expect(controls).toBeTruthy();
+    expect(document.getElementById(controls!)).toBe(screen.getByRole('dialog'));
+  });
+
+  it('gives two popovers on one page different panel ids', async () => {
+    render(
+      <>
+        <HelpPopover title="Alpha" description="a" />
+        <HelpPopover title="Beta" description="b" />
+      </>,
+    );
+    const [first, second] = screen.getAllByRole('button', { name: 'Help' });
+    await userEvent.click(first);
+    const firstId = first.getAttribute('aria-controls');
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(second);
+    const secondId = second.getAttribute('aria-controls');
+    expect(firstId).toBeTruthy();
+    expect(secondId).toBeTruthy();
+    expect(firstId).not.toBe(secondId);
+  });
+});
+
 function setViewport(width: number, height: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });

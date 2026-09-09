@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { adminService } from '@/services';
 import { useUrlState } from '@/hooks/useUrlState';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
-import { TabBar } from '@/components/ui/TabBar';
+import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { SectionPanel } from '@/components/layout/SectionPanel';
 import { Button } from '@/components/ui/Button';
@@ -55,6 +55,9 @@ const ADMIN_OPS: { value: AdminOp; label: string }[] = [
   { value: 'reissue', label: 'Reissue' },
   { value: 'local', label: 'Local JWT' },
 ];
+
+/** Ties this section's tabs to the region they reveal — see `tabPanelProps`. */
+const ADMIN_PANEL_ID = 'admin-panel';
 
 function AdminSection() {
   // The management credential is shared for the page rather than owned here: eight sections
@@ -115,233 +118,243 @@ function AdminSection() {
 
       {error && <ErrorExplainer error={error} className="mb-3" />}
 
-      <TabBar options={ADMIN_OPS} value={activeOp} onChange={setActiveOp} disabled={!auth} />
+      <TabBar
+        options={ADMIN_OPS}
+        value={activeOp}
+        onChange={setActiveOp}
+        disabled={!auth}
+        panelId={ADMIN_PANEL_ID}
+      />
 
-      {activeOp && doc && <OperationDescription doc={doc} />}
+      <div {...tabPanelProps(ADMIN_PANEL_ID, activeOp)}>
+        {activeOp && doc && <OperationDescription doc={doc} />}
 
-      {activeOp === 'create' && (
-        <div className="space-y-3">
-          <Select
-            label="Grant Type"
-            value={createGrant}
-            onChange={(e) => setCreateGrant(e.target.value)}
-            options={GRANT_TYPES}
-          />
-          <Input
-            label="Subject"
-            value={createSubject}
-            onChange={(e) => setCreateSubject(e.target.value)}
-            placeholder="End-user identifier (optional)"
-          />
-          <Input
-            label="Scopes (comma-separated)"
-            value={createScopes}
-            onChange={(e) => setCreateScopes(e.target.value)}
-            placeholder="e.g. openid,profile,email"
-          />
-          <Input
-            label="Access Token Duration (seconds)"
-            value={createDuration}
-            onChange={(e) => setCreateDuration(e.target.value)}
-            placeholder="Leave empty for service default"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                adminService.createToken(
-                  {
-                    grantType: createGrant,
-                    clientId: authId,
-                    subject: createSubject,
-                    scopes: createScopes,
-                    accessTokenDuration: createDuration,
-                  },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
+        {activeOp === 'create' && (
+          <div className="space-y-3">
+            <Select
+              label="Grant Type"
+              value={createGrant}
+              onChange={(e) => setCreateGrant(e.target.value)}
+              options={GRANT_TYPES}
+            />
+            <Input
+              label="Subject"
+              value={createSubject}
+              onChange={(e) => setCreateSubject(e.target.value)}
+              placeholder="End-user identifier (optional)"
+            />
+            <Input
+              label="Scopes (comma-separated)"
+              value={createScopes}
+              onChange={(e) => setCreateScopes(e.target.value)}
+              placeholder="e.g. openid,profile,email"
+            />
+            <Input
+              label="Access Token Duration (seconds)"
+              value={createDuration}
+              onChange={(e) => setCreateDuration(e.target.value)}
+              placeholder="Leave empty for service default"
+            />
+            <Button
+              onClick={() =>
+                handleCall(() =>
+                  adminService.createToken(
+                    {
+                      grantType: createGrant,
+                      clientId: authId,
+                      subject: createSubject,
+                      scopes: createScopes,
+                      accessTokenDuration: createDuration,
+                    },
+                    auth,
+                  ),
+                )
+              }
+              loading={loading}
+            >
+              Run
+            </Button>
+          </div>
+        )}
+
+        {activeOp === 'list' && (
+          <Button onClick={() => handleCall(() => adminService.listTokens(auth))} loading={loading}>
             Run
           </Button>
-        </div>
-      )}
+        )}
 
-      {activeOp === 'list' && (
-        <Button onClick={() => handleCall(() => adminService.listTokens(auth))} loading={loading}>
-          Run
-        </Button>
-      )}
+        {activeOp === 'update' && (
+          <div className="space-y-3">
+            <Input
+              label="Access Token"
+              value={updateToken}
+              onChange={(e) => setUpdateToken(e.target.value)}
+              placeholder="Full access token value"
+            />
+            <Input
+              label="Scopes (comma-separated)"
+              value={updateScopes}
+              onChange={(e) => setUpdateScopes(e.target.value)}
+              placeholder="New scopes to replace existing"
+            />
+            <Input
+              label="Access Token Expires At (ISO string)"
+              value={updateExpiry}
+              onChange={(e) => setUpdateExpiry(e.target.value)}
+              placeholder="e.g. 2026-12-31T23:59:59Z"
+            />
+            <Button
+              onClick={() =>
+                handleCall(() =>
+                  adminService.updateToken(
+                    {
+                      accessToken: updateToken,
+                      scopes: updateScopes,
+                      accessTokenExpiresAt: updateExpiry,
+                    },
+                    auth,
+                  ),
+                )
+              }
+              loading={loading}
+            >
+              Run
+            </Button>
+          </div>
+        )}
 
-      {activeOp === 'update' && (
-        <div className="space-y-3">
-          <Input
-            label="Access Token"
-            value={updateToken}
-            onChange={(e) => setUpdateToken(e.target.value)}
-            placeholder="Full access token value"
-          />
-          <Input
-            label="Scopes (comma-separated)"
-            value={updateScopes}
-            onChange={(e) => setUpdateScopes(e.target.value)}
-            placeholder="New scopes to replace existing"
-          />
-          <Input
-            label="Access Token Expires At (ISO string)"
-            value={updateExpiry}
-            onChange={(e) => setUpdateExpiry(e.target.value)}
-            placeholder="e.g. 2026-12-31T23:59:59Z"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                adminService.updateToken(
-                  {
-                    accessToken: updateToken,
-                    scopes: updateScopes,
-                    accessTokenExpiresAt: updateExpiry,
-                  },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
+        {activeOp === 'revoke' && (
+          <div className="space-y-3">
+            <Input
+              label="Access Token Identifier"
+              value={revokeId}
+              onChange={(e) => setRevokeId(e.target.value)}
+              placeholder="Internal identifier (NOT the token value)"
+            />
+            <Button
+              onClick={() =>
+                handleCall(() =>
+                  adminService.revokeToken({ accessTokenIdentifier: revokeId }, auth),
+                )
+              }
+              loading={loading}
+            >
+              Run
+            </Button>
+          </div>
+        )}
 
-      {activeOp === 'revoke' && (
-        <div className="space-y-3">
-          <Input
-            label="Access Token Identifier"
-            value={revokeId}
-            onChange={(e) => setRevokeId(e.target.value)}
-            placeholder="Internal identifier (NOT the token value)"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() => adminService.revokeToken({ accessTokenIdentifier: revokeId }, auth))
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
+        {activeOp === 'delete' && (
+          <div className="space-y-3">
+            <Input
+              label="Access Token Identifier"
+              value={deleteId}
+              onChange={(e) => setDeleteId(e.target.value)}
+              placeholder="Internal identifier from List or Create"
+            />
+            <Button
+              onClick={() => handleCall(() => adminService.deleteToken(deleteId, auth))}
+              loading={loading}
+            >
+              Run
+            </Button>
+          </div>
+        )}
 
-      {activeOp === 'delete' && (
-        <div className="space-y-3">
-          <Input
-            label="Access Token Identifier"
-            value={deleteId}
-            onChange={(e) => setDeleteId(e.target.value)}
-            placeholder="Internal identifier from List or Create"
-          />
-          <Button
-            onClick={() => handleCall(() => adminService.deleteToken(deleteId, auth))}
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
+        {activeOp === 'reissue' && (
+          <div className="space-y-3">
+            <Input
+              label="Access Token"
+              value={reissueAt}
+              onChange={(e) => setReissueAt(e.target.value)}
+              placeholder="Existing access token"
+            />
+            <Input
+              label="Refresh Token"
+              value={reissueRt}
+              onChange={(e) => setReissueRt(e.target.value)}
+              placeholder="Associated refresh token"
+            />
+            <Button
+              onClick={() =>
+                handleCall(() =>
+                  adminService.reissueToken(
+                    { accessToken: reissueAt, refreshToken: reissueRt },
+                    auth,
+                  ),
+                )
+              }
+              loading={loading}
+            >
+              Run
+            </Button>
+          </div>
+        )}
 
-      {activeOp === 'reissue' && (
-        <div className="space-y-3">
-          <Input
-            label="Access Token"
-            value={reissueAt}
-            onChange={(e) => setReissueAt(e.target.value)}
-            placeholder="Existing access token"
-          />
-          <Input
-            label="Refresh Token"
-            value={reissueRt}
-            onChange={(e) => setReissueRt(e.target.value)}
-            placeholder="Associated refresh token"
-          />
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                adminService.reissueToken(
-                  { accessToken: reissueAt, refreshToken: reissueRt },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
+        {activeOp === 'local' && (
+          <div className="space-y-3">
+            <Input
+              label="Issuer (iss)"
+              value={localIss}
+              onChange={(e) => setLocalIss(e.target.value)}
+              placeholder="Token issuer identifier"
+            />
+            <Input
+              label="Subject (sub)"
+              value={localSub}
+              onChange={(e) => setLocalSub(e.target.value)}
+              placeholder="End-user identifier"
+            />
+            <Input
+              label="Audience (aud)"
+              value={localAud}
+              onChange={(e) => setLocalAud(e.target.value)}
+              placeholder="Target audience"
+            />
+            <Input
+              label="Client ID (client_id)"
+              value={localClientId}
+              onChange={(e) => setLocalClientId(e.target.value)}
+              placeholder="Client the token was issued to"
+            />
+            <Input
+              label="Scope (optional)"
+              value={localScope}
+              onChange={(e) => setLocalScope(e.target.value)}
+              placeholder="e.g. openid profile"
+            />
+            <p className="text-xs text-muted-foreground -mt-1">
+              The token is a worked example of <strong>RFC 9068 §2</strong>:{' '}
+              <code>typ: at+jwt</code> plus the seven claims §2.2 marks REQUIRED, which is why{' '}
+              <code>client_id</code> is not optional here.
+              <code>scope</code> is a §2.2.3 SHOULD and is omitted from the token when left blank.
+              Development only — the endpoint answers 404 elsewhere, and nothing in this deployment
+              accepts the result as an access token.
+            </p>
+            <Button
+              onClick={() =>
+                handleCall(() =>
+                  adminService.localToken(
+                    {
+                      iss: localIss,
+                      sub: localSub,
+                      aud: localAud,
+                      client_id: localClientId,
+                      ...(localScope ? { scope: localScope } : {}),
+                    },
+                    auth,
+                  ),
+                )
+              }
+              loading={loading}
+            >
+              Run
+            </Button>
+          </div>
+        )}
 
-      {activeOp === 'local' && (
-        <div className="space-y-3">
-          <Input
-            label="Issuer (iss)"
-            value={localIss}
-            onChange={(e) => setLocalIss(e.target.value)}
-            placeholder="Token issuer identifier"
-          />
-          <Input
-            label="Subject (sub)"
-            value={localSub}
-            onChange={(e) => setLocalSub(e.target.value)}
-            placeholder="End-user identifier"
-          />
-          <Input
-            label="Audience (aud)"
-            value={localAud}
-            onChange={(e) => setLocalAud(e.target.value)}
-            placeholder="Target audience"
-          />
-          <Input
-            label="Client ID (client_id)"
-            value={localClientId}
-            onChange={(e) => setLocalClientId(e.target.value)}
-            placeholder="Client the token was issued to"
-          />
-          <Input
-            label="Scope (optional)"
-            value={localScope}
-            onChange={(e) => setLocalScope(e.target.value)}
-            placeholder="e.g. openid profile"
-          />
-          <p className="text-xs text-muted-foreground -mt-1">
-            The token is a worked example of <strong>RFC 9068 §2</strong>: <code>typ: at+jwt</code>{' '}
-            plus the seven claims §2.2 marks REQUIRED, which is why <code>client_id</code> is not
-            optional here.
-            <code>scope</code> is a §2.2.3 SHOULD and is omitted from the token when left blank.
-            Development only — the endpoint answers 404 elsewhere, and nothing in this deployment
-            accepts the result as an access token.
-          </p>
-          <Button
-            onClick={() =>
-              handleCall(() =>
-                adminService.localToken(
-                  {
-                    iss: localIss,
-                    sub: localSub,
-                    aud: localAud,
-                    client_id: localClientId,
-                    ...(localScope ? { scope: localScope } : {}),
-                  },
-                  auth,
-                ),
-              )
-            }
-            loading={loading}
-          >
-            Run
-          </Button>
-        </div>
-      )}
-
-      {result ? <JsonBlock data={result} label="Response" /> : null}
+        {result ? <JsonBlock data={result} label="Response" /> : null}
+      </div>
     </SectionPanel>
   );
 }
