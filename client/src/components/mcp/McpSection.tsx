@@ -106,7 +106,7 @@ function McpSection() {
    */
   const uid = useId();
   const [activeOp, setActiveOp] = useUrlState<McpOp>('op', ALL_OPS);
-  const { loading, result, error, call } = useAsyncCall();
+  const { loading, result, error, call, reset } = useAsyncCall();
   /** One URL per lookup, keyed by operation — they are different addresses, so they are not shared. */
   const [urls, setUrls] = useState<Record<string, string>>(INITIAL_URLS);
   const flow = useMcpFlow();
@@ -124,12 +124,14 @@ function McpSection() {
   };
 
   return (
-    <section className="tx">
+    <section className="tx" aria-labelledby={`${uid}-masthead`}>
       {/* `h1`, for the same reason `SectionPanel` used one: this is the title of the page a route
           renders. `SectionPanel` is gone rather than wrapped — `.tx` declares its own palette and
           chrome, and `ParSection` establishes that the two do not nest. */}
       <header className="tx-masthead">
-        <h1 className="tx-title">MCP (Model Context Protocol) OAuth 2.1</h1>
+        <h1 className="tx-title" id={`${uid}-masthead`}>
+          MCP (Model Context Protocol) OAuth 2.1
+        </h1>
         <span className="tx-ref">MCP Authorization · OAuth 2.1 · RFC 8707</span>
       </header>
 
@@ -150,7 +152,17 @@ function McpSection() {
         <TabBar
           options={LOOKUPS.map(({ value, label }) => ({ value, label }))}
           value={activeOp}
-          onChange={setActiveOp}
+          /**
+           * `reset()` first: the three lookups share one `useAsyncCall`, and it clears its result
+           * only when the *next* request starts. So fetching AS Metadata and then clicking CIMD
+           * Metadata left one server's document under a turn head reading "GET the CIMD URL
+           * itself", with a filled marker and `data-dir="in"` — an answer to a request nobody made,
+           * which for a wire-inspection instrument is worse than showing nothing.
+           */
+          onChange={(v) => {
+            reset();
+            setActiveOp(v);
+          }}
           panelId={LOOKUP_PANEL_ID}
         />
 
@@ -166,7 +178,9 @@ function McpSection() {
         >
           <span className="tx-marker" aria-hidden="true" />
           <div className="tx-turn-head">
-            <span className="tx-turn-label">Metadata · Client → Server</span>
+            {/* `h2`, matching the wizard's — the six step turns are `h3`s and this was a bare `span`,
+              so heading navigation jumped straight past the section's entire first half. */}
+            <h2 className="tx-turn-label">Metadata · Client → Server</h2>
             {lookup && <span className="tx-turn-note">GET {lookup.wellKnown}</span>}
           </div>
 
@@ -213,9 +227,9 @@ function McpSection() {
 
           {result ? <JsonBlock data={result} label="Response" /> : null}
         </div>
-
-        <McpWizard flow={flow} />
       </div>
+
+      <McpWizard flow={flow} />
     </section>
   );
 }

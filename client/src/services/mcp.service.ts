@@ -7,7 +7,7 @@ async function fetchAsMetadata(issuerUrl: string): Promise<unknown> {
     '/.well-known/oauth-authorization-server',
     '/.well-known/openid-configuration',
   ];
-  let lastError: Error | null = null;
+  const attempts: Array<{ path: string; message: string }> = [];
 
   for (const path of wellKnownPaths) {
     const url = `${issuerUrl.replace(/\/$/, '')}${path}`;
@@ -17,11 +17,24 @@ async function fetchAsMetadata(issuerUrl: string): Promise<unknown> {
       const data = await http.getJson(url, undefined, asMetadataSchema);
       return data;
     } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e));
+      attempts.push({ path, message: e instanceof Error ? e.message : String(e) });
     }
   }
 
-  throw lastError || new Error('Failed to fetch AS metadata from both well-known paths');
+  /**
+   * Both attempts, not just the last one.
+   *
+   * This threw `lastError` alone, so a legitimate RFC 8414 failure was reported as whatever OIDC
+   * Discovery happened to say — the diagnostic for the path the client asked for first was
+   * discarded. A reader debugging discovery needs to know which document was missing and which was
+   * malformed; one of those is a server misconfiguration and the other is a wrong issuer.
+   */
+  const detail = attempts.map(({ path, message }) => `${path}: ${message}`).join(' · ');
+  throw new Error(
+    attempts.length
+      ? `No usable AS metadata at either well-known path — ${detail}`
+      : 'Failed to fetch AS metadata from both well-known paths',
+  );
 }
 
 async function fetchProtectedResourceMetadata(resourceUrl: string): Promise<unknown> {
@@ -35,6 +48,18 @@ async function fetchCimdMetadata(cimdUrl: string): Promise<unknown> {
 
 function buildAuthorizationUrl(params: {
   issuer: string;
+  /**
+   * The `authorization_endpoint` discovery advertised, when Step 1 has run.
+   *
+   * **Without it this function made discovery decorative.** It assembled
+   * `${issuer}/api/authorization` by string concatenation, so a reader who discovered a document
+   * advertising `https://oauth2-0-ekh2.onrender.com/api/authorization` was then sent to
+   * `http://localhost:3000/api/authorization` — measured. The token and userinfo steps already
+   * prefer their discovered endpoints; authorize was the one that did not, in the section whose
+   * standfirst and whose own gating sentence both claim the URL is built from the metadata. In a
+   * teaching instrument the claim is the product.
+   */
+  authorizationEndpoint?: string;
   clientId: string;
   redirectUri: string;
   scope: string;
@@ -43,7 +68,8 @@ function buildAuthorizationUrl(params: {
   state: string;
   requestUri?: string;
 }): string {
-  const baseUrl = `${params.issuer.replace(/\/$/, '')}/api/authorization`;
+  const baseUrl =
+    params.authorizationEndpoint || `${params.issuer.replace(/\/$/, '')}/api/authorization`;
 
   const url = new URL(baseUrl);
   url.searchParams.set('response_type', 'code');

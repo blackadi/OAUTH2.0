@@ -150,7 +150,7 @@ describe('McpSection — the credential the user obtained', () => {
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
     );
 
-    fill(/Authorization Code \(from callback\)/i, 'code-from-callback');
+    fill(/Authorization Code/i, 'code-from-callback');
     press(/Exchange Code for Token/i);
 
     const [params] = (await expectCall(spy, 'the token exchange button')) as [
@@ -185,7 +185,7 @@ describe('McpSection — the credential the user obtained', () => {
     press(/Fetch Metadata/i);
     await screen.findByText(/DCR Supported/i);
 
-    fill(/Resource — the MCP server this token is for/i, 'https://mcp.example.com');
+    fill(/Resource \(MCP server URL\)/i, 'https://mcp.example.com');
     press(/Build Authorization URL/i);
 
     const [authParams] = (await expectCall(build, 'the build authorization URL button')) as [
@@ -197,7 +197,7 @@ describe('McpSection — the credential the user obtained', () => {
     await waitFor(() =>
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
     );
-    fill(/Authorization Code \(from callback\)/i, 'code-from-callback');
+    fill(/Authorization Code/i, 'code-from-callback');
     press(/Exchange Code for Token/i);
 
     const [tokenParams] = (await expectCall(exchange, 'the token exchange button')) as [
@@ -243,7 +243,7 @@ describe('McpSection — the credential the user obtained', () => {
     await waitFor(() =>
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
     );
-    fill(/Authorization Code \(from callback\)/i, 'code-from-callback');
+    fill(/Authorization Code/i, 'code-from-callback');
     press(/Exchange Code for Token/i);
 
     await expectReadsBack(/at-mcp-01/, 'the access token from the exchange');
@@ -267,7 +267,7 @@ describe('McpSection — the credential the user obtained', () => {
     await waitFor(() =>
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
     );
-    fill(/Authorization Code \(from callback\)/i, 'code-from-callback');
+    fill(/Authorization Code/i, 'code-from-callback');
     press(/Exchange Code for Token/i);
     await waitFor(() => expect(screen.getByRole('button', { name: /Introspect/i })).toBeEnabled());
     press(/Introspect/i);
@@ -304,7 +304,7 @@ describe('McpSection — the credential the user obtained', () => {
     await waitFor(() =>
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
     );
-    fill(/Authorization Code \(from callback\)/i, 'code-from-callback');
+    fill(/Authorization Code/i, 'code-from-callback');
     press(/Exchange Code for Token/i);
 
     expect(await screen.findByText(/What does this mean\?|Hide explanation/i)).toBeInTheDocument();
@@ -354,7 +354,7 @@ describe('McpSection — the authorization survives the redirect', () => {
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
     await screen.findByText(/DCR Supported/i);
-    if (resource !== undefined) fill(/Resource — the MCP server/i, resource);
+    if (resource !== undefined) fill(/Resource \(MCP server URL\)/i, resource);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
   }
@@ -535,13 +535,80 @@ describe('McpSection — the three regressions the second critique found', () =>
     await screen.findByText(/DCR Supported/i);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
-    fill(/Authorization Code \(from callback\)/i, 'typed-by-hand');
+    fill(/Authorization Code/i, 'typed-by-hand');
 
     expect(
       within(document.getElementById('mcp-step-4')!).queryByText(/callback already exchanged/i),
     ).toBeNull();
     // And step 4 no longer tells you to fetch a code the redirect would have handled.
     expect(screen.queryByText(/bring the code back from the callback/i)).toBeNull();
+  });
+});
+
+describe('McpSection — a coloured pixel means the server spoke', () => {
+  /**
+   * `transcript.css` states this world's one inviolable rule, and Step 2 broke it.
+   *
+   * The "landed" marker and the flow diagram both read `clientId !== CLIENT_ID`, so typing a single
+   * character into the editable "Client ID (auto-filled)" field filled the marker with the issued
+   * colour, flipped the turn to `data-dir="in"`, and made the diagram announce "Register:
+   * completed" — through `aria-label`, so assistive technology heard it too. No request had been
+   * made. In the section that teaches OAuth, a green "registered" for a client that was never
+   * registered is a false claim about a protocol step.
+   */
+  it('does not call a step landed because someone typed in a field', async () => {
+    vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
+    mountSection(<McpSection />);
+    press(/Fetch Metadata/i);
+    await screen.findByText(/capabilities/i);
+
+    const step2 = document.getElementById('mcp-step-2')!;
+    expect(step2).toHaveAttribute('data-dir', 'out');
+
+    fill(/Client ID \(auto-filled\)/i, 'typed-by-hand-not-registered');
+
+    expect(step2, 'a keystroke is not a registration').toHaveAttribute('data-dir', 'out');
+    expect(step2).not.toHaveAttribute('data-state', 'landed');
+    // And the diagram must not announce it either — that reached assistive tech verbatim.
+    expect(screen.queryByLabelText(/Step 2, Register: completed/i)).toBeNull();
+  });
+
+  it('calls it landed when a server actually answers', async () => {
+    vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
+    vi.spyOn(mcpService, 'fetchCimdMetadata').mockResolvedValue({ client_name: 'Probe' });
+    mountSection(<McpSection />);
+    press(/Fetch Metadata/i);
+    await screen.findByText(/capabilities/i);
+
+    fill(/CIMD URL \(for CIMD flow\)/i, 'https://app.example.com/.well-known/oauth-client');
+    press(/CIMD \(URL as client_id\)/i);
+    await screen.findByText(/CIMD document read/i);
+
+    expect(document.getElementById('mcp-step-2')).toHaveAttribute('data-dir', 'in');
+  });
+});
+
+describe('McpSection — evidence belongs to the request that produced it', () => {
+  /**
+   * The three lookups share one `useAsyncCall`, which clears its result only when the *next* request
+   * starts. So fetching AS Metadata and then switching to the CIMD tab left one server's document
+   * sitting under a turn head reading "GET the CIMD URL itself", with a filled marker — a
+   * wire-inspection instrument presenting an answer to a request nobody made.
+   */
+  it('clears a landed document when the selected lookup changes', async () => {
+    vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
+    mountSection(<McpSection />);
+
+    await selectOp(/AS Metadata/i);
+    press(/Fetch AS Metadata/i);
+    await screen.findByText(/"issuer"/);
+
+    await selectOp(/CIMD Metadata/i);
+    expect(
+      screen.queryByText(/"issuer"/),
+      'that document answers a request this tab never made',
+    ).toBeNull();
+    expect(document.getElementById('mcp-lookup-panel')).toHaveAttribute('data-dir', 'out');
   });
 });
 
@@ -637,7 +704,7 @@ describe('McpSection — rebuilding the authorization asks first', () => {
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
 
-    fill(/Authorization Code \(from callback\)/i, 'code-from-the-first-authorization');
+    fill(/Authorization Code/i, 'code-from-the-first-authorization');
     const first = sessionStorage.getItem('pkce_code_verifier');
     press(/Build Authorization URL/i);
 
@@ -648,9 +715,7 @@ describe('McpSection — rebuilding the authorization asks first', () => {
     press(/Start over/i);
     await waitFor(() => expect(sessionStorage.getItem('pkce_code_verifier')).not.toBe(first));
     // The code cannot be exchanged against the new challenge, so it must not be left in the field.
-    expect(
-      (screen.getByLabelText(/Authorization Code \(from callback\)/i) as HTMLInputElement).value,
-    ).toBe('');
+    expect((screen.getByLabelText(/Authorization Code/i) as HTMLInputElement).value).toBe('');
   });
 
   it('keeps the code when the question is declined', async () => {
@@ -661,16 +726,16 @@ describe('McpSection — rebuilding the authorization asks first', () => {
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
 
-    fill(/Authorization Code \(from callback\)/i, 'keep-me');
+    fill(/Authorization Code/i, 'keep-me');
     const first = sessionStorage.getItem('pkce_code_verifier');
     press(/Build Authorization URL/i);
     await screen.findByRole('dialog');
     press(/Cancel/i);
 
     expect(sessionStorage.getItem('pkce_code_verifier')).toBe(first);
-    expect(
-      (screen.getByLabelText(/Authorization Code \(from callback\)/i) as HTMLInputElement).value,
-    ).toBe('keep-me');
+    expect((screen.getByLabelText(/Authorization Code/i) as HTMLInputElement).value).toBe(
+      'keep-me',
+    );
   });
 });
 

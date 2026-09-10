@@ -174,6 +174,20 @@ function HelpPopover({ title, description, params, returns, tips }: HelpPopoverP
         ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
         className="flex items-center justify-center w-5 h-5 rounded-full border border-accent bg-transparent text-accent-text cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+        /**
+         * Deliberately just "Help", and the alternative is worse.
+         *
+         * A review found four identically-named Help buttons on `/mcp` with nothing to choose
+         * between them, so the obvious fix is to name each after what it explains — `Help: ${title}`.
+         * Measured: that broke **22 tests across five sections**, because the title *is* the
+         * operation's name, so every `getByRole('button', { name: /Build Authorization URL/i })`
+         * then matched the real control and its help button both. Ambiguity moved from four buttons
+         * that share a name to every button colliding with the control beside it.
+         *
+         * The disambiguation belongs in context instead: each of these sits inside a `role="group"`
+         * named by its own step heading, which is the mechanism ARIA provides for exactly this and
+         * costs no collisions. The name stays a verb the reader recognises.
+         */
         aria-label="Help"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}

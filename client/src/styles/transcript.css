@@ -1,5 +1,5 @@
 /**
- * The Transcript world — a pilot, scoped to `.tx` and applied so far only by `ParSection`.
+ * The Transcript world — a pilot, scoped to `.tx` and adopted by sixteen sections (it began as a pilot in `ParSection`).
  *
  * **The thesis.** An OAuth exchange is a conversation with a strict turn order, and its security model
  * depends on that order. The incumbent world renders every operation as an isolated form with a JSON
@@ -38,6 +38,16 @@
   --t-refused-wash: rgb(155 28 28 / 0.07);
 
   --t-spine: 2rem;
+
+  /*
+   * One mono stack for the world. It was declared three different ways across this file and
+   * `register.css` — `…, ui-monospace, monospace`, `…, ui-monospace, SFMono-Regular, Menlo,
+   * monospace`, and the app's own longer stack — which is three answers to "what is the fallback
+   * when JetBrains Mono is missing". DESIGN.md's rule about the body face applies here for the same
+   * reason: restating a stack makes a second place the face is named, and two declarations of one
+   * thing is how the next person picks the wrong one.
+   */
+  --t-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   background: var(--t-paper);
   color: var(--t-ink);
@@ -97,7 +107,7 @@
 
 .tx-title {
   margin: 0;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--t-mono);
   font-size: 1.0625rem;
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -106,7 +116,7 @@
 }
 
 .tx-ref {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.6875rem;
   letter-spacing: 0.08em;
   color: var(--t-graphite);
@@ -182,7 +192,19 @@
 }
 
 .tx-turn[data-state='pending'] .tx-marker {
+  /*
+   * Measured against a ready marker: fill 1.00:1 (ready is `--t-paper` over `--t-paper`; pending is
+   * transparent, compositing to the same colour) and an *identical* border colour, so the entire
+   * visual distinction rested on solid-vs-dashed on a 1px stroke around an 11px square — 2.13:1
+   * against its ground, under WCAG 2.1 §1.4.11's 3:1 for non-text contrast.
+   *
+   * The border colour now differs too, so the state has a second visual carrier. The marker is
+   * `aria-hidden`, and the state is already conveyed in text (`data-state`, the `aria-describedby`
+   * sentence, `fieldset[disabled]`) — this closes the one place it was carried weakly rather than
+   * the places it was carried well.
+   */
   border-style: dashed;
+  border-color: var(--t-graphite);
   background: transparent;
 }
 
@@ -195,7 +217,7 @@
 }
 
 .tx-turn-label {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.14em;
@@ -223,7 +245,7 @@
 
 .tx-label {
   display: block;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.6875rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -241,7 +263,7 @@
   border-radius: 0;
   background: transparent;
   color: var(--t-ink);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.8125rem;
   line-height: 1.6;
 }
@@ -285,10 +307,17 @@
 }
 
 .tx-hint {
-  margin: 0.375rem 0 0;
+  /* `0.75rem` top, and `0.75rem` bottom: with no bottom margin a hint abutted the *next* field's
+     label, so it read as that field's caption rather than its own field's. Measured in Step 2, where
+     two hints each documented the control below them instead of the one above. */
+  margin: 0.375rem 0 0.75rem;
   font-size: 0.75rem;
   line-height: 1.5;
   color: var(--t-graphite);
+  /* The measure `.tx-standfirst` (68ch) and `.tx-waiting` (62ch) already carry, and this class did
+     not — so five hints rendered at 642px, ~107 characters a line, one of them 395 characters long.
+     Two of three prose classes capped it; the third was the one used most. */
+  max-width: 62ch;
 }
 
 .tx-row {
@@ -359,6 +388,9 @@
   flex-wrap: wrap;
   align-items: center;
   margin-top: 1rem;
+  /* The primary button carries a `1px 1px 0 0` offset shadow, and with no bottom margin it bled
+     into the top border of whatever followed — visibly, into the error box under a failed step. */
+  margin-bottom: 0.25rem;
 }
 
 .tx-btn {
@@ -370,7 +402,7 @@
   border-radius: 1px;
   background: transparent;
   color: var(--t-graphite);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.75rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -450,7 +482,7 @@
 }
 
 .tx-evidence-verdict {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.12em;
@@ -473,7 +505,7 @@
 
 .tx-datum-key {
   display: block;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.625rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -482,7 +514,7 @@
 }
 
 .tx-datum-value {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.8125rem;
   line-height: 1.55;
   color: var(--t-ink);
@@ -511,7 +543,7 @@
 }
 
 .tx-waiting code {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--t-mono);
   font-size: 0.75rem;
   color: var(--t-ink);
 }

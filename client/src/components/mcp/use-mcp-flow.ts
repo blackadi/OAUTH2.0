@@ -113,6 +113,7 @@ export function useMcpFlow() {
     error,
     errorLabel: wizErrorLabel,
     call: wizCall,
+    fail: wizFail,
   } = useDiscriminatedAsyncCall<McpStep>();
   // The management credential is shared for the page rather than owned here: eight sections held their
   // own copy, and a route change unmounts a section, so it had to be retyped on every navigation.
@@ -140,6 +141,21 @@ export function useMcpFlow() {
    * only when non-empty.
    */
   const [wizClientSecret, setWizClientSecret] = useState('');
+  /**
+   * The client id an authorization server actually gave back, as distinct from the one in the field.
+   *
+   * **The defect this exists to end.** Step 2's "landed" marker and the flow diagram both read
+   * `clientId !== CLIENT_ID`, so typing a single character into the editable "Client ID
+   * (auto-filled)" field filled the marker with the issued colour, flipped the turn to
+   * `data-dir="in"`, and made the diagram announce "Register: completed" — through `aria-label`, so
+   * assistive technology heard it too. No request had been made.
+   *
+   * `transcript.css` states this world's one inviolable rule: a coloured pixel means the server
+   * spoke. And this is the section that teaches OAuth, so a green "registered" for a client that was
+   * never registered is a false claim about a protocol step, in the tool a reader will trust over
+   * their own reading. Set only in the success branches of `wizStepCimd` and `wizStepDcr`.
+   */
+  const [wizRegisteredClientId, setWizRegisteredClientId] = useState<string | null>(null);
   const [wizRedirectUri, setWizRedirectUri] = useState(REDIRECT_URI);
   const [wizScopes, setWizScopes] = useState(DEFAULT_SCOPES);
   const [wizResource, setWizResource] = useState('');
@@ -206,6 +222,7 @@ export function useMcpFlow() {
 
   const wizStepCimd = useCallback(async () => {
     if (!wizCimdUrl) {
+      wizFail('Fetch CIMD', 'Enter a CIMD URL first');
       toast.error('Enter a CIMD URL first');
       return;
     }
@@ -220,14 +237,16 @@ export function useMcpFlow() {
       if (cimdData.scope) setWizScopes(cimdData.scope);
       // Use CIMD URL as client_id
       setWizClientId(wizCimdUrl);
+      setWizRegisteredClientId(wizCimdUrl);
       toast.success('CIMD metadata loaded — client_id set to CIMD URL');
     } else {
       toast.error(err);
     }
-  }, [wizCimdUrl, wizCall]);
+  }, [wizCimdUrl, wizCall, wizFail]);
 
   const wizStepDcr = useCallback(async () => {
     if (!auth) {
+      wizFail('DCR Register', 'Enter admin credentials first');
       toast.error('Enter admin credentials first');
       return;
     }
@@ -262,6 +281,7 @@ export function useMcpFlow() {
       const clientSecret = stringMember(responseContent, 'client_secret', 'clientSecret') ?? '';
       if (clientId) {
         setWizClientId(clientId);
+        setWizRegisteredClientId(clientId);
         setWizClientSecret(clientSecret);
         toast.success(
           `DCR registered: client_id=${clientId}${clientSecret ? ' — a secret came back despite asking for NONE; it will be sent on the exchange' : ' (public, PKCE only)'}`,
@@ -270,7 +290,7 @@ export function useMcpFlow() {
     } else {
       toast.error(err);
     }
-  }, [auth, wizRedirectUri, wizScopes, wizCall]);
+  }, [auth, wizRedirectUri, wizScopes, wizCall, wizFail]);
 
   /**
    * Build the authorization URL, and write down everything the callback will need.
@@ -342,6 +362,9 @@ export function useMcpFlow() {
 
     const authUrl = mcpService.buildAuthorizationUrl({
       issuer: wizIssuer,
+      // Step 1's document, when it has run. Without this the section claimed to build the URL from
+      // discovered metadata and then ignored it.
+      authorizationEndpoint: wizAsData?.authorization_endpoint,
       clientId: wizClientId,
       redirectUri: wizRedirectUri,
       scope: wizScopes,
@@ -359,6 +382,7 @@ export function useMcpFlow() {
     wizRedirectUri,
     wizScopes,
     wizResource,
+    wizAsData,
     saveProgress,
   ]);
 
@@ -385,6 +409,7 @@ export function useMcpFlow() {
 
   const wizStepToken = useCallback(async () => {
     if (!wizCode || !wizCodeVerifier) {
+      wizFail('Exchange Code', 'Enter the authorization code from the callback');
       toast.error('Enter the authorization code from the callback');
       return;
     }
@@ -417,6 +442,7 @@ export function useMcpFlow() {
     wizRedirectUri,
     wizResource,
     wizCall,
+    wizFail,
   ]);
 
   /**
@@ -433,6 +459,7 @@ export function useMcpFlow() {
   const wizStepUserinfo = useCallback(async () => {
     const accessToken = (wizEffectiveToken as Record<string, unknown>)?.access_token as string;
     if (!accessToken) {
+      wizFail('Fetch UserInfo', 'No access token available — complete token exchange first');
       toast.error('No access token available — complete token exchange first');
       return;
     }
@@ -446,7 +473,7 @@ export function useMcpFlow() {
     } else {
       toast.error(err);
     }
-  }, [wizEffectiveToken, wizAsData, wizIssuer, wizCall]);
+  }, [wizEffectiveToken, wizAsData, wizIssuer, wizCall, wizFail]);
 
   /**
    * Introspect the token the wizard just obtained.
@@ -462,26 +489,44 @@ export function useMcpFlow() {
   const wizStepIntrospect = useCallback(async () => {
     const accessToken = (wizEffectiveToken as Record<string, unknown>)?.access_token as string;
     if (!accessToken) {
+      wizFail('Introspect', 'No access token available — complete token exchange first');
       toast.error('No access token available — complete token exchange first');
       return;
     }
     if (!authId || !authSecret) {
+      wizFail(
+        'Introspect',
+        "Introspection needs this deployment's admin credentials — fill them in above",
+      );
       toast.error("Introspection needs this deployment's admin credentials — fill them in above");
       return;
     }
     /**
-     * The discovered endpoint, falling back to the RFC 7662 path.
+     * The RFC 7662 path, deliberately not the discovered member.
      *
-     * A review flagged this as a likely defect — that the advertised `introspection_endpoint` would
-     * be the Authlete-shaped `/api/introspection` while the fallback names the RFC 7662
-     * `/api/introspection/standard`, so Step 6 would get *more* likely to fail once Step 1 had run.
-     * Measured 2026-09-10 against the live document: it advertises
-     * `https://…/api/introspection/standard`, the same path as the fallback. There is no mismatch,
-     * and the concern is recorded here so it is not re-raised from the same reasoning.
+     * **A correction to a comment that stood here and was wrong.** It claimed the concern had been
+     * measured away — that the advertised `introspection_endpoint` was already the RFC 7662
+     * `/api/introspection/standard`, so there was no mismatch. That measurement read
+     * `/.well-known/openid-configuration`. `fetchAsMetadata` tries `/.well-known/
+     * oauth-authorization-server` **first**, and the two documents this deployment serves disagree:
+     *
+     *   RFC 8414 path        → `…/api/introspection`           (Authlete-shaped)
+     *   OIDC Discovery path  → `…/api/introspection/standard`  (RFC 7662)
+     *
+     * So the original concern was right: Step 1 populates `asData` from the RFC 8414 document, and
+     * trusting its member sent an RFC 7662 body to an endpoint with a different contract — the final
+     * step getting *more* likely to fail the more correctly the flow was run. `AGENTS.md` says it
+     * plainly: reading one document proves nothing about the other.
+     *
+     * `mcpService.introspectToken` sends an RFC 7662 request, so it goes to the RFC 7662 endpoint.
+     * The discovered member is honoured only when it already names that path, which keeps discovery
+     * meaningful for a deployment whose documents agree.
      */
+    const discovered = wizAsData?.introspection_endpoint as string | undefined;
     const endpoint =
-      (wizAsData?.introspection_endpoint as string | undefined) ||
-      `${wizIssuer}/api/introspection/standard`;
+      discovered && discovered.endsWith('/standard')
+        ? discovered
+        : `${wizIssuer}/api/introspection/standard`;
     const { data, error: err } = await wizCall('Introspect', () =>
       mcpService.introspectToken(endpoint, accessToken, authId, authSecret),
     );
@@ -491,7 +536,7 @@ export function useMcpFlow() {
     } else {
       toast.error(err);
     }
-  }, [wizEffectiveToken, wizAsData, wizIssuer, authId, authSecret, wizCall]);
+  }, [wizEffectiveToken, wizAsData, wizIssuer, authId, authSecret, wizCall, wizFail]);
 
   return {
     loading,
@@ -526,6 +571,11 @@ export function useMcpFlow() {
     tokenResult: wizEffectiveToken,
     userinfoResult: wizUserinfoResult,
     introspectResult: wizIntrospectResult,
+    /**
+     * Non-null once a server has answered a registration. The wizard reads this, never the field,
+     * for anything that claims the step happened.
+     */
+    registeredClientId: wizRegisteredClientId,
     /** `auth` is exposed so the wizard can disable the DCR button without re-deriving it. */
     hasAdminCredential: Boolean(auth),
     stepDiscover: wizStepDiscover,

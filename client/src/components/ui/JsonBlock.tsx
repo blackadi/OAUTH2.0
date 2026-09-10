@@ -62,7 +62,14 @@ function JsonBlock({ data, className, label }: JsonBlockProps) {
         hover state caused the render. An identical response twice deliberately does **not** re-animate:
         nothing changed, so there is nothing to point at.
       */}
+      {/*
+        `role="region"` and a name, because the well is a *scroll* container and Chrome makes those
+        focusable: measured on `/mcp`, tab stop 9 of 12 landed on this `<pre>` with no role, no
+        tabindex and no accessible name — an announced blank stop in the middle of the flow.
+      */}
       <pre
+        role="region"
+        aria-label={label ? `${label} body` : 'Response body'}
         key={formatted}
         /**
          * `max-h-96` and a vertical scroll, not just `overflow-x-auto`.

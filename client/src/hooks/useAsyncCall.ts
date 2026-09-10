@@ -142,6 +142,23 @@ function useDiscriminatedAsyncCall<Label extends string, Result = unknown>() {
     [],
   );
 
+  /**
+   * Record a refusal this hook never sent a request for.
+   *
+   * A section's guard clauses — "enter a code first", "no access token yet" — are failures of the
+   * same operation, and they used to reach the reader only as a toast in the corner. So the section
+   * that had moved every *server* refusal to the control that caused it still threw its own
+   * refusals across the screen, and `MCP`'s five guard clauses were the proof: same operation, same
+   * reader, two different places to look depending on who said no.
+   *
+   * Labelled like a real call so the same `errorLabel` routing places it in the same card.
+   */
+  const fail = useCallback((label: Label, message: string) => {
+    setResult(null);
+    setError(message);
+    setErrorLabel(label);
+  }, []);
+
   const reset = useCallback(() => {
     setLoading(null);
     setResult(null);
@@ -149,7 +166,7 @@ function useDiscriminatedAsyncCall<Label extends string, Result = unknown>() {
     setErrorLabel(null);
   }, []);
 
-  return { loading, result, error, errorLabel, call, reset };
+  return { loading, result, error, errorLabel, call, fail, reset };
 }
 
 /**

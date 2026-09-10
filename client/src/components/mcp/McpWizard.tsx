@@ -5,7 +5,6 @@ import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc, type OpDoc } from '@/data/operationDocs';
 import { useConfirmedAction } from '@/hooks/useConfirmedAction';
-import { CLIENT_ID } from '@/config';
 import type { McpFlow, McpStep } from './use-mcp-flow';
 
 /** The `tx-doc` overrides every transcript section applies to the shared explainer. */
@@ -76,7 +75,9 @@ const MCP_STEPS: FlowStep[] = [
 function wizardProgress(flow: McpFlow): { completedSteps: string[]; currentStep?: string } {
   const done: Array<[string, boolean]> = [
     ['discover', Boolean(flow.asData)],
-    ['register', flow.clientId !== CLIENT_ID],
+    // The response, never the field — see `registeredClientId`. Reading `clientId` here is what
+    // let one keystroke announce "Register: completed".
+    ['register', flow.registeredClientId !== null],
     ['authorize', Boolean(flow.authUrl)],
     ['token', Boolean(flow.tokenResult)],
     ['userinfo', Boolean(flow.userinfoResult)],
@@ -174,19 +175,29 @@ function StepTurn({
   blockedBy,
   children,
 }: StepTurnProps) {
-  const hintId = `${useId()}-blocked`;
+  const base = useId();
+  const hintId = `${base}-blocked`;
+  const headingId = `${base}-label`;
   return (
     <div
       id={id}
       tabIndex={-1}
       className="tx-turn"
+      /**
+       * A named group, doing two jobs. It stops six `<fieldset>`s announcing as a bare "group", and
+       * it gives the step's Help button a context saying which step it belongs to — the
+       * disambiguation that naming the button itself could not provide without colliding with the
+       * operation's own control.
+       */
+      role="group"
+      aria-labelledby={headingId}
       data-dir={landed ? 'in' : 'out'}
       data-state={!ready ? 'pending' : landed ? 'landed' : undefined}
       aria-describedby={!ready && blockedBy ? hintId : undefined}
     >
       <span className="tx-marker" aria-hidden="true" />
       <div className="tx-turn-head">
-        <h3 className="tx-turn-label">
+        <h3 className="tx-turn-label" id={headingId}>
           {n} · {label}
         </h3>
         {note && <span className="tx-turn-note">{note}</span>}
@@ -199,6 +210,10 @@ function StepTurn({
         </div>
       )}
       {doc && <OperationDescription doc={doc} className={DOC_CLASS} />}
+      {/* `aria-labelledby` on the group: six unnamed `<fieldset>`s announce as "group" six times,
+          and the heading above each one is exactly its name. */}
+      {/* Unnamed on purpose: the turn above is the named group, and repeating the name here would
+          announce the same step twice on the way in. What this element is for is the `disabled`. */}
       <fieldset disabled={!ready} className="contents">
         {children}
       </fieldset>
@@ -335,6 +350,13 @@ function McpWizard({ flow }: { flow: McpFlow }) {
 
   return (
     <>
+      {/*
+        A sibling of the section's own `tx-body`, not a second one nested inside it.
+        Nested, the wizard's masthead was inset 24px against a full-bleed section rule, and its six
+        turns hung on a *second* spine 24px to the right of the lookup turn's — so the signature
+        element of this world rendered as two disconnected threads. `DcrSection` keeps its masthead
+        and standfirst as siblings for the same reason.
+      */}
       <header className="tx-masthead">
         <h2 className="tx-title">The full flow</h2>
         <span className="tx-ref">six exchanges, in order</span>
@@ -430,7 +452,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           label="Register client (optional)"
           note="CIMD fetch, or POST /api/client/registration"
           ready={Boolean(flow.asData)}
-          landed={flow.clientId !== CLIENT_ID}
+          landed={flow.registeredClientId !== null}
           busy={flow.loading === 'Fetch CIMD' || flow.loading === 'DCR Register'}
           blockedBy="Run Step 1 first — this step reads the registration endpoint out of the AS metadata."
         >
@@ -536,27 +558,18 @@ function McpWizard({ flow }: { flow: McpFlow }) {
             <TxField label="Scopes" value={flow.scopes} onChange={flow.setScopes} />
           </div>
           <TxField
-            label="Resource — the MCP server this token is for"
+            label="Resource (MCP server URL)"
             value={flow.resource}
             onChange={flow.setResource}
             placeholder="https://mcp-server.example.com"
             hint={
               <>
-                Labelled optional here until 2026-09-10, which contradicted the specification this
-                section is named for: MCP requires <code>resource</code> on both the authorization
-                and the token request, and requires clients to send it{' '}
-                <em>regardless of whether the authorization server advertises support</em>. Leave it
-                empty and the token comes back without an <code>aud</code> bound to your server —
-                Step 6 is where you can see which you got.
+                MCP requires this on both the authorization and the token request,{' '}
+                <em>regardless of whether the server advertises support</em>. Empty means an unbound
+                token — Step 6 is where you see which you got.
               </>
             }
           />
-          {!flow.resource && (
-            <p className="tx-hint">
-              No resource set, so this authorization asks for an unbound token — useful to compare
-              against in Step 6, and not what an MCP client should send.
-            </p>
-          )}
           <div className="tx-actions">
             <button
               type="button"
@@ -601,7 +614,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
             </p>
           )}
           <TxField
-            label="Authorization Code (from callback)"
+            label="Authorization Code"
             value={flow.code}
             onChange={flow.setCode}
             placeholder="Paste code from ?code=... in callback URL"

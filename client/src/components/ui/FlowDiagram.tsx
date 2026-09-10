@@ -25,7 +25,19 @@ interface FlowDiagramProps {
 function FlowDiagram({ steps, currentStep, completedSteps = [], className }: FlowDiagramProps) {
   return (
     <div
-      className={cn('flex items-center gap-0', className)}
+      /**
+       * `items-start`, not `items-center`.
+       *
+       * Each column is as tall as its own wrapped description, and centring them put the six step
+       * labels on six different baselines — measured top edges at y = 796, 788, 788, 796, 804, 804,
+       * a 16px spread across a row whose whole job is to read as one rank.
+       *
+       * `overflow-x-auto` below `sm`: at 390px each item computed to 43px wide with no width floor,
+       * so "Authorize" overlapped "Token", "Introspect" was clipped at the container edge, and the
+       * arrow glyphs rendered *underneath* the text. Descriptions are already hidden below `sm`, so
+       * those six overlapping words were the only wayfinding left on a 4,484px mobile page.
+       */
+      className={cn('flex items-start gap-0 overflow-x-auto sm:overflow-visible', className)}
       role="list"
       aria-label="Flow progress"
     >
@@ -52,7 +64,7 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
              * both check the attributes rather than the resulting accessibility tree.
              */
             role="listitem"
-            className="flex items-center flex-1 min-w-0"
+            className="flex items-start flex-1 min-w-[4.5rem] sm:min-w-0"
             aria-label={`Step ${i + 1}, ${step.label}: ${state}${step.description ? `. ${step.description}` : ''}`}
             aria-current={isCurrent ? 'step' : undefined}
           >
@@ -79,7 +91,7 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
               </div>
               <span
                 className={cn(
-                  'text-2xs font-medium text-center leading-tight px-1',
+                  'text-2xs font-medium text-center leading-tight px-1 max-w-[9ch] sm:max-w-none',
                   isCompleted && 'text-success-text',
                   isCurrent && 'text-accent-text',
                   isPending && 'text-muted-foreground',
@@ -94,7 +106,7 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
               )}
             </div>
             {i < steps.length - 1 && (
-              <div className="shrink-0 mx-1">
+              <div className="shrink-0 mx-1 mt-2.5">
                 <ArrowRight
                   className={cn('h-3 w-3', isCompleted ? 'text-success-text' : 'text-border')}
                 />
