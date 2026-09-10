@@ -17,6 +17,14 @@ import { NARROW } from './surfaces';
  * | the disabled parameter row | the `opacity-55` contrast failure, now a surface tint |
  * | a primary and a danger button | the gradient stops that measured 2.98:1 and 2.77:1 on hover |
  * | an unavailable wizard step | the `opacity-50` failure across seven sites |
+ * | a selected transcript tab | the indigo `bg-tint-accent-strong` the `.tx` world used to borrow |
+ * | the flow diagram's three states | done/here/not-yet, after "here" stopped being indigo |
+ *
+ * The last two were added because the `.tx` palette fix spanned **16 of 23 sections** — the payload
+ * well, every tab bar and the diagram's current step — and this suite had exactly one shot touching
+ * that world, of a gated step containing none of the three. A change that broad with that little
+ * coverage is how a suite passes something it should have caught. Both new shots are deterministic:
+ * a tab click makes no request, and the diagram renders its states on arrival.
  *
  * **Chromium only.** Font rasterisation differs between engines, so a shared baseline would fail on one
  * of them for reasons that have nothing to do with the layout — and maintaining two sets doubles the
@@ -126,6 +134,50 @@ for (const scheme of ['dark', 'light'] as const) {
 
       await expect(page.getByRole('button').first()).toHaveScreenshot(
         `button-primary-${scheme}.png`,
+      );
+    });
+
+    /**
+     * A selected tab in the transcript world, which used to paint itself indigo.
+     *
+     * `bg-tint-accent-strong text-accent-text border-edge-accent` — the app's accent inside a scoped
+     * world with its own palette, and the first thing a reader sees in each of 16 sections. It is now
+     * ink on `--t-sunk`, and deliberately not `--t-issued`: that token means the server answered, and
+     * a tab is a selector.
+     */
+    test(`a selected transcript tab`, async ({ page }) => {
+      await page.setViewportSize({ width: 1024, height: 900 });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto('/mcp');
+      await page.waitForSelector('h1');
+      // A click, not a request: nothing here is fetched, so the shot cannot flake on the network.
+      await page.getByRole('tab', { name: /AS Metadata/i }).click();
+      await settle(page);
+
+      // Scoped to `main`, and strict rather than `.first()`: the app chrome is one `<ul>` away from
+      // silently becoming what these shots capture, and a baseline that follows the sidebar is worse
+      // than one that fails loudly. Measured: exactly one `tablist` and one `role=list` inside `main`.
+      await expect(page.locator('main').getByRole('tablist')).toHaveScreenshot(
+        `tx-tab-selected-${scheme}.png`,
+      );
+    });
+
+    /**
+     * The flow diagram's three states in one shot, after "you are here" stopped being indigo.
+     *
+     * Completed keeps its green because a completed step is an outcome; the current one is `--t-ink`
+     * because it describes the reader's position rather than a response. The 2px accent ring went
+     * with it. All three states render on arrival, so no request is needed.
+     */
+    test(`the flow diagram's three states`, async ({ page }) => {
+      await page.setViewportSize({ width: 1024, height: 900 });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto('/mcp');
+      await page.waitForSelector('h1');
+      await settle(page);
+
+      await expect(page.locator('main').getByRole('list')).toHaveScreenshot(
+        `tx-flow-diagram-${scheme}.png`,
       );
     });
 

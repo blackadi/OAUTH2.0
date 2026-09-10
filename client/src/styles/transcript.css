@@ -718,6 +718,23 @@
   color: var(--t-ink);
 }
 
+/* And the steps not yet reached, which were the larger surface of the two: five of six labels and
+   descriptions at slate-400 in dark and `#55637a` in light, against `--t-graphite` `#a19a8c` /
+   `#56524a`. Same lightness, cooler temperature — the same finding as `JsonBlock`'s header label,
+   and fixed here rather than recorded because this is the section's map rather than two words of
+   11px chrome.
+
+   Selected on the state in `aria-label`, which is the only place the component distinguishes *not
+   started* from *completed* in the DOM — there is no attribute for it. That is deliberate rather
+   than clever: `:not([aria-current])` would have caught completed steps too and taken their green
+   away, and green there is correct, because a completed step is an outcome. The string is the
+   component's own (`'not started'`, `FlowDiagram.tsx:62`), so a rename breaks the rule visibly
+   instead of silently repainting a state it was never meant to touch. */
+
+.tx [role='listitem'][aria-label*=': not started'] span {
+  color: var(--t-graphite);
+}
+
 /* ── RequestBuilder's header lines, with the emphasis the right way round ────
    The last app-palette element inside `.tx`, on `/token-exchange`: `RequestBuilder` renders each
    header key `text-accent-text` and its value `text-muted-foreground` — indigo on the name, muted
