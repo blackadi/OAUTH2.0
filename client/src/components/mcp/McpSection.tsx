@@ -75,7 +75,11 @@ const LOOKUPS: Lookup[] = [
   },
   {
     value: 'cimd',
-    wellKnown: 'the CIMD URL itself — the document is the client_id',
+    /* The other two append a well-known path to a base URL; a CIMD document is fetched from the
+       `client_id` itself, so the literal request line is the client_id. The explanation this used to
+       carry inline — "the document is the client_id" — read as prose after the word GET, and
+       `getDoc('mcp', 'cimd')` already says it in full, where a sentence belongs. */
+    wellKnown: '{client_id}',
     label: 'CIMD Metadata',
     inputLabel: 'CIMD URL',
     placeholder: 'https://myapp.com/.well-known/oauth-client',

@@ -205,7 +205,7 @@ export function press(name: string | RegExp): void {
  * through it — and asserting that it *appears* is itself worth having, since the guard is the finding.
  */
 export async function confirmDialog(typed?: string): Promise<void> {
-  const dialog = await screen.findByRole('dialog');
+  const dialog = await screen.findByRole('alertdialog');
   expect(dialog).toBeInTheDocument();
   if (typed !== undefined) {
     fireEvent.change(within(dialog).getByLabelText(/to confirm/i), { target: { value: typed } });

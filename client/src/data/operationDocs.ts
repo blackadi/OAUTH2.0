@@ -1233,7 +1233,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
         },
       ],
       returns:
-        'JSON with issuer, authorization_endpoint, token_endpoint, registration_endpoint (if DCR supported), resource_indicators_supported, code_challenge_methods_supported, scopes_supported, and other AS metadata fields.',
+        'JSON with issuer, authorization_endpoint, token_endpoint, registration_endpoint (if DCR supported), code_challenge_methods_supported, scopes_supported, and other AS metadata fields.',
       tips: 'MCP spec requires clients to support both discovery mechanisms. This server publishes metadata at both well-known paths. Use the metadata to build authorization URLs and token requests automatically.',
     },
     'resource-metadata': {

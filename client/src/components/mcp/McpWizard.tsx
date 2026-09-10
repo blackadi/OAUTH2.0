@@ -37,6 +37,39 @@ function StepError({ flow, steps }: { flow: McpFlow; steps: McpStep[] }) {
 }
 
 /**
+ * The AS metadata members Step 1 reports, and how to render each one's value.
+ *
+ * A list rather than three inline ternaries so that adding a member cannot accidentally add it to
+ * only the positive branch — which is how the previous version came to be unable to say "absent".
+ */
+const AS_CHECKS: readonly {
+  member: string;
+  read: (d: Record<string, unknown>) => string | null;
+}[] = [
+  {
+    member: 'registration_endpoint',
+    read: (d) => (typeof d.registration_endpoint === 'string' ? d.registration_endpoint : null),
+  },
+  {
+    member: 'code_challenge_methods_supported',
+    read: (d) =>
+      Array.isArray(d.code_challenge_methods_supported) &&
+      d.code_challenge_methods_supported.length > 0
+        ? d.code_challenge_methods_supported.join(' ')
+        : null,
+  },
+  {
+    member: 'authorization_response_iss_parameter_supported',
+    read: (d) =>
+      d.authorization_response_iss_parameter_supported === true
+        ? 'true (RFC 9207)'
+        : d.authorization_response_iss_parameter_supported === false
+          ? 'false'
+          : null,
+  },
+];
+
+/**
  * The six steps as a map, above the six turns.
  *
  * MCP is the longest sequence in this application and was the only multi-step section with no
@@ -378,6 +411,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           ready
           landed={Boolean(flow.asData)}
           busy={flow.loading === 'Discover AS'}
+          doc={getDoc('mcp', 'discovery')}
         >
           <TxField
             label="Issuer URL"
@@ -413,33 +447,32 @@ function McpWizard({ flow }: { flow: McpFlow }) {
                 </span>
               )}
               {/*
-                `resource_indicators_supported` used to be read here and rendered as a badge, and it
-                is not a thing. Verified 2026-09-10 against the IANA OAuth Authorization Server
-                Metadata registry — no such name is registered; the only resource-related member is
-                `protected_resources` (RFC 9728 §4) — and against the MCP authorization specification
-                (draft), which never mentions it and says instead: *"MCP clients MUST send this
-                parameter regardless of whether authorization servers support it."* There is no
-                Authlete service flag for it either; the live service object carries 135 fields and
-                none of them is one. So the badge could only ever be absent, and its absence was
-                indistinguishable from "we did not check".
+                Each member is named whether or not it is there, with its own value.
+
+                The line used to be one `capabilities` datum joining only the checks that *passed*,
+                falling back to "none advertised" — so an absent member and a member nobody looked
+                for rendered identically, which is the same defect that made
+                `resource_indicators_supported` worth deleting. (That one is not a real member:
+                verified 2026-09-10 against the IANA OAuth Authorization Server Metadata registry —
+                no such name is registered, the only resource-related member being
+                `protected_resources`, RFC 9728 §4 — and against the MCP authorization
+                specification, which never mentions it and says instead *"MCP clients MUST send this
+                parameter regardless of whether authorization servers support it."* No Authlete
+                service flag exists for it either.)
+
+                Showing the value rather than a badge is also strictly more instrument: the reader
+                gets the registration endpoint they are about to POST to, and the actual list of
+                challenge methods.
               */}
-              <span className="tx-datum">
-                <span className="tx-datum-key">capabilities</span>
-                <span className="tx-datum-value">
-                  {[
-                    flow.asData.registration_endpoint ? 'DCR Supported' : null,
-                    Array.isArray(flow.asData.code_challenge_methods_supported) &&
-                    flow.asData.code_challenge_methods_supported.includes('S256')
-                      ? 'PKCE S256'
-                      : null,
-                    flow.asData.authorization_response_iss_parameter_supported
-                      ? 'RFC 9207 iss'
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') || 'none advertised'}
-                </span>
-              </span>
+              {AS_CHECKS.map(({ member, read }) => {
+                const value = read(flow.asData!);
+                return (
+                  <span className="tx-datum" key={member}>
+                    <span className="tx-datum-key">{member}</span>
+                    <span className="tx-datum-value">{value ?? 'not advertised'}</span>
+                  </span>
+                );
+              })}
             </div>
           )}
           <StepError flow={flow} steps={['Discover AS']} />
@@ -454,6 +487,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           ready={Boolean(flow.asData)}
           landed={flow.registeredClientId !== null}
           busy={flow.loading === 'Fetch CIMD' || flow.loading === 'DCR Register'}
+          doc={getDoc('mcp', 'cimd')}
           blockedBy="Run Step 1 first — this step reads the registration endpoint out of the AS metadata."
         >
           {/* Step 3 gates on the AS metadata and never on this one, so the numbering overstates it:

@@ -131,7 +131,7 @@ describe('TokenVault — clearing the vault', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Clear tokens/i }));
 
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     // The vault clears DPoP keys and signing keys too, which is worth stating before someone confirms —
     // this is the property a driven test elsewhere would not catch, since it never opens this dialog.
     expect(within(dialog).getByText(/DPoP key pair/i)).toBeInTheDocument();
@@ -146,10 +146,10 @@ describe('TokenVault — clearing the vault', () => {
     mountSection(<TokenVault defaultExpanded />);
 
     fireEvent.click(screen.getByRole('button', { name: /Clear tokens/i }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: /Clear session/i }));
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(await screen.findByText(/No tokens yet/i)).toBeInTheDocument();
   });
 
@@ -158,10 +158,10 @@ describe('TokenVault — clearing the vault', () => {
     mountSection(<TokenVault defaultExpanded />);
 
     fireEvent.click(screen.getByRole('button', { name: /Clear tokens/i }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: /Cancel/i }));
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.getByText('Access Token')).toBeInTheDocument();
   });
 });

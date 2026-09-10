@@ -29,7 +29,7 @@ describe('ConfirmDialog', () => {
       />,
     );
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   it('names itself to assistive technology through its title and body', () => {
@@ -43,10 +43,44 @@ describe('ConfirmDialog', () => {
         onCancel={vi.fn()}
       />,
     );
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('alertdialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAccessibleName('Delete client 4277838306?');
     expect(dialog).toHaveAccessibleDescription('This cannot be undone.');
+  });
+
+  /**
+   * Focus on open, for the plain form — the regression that matters most in this file.
+   *
+   * It landed on the destructive button, so Enter pressed straight after opening ran the action the
+   * dialog exists to stop, with the body text unread.
+   *
+   * Asserted as an *outcome* rather than as a focus ring, because the outcome is what broke. jsdom
+   * does not turn a key press on a button into a click, so the two events are dispatched
+   * separately: the `keyDown` proves the panel's own handler does not intercept Enter, and the click
+   * on whatever holds focus is what a browser would then do. The browser half was confirmed live —
+   * `alertdialog` reported, Cancel focused, Enter closing the dialog with the token still in the
+   * vault.
+   */
+  it('opens with focus on Cancel, so Enter does not run the destructive action', async () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <ConfirmDialog
+        open
+        title="Clear the vault?"
+        body="Every stored key goes."
+        confirmLabel="Clear it"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    await waitFor(() => expect(cancel).toHaveFocus());
+    fireEvent.keyDown(cancel, { key: 'Enter' });
+    fireEvent.click(document.activeElement as HTMLElement);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalled();
   });
 
   it('confirms and cancels through the two buttons', () => {
@@ -114,7 +148,7 @@ describe('ConfirmDialog', () => {
         />,
       );
       // The dialog is the direct child of the backdrop, so its parent IS the backdrop element.
-      const backdrop = screen.getByRole('dialog').parentElement!;
+      const backdrop = screen.getByRole('alertdialog').parentElement!;
       fireEvent.mouseDown(backdrop, { target: backdrop });
       expect(onCancel).toHaveBeenCalledTimes(1);
     });
@@ -132,7 +166,7 @@ describe('ConfirmDialog', () => {
         />,
       );
       // A real click inside bubbles from the panel, so `e.target` is never the backdrop itself.
-      fireEvent.mouseDown(screen.getByRole('dialog'));
+      fireEvent.mouseDown(screen.getByRole('alertdialog'));
       expect(onCancel).not.toHaveBeenCalled();
     });
   });
@@ -359,7 +393,7 @@ describe('useConfirmedAction', () => {
     fireEvent.change(screen.getByLabelText(/to confirm/i), { target: { value: 'grant-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
     expect(run).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   it('runs nothing when cancelled', () => {
@@ -368,6 +402,6 @@ describe('useConfirmedAction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Revoke grant' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(run).not.toHaveBeenCalled();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });

@@ -64,7 +64,7 @@ function ConfirmDialogPanel({
 }: Omit<ConfirmDialogProps, 'open'>) {
   const [typed, setTyped] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   /** Where focus was before the dialog opened, so it can be given back. */
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -83,12 +83,22 @@ function ConfirmDialogPanel({
     [],
   );
 
-  // Remember the trigger on mount and move focus in — to the text field when one is required, otherwise
-  // to the confirm button — then give focus back on unmount. `requireTyped` is read once and not tracked:
-  // a dialog that changed its own shape mid-life would be a different dialog.
+  /**
+   * Focus moves to the text field when one is required, and otherwise to **Cancel**.
+   *
+   * It used to land on the confirm button, which for this component means the destructive one — so
+   * Enter pressed immediately after opening destroyed whatever the dialog was guarding, without the
+   * body text having been read. That is the opposite of what a confirmation is for, and it is worse
+   * for the people most likely to hit it: a screen-reader user hears the dialog's name and presses
+   * Enter, and a keyboard user's hand is already on the key that opened it.
+   *
+   * The safe option is the default; reaching the destructive one now takes a deliberate move. Where
+   * `requireTyped` is set the field still comes first, because typing the identifier *is* the
+   * deliberate move and the confirm button is disabled until it matches.
+   */
   useEffect(() => {
     returnFocusRef.current = document.activeElement as HTMLElement | null;
-    const target = inputRef.current ?? confirmRef.current;
+    const target = inputRef.current ?? cancelRef.current;
     target?.focus();
     const trigger = returnFocusRef.current;
     return () => {
@@ -133,7 +143,13 @@ function ConfirmDialogPanel({
     >
       <div
         ref={panelRef}
-        role="dialog"
+        /**
+         * `alertdialog`, not `dialog`: every use of this component guards something irreversible, and
+         * the role is what tells assistive technology to announce the body text rather than only the
+         * name. A `dialog` whose message is the entire point of stopping you can be entered without
+         * that message being read out.
+         */
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
@@ -176,16 +192,10 @@ function ConfirmDialogPanel({
         )}
 
         <div className="flex justify-end gap-2 px-4 py-4">
-          <Button variant="secondary" size="sm" onClick={onCancel}>
+          <Button ref={cancelRef} variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            ref={confirmRef}
-            variant="danger"
-            size="sm"
-            disabled={!satisfied}
-            onClick={onConfirm}
-          >
+          <Button variant="danger" size="sm" disabled={!satisfied} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </div>

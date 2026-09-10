@@ -90,14 +90,42 @@ describe('McpSection — the credential the user obtained', () => {
 
     press(/Fetch Metadata/i);
 
-    // Each badge is a separate member read off the document; a rename shows as a missing badge and
-    // nothing else, which is exactly the failure mode a smoke test cannot see.
-    expect(await screen.findByText(/DCR Supported/i)).toBeInTheDocument();
-    // Not `Resource Indicators`: that read `resource_indicators_supported`, which no registry or
-    // specification defines, so the line could only ever be absent. RFC 9207's flag is real and
-    // advertised, so it is what the capability line reports now.
-    expect(screen.getByText(/RFC 9207 iss/i)).toBeInTheDocument();
-    expect(screen.getByText(/PKCE S256/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Metadata read/i)).toBeInTheDocument();
+    const evidence = within(document.getElementById('mcp-step-1')!);
+    // Each member is named with its own value, not summarised into a badge.
+    expect(evidence.getByText('registration_endpoint')).toBeInTheDocument();
+    expect(evidence.getByText(AS_METADATA.registration_endpoint)).toBeInTheDocument();
+    expect(evidence.getByText('code_challenge_methods_supported')).toBeInTheDocument();
+    expect(evidence.getByText('S256')).toBeInTheDocument();
+    // Not `resource_indicators_supported`, which no registry or specification defines, so the line
+    // could only ever be absent. RFC 9207's flag is real and this service advertises it.
+    expect(
+      evidence.getByText('authorization_response_iss_parameter_supported'),
+    ).toBeInTheDocument();
+    expect(evidence.getByText(/true \(RFC 9207\)/)).toBeInTheDocument();
+  });
+
+  /**
+   * The defect this replaced: the line joined only the checks that *passed* and fell back to "none
+   * advertised", so a member the server does not advertise and a member nobody looked for rendered
+   * identically — nothing at all. A reader could not tell "this AS has no DCR" from "this screen
+   * does not report DCR", which for a section whose whole job is reading capabilities off the wire
+   * is the one thing it must not be ambiguous about.
+   */
+  it('says so when the AS does not advertise a member, rather than omitting it', async () => {
+    vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue({
+      issuer: AS_METADATA.issuer,
+      authorization_endpoint: AS_METADATA.authorization_endpoint,
+      token_endpoint: AS_METADATA.token_endpoint,
+    });
+    mountSection(<McpSection />);
+
+    press(/Fetch Metadata/i);
+
+    expect(await screen.findByText(/Metadata read/i)).toBeInTheDocument();
+    const evidence = within(document.getElementById('mcp-step-1')!);
+    expect(evidence.getByText('registration_endpoint')).toBeInTheDocument();
+    expect(evidence.getAllByText('not advertised')).toHaveLength(3);
   });
 
   /**
@@ -111,7 +139,7 @@ describe('McpSection — the credential the user obtained', () => {
     mountSection(<McpSection />);
     fillAdminCredentials('mgmt-id', 'mgmt-secret', 'Admin (for DCR)');
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
 
     press(/DCR \(admin register\)/i);
     const args = await expectCall(spy, 'the DCR register button');
@@ -136,7 +164,7 @@ describe('McpSection — the credential the user obtained', () => {
     fillAdminCredentials('mgmt-id', 'mgmt-secret', 'Admin (for DCR)');
 
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/DCR \(admin register\)/i);
     // The registered id lands in the auto-filled input's *value*, not as text on the page.
     await waitFor(() =>
@@ -183,7 +211,7 @@ describe('McpSection — the credential the user obtained', () => {
     mountSection(<McpSection />);
 
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
 
     fill(/Resource \(MCP server URL\)/i, 'https://mcp.example.com');
     press(/Build Authorization URL/i);
@@ -223,7 +251,7 @@ describe('McpSection — the credential the user obtained', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
 
     const shown = await screen.findByText(/\/api\/authorization\?/);
@@ -238,7 +266,7 @@ describe('McpSection — the credential the user obtained', () => {
     vi.spyOn(mcpService, 'exchangeCode').mockResolvedValue(TOKEN_RESPONSE);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
     await waitFor(() =>
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
@@ -262,7 +290,7 @@ describe('McpSection — the credential the user obtained', () => {
     mountSection(<McpSection />);
     fillAdminCredentials('mgmt-id', 'mgmt-secret', 'Admin (for DCR)');
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
     await waitFor(() =>
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
@@ -299,7 +327,7 @@ describe('McpSection — the credential the user obtained', () => {
     );
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
     await waitFor(() =>
       expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
@@ -353,7 +381,7 @@ describe('McpSection — the authorization survives the redirect', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     if (resource !== undefined) fill(/Resource \(MCP server URL\)/i, resource);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
@@ -500,7 +528,7 @@ describe('McpSection — the three regressions the second critique found', () =>
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
 
@@ -532,7 +560,7 @@ describe('McpSection — the three regressions the second critique found', () =>
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
     fill(/Authorization Code/i, 'typed-by-hand');
@@ -560,7 +588,7 @@ describe('McpSection — a coloured pixel means the server spoke', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/capabilities/i);
+    await screen.findByText(/Metadata read/i);
 
     const step2 = document.getElementById('mcp-step-2')!;
     expect(step2).toHaveAttribute('data-dir', 'out');
@@ -578,7 +606,7 @@ describe('McpSection — a coloured pixel means the server spoke', () => {
     vi.spyOn(mcpService, 'fetchCimdMetadata').mockResolvedValue({ client_name: 'Probe' });
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/capabilities/i);
+    await screen.findByText(/Metadata read/i);
 
     fill(/CIMD URL \(for CIMD flow\)/i, 'https://app.example.com/.well-known/oauth-client');
     press(/CIMD \(URL as client_id\)/i);
@@ -640,7 +668,7 @@ describe('McpSection — the wizard remembers what it did before the redirect', 
     expect(document.getElementById('mcp-step-4')).not.toHaveAttribute('data-state', 'pending');
     // And what the reader can see of it, so a restored gate cannot be an empty card.
     expect(
-      within(document.getElementById('mcp-step-1')!).getByText(/DCR Supported/i),
+      within(document.getElementById('mcp-step-1')!).getByText(/Metadata read/i),
     ).toBeInTheDocument();
     expect(
       within(document.getElementById('mcp-step-3')!).getByText(/\/api\/authorization\?/),
@@ -664,7 +692,7 @@ describe('McpSection — the wizard remembers what it did before the redirect', 
     expect(sessionStorage.getItem('mcp_wizard_progress')).toBeNull();
 
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     const afterDiscovery = readSnapshot();
     // Read from the response, not from the closure's stale copy of state.
     expect(afterDiscovery.asData?.issuer).toBe(AS_METADATA.issuer);
@@ -689,10 +717,10 @@ describe('McpSection — rebuilding the authorization asks first', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
 
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     await screen.findByText(/\/api\/authorization\?/);
   });
 
@@ -700,7 +728,7 @@ describe('McpSection — rebuilding the authorization asks first', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
 
@@ -709,7 +737,7 @@ describe('McpSection — rebuilding the authorization asks first', () => {
     press(/Build Authorization URL/i);
 
     // Nothing has changed yet — the dialog is a question, not a formality.
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
     expect(sessionStorage.getItem('pkce_code_verifier')).toBe(first);
 
     press(/Start over/i);
@@ -722,14 +750,14 @@ describe('McpSection — rebuilding the authorization asks first', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
 
     fill(/Authorization Code/i, 'keep-me');
     const first = sessionStorage.getItem('pkce_code_verifier');
     press(/Build Authorization URL/i);
-    await screen.findByRole('dialog');
+    await screen.findByRole('alertdialog');
     press(/Cancel/i);
 
     expect(sessionStorage.getItem('pkce_code_verifier')).toBe(first);
@@ -817,7 +845,12 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
   it('disables a gated step to the keyboard without hiding it from assistive tech', () => {
     mountSection(<McpSection />);
     const gated = document.getElementById('mcp-step-2');
-    const controls = gated!.querySelectorAll('input, button, select, textarea');
+    // Scoped to the `fieldset`, which is the gate. The Help trigger sits outside it on purpose —
+    // 'keeps the help affordance reachable on a gated step' below is the other half of that pair,
+    // and this sweep used to catch it only because step 2 had no doc to offer.
+    const controls = gated!.querySelectorAll(
+      'fieldset input, fieldset button, fieldset select, fieldset textarea',
+    );
     expect(controls.length).toBeGreaterThan(0);
     controls.forEach((c) => expect(c).toBeDisabled());
 
@@ -825,7 +858,12 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     // is `aria-hidden` and should be: it is a decorative dot, and the only thing in here that is.
     expect(gated).not.toHaveAttribute('aria-hidden');
     expect(gated!.querySelector('fieldset')).not.toHaveAttribute('aria-hidden');
-    for (const hidden of gated!.querySelectorAll('[aria-hidden="true"]')) {
+    // Icons excluded: an `aria-hidden` `<svg>` is the correct way to draw a glyph whose meaning
+    // comes from the labelled button around it, and the Help trigger's letter-i mark is one — it
+    // has `textContent` of 'i' because the letter is drawn as `<text>`, not because a word is
+    // hidden. Everything else in here must carry no words.
+    for (const hidden of gated!.querySelectorAll('[aria-hidden="true"]:not(svg)')) {
+      if (hidden.closest('svg')) continue;
       expect(hidden.textContent, 'nothing carrying words may be hidden').toBe('');
     }
     expect(within(gated!).getByText(/2 · Register client \(optional\)/i)).toBeInTheDocument();
@@ -868,7 +906,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     ).toBeInTheDocument();
 
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
 
     // Steps 2 and 3 are reachable now, so the instruction has to go — a stale "run Step 1 first" on a
     // live card is worse than none.
@@ -895,7 +933,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
     const step2 = document.getElementById('mcp-step-2')!;
 
     // DCR is dead without the admin credentials, and now says so.
@@ -943,7 +981,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
-    await screen.findByText(/DCR Supported/i);
+    await screen.findByText(/Metadata read/i);
 
     const step2 = document.getElementById('mcp-step-2');
     expect(step2).not.toHaveAttribute('data-state');
