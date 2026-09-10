@@ -102,10 +102,20 @@ interface WizardProgress {
   issuer: string;
   asData: AsMetadata | null;
   authUrl: string;
+  /**
+   * `resource` travels too, and it was the one field of the four that did not.
+   *
+   * It is written to `SESSION_KEYS.authzResource` before the redirect, so the authorization *and*
+   * the token request both carried it and the audience restriction really happened — but the field
+   * itself came back empty, so Step 6 could not tell "no resource was requested" from "the resource
+   * was requested and then forgotten". The same amnesia the other three fields were added to fix,
+   * in the one field Step 6's verdict has to read to say anything true.
+   */
+  resource: string;
 }
 
 export function useMcpFlow() {
-  /** Read once, at mount, so the three lazy initialisers below cannot disagree with each other. */
+  /** Read once, at mount, so the four lazy initialisers below cannot disagree with each other. */
   const [restored] = useState(() => readJsonKey<WizardProgress>(SESSION_KEYS.mcpWizard));
 
   const {
@@ -158,7 +168,7 @@ export function useMcpFlow() {
   const [wizRegisteredClientId, setWizRegisteredClientId] = useState<string | null>(null);
   const [wizRedirectUri, setWizRedirectUri] = useState(REDIRECT_URI);
   const [wizScopes, setWizScopes] = useState(DEFAULT_SCOPES);
-  const [wizResource, setWizResource] = useState('');
+  const [wizResource, setWizResource] = useState(() => restored?.resource ?? '');
   const [wizCode, setWizCode] = useState('');
   /**
    * A lazy initialiser, not `''`: leaving for the authorization endpoint destroys this hook, and the
@@ -198,11 +208,12 @@ export function useMcpFlow() {
           issuer: wizIssuer,
           asData: wizAsData,
           authUrl: wizAuthUrl,
+          resource: wizResource,
           ...next,
         } satisfies WizardProgress),
       );
     },
-    [wizIssuer, wizAsData, wizAuthUrl],
+    [wizIssuer, wizAsData, wizAuthUrl, wizResource],
   );
 
   const wizStepDiscover = useCallback(async () => {
@@ -496,9 +507,11 @@ export function useMcpFlow() {
     if (!authId || !authSecret) {
       wizFail(
         'Introspect',
-        "Introspection needs this deployment's admin credentials — fill them in above",
+        "Introspection needs this deployment's admin credentials — fill them in at the top of this flow",
       );
-      toast.error("Introspection needs this deployment's admin credentials — fill them in above");
+      toast.error(
+        "Introspection needs this deployment's admin credentials — fill them in at the top of this flow",
+      );
       return;
     }
     /**

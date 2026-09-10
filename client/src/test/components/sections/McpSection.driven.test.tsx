@@ -310,6 +310,102 @@ describe('McpSection — the credential the user obtained', () => {
   });
 
   /**
+   * Step 6's verdict, across all four branches.
+   *
+   * The step's own copy states the question — *"the only way to know the audience binding worked is
+   * to read `aud` off the token you were issued"* — and then rendered raw JSON and stopped. The
+   * branch worth the most here is the **third**: RFC 7662 §2.2 lists `aud` as optional, so a
+   * response without it is not evidence the token is unrestricted, and reporting it as a failure
+   * would be the same absent-versus-failed ambiguity just closed in Step 1.
+   */
+  describe.each([
+    {
+      name: 'says bound when the aud matches the resource that was requested',
+      resource: 'https://mcp.example.com',
+      body: { active: true, aud: 'https://mcp.example.com', scope: 'openid' },
+      verdict: /Audience bound/i,
+      hint: /RFC 8707 working end to end/i,
+    },
+    {
+      name: 'says the audience differs when the token is bound to something else',
+      resource: 'https://mcp.example.com',
+      body: { active: true, aud: ['https://other.example.com'] },
+      verdict: /Audience differs/i,
+      hint: /not usable at the MCP server you asked for/i,
+    },
+    {
+      name: 'does not call a missing aud a failure, because RFC 7662 makes it optional',
+      resource: 'https://mcp.example.com',
+      body: { active: true, scope: 'openid' },
+      verdict: /No audience reported/i,
+      hint: /not proof the token is unrestricted/i,
+    },
+    {
+      name: 'says there is nothing to check when no resource was requested',
+      resource: '',
+      body: { active: true },
+      verdict: /No resource requested/i,
+      hint: /no audience restriction to check/i,
+    },
+    {
+      name: 'reports an inactive token as refused before reading anything else',
+      resource: 'https://mcp.example.com',
+      body: { active: false, aud: 'https://mcp.example.com' },
+      verdict: /Token inactive/i,
+      hint: /only required member/i,
+    },
+  ])('the audience verdict', ({ name, resource, body, verdict, hint }) => {
+    it(name, async () => {
+      vi.spyOn(mcpService, 'fetchAsMetadata').mockResolvedValue(AS_METADATA);
+      vi.spyOn(mcpService, 'exchangeCode').mockResolvedValue(TOKEN_RESPONSE);
+      vi.spyOn(mcpService, 'introspectToken').mockResolvedValue(body);
+      mountSection(<McpSection />);
+      fillAdminCredentials('mgmt-id', 'mgmt-secret', 'Admin (for DCR)');
+      press(/Fetch Metadata/i);
+      await screen.findByText(/Metadata read/i);
+      if (resource) fill(/Resource \(MCP server URL\)/i, resource);
+      press(/Build Authorization URL/i);
+      await waitFor(() =>
+        expect((screen.getByLabelText(/Code Verifier/i) as HTMLInputElement).value).not.toBe(''),
+      );
+      fill(/Authorization Code/i, 'code-from-callback');
+      press(/Exchange Code for Token/i);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /Introspect/i })).toBeEnabled(),
+      );
+      press(/Introspect/i);
+
+      const step6 = within(await waitFor(() => document.getElementById('mcp-step-6')!));
+      expect(await step6.findByText(verdict)).toBeInTheDocument();
+      expect(step6.getByText(hint)).toBeInTheDocument();
+      // The payload stays: it is the evidence the section exists to show.
+      expect(step6.getByText(/Introspection Response/i)).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * `resource` was the one field of the four that did not travel in `SESSION_KEYS.mcpWizard`, and
+   * the verdict above is what made it matter: it was written to `authz_resource` before the
+   * redirect, so both requests carried it, but the field came back empty — so Step 6 reported "no
+   * resource requested" for a token that had in fact been audience-restricted.
+   */
+  it('brings the resource back across the redirect, not just to the token request', () => {
+    sessionStorage.setItem(
+      'mcp_wizard_progress',
+      JSON.stringify({
+        issuer: 'http://localhost:3000',
+        asData: AS_METADATA,
+        authUrl: 'http://localhost:3000/api/authorization?x=1',
+        resource: 'https://mcp.example.com',
+      }),
+    );
+    mountSection(<McpSection />);
+    expect((screen.getByLabelText(/Resource \(MCP server URL\)/i) as HTMLInputElement).value).toBe(
+      'https://mcp.example.com',
+    );
+  });
+
+  /**
    * The wizard's failures were a bare `<p>` while the tabs above used `ErrorExplainer` — the same
    * PED-08 defect that was closed in JAR and FAPI, still open in one half of this section. An
    * `[A157303]` here means the exchange presented client-authentication data for a public client,
@@ -939,7 +1035,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     // DCR is dead without the admin credentials, and now says so.
     expect(within(step2).getByRole('button', { name: /DCR \(admin register\)/i })).toBeDisabled();
     expect(
-      within(step2).getByText(/needs the admin credentials at the top of this section/i),
+      within(step2).getByText(/needs the admin credentials at the top of this flow/i),
     ).toBeInTheDocument();
 
     // CIMD is dead without a URL, and the field that supplies it is wired to the button by a hint the

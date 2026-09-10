@@ -7,7 +7,6 @@ import { TabBar, tabPanelProps } from '@/components/ui/TabBar';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { OperationDescription } from '@/components/ui/OperationDescription';
-import { AdminAuth } from '@/components/layout/AdminAuth';
 import { getDoc } from '@/data/operationDocs';
 import { API_BASE_URL } from '@/config';
 import { useMcpFlow } from './use-mcp-flow';
@@ -140,11 +139,35 @@ function McpSection() {
       </header>
 
       <p className="tx-standfirst">
-        Three metadata lookups, then the authorization flow end to end — discovery, CIMD or DCR
-        registration, PKCE with a resource indicator, and the token it produces.
+        Two halves, and they answer different questions. The lookups read any server&apos;s metadata
+        documents; the flow below runs the whole MCP authorization sequence against this deployment.
       </p>
 
-      <AdminAuth label="Admin (for DCR)" />
+      {/*
+        The first half had no name, and that was the whole of the two-front-doors problem.
+
+        The page opened with a bare tab bar and closed with a masthead reading "The full flow", so one
+        entry point was labelled and the other was not — and two of the three lookups run the same
+        call as two of the six steps (`fetchAsMetadata` is Step 1; `fetchCimdMetadata` is Step 2's
+        CIMD button), which made the unlabelled half look like a duplicate of the labelled one.
+
+        It is not a duplicate, and the standfirst here is the difference: these take **any** origin.
+        Verified cross-origin against `accounts.google.com` and `login.microsoftonline.com`, both 200
+        — the major providers serve the well-known paths with permissive CORS, so pointing this at
+        someone else's authorization server genuinely works. Step 1 walks *this* deployment's flow
+        and parses what it reads into a verdict; these hand back the document as it arrived, from
+        wherever you point them. Naming both halves is the fix; deleting either would cost a job the
+        other cannot do.
+      */}
+      <header className="tx-masthead">
+        <h2 className="tx-title">Read any server&apos;s documents</h2>
+        <span className="tx-ref">three well-known lookups</span>
+      </header>
+      <p className="tx-standfirst">
+        Point these at any origin — this deployment, a third-party authorization server, or an MCP
+        server of your own — and read the document exactly as it arrived. Nothing here starts a
+        flow.
+      </p>
 
       <div className="tx-body">
         {/* The three lookups below share one result pane, so they share one explainer, and it belongs
@@ -182,9 +205,12 @@ function McpSection() {
         >
           <span className="tx-marker" aria-hidden="true" />
           <div className="tx-turn-head">
-            {/* `h2`, matching the wizard's — the six step turns are `h3`s and this was a bare `span`,
-              so heading navigation jumped straight past the section's entire first half. */}
-            <h2 className="tx-turn-label">Metadata · Client → Server</h2>
+            {/* `h3`, one level under the masthead this half now carries — the same relationship
+              the wizard's six step turns have to "The full flow". It was a bare `span` first, which
+              made heading navigation jump straight past this entire half, then an `h2` because that
+              was the only heading here; with a real masthead above it, `h3` is what keeps the
+              outline from skipping a level. */}
+            <h3 className="tx-turn-label">Metadata · Client → Server</h3>
             {lookup && <span className="tx-turn-note">GET {lookup.wellKnown}</span>}
           </div>
 

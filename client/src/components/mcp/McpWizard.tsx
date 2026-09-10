@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
+import { AdminAuth } from '@/components/layout/AdminAuth';
 import { JsonBlock } from '@/components/ui/JsonBlock';
 import { FlowDiagram, type FlowStep } from '@/components/ui/FlowDiagram';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -34,6 +35,122 @@ const DOC_CLASS = 'tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0';
 function StepError({ flow, steps }: { flow: McpFlow; steps: McpStep[] }) {
   if (!flow.error || !flow.failedStep || !steps.includes(flow.failedStep)) return null;
   return <ErrorExplainer error={flow.error} />;
+}
+
+/**
+ * What Step 6 exists to answer, answered — instead of left in the payload for the reader to find.
+ *
+ * The step's own copy poses the question: *"the only way to know the audience binding worked is to
+ * read `aud` off the token you were issued."* It then rendered the raw introspection response and
+ * stopped, so the one section in this application that asks a question in words did not answer it.
+ * Every other landing turn in this world states an outcome first and shows the payload underneath.
+ * The payload stays, because it is the evidence the section exists to show.
+ *
+ * **The absent case is deliberately not a failure.** RFC 7662 §2.2 makes `active` the only REQUIRED
+ * member and lists `aud` as OPTIONAL, so a response without it does not prove the token is
+ * unrestricted — it proves this response does not say. Calling that "not bound" would be the same
+ * defect just closed in Step 1's metadata line, where an absent member and a failed check rendered
+ * identically. Hence four verdicts on a live token rather than two.
+ *
+ * No sample of this deployment's own introspection response was obtainable while this was written:
+ * the discovered `authorization_endpoint` is the deployed host, which serves a **different** Authlete
+ * service from the local one — 59 metadata members against 67 — and it does not know this client
+ * (`[A010308]`). So the branch taken is decided by what the response contains rather than by any
+ * assumption about what it will contain, which is why not having the sample does not weaken it.
+ */
+function AudienceVerdict({
+  result,
+  resource,
+}: {
+  result: Record<string, unknown>;
+  resource: string;
+}) {
+  const active = result.active === true;
+  const rawAud = result.aud;
+  const auds = Array.isArray(rawAud)
+    ? rawAud.map(String)
+    : typeof rawAud === 'string'
+      ? [rawAud]
+      : [];
+
+  let label: string;
+  let outcome: 'issued' | 'refused' | undefined;
+  let note: ReactNode;
+
+  if (!active) {
+    label = 'Token inactive';
+    outcome = 'refused';
+    note = (
+      <>
+        RFC 7662 §2.2: <code>active</code> is the only required member, and it is false — every
+        other claim in the response is meaningless here. Exchange a fresh code in Step 4.
+      </>
+    );
+  } else if (!resource) {
+    label = 'No resource requested';
+    outcome = undefined;
+    note = (
+      <>
+        Step 3 sent no <code>resource</code>, so there is no audience restriction to check. Fill the
+        resource field, authorize again, and this line reports whether it took.
+      </>
+    );
+  } else if (auds.length === 0) {
+    label = 'No audience reported';
+    outcome = undefined;
+    note = (
+      <>
+        The <code>resource</code> was sent on both requests, but this response carries no{' '}
+        <code>aud</code>. RFC 7662 §2.2 lists it as optional, so that is not proof the token is
+        unrestricted — only that the endpoint does not say.
+      </>
+    );
+  } else if (auds.includes(resource)) {
+    label = 'Audience bound';
+    outcome = 'issued';
+    note = (
+      <>
+        The <code>aud</code> on the issued token matches the <code>resource</code> Step 3 requested,
+        which is RFC 8707 working end to end — nothing in the metadata could have told you this.
+      </>
+    );
+  } else {
+    label = 'Audience differs';
+    outcome = 'refused';
+    note = (
+      <>
+        The token carries an audience, and it is not the <code>resource</code> that was requested. A
+        token bound to something else is not usable at the MCP server you asked for.
+      </>
+    );
+  }
+
+  return (
+    <div className="tx-evidence tx-lands" data-outcome={outcome} style={{ marginTop: '1rem' }}>
+      <div className="tx-evidence-head">
+        <span className="tx-evidence-verdict">{label}</span>
+      </div>
+      <span className="tx-datum">
+        <span className="tx-datum-key">requested resource</span>
+        <span className="tx-datum-value">{resource || 'none'}</span>
+      </span>
+      <span className="tx-datum">
+        <span className="tx-datum-key">aud</span>
+        <span className="tx-datum-value">{auds.length ? auds.join(' ') : 'not reported'}</span>
+      </span>
+      <span className="tx-datum">
+        <span className="tx-datum-key">active</span>
+        <span className="tx-datum-value">{String(result.active)}</span>
+      </span>
+      {typeof result.scope === 'string' && (
+        <span className="tx-datum">
+          <span className="tx-datum-key">scope</span>
+          <span className="tx-datum-value">{result.scope}</span>
+        </span>
+      )}
+      <p className="tx-hint">{note}</p>
+    </div>
+  );
 }
 
 /**
@@ -399,6 +516,17 @@ function McpWizard({ flow }: { flow: McpFlow }) {
         resource indicator, then exchange the code and read what the token carries.
       </p>
 
+      {/*
+        The credential lives with the two steps that use it — DCR in Step 2 and introspection in
+        Step 6 — rather than at the top of the page.
+
+        It sat above the metadata lookups, which is the one half of this section that needs no
+        credential at all ("Nothing here starts a flow"). That was invisible while the lookups had no
+        name; naming them made a credential field the first thing under a heading that does not use
+        it. `useCredentials` is page-level context, so this is a move rather than a second copy.
+      */}
+      <AdminAuth label="Admin (for DCR)" />
+
       <div className="tx-body">
         <FlowDiagram {...wizardProgress(flow)} steps={MCP_STEPS} className="mb-4" />
 
@@ -483,7 +611,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           id="mcp-step-2"
           n={2}
           label="Register client (optional)"
-          note="CIMD fetch, or POST /api/client/registration"
+          note="CIMD fetch, or POST /api/client/dcr/register"
           ready={Boolean(flow.asData)}
           landed={flow.registeredClientId !== null}
           busy={flow.loading === 'Fetch CIMD' || flow.loading === 'DCR Register'}
@@ -532,7 +660,7 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           </div>
           {!flow.hasAdminCredential && (
             <p className="tx-hint">
-              DCR registration needs the admin credentials at the top of this section.
+              DCR registration needs the admin credentials at the top of this flow.
             </p>
           )}
 
@@ -738,9 +866,12 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           </div>
           <StepError flow={flow} steps={['Introspect']} />
           {flow.introspectResult && (
-            <div className="tx-lands" style={{ marginTop: '1rem' }}>
-              <JsonBlock data={flow.introspectResult} label="Introspection Response" />
-            </div>
+            <>
+              <AudienceVerdict result={flow.introspectResult} resource={flow.resource} />
+              <div className="tx-lands" style={{ marginTop: '0.75rem' }}>
+                <JsonBlock data={flow.introspectResult} label="Introspection Response" />
+              </div>
+            </>
           )}
         </StepTurn>
       </div>
