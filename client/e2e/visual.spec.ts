@@ -137,7 +137,16 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.waitForSelector('h1');
       await settle(page);
 
-      const step = page.locator('[aria-disabled="true"]').first();
+      /**
+       * `#mcp-step-2` by id, not `[aria-disabled="true"]` by state.
+       *
+       * The gated step used to carry `aria-disabled` on its container, and that attribute is gone on
+       * purpose: it made assistive technology treat every descendant as unavailable, including the
+       * help affordance inside the step, so four Help buttons were announced as disabled on arrival.
+       * A gated turn now says `data-state="pending"` and describes itself with the sentence naming
+       * what unblocks it. Addressing the step by id is what this test always meant anyway.
+       */
+      const step = page.locator('#mcp-step-2');
       await expect(step).toHaveScreenshot(`wizard-step-unavailable-${scheme}.png`);
     });
   });
