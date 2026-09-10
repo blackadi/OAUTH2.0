@@ -32,12 +32,22 @@ function FlowDiagram({ steps, currentStep, completedSteps = [], className }: Flo
        * labels on six different baselines — measured top edges at y = 796, 788, 788, 796, 804, 804,
        * a 16px spread across a row whose whole job is to read as one rank.
        *
-       * `overflow-x-auto` below `sm`: at 390px each item computed to 43px wide with no width floor,
-       * so "Authorize" overlapped "Token", "Introspect" was clipped at the container edge, and the
-       * arrow glyphs rendered *underneath* the text. Descriptions are already hidden below `sm`, so
-       * those six overlapping words were the only wayfinding left on a 4,484px mobile page.
+       * `flex-wrap` below `sm`, and deliberately **not** `overflow-x-auto`: at 390px each item
+       * computed to 43px wide with no width floor, so "Authorize" overlapped "Token", "Introspect"
+       * was clipped at the container edge, and the arrow glyphs rendered *underneath* the text.
+       * Descriptions are already hidden below `sm`, so those six overlapping words were the only
+       * wayfinding left on a 4,484px mobile page.
+       *
+       * Scrolling was the first fix and axe rejected it, correctly: `scrollable-region-focusable`,
+       * serious — a scroll container with no focusable content cannot be reached by keyboard. The
+       * options were to bolt a `tabindex` onto it, adding a tab stop on all six routes that use this
+       * component, or to stop making a scroll container at all. Wrapping to two rows of three needs
+       * no tab stop, discovers itself, and reads better than a strip you have to know to swipe.
        */
-      className={cn('flex items-start gap-0 overflow-x-auto sm:overflow-visible', className)}
+      className={cn(
+        'flex flex-wrap sm:flex-nowrap items-start gap-y-3 gap-x-0 justify-center sm:justify-start',
+        className,
+      )}
       role="list"
       aria-label="Flow progress"
     >
