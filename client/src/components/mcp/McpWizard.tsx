@@ -1,18 +1,15 @@
-import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { useId, useState, type ReactNode } from 'react';
 import { JsonBlock } from '@/components/ui/JsonBlock';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Spinner } from '@/components/ui/Spinner';
 import { FlowDiagram, type FlowStep } from '@/components/ui/FlowDiagram';
-import { OperationDescription } from '@/components/ui/OperationDescription';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
+import { OperationDescription } from '@/components/ui/OperationDescription';
 import { getDoc, type OpDoc } from '@/data/operationDocs';
-import { stepState } from '@/utils/step-state';
 import { useConfirmedAction } from '@/hooks/useConfirmedAction';
 import { CLIENT_ID } from '@/config';
 import type { McpFlow, McpStep } from './use-mcp-flow';
+
+/** The `tx-doc` overrides every transcript section applies to the shared explainer. */
+const DOC_CLASS = 'tx-doc bg-transparent border-l-0 rounded-none p-0 mb-0';
 
 /**
  * The failure, rendered inside the step that produced it.
@@ -28,7 +25,7 @@ import type { McpFlow, McpStep } from './use-mcp-flow';
  * the section was the only spot that was always correct.
  *
  * A step takes a *list* because Step 2 has two buttons — CIMD and DCR — and either can fail into the
- * same card.
+ * same turn.
  *
  * The explainer itself is why this is worth moving rather than deleting: an `[A157303]` here means the
  * exchange presented client-authentication data for a public client, and `[A157357]` means the
@@ -41,11 +38,11 @@ function StepError({ flow, steps }: { flow: McpFlow; steps: McpStep[] }) {
 }
 
 /**
- * The six steps as a map, above the six cards.
+ * The six steps as a map, above the six turns.
  *
  * MCP is the longest sequence in this application and was the only multi-step section with no
- * diagram — six cards spanning some 2,000px with nothing saying where in the protocol the reader
- * is, in a product that had already built the component and shipped it to five shorter flows.
+ * diagram — six steps spanning some 2,000px with nothing saying where in the protocol the reader is,
+ * in a product that had already built the component and shipped it to five shorter flows.
  */
 const MCP_STEPS: FlowStep[] = [
   { id: 'discover', label: 'Discover AS', description: 'Read the metadata and its capabilities.' },
@@ -61,11 +58,7 @@ const MCP_STEPS: FlowStep[] = [
   },
   { id: 'token', label: 'Token', description: 'Exchange the code, repeating the resource.' },
   { id: 'userinfo', label: 'UserInfo', description: 'Who approved the access.' },
-  {
-    id: 'introspect',
-    label: 'Introspect',
-    description: 'RFC 7662 — what the token actually carries.',
-  },
+  { id: 'introspect', label: 'Introspect', description: 'RFC 7662 — what the token carries.' },
 ];
 
 /**
@@ -78,8 +71,7 @@ const MCP_STEPS: FlowStep[] = [
  * Flows would arrive here to find steps 4 to 6 already ticked. `DeviceSection` and the rest do not
  * have this problem because their endpoints are theirs alone.
  *
- * Reading the same values the cards gate on also means the diagram and the per-card "Done" badges
- * cannot disagree, which two sources of truth eventually would.
+ * Reading the same values the turns gate on also means the diagram and the markers cannot disagree.
  */
 function wizardProgress(flow: McpFlow): { completedSteps: string[]; currentStep?: string } {
   const done: Array<[string, boolean]> = [
@@ -93,7 +85,7 @@ function wizardProgress(flow: McpFlow): { completedSteps: string[]; currentStep?
   /**
    * Back-filled from the last step that actually happened, not "every step whose flag is set".
    *
-   * `currentStep` was the *first* incomplete step, and step 2 is optional — the card says so and
+   * `currentStep` was the *first* incomplete step, and step 2 is optional — the turn says so and
    * tells the reader to skip it. So on the path the section recommends (discover, skip, authorize)
    * the diagram reported "Register: current" and "Authorize: completed": the you-are-here marker
    * pointing backwards at the step it had just told you not to take, and `aria-current="step"` with
@@ -101,8 +93,7 @@ function wizardProgress(flow: McpFlow): { completedSteps: string[]; currentStep?
    *
    * Back-filling is the same rule `utils/sequence-progress.ts` applies for the same reason — a later
    * success implies the earlier steps happened or were not needed, because these protocols cannot be
-   * entered in the middle. A step that was skipped rather than run is therefore shown as behind you
-   * rather than ahead of you, which is what it is.
+   * entered in the middle.
    */
   const lastDone = done.reduce((last, [, ok], i) => (ok ? i : last), -1);
   return {
@@ -111,121 +102,212 @@ function wizardProgress(flow: McpFlow): { completedSteps: string[]; currentStep?
   };
 }
 
-/**
- * One step of the wizard, gated or not.
- *
- * **Why the variant moves with the state.** `stepState` sets `border-dashed` — a border *style* — and
- * a `Card`'s default variant carries a shadow and no border *width*, so the dashed edge its docblock
- * promises resolved to `border-top-width: 0px`. The only surviving signal was `bg-muted/30`, measured
- * at roughly 2% luminance from a ready card on the light palette. Five of the six steps are gated on
- * arrival and none of them looked it, so readers clicked into dead cards — while `aria-disabled` was
- * announcing the state correctly all along, leaving sighted users strictly worse off than screen
- * reader users.
- *
- * `bordered` supplies the width that style needs and drops the shadow in the same move, which is what
- * DESIGN.md requires anyway: a card takes a border or a shadow, never both. Doing it here rather than
- * inside `stepState` is deliberate — that helper is also spread onto plain `<div>`s in
- * `FapiTestFlow`, which carry their own `border-t` and would take a `variant` prop React would then
- * warn about on a DOM element.
- *
- * **Every step is bordered, ready or not**, which is the second half of the same finding. The
- * detector reported seven `nested-cards`: `SectionPanel` paints `rounded-xl border bg-card` and each
- * step painted `rounded-xl bg-card` inside it — the same ground and the same radius at two levels, so
- * six steps read as one undifferentiated wall and the shadow that was meant to separate them is, by
- * DESIGN.md's own measurement, "near-black against a near-black ground and almost invisible". A
- * hairline is what actually separates them, and it is the system's north star anyway: a ruled
- * rectangle. Ready and gated then differ by border *style* — solid against dashed — plus the recessed
- * fill and the disabled controls.
- *
- * **The `fieldset` closes the other half of "not yet".** `pointer-events-none` stops a mouse and
- * nothing else, so a gated step's controls stayed in the tab order and stayed typeable: measured on
- * the live page, steps 2, 3 and 4 offered 2, 4 and 3 tabbable controls each while announcing
- * `aria-disabled`. A keyboard user could fill in a step the interface had declared unreachable.
- * `FapiTestFlow` never had this — its two gated steps contain one button apiece, each already
- * carrying its own `disabled`, and measured zero tabbable descendants.
- *
- * `inert` is the shorter spelling and the wrong one: it also removes the subtree from the
- * accessibility tree, and this wizard renders all six steps at once precisely so the whole flow can
- * be read before any of it is run. Hiding five of six from a screen reader on arrival trades one
- * access failure for a worse one. A disabled `fieldset` disables its descendant form controls —
- * dropping them from the tab order and marking them disabled — while leaving every word readable.
- * `display: contents` keeps it out of the layout, and the controls pick up the `disabled:opacity-50`
- * that `step-state.ts` already sanctions for inactive controls (WCAG 2.1 SC 1.4.3 exempts them).
- */
-interface StepCardProps {
+interface StepTurnProps {
   id: string;
+  /** The step's position in the sequence, for the turn label. */
+  n: number;
+  label: string;
+  /** The exchange this turn performs — the information a card never carried. */
+  note?: string;
   ready: boolean;
-  title: string;
-  /** Badges and the spinner — whatever the step says about itself beside its name. */
-  status?: ReactNode;
-  /**
-   * The operation's explainer, rendered outside the `fieldset`.
-   *
-   * It used to be the first of `children`, and `<fieldset disabled>` disables *every* descendant form
-   * control — including the `HelpPopover` trigger inside it. Measured on arrival: four Help buttons,
-   * all four disabled, all four inside gated steps, a forced click opening nothing. So the params,
-   * returns and tips were unreachable on exactly the steps whose content is still gated.
-   *
-   * That defeated the reason `fieldset` was chosen over `inert` in the first place — the docblock
-   * below says the wizard renders all six steps at once "precisely so the whole flow can be read
-   * before any of it is run", and reading it includes the popover. A read affordance is not a form
-   * control, so it belongs on the other side of the gate.
-   */
+  /** Whether this step has produced its result, which fills the marker. */
+  landed?: boolean;
+  busy?: boolean;
   doc?: OpDoc;
   /**
    * What the reader has to do first, shown only while the step is gated.
    *
-   * A step that says "not yet" without saying "not yet until what" has told the reader they are stuck
-   * and nothing else. Five of the six are gated on arrival, so this is the copy that turns a wall of
-   * dead cards into a sequence — and it names the step to run, not the state to acquire, because
-   * "needs `asData`" is a sentence about this codebase rather than about the reader's next click.
+   * A step that says "not yet" without saying "not yet until what" has told the reader they are
+   * stuck and nothing else. Five of the six are gated on arrival, so this is the copy that turns a
+   * wall of dead steps into a sequence — and it names the step to run, not the state to acquire,
+   * because "needs `asData`" is a sentence about this codebase rather than about the next click.
    */
   blockedBy?: string;
   children: ReactNode;
 }
 
-function StepCard({ id, ready, title, status, doc, blockedBy, children }: StepCardProps) {
+/**
+ * One step of the flow, as a transcript turn.
+ *
+ * **What this replaces, and why the card had to go.** Each step was a `<Card>` inside
+ * `SectionPanel`, and the detector reported seven `nested-cards` because the two paint the same
+ * `bg-card` ground at the same radius. Measured: the ready step was identical to the panel
+ * containing it on all four card properties in both palettes. Adding a hairline separated the steps
+ * from each other and made the ready one match its container exactly — the fix I claimed and did not
+ * get. A turn is not a card, so the problem does not exist here: the spine and the marker carry the
+ * structure and nothing shares a ground with anything.
+ *
+ * **The three parts of gating, because the transcript world has no gate.** Every sibling section
+ * shows one operation at a time behind a tab, so nothing is ever unreachable; `data-state="pending"`
+ * styles a turn *not yet reached* in a linear thread. MCP shows all six at once, which
+ * `useUrlState.ts` records as deliberate — you can read step 4 before running step 1. So:
+ *
+ * 1. **Visual** — `data-state="pending"` gives a dashed marker and a muted label. That is a shape
+ *    and a tone, where the card's gated fill measured 1.03–1.05:1 against a ready one with an
+ *    identical border colour.
+ * 2. **Operability** — the disabled `fieldset` stays. `pointer-events-none` stops a mouse and
+ *    nothing else, so a gated step's controls stayed in the tab order and stayed typeable: measured,
+ *    steps 2, 3 and 4 offered 2, 4 and 3 tabbable controls each while announcing they were disabled.
+ *    `inert` is the shorter spelling and the wrong one — it also removes the subtree from the
+ *    accessibility tree, and this wizard renders every step so the whole flow can be *read* first.
+ * 3. **Announcement** — `aria-describedby` pointing at the `blockedBy` sentence, **not**
+ *    `aria-disabled` on the turn. That is the defect this closes: `aria-disabled` on the container
+ *    made assistive technology treat every descendant as unavailable, including the `HelpPopover`
+ *    inside the explainer, so four Help buttons were announced as disabled on arrival. Describing the
+ *    turn says *why* it is not ready, which is more than a flag ever did, and it stops the region
+ *    suppressing the read affordances inside it. `utils/step-state.ts` still returns `aria-disabled`
+ *    for `FapiTestFlow`, which has no sentence to point at.
+ *
+ * The label is an `h3` carrying `tx-turn-label`, where every sibling uses a bare `<span>`. The class
+ * sets the face and size either way, and Tailwind's preflight zeroes the heading's margin — so the
+ * six steps stay in the document outline as children of the wizard's `h2`, which is what they are.
+ */
+function StepTurn({
+  id,
+  n,
+  label,
+  note,
+  ready,
+  landed,
+  busy,
+  doc,
+  blockedBy,
+  children,
+}: StepTurnProps) {
+  const hintId = `${useId()}-blocked`;
   return (
-    <Card id={id} tabIndex={-1} variant="bordered" {...stepState(ready, 'mb-3')}>
-      {/* The title is set here rather than at six call sites, which is how step 6 came to render at
-          18px against its siblings' 14px: one `text-sm` was missing and nothing could see it. */}
-      <CardHeader>
-        {/* `h3`, not the default `h2`: these are children of the wizard's own `h2` below, and marking
-            them as its peers presented six steps as siblings of the thing that contains them. */}
-        <CardTitle as="h3" className="text-sm flex items-center gap-2">
-          {title}
-          {status}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* `max-w-prose`: this renders five times and exceeded on three of them. The paragraph four
-            lines below got the measure, with a docblock about this exact problem, and the shared one
-            here was missed. */}
-        {!ready && blockedBy && (
-          <p className="text-xs text-muted-foreground mb-3 max-w-prose">{blockedBy}</p>
-        )}
-        {/* `pointer-events-auto` because `stepState` puts `pointer-events-none` on the whole gated
-            card. Taking the explainer out of the `fieldset` made its Help trigger enabled and
-            keyboard-operable, and it was still unclickable by mouse — reachable one way and not the
-            other is worse than consistently either. Found by driving a real click; the enabled-state
-            assertion alone passed. */}
-        {doc && <OperationDescription doc={doc} className="mb-3 pointer-events-auto" />}
-        <fieldset disabled={!ready} className="contents">
-          {children}
-        </fieldset>
-      </CardContent>
-    </Card>
+    <div
+      id={id}
+      tabIndex={-1}
+      className="tx-turn"
+      data-dir={landed ? 'in' : 'out'}
+      data-state={!ready ? 'pending' : landed ? 'landed' : undefined}
+      aria-describedby={!ready && blockedBy ? hintId : undefined}
+    >
+      <span className="tx-marker" aria-hidden="true" />
+      <div className="tx-turn-head">
+        <h3 className="tx-turn-label">
+          {n} · {label}
+        </h3>
+        {note && <span className="tx-turn-note">{note}</span>}
+        {busy && <span className="tx-spin" aria-hidden="true" />}
+      </div>
+
+      {!ready && blockedBy && (
+        <div className="tx-waiting" id={hintId}>
+          {blockedBy}
+        </div>
+      )}
+      {doc && <OperationDescription doc={doc} className={DOC_CLASS} />}
+      <fieldset disabled={!ready} className="contents">
+        {children}
+      </fieldset>
+    </div>
+  );
+}
+
+/** A labelled field in the transcript's own vocabulary, with its hint wired to it. */
+function TxField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+  readOnly,
+}: {
+  label: string;
+  value: string;
+  onChange?: (v: string) => void;
+  placeholder?: string;
+  hint?: ReactNode;
+  readOnly?: boolean;
+}) {
+  const base = useId();
+  const id = `${base}-f`;
+  const hintId = `${base}-h`;
+  return (
+    <>
+      <label className="tx-field" htmlFor={id}>
+        <span className="tx-label">{label}</span>
+        <input
+          id={id}
+          className="tx-input"
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+          placeholder={placeholder}
+          /**
+           * The hint is wired, which `ParSection` does and the other thirteen adopters do not.
+           * `tx-hint` on its own is a paragraph a sighted reader sees and a screen reader never
+           * associates with the field — and this field's hint is the one that says which button it
+           * enables, so losing the association would lose the precondition.
+           */
+          aria-describedby={hint ? hintId : undefined}
+        />
+      </label>
+      {hint && (
+        <p className="tx-hint" id={hintId}>
+          {hint}
+        </p>
+      )}
+    </>
   );
 }
 
 /**
- * The six cards of the MCP flow, and nothing else.
+ * The authorization URL, as evidence rather than a link.
+ *
+ * Three DESIGN.md rules were broken by the previous treatment, a bare `<p className="text-accent-text
+ * break-all font-mono">`: Signal Indigo is for what can be acted on and this is a string to read, the
+ * Code Wells spec asks for a copy affordance, and `break-all` split inside `http`. It also had no way
+ * to take the URL anywhere, while the copy above it called this "the artifact this step exists to
+ * show". `tx-datum-value` is mono, ink-coloured and already breaks long values; the copy button is
+ * the part the world had no equivalent for.
+ */
+function AuthUrlEvidence({ url, onAuthorize }: { url: string; onAuthorize: () => void }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="tx-evidence tx-lands" data-outcome="issued">
+      <div className="tx-evidence-head">
+        <span className="tx-evidence-verdict">Authorization URL built</span>
+        <span className="tx-turn-note">S256 · state bound</span>
+      </div>
+      <span className="tx-datum">
+        <span className="tx-datum-key">authorization_url</span>
+        <span className="tx-datum-value">{url}</span>
+      </span>
+      <div className="tx-actions">
+        <button type="button" className="tx-btn tx-btn-primary" onClick={onAuthorize}>
+          Authorize in this tab
+        </button>
+        <button
+          type="button"
+          className="tx-btn"
+          onClick={() => {
+            void navigator.clipboard?.writeText(url).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1200);
+            });
+          }}
+        >
+          {copied ? 'Copied' : 'Copy URL'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The six turns of the MCP flow, and nothing else.
  *
  * All of the sequencing lives in `use-mcp-flow.ts`; this file decides only what a step looks like and
- * when it is available. `stepState` greys a card whose prerequisite has not happened yet — which is the
- * one piece of logic that belongs here, because "can this step be attempted" is a rendering question and
- * **gating a step on the response object rather than on the field it is about to use** is how the FAPI
- * wizard came to have an enabled button that did nothing.
+ * when it is available — because "can this step be attempted" is a rendering question, and **gating a
+ * step on the response object rather than on the field it is about to use** is how the FAPI wizard
+ * came to have an enabled button that did nothing.
+ *
+ * Each response now renders inside the turn that produced it. They used to stack after step 6, so a
+ * UserInfo response sat 600px below the button that fetched it — the same defect this file's
+ * `StepError` docblock records fixing for *failures*, which was never applied to successes.
  */
 function McpWizard({ flow }: { flow: McpFlow }) {
   /**
@@ -252,302 +334,338 @@ function McpWizard({ flow }: { flow: McpFlow }) {
   };
 
   return (
-    <div className="mt-6 pt-4 border-t border-border">
-      {/* `font-semibold`, matching the steps: at `font-medium` the container rendered lighter than
-          the six headings inside it, which is a rank inversion rather than a rank. */}
-      <h2 className="text-sm font-semibold text-foreground mb-3">Full MCP Flow Wizard</h2>
-      {/* `max-w-prose`: this ran to ~153 characters a line, the one line-length finding the detector
-          attributed to this file while every sibling caption already carried the measure. */}
-      <p className="text-xs text-muted-foreground mb-4 max-w-prose">
-        Walk through the complete MCP OAuth 2.1 flow step by step: discover the AS, register a
-        client, authorize, exchange tokens, and fetch user info.
+    <>
+      <header className="tx-masthead">
+        <h2 className="tx-title">The full flow</h2>
+        <span className="tx-ref">six exchanges, in order</span>
+      </header>
+      <p className="tx-standfirst">
+        Discover the authorization server, register a client or skip it, authorize with PKCE and a
+        resource indicator, then exchange the code and read what the token carries.
       </p>
 
-      <FlowDiagram {...wizardProgress(flow)} steps={MCP_STEPS} className="mb-4" />
+      <div className="tx-body">
+        <FlowDiagram {...wizardProgress(flow)} steps={MCP_STEPS} className="mb-4" />
 
-      {/* ── Step 1: Discovery ─────────────────────────── */}
-      <StepCard
-        id="mcp-step-1"
-        ready
-        title="Step 1: Discover AS"
-        status={
-          <>
-            {flow.asData && <Badge variant="success">Done</Badge>}
-            {flow.loading === 'Discover AS' && <Spinner size="sm" />}
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Input
+        {/* ── 1 · Discover ─────────────────────────────── */}
+        <StepTurn
+          id="mcp-step-1"
+          n={1}
+          label="Discover AS"
+          note="GET /.well-known/oauth-authorization-server"
+          ready
+          landed={Boolean(flow.asData)}
+          busy={flow.loading === 'Discover AS'}
+        >
+          <TxField
             label="Issuer URL"
             value={flow.issuer}
-            onChange={(e) => flow.setIssuer(e.target.value)}
+            onChange={flow.setIssuer}
             placeholder="http://localhost:3000"
           />
-          <Button onClick={flow.stepDiscover} loading={flow.loading === 'Discover AS'}>
-            Fetch Metadata
-          </Button>
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={flow.stepDiscover}
+              disabled={flow.loading === 'Discover AS'}
+            >
+              {flow.loading === 'Discover AS' && <span className="tx-spin" aria-hidden="true" />}
+              Fetch Metadata
+            </button>
+          </div>
+
           {flow.asData && (
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div
+              className="tx-evidence tx-lands"
+              data-outcome="issued"
+              style={{ marginTop: '1rem' }}
+            >
+              <div className="tx-evidence-head">
+                <span className="tx-evidence-verdict">Metadata read</span>
+              </div>
               {flow.asData.issuer && (
-                <Badge variant="info">Issuer: {String(flow.asData.issuer).slice(0, 40)}</Badge>
+                <span className="tx-datum">
+                  <span className="tx-datum-key">issuer</span>
+                  <span className="tx-datum-value">{String(flow.asData.issuer)}</span>
+                </span>
               )}
-              {flow.asData.registration_endpoint && <Badge variant="success">DCR Supported</Badge>}
-              {flow.asData.resource_indicators_supported && (
-                <Badge variant="success">Resource Indicators</Badge>
-              )}
-              {Array.isArray(flow.asData.code_challenge_methods_supported) &&
-                flow.asData.code_challenge_methods_supported.includes('S256') && (
-                  <Badge variant="success">PKCE S256</Badge>
-                )}
+              <span className="tx-datum">
+                <span className="tx-datum-key">capabilities</span>
+                <span className="tx-datum-value">
+                  {[
+                    flow.asData.registration_endpoint ? 'DCR Supported' : null,
+                    flow.asData.resource_indicators_supported ? 'Resource Indicators' : null,
+                    Array.isArray(flow.asData.code_challenge_methods_supported) &&
+                    flow.asData.code_challenge_methods_supported.includes('S256')
+                      ? 'PKCE S256'
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'none advertised'}
+                </span>
+              </span>
             </div>
           )}
           <StepError flow={flow} steps={['Discover AS']} />
-        </div>
-      </StepCard>
+        </StepTurn>
 
-      {/* ── Step 2: Register Client ────────────────────── */}
-      <StepCard
-        id="mcp-step-2"
-        ready={Boolean(flow.asData)}
-        title="Step 2 (optional): Register Client"
-        blockedBy="Run Step 1 first — this step reads the registration endpoint out of the AS metadata."
-        status={
-          <>
-            {flow.clientId !== CLIENT_ID && <Badge variant="success">Done</Badge>}
-            {(flow.loading === 'Fetch CIMD' || flow.loading === 'DCR Register') && (
-              <Spinner size="sm" />
-            )}
-          </>
-        }
-      >
-        <div className="space-y-3">
+        {/* ── 2 · Register ─────────────────────────────── */}
+        <StepTurn
+          id="mcp-step-2"
+          n={2}
+          label="Register client (optional)"
+          note="CIMD fetch, or POST /api/client/registration"
+          ready={Boolean(flow.asData)}
+          landed={flow.clientId !== CLIENT_ID}
+          busy={flow.loading === 'Fetch CIMD' || flow.loading === 'DCR Register'}
+          blockedBy="Run Step 1 first — this step reads the registration endpoint out of the AS metadata."
+        >
           {/* Step 3 gates on the AS metadata and never on this one, so the numbering overstates it:
-              the flow runs end to end with the client ID already in the field below. Saying so is
-              cheaper than a reader working it out from two `stepState` calls. */}
-          <p className="text-xs text-muted-foreground">
+              the flow runs end to end with the client ID already in the field below. */}
+          <p className="tx-hint">
             Optional — Step 3 needs Step 1, not this one. Skip it to authorize with the client ID
             already filled in below.
           </p>
           {/* The field comes before the buttons because it is what turns one of them on. It used to
               sit underneath, so the control and its precondition were in the wrong reading order. */}
-          <Input
+          <TxField
             label="CIMD URL (for CIMD flow)"
             value={flow.cimdUrl}
-            onChange={(e) => flow.setCimdUrl(e.target.value)}
+            onChange={flow.setCimdUrl}
             placeholder="https://myapp.com/.well-known/oauth-client"
-            hint="An HTTPS URL serving your client's metadata document. The URL itself becomes the `client_id`, and it is what enables the CIMD button below."
+            hint={
+              <>
+                An HTTPS URL serving your client&apos;s metadata document. The URL itself becomes
+                the <code>client_id</code>, and it is what enables the CIMD button below.
+              </>
+            }
           />
-          <div className="flex gap-2 flex-wrap">
-            <Button
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
               onClick={flow.stepCimd}
-              loading={flow.loading === 'Fetch CIMD'}
-              disabled={!flow.cimdUrl}
-              variant="default"
+              disabled={!flow.cimdUrl || flow.loading === 'Fetch CIMD'}
             >
+              {flow.loading === 'Fetch CIMD' && <span className="tx-spin" aria-hidden="true" />}
               CIMD (URL as client_id)
-            </Button>
-            <Button
+            </button>
+            <button
+              type="button"
+              className="tx-btn"
               onClick={flow.stepDcr}
-              loading={flow.loading === 'DCR Register'}
-              disabled={!flow.hasAdminCredential}
-              variant="default"
+              disabled={!flow.hasAdminCredential || flow.loading === 'DCR Register'}
             >
+              {flow.loading === 'DCR Register' && <span className="tx-spin" aria-hidden="true" />}
               DCR (admin register)
-            </Button>
+            </button>
           </div>
           {!flow.hasAdminCredential && (
-            <p className="text-xs text-muted-foreground">
+            <p className="tx-hint">
               DCR registration needs the admin credentials at the top of this section.
             </p>
           )}
+
           {flow.cimdData && (
-            <div className="flex flex-wrap gap-2">
+            <div
+              className="tx-evidence tx-lands"
+              data-outcome="issued"
+              style={{ marginTop: '1rem' }}
+            >
+              <div className="tx-evidence-head">
+                <span className="tx-evidence-verdict">CIMD document read</span>
+              </div>
               {flow.cimdData.client_name && (
-                <Badge variant="info">{String(flow.cimdData.client_name)}</Badge>
+                <span className="tx-datum">
+                  <span className="tx-datum-key">client_name</span>
+                  <span className="tx-datum-value">{String(flow.cimdData.client_name)}</span>
+                </span>
               )}
               {flow.cimdData.token_endpoint_auth_method && (
-                <Badge variant="info">
-                  Auth: {String(flow.cimdData.token_endpoint_auth_method)}
-                </Badge>
+                <span className="tx-datum">
+                  <span className="tx-datum-key">token_endpoint_auth_method</span>
+                  <span className="tx-datum-value">
+                    {String(flow.cimdData.token_endpoint_auth_method)}
+                  </span>
+                </span>
               )}
               {flow.cimdData.scope && (
-                <Badge variant="info">Scope: {String(flow.cimdData.scope)}</Badge>
+                <span className="tx-datum">
+                  <span className="tx-datum-key">scope</span>
+                  <span className="tx-datum-value">{String(flow.cimdData.scope)}</span>
+                </span>
               )}
             </div>
           )}
-          <Input
+          <TxField
             label="Client ID (auto-filled)"
             value={flow.clientId}
-            onChange={(e) => flow.setClientId(e.target.value)}
+            onChange={flow.setClientId}
             placeholder="client_id or CIMD URL"
           />
           <StepError flow={flow} steps={['Fetch CIMD', 'DCR Register']} />
-        </div>
-      </StepCard>
+        </StepTurn>
 
-      {/* ── Step 3: Authorize ──────────────────────────── */}
-      <StepCard
-        id="mcp-step-3"
-        doc={getDoc('mcp', 'authorize-url')}
-        ready={Boolean(flow.asData)}
-        title="Step 3: Authorize (PKCE + Resource)"
-        blockedBy="Run Step 1 first — the authorization URL is built from the endpoints in the AS metadata."
-        status={flow.authUrl ? <Badge variant="success">URL Built</Badge> : null}
-      >
-        <div className="space-y-3">
-          <Input
-            label="Redirect URI"
-            value={flow.redirectUri}
-            onChange={(e) => flow.setRedirectUri(e.target.value)}
-          />
-          <Input
-            label="Scopes"
-            value={flow.scopes}
-            onChange={(e) => flow.setScopes(e.target.value)}
-          />
-          <Input
+        {/* ── 3 · Authorize ────────────────────────────── */}
+        <StepTurn
+          id="mcp-step-3"
+          n={3}
+          label="Authorize (PKCE + resource)"
+          note="front channel — the browser leaves"
+          ready={Boolean(flow.asData)}
+          landed={Boolean(flow.authUrl)}
+          doc={getDoc('mcp', 'authorize-url')}
+          blockedBy="Run Step 1 first — the authorization URL is built from the endpoints in the AS metadata."
+        >
+          <div className="tx-row">
+            <TxField label="Redirect URI" value={flow.redirectUri} onChange={flow.setRedirectUri} />
+            <TxField label="Scopes" value={flow.scopes} onChange={flow.setScopes} />
+          </div>
+          <TxField
             label="Resource (optional — MCP server URL)"
             value={flow.resource}
-            onChange={(e) => flow.setResource(e.target.value)}
+            onChange={flow.setResource}
             placeholder="https://mcp-server.example.com"
           />
-          <Button onClick={buildAuthUrl} disabled={!flow.asData || !flow.clientId}>
-            Build Authorization URL
-          </Button>
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={buildAuthUrl}
+              disabled={!flow.asData || !flow.clientId}
+            >
+              Build Authorization URL
+            </button>
+          </div>
+
           {flow.authUrl && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
+            <div style={{ marginTop: '1rem' }}>
+              <p className="tx-hint">
                 Authorizing leaves this page and returns to Step 4 with the code already exchanged.
                 The URL is here to read first — it is the artifact this step exists to show.
               </p>
-              {/* Selectable text rather than a `target="_blank"` link. The new tab was the previous
-                  behaviour and it is the one shape that defeats the verifier this step writes down:
-                  session storage is per-tab, so the callback would look for it and find nothing. */}
-              <p className="text-xs text-accent-text break-all font-mono">{flow.authUrl}</p>
-              <Button onClick={flow.goAuthorize}>Authorize in this tab</Button>
+              <AuthUrlEvidence url={flow.authUrl} onAuthorize={flow.goAuthorize} />
             </div>
           )}
-        </div>
-      </StepCard>
+        </StepTurn>
 
-      {/* ── Step 4: Token Exchange ─────────────────────── */}
-      <StepCard
-        id="mcp-step-4"
-        doc={getDoc('mcp', 'token-exchange')}
-        ready={Boolean(flow.authUrl)}
-        title="Step 4: Token Exchange"
-        blockedBy="Build the authorization URL in Step 3 first."
-        status={
-          <>
-            {flow.tokenResult && <Badge variant="success">Done</Badge>}
-            {flow.loading === 'Exchange Code' && <Spinner size="sm" />}
-          </>
-        }
-      >
-        <div className="space-y-3">
+        {/* ── 4 · Token ────────────────────────────────── */}
+        <StepTurn
+          id="mcp-step-4"
+          n={4}
+          label="Token exchange"
+          note="POST to the discovered token endpoint"
+          ready={Boolean(flow.authUrl)}
+          landed={Boolean(flow.tokenResult)}
+          busy={flow.loading === 'Exchange Code'}
+          doc={getDoc('mcp', 'token-exchange')}
+          blockedBy="Build the authorization URL in Step 3 first."
+        >
           {/* Step 3 promises the callback exchanges the code, and this step asks you to paste one.
               Both are true — of different legs — and nothing said which you were on. `tokenResult`
               with no code typed here means the redirect leg already did it. */}
           {flow.tokenResult && !flow.code && (
-            <p className="text-xs text-muted-foreground max-w-prose">
+            <p className="tx-hint">
               The callback already exchanged a code for the token below. These fields are for a code
               you obtained some other way — by opening the authorization URL yourself, say.
             </p>
           )}
-          <Input
+          <TxField
             label="Authorization Code (from callback)"
             value={flow.code}
-            onChange={(e) => flow.setCode(e.target.value)}
+            onChange={flow.setCode}
             placeholder="Paste code from ?code=... in callback URL"
           />
-          <Input
+          <TxField
             label="Code Verifier (auto-filled)"
             value={flow.codeVerifier}
-            onChange={(e) => flow.setCodeVerifier(e.target.value)}
+            onChange={flow.setCodeVerifier}
           />
-          <Button
-            onClick={flow.stepToken}
-            loading={flow.loading === 'Exchange Code'}
-            disabled={!flow.code || !flow.codeVerifier}
-          >
-            Exchange Code for Token
-          </Button>
+          <div className="tx-actions">
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={flow.stepToken}
+              disabled={!flow.code || !flow.codeVerifier || flow.loading === 'Exchange Code'}
+            >
+              {flow.loading === 'Exchange Code' && <span className="tx-spin" aria-hidden="true" />}
+              Exchange Code for Token
+            </button>
+          </div>
           <StepError flow={flow} steps={['Exchange Code']} />
-        </div>
-      </StepCard>
+          {flow.tokenResult && (
+            <div className="tx-lands" style={{ marginTop: '1rem' }}>
+              <JsonBlock data={flow.tokenResult} label="Token Response" />
+            </div>
+          )}
+        </StepTurn>
 
-      {/* ── Step 5: UserInfo ───────────────────────────── */}
-      <StepCard
-        id="mcp-step-5"
-        doc={getDoc('mcp', 'userinfo')}
-        ready={Boolean(flow.tokenResult)}
-        title="Step 5: Fetch UserInfo"
-        blockedBy="Exchange a code for an access token in Step 4 first."
-        status={
-          <>
-            {flow.userinfoResult && <Badge variant="success">Done</Badge>}
-            {flow.loading === 'Fetch UserInfo' && <Spinner size="sm" />}
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Button
-            onClick={flow.stepUserinfo}
-            loading={flow.loading === 'Fetch UserInfo'}
-            disabled={!flow.tokenResult}
-          >
-            Fetch UserInfo
-          </Button>
+        {/* ── 5 · UserInfo ─────────────────────────────── */}
+        <StepTurn
+          id="mcp-step-5"
+          n={5}
+          label="Fetch UserInfo"
+          note="GET the userinfo endpoint, bearer token"
+          ready={Boolean(flow.tokenResult)}
+          landed={Boolean(flow.userinfoResult)}
+          busy={flow.loading === 'Fetch UserInfo'}
+          doc={getDoc('mcp', 'userinfo')}
+          blockedBy="Exchange a code for an access token in Step 4 first."
+        >
+          <div className="tx-actions" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={flow.stepUserinfo}
+              disabled={!flow.tokenResult || flow.loading === 'Fetch UserInfo'}
+            >
+              {flow.loading === 'Fetch UserInfo' && <span className="tx-spin" aria-hidden="true" />}
+              Fetch UserInfo
+            </button>
+          </div>
           <StepError flow={flow} steps={['Fetch UserInfo']} />
-        </div>
-      </StepCard>
+          {flow.userinfoResult && (
+            <div className="tx-lands" style={{ marginTop: '1rem' }}>
+              <JsonBlock data={flow.userinfoResult} label="UserInfo Response" />
+            </div>
+          )}
+        </StepTurn>
 
-      {/* ── Step 6: Introspect ─────────────────────────── */}
-      <StepCard
-        id="mcp-step-6"
-        doc={getDoc('mcp', 'introspect')}
-        ready={Boolean(flow.tokenResult)}
-        title="Step 6: Introspect Token"
-        blockedBy="Exchange a code for an access token in Step 4 first."
-        status={
-          <>
-            {flow.introspectResult && <Badge variant="success">Done</Badge>}
-            {flow.loading === 'Introspect' && <Spinner size="sm" />}
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Button
-            onClick={flow.stepIntrospect}
-            loading={flow.loading === 'Introspect'}
-            disabled={!flow.tokenResult}
-          >
-            Introspect
-          </Button>
+        {/* ── 6 · Introspect ───────────────────────────── */}
+        <StepTurn
+          id="mcp-step-6"
+          n={6}
+          label="Introspect token"
+          note="POST the introspection endpoint (RFC 7662)"
+          ready={Boolean(flow.tokenResult)}
+          landed={Boolean(flow.introspectResult)}
+          busy={flow.loading === 'Introspect'}
+          doc={getDoc('mcp', 'introspect')}
+          blockedBy="Exchange a code for an access token in Step 4 first."
+        >
+          <div className="tx-actions" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="tx-btn tx-btn-primary"
+              onClick={flow.stepIntrospect}
+              disabled={!flow.tokenResult || flow.loading === 'Introspect'}
+            >
+              {flow.loading === 'Introspect' && <span className="tx-spin" aria-hidden="true" />}
+              Introspect
+            </button>
+          </div>
           <StepError flow={flow} steps={['Introspect']} />
-        </div>
-      </StepCard>
-
-      {/* ── Results ─────────────────────────────────────── */}
-      {flow.tokenResult && (
-        <div className="mt-3">
-          <JsonBlock data={flow.tokenResult} label="Token Response" />
-        </div>
-      )}
-      {flow.userinfoResult && (
-        <div className="mt-3">
-          <JsonBlock data={flow.userinfoResult} label="UserInfo Response" />
-        </div>
-      )}
-      {flow.introspectResult && (
-        <div className="mt-3">
-          <JsonBlock data={flow.introspectResult} label="Introspection Response" />
-        </div>
-      )}
+          {flow.introspectResult && (
+            <div className="tx-lands" style={{ marginTop: '1rem' }}>
+              <JsonBlock data={flow.introspectResult} label="Introspection Response" />
+            </div>
+          )}
+        </StepTurn>
+      </div>
 
       {dialog}
-    </div>
+    </>
   );
 }
 

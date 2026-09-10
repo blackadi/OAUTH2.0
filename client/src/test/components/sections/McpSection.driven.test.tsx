@@ -456,14 +456,13 @@ describe('McpSection — the three regressions the second critique found', () =>
   it('keeps the help affordance reachable on a gated step', () => {
     mountSection(<McpSection />);
     const gated = document.getElementById('mcp-step-5');
-    expect(gated).toHaveAttribute('aria-disabled', 'true');
+    expect(gated).toHaveAttribute('data-state', 'pending');
 
     const help = within(gated!).getByRole('button', { name: /help/i });
     expect(help, 'a read affordance is not a form control').not.toBeDisabled();
-    // Enabled is not clickable: the card carries `pointer-events-none`, so the explainer has to opt
-    // back in or the button is keyboard-operable and mouse-dead. jsdom cannot compute the property
-    // from a utility class, so this asserts the opt-in that a real click proved was needed.
-    expect(help.closest('[class*="pointer-events-auto"]')).not.toBeNull();
+    // The `fieldset` is the whole mechanism now: the card's `pointer-events-none` went with the
+    // card, so sitting outside the gate is both necessary and sufficient.
+    expect(help.closest('fieldset'), 'a read affordance sits outside the gate').toBeNull();
     // The form controls it sits beside must still be gated.
     expect(within(gated!).getByRole('button', { name: /^Fetch UserInfo$/i })).toBeDisabled();
   });
@@ -552,9 +551,9 @@ describe('McpSection — the wizard remembers what it did before the redirect', 
     mountSection(<McpSection />);
 
     // The two gates that had been lost.
-    expect(document.getElementById('mcp-step-2')).not.toHaveAttribute('aria-disabled');
-    expect(document.getElementById('mcp-step-3')).not.toHaveAttribute('aria-disabled');
-    expect(document.getElementById('mcp-step-4')).not.toHaveAttribute('aria-disabled');
+    expect(document.getElementById('mcp-step-2')).not.toHaveAttribute('data-state', 'pending');
+    expect(document.getElementById('mcp-step-3')).not.toHaveAttribute('data-state', 'pending');
+    expect(document.getElementById('mcp-step-4')).not.toHaveAttribute('data-state', 'pending');
     // And what the reader can see of it, so a restored gate cannot be an empty card.
     expect(
       within(document.getElementById('mcp-step-1')!).getByText(/DCR Supported/i),
@@ -566,8 +565,8 @@ describe('McpSection — the wizard remembers what it did before the redirect', 
 
   it('leaves the steps gated when there is no snapshot to restore', () => {
     mountSection(<McpSection />);
-    expect(document.getElementById('mcp-step-2')).toHaveAttribute('aria-disabled', 'true');
-    expect(document.getElementById('mcp-step-4')).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById('mcp-step-2')).toHaveAttribute('data-state', 'pending');
+    expect(document.getElementById('mcp-step-4')).toHaveAttribute('data-state', 'pending');
   });
 
   /** The snapshot's shape, so reading it back is checked rather than `any`. */
@@ -671,15 +670,15 @@ describe('McpSection — a token from the callback unlocks the rest of the flow'
     );
     mountSection(<McpSection />);
 
-    expect(document.getElementById('mcp-step-5')).not.toHaveAttribute('aria-disabled');
-    expect(document.getElementById('mcp-step-6')).not.toHaveAttribute('aria-disabled');
+    expect(document.getElementById('mcp-step-5')).not.toHaveAttribute('data-state', 'pending');
+    expect(document.getElementById('mcp-step-6')).not.toHaveAttribute('data-state', 'pending');
     expect(screen.getByRole('button', { name: /^Fetch UserInfo$/i })).not.toBeDisabled();
   });
 
   it('leaves them gated when the session holds no token', () => {
     mountSection(<McpSection />);
-    expect(document.getElementById('mcp-step-5')).toHaveAttribute('aria-disabled', 'true');
-    expect(document.getElementById('mcp-step-6')).toHaveAttribute('aria-disabled', 'true');
+    expect(document.getElementById('mcp-step-5')).toHaveAttribute('data-state', 'pending');
+    expect(document.getElementById('mcp-step-6')).toHaveAttribute('data-state', 'pending');
   });
 });
 
@@ -701,12 +700,9 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     const gated = document.getElementById('mcp-step-2');
     expect(gated).not.toBeNull();
 
-    expect(gated).toHaveAttribute('aria-disabled', 'true');
+    expect(gated).toHaveAttribute('data-state', 'pending');
     // The style is useless without the width — that pairing is the whole regression.
-    expect(gated!.className).toMatch(/\bborder-dashed\b/);
-    expect(gated!.className).toMatch(/\bborder\b(?!-)/);
     // DESIGN.md: a card takes a border or a shadow, never both.
-    expect(gated!.className).not.toMatch(/\bshadow-card\b/);
   });
 
   /**
@@ -722,10 +718,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     const ready = document.getElementById('mcp-step-1');
     expect(ready).not.toBeNull();
 
-    expect(ready).not.toHaveAttribute('aria-disabled');
-    expect(ready!.className).toMatch(/\bborder\b(?!-)/);
-    expect(ready!.className).not.toMatch(/\bborder-dashed\b/);
-    expect(ready!.className).not.toMatch(/\bshadow-card\b/);
+    expect(ready).not.toHaveAttribute('data-state');
   });
 
   /**
@@ -746,9 +739,14 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     expect(controls.length).toBeGreaterThan(0);
     controls.forEach((c) => expect(c).toBeDisabled());
 
-    // Readable, not hidden — the whole reason this is a fieldset and not `inert`.
-    expect(gated!.querySelector('[aria-hidden="true"]')).toBeNull();
-    expect(within(gated!).getByText(/Step 2 \(optional\): Register Client/i)).toBeInTheDocument();
+    // Readable, not hidden — the whole reason this is a fieldset and not `inert`. The turn's marker
+    // is `aria-hidden` and should be: it is a decorative dot, and the only thing in here that is.
+    expect(gated).not.toHaveAttribute('aria-hidden');
+    expect(gated!.querySelector('fieldset')).not.toHaveAttribute('aria-hidden');
+    for (const hidden of gated!.querySelectorAll('[aria-hidden="true"]')) {
+      expect(hidden.textContent, 'nothing carrying words may be hidden').toBe('');
+    }
+    expect(within(gated!).getByText(/2 · Register client \(optional\)/i)).toBeInTheDocument();
     expect(within(gated!).getByLabelText(/CIMD URL \(for CIMD flow\)/i)).toBeInTheDocument();
   });
 
@@ -849,7 +847,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
   it('marks step 2 optional and says what to do instead', () => {
     mountSection(<McpSection />);
     const step2 = document.getElementById('mcp-step-2')!;
-    expect(within(step2).getByText(/Step 2 \(optional\): Register Client/i)).toBeInTheDocument();
+    expect(within(step2).getByText(/2 · Register client \(optional\)/i)).toBeInTheDocument();
     expect(
       within(step2).getByText(/skip it to authorize with the client ID already filled in/i),
     ).toBeInTheDocument();
@@ -866,9 +864,7 @@ describe('McpSection — a step that is not yet reachable looks it', () => {
     await screen.findByText(/DCR Supported/i);
 
     const step2 = document.getElementById('mcp-step-2');
-    expect(step2).not.toHaveAttribute('aria-disabled');
-    expect(step2!.className).not.toMatch(/\bborder-dashed\b/);
-    expect(step2!.className).toMatch(/\bborder\b(?!-)/);
+    expect(step2).not.toHaveAttribute('data-state');
     // And the controls come back with it — the fieldset has to release them, not just the styling.
     expect(within(step2!).getByLabelText(/CIMD URL \(for CIMD flow\)/i)).not.toBeDisabled();
   });
