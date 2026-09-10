@@ -35,7 +35,21 @@ import {
 beforeEach(resetSectionState);
 afterEach(cleanup);
 
-/** RFC 8414 AS metadata, trimmed to the members the wizard actually branches on. */
+/**
+ * RFC 8414 AS metadata, trimmed to the members the wizard branches on — and only members the
+ * deployment actually serves.
+ *
+ * **This fixture is how a phantom survived.** It carried `resource_indicators_supported: true`, so
+ * Step 1's capability line looked exercised in tests while being unreachable in production: no such
+ * member is registered with IANA, the MCP specification never mentions it, and the live document
+ * (measured 2026-09-10) does not contain it. A fixture that invents a field tests the reading of a
+ * document nobody serves. `authorization_response_iss_parameter_supported` replaces it because RFC
+ * 9207 §2.3 defines it and the live document really does advertise it as `true`.
+ *
+ * `introspection_endpoint` is the RFC 7662 path here because that is the path the live document
+ * advertises — checked, after a review predicted an Authlete-shaped `/api/introspection` mismatch
+ * that does not exist.
+ */
 const AS_METADATA = {
   issuer: 'http://localhost:3000',
   authorization_endpoint: 'http://localhost:3000/api/authorization',
@@ -43,7 +57,7 @@ const AS_METADATA = {
   userinfo_endpoint: 'http://localhost:3000/api/userinfo',
   introspection_endpoint: 'http://localhost:3000/api/introspection/standard',
   registration_endpoint: 'http://localhost:3000/api/client/dcr/register',
-  resource_indicators_supported: true,
+  authorization_response_iss_parameter_supported: true,
   code_challenge_methods_supported: ['S256'],
 };
 
@@ -79,7 +93,10 @@ describe('McpSection — the credential the user obtained', () => {
     // Each badge is a separate member read off the document; a rename shows as a missing badge and
     // nothing else, which is exactly the failure mode a smoke test cannot see.
     expect(await screen.findByText(/DCR Supported/i)).toBeInTheDocument();
-    expect(screen.getByText(/Resource Indicators/i)).toBeInTheDocument();
+    // Not `Resource Indicators`: that read `resource_indicators_supported`, which no registry or
+    // specification defines, so the line could only ever be absent. RFC 9207's flag is real and
+    // advertised, so it is what the capability line reports now.
+    expect(screen.getByText(/RFC 9207 iss/i)).toBeInTheDocument();
     expect(screen.getByText(/PKCE S256/i)).toBeInTheDocument();
   });
 
@@ -168,7 +185,7 @@ describe('McpSection — the credential the user obtained', () => {
     press(/Fetch Metadata/i);
     await screen.findByText(/DCR Supported/i);
 
-    fill(/Resource \(optional — MCP server URL\)/i, 'https://mcp.example.com');
+    fill(/Resource — the MCP server this token is for/i, 'https://mcp.example.com');
     press(/Build Authorization URL/i);
 
     const [authParams] = (await expectCall(build, 'the build authorization URL button')) as [
@@ -337,7 +354,7 @@ describe('McpSection — the authorization survives the redirect', () => {
     mountSection(<McpSection />);
     press(/Fetch Metadata/i);
     await screen.findByText(/DCR Supported/i);
-    if (resource !== undefined) fill(/Resource \(optional/i, resource);
+    if (resource !== undefined) fill(/Resource — the MCP server/i, resource);
     press(/Build Authorization URL/i);
     await screen.findByText(/\/api\/authorization\?/);
   }

@@ -21,6 +21,11 @@
  * **It answers a second question too**: *is every font size on the three-step type scale?* Same
  * failure mode, same invisibility to every other gate — see the note on `arbitrarySizes` below.
  *
+ * **And a third**: *is any colour written as a hex literal in a style object?* See `inlineHexes`.
+ * That one exists because this checker reads Tailwind utilities, and a colour set in JavaScript is
+ * not a utility — so it was the one place a palette violation could hide from the gate written to
+ * catch palette violations.
+ *
  * Usage: node scripts/check-theme-tokens.mjs
  */
 
@@ -90,11 +95,38 @@ const used = new Map(); // token -> Set of "file:line class"
 const arbitrarySizes = []; // "file:line class"
 const ARBITRARY_SIZE = /\btext-\[[0-9.]+(?:rem|px|em)\]/g;
 
+/**
+ * Hex colours written into a style object, which this checker could not previously see.
+ *
+ * **The defect that earned this rule.** `main.tsx` configured the toast with
+ * `background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155'` — the *dark* palette's
+ * values, hard-coded. So every toast in the application rendered dark on the light theme, and
+ * `#334155` was not even a border token in either palette. It survived typecheck, lint, the whole
+ * suite, `check:contrast` and this script, because all three colour gates read Tailwind utilities or
+ * the built stylesheet's custom properties and none of them reads a JavaScript object literal.
+ *
+ * Matched in a CSS-property position specifically, rather than "any hex anywhere": this repo's
+ * docblocks quote measured hex values constantly — that is how its reasoning is recorded — and a rule
+ * that flagged those would be turned off within a week. Comment lines are skipped for the same
+ * reason.
+ *
+ * The fix is always the same: `var(--token)` resolves per palette, a literal cannot.
+ */
+const inlineHexes = []; // "file:line declaration"
+const INLINE_HEX =
+  /\b(background|backgroundColor|color|borderColor|border|borderTop|borderBottom|borderLeft|borderRight|fill|stroke|boxShadow|outline|outlineColor|caretColor|textDecorationColor)\s*:\s*['"`][^'"`]*#[0-9a-fA-F]{3,8}/g;
+const COMMENT_LINE = /^\s*(?:\*|\/\/|\/\*)/;
+
 for (const file of walk(CLIENT_SRC)) {
   const lines = readFileSync(file, "utf8").split("\n");
   lines.forEach((line, i) => {
     for (const hit of line.matchAll(ARBITRARY_SIZE)) {
       arbitrarySizes.push(`${relative(REPO_ROOT, file)}:${i + 1}  ${hit[0]}`);
+    }
+    if (!COMMENT_LINE.test(line)) {
+      for (const hit of line.matchAll(INLINE_HEX)) {
+        inlineHexes.push(`${relative(REPO_ROOT, file)}:${i + 1}  ${hit[0].trim()}`);
+      }
     }
     for (const token of vocabulary) {
       // The token must be a whole utility suffix: `text-muted-foreground` must not register as
@@ -179,8 +211,25 @@ if (arbitrarySizes.length) {
   console.error("  valid utility, so it compiles and renders — which is why no other gate can see it.");
 }
 
-if (missing.length === 0 && paletteGaps.length === 0 && arbitrarySizes.length === 0) {
-  console.log("\n✓ every semantic colour utility is mapped, both palettes agree, and the type scale holds");
+console.log(`Hex colours in style objects  : ${inlineHexes.length}`);
+
+if (inlineHexes.length) {
+  console.error(`\n✗ ${inlineHexes.length} hex colour(s) written into a style object:`);
+  for (const site of inlineHexes.slice(0, 12)) console.error(`    ${site}`);
+  if (inlineHexes.length > 12) console.error(`    … and ${inlineHexes.length - 12} more`);
+  console.error("  A colour set in JavaScript is not a Tailwind utility, so it is invisible to the rest");
+  console.error("  of this script and to check:contrast — which is how the toast came to render the dark");
+  console.error("  palette on the light theme. Use var(--token): it resolves per palette, a literal cannot.");
+}
+
+if (
+  missing.length === 0 &&
+  paletteGaps.length === 0 &&
+  arbitrarySizes.length === 0 &&
+  inlineHexes.length === 0
+) {
+  console.log("\n✓ every semantic colour utility is mapped, both palettes agree, the type scale holds,");
+  console.log("  and no colour is hard-coded in a style object");
   process.exit(0);
 }
 if (missing.length === 0) process.exit(1);

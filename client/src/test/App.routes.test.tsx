@@ -270,7 +270,10 @@ describe('shared management credentials (F-18)', () => {
   it('carries the credential across sections, so it is entered once', async () => {
     renderAt('/admin');
     const id = await screen.findByLabelText(/Admin Client ID/i);
-    const secret = await screen.findByLabelText(/Admin Client Secret/i);
+    // `selector: 'input'` because the field's reveal toggle is named after the field it reveals —
+    // "Reveal Admin Client Secret" — so an unanchored label query matches the button too. The name is
+    // right for a screen reader; the query has to say it wants the control.
+    const secret = await screen.findByLabelText(/Admin Client Secret/i, { selector: 'input' });
 
     fireEvent.change(id, { target: { value: 'mgmt-client' } });
     fireEvent.change(secret, { target: { value: 's3cr3t' } });
@@ -285,13 +288,15 @@ describe('shared management credentials (F-18)', () => {
     );
 
     expect(await screen.findByLabelText(/Admin Client ID/i)).toHaveValue('mgmt-client');
-    expect(await screen.findByLabelText(/Admin Client Secret/i)).toHaveValue('s3cr3t');
+    expect(await screen.findByLabelText(/Admin Client Secret/i, { selector: 'input' })).toHaveValue(
+      's3cr3t',
+    );
   });
 
   it('says the credential is shared, once both halves are present', async () => {
     renderAt('/admin');
     fireEvent.change(await screen.findByLabelText(/Admin Client ID/i), { target: { value: 'a' } });
-    fireEvent.change(await screen.findByLabelText(/Admin Client Secret/i), {
+    fireEvent.change(await screen.findByLabelText(/Admin Client Secret/i, { selector: 'input' }), {
       target: { value: 'b' },
     });
     expect(screen.getByText(/Shared across every admin section/i)).toBeInTheDocument();

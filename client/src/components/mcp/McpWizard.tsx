@@ -390,15 +390,28 @@ function McpWizard({ flow }: { flow: McpFlow }) {
                   <span className="tx-datum-value">{String(flow.asData.issuer)}</span>
                 </span>
               )}
+              {/*
+                `resource_indicators_supported` used to be read here and rendered as a badge, and it
+                is not a thing. Verified 2026-09-10 against the IANA OAuth Authorization Server
+                Metadata registry — no such name is registered; the only resource-related member is
+                `protected_resources` (RFC 9728 §4) — and against the MCP authorization specification
+                (draft), which never mentions it and says instead: *"MCP clients MUST send this
+                parameter regardless of whether authorization servers support it."* There is no
+                Authlete service flag for it either; the live service object carries 135 fields and
+                none of them is one. So the badge could only ever be absent, and its absence was
+                indistinguishable from "we did not check".
+              */}
               <span className="tx-datum">
                 <span className="tx-datum-key">capabilities</span>
                 <span className="tx-datum-value">
                   {[
                     flow.asData.registration_endpoint ? 'DCR Supported' : null,
-                    flow.asData.resource_indicators_supported ? 'Resource Indicators' : null,
                     Array.isArray(flow.asData.code_challenge_methods_supported) &&
                     flow.asData.code_challenge_methods_supported.includes('S256')
                       ? 'PKCE S256'
+                      : null,
+                    flow.asData.authorization_response_iss_parameter_supported
+                      ? 'RFC 9207 iss'
                       : null,
                   ]
                     .filter(Boolean)
@@ -523,11 +536,27 @@ function McpWizard({ flow }: { flow: McpFlow }) {
             <TxField label="Scopes" value={flow.scopes} onChange={flow.setScopes} />
           </div>
           <TxField
-            label="Resource (optional — MCP server URL)"
+            label="Resource — the MCP server this token is for"
             value={flow.resource}
             onChange={flow.setResource}
             placeholder="https://mcp-server.example.com"
+            hint={
+              <>
+                Labelled optional here until 2026-09-10, which contradicted the specification this
+                section is named for: MCP requires <code>resource</code> on both the authorization
+                and the token request, and requires clients to send it{' '}
+                <em>regardless of whether the authorization server advertises support</em>. Leave it
+                empty and the token comes back without an <code>aud</code> bound to your server —
+                Step 6 is where you can see which you got.
+              </>
+            }
           />
+          {!flow.resource && (
+            <p className="tx-hint">
+              No resource set, so this authorization asks for an unbound token — useful to compare
+              against in Step 6, and not what an MCP client should send.
+            </p>
+          )}
           <div className="tx-actions">
             <button
               type="button"
@@ -644,6 +673,11 @@ function McpWizard({ flow }: { flow: McpFlow }) {
           doc={getDoc('mcp', 'introspect')}
           blockedBy="Exchange a code for an access token in Step 4 first."
         >
+          <p className="tx-hint">
+            This is where the resource indicator is proved. Nothing in the metadata advertises RFC
+            8707 support — no such member is registered — so the only way to know the audience
+            binding worked is to read <code>aud</code> off the token you were issued.
+          </p>
           <div className="tx-actions" style={{ marginTop: 0 }}>
             <button
               type="button"

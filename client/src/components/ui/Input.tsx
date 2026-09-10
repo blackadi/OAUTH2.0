@@ -1,4 +1,5 @@
-import { forwardRef, useId, type InputHTMLAttributes } from 'react';
+import { forwardRef, useId, useState, type InputHTMLAttributes } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Prose } from '@/components/ui/Prose';
 
@@ -18,7 +19,21 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, hint, id, ...props }, ref) => {
+  ({ className, label, error, hint, id, type, ...props }, ref) => {
+    /**
+     * A secret you cannot read is a secret you cannot check.
+     *
+     * Seven `Input`-based fields in this application are `type="password"`, and every one of them
+     * holds a value the reader typed in order to watch it travel — a management credential, a client
+     * secret. This is a debugger: the premise is that you can see exactly what was sent, and a field
+     * that hides its own contents from the person who typed them contradicts it. One misread
+     * character in a client secret surfaces two steps later as an opaque vendor code.
+     *
+     * The masking still defaults on, because the value is a credential and shoulder-surfing is real.
+     * What changes is that it is now the reader's choice rather than the field's.
+     */
+    const [revealed, setRevealed] = useState(false);
+    const isSecret = type === 'password';
     const generatedId = useId();
     const inputId = id || generatedId;
     const errorId = error ? `${inputId}-error` : undefined;
@@ -35,18 +50,41 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {label}
           </label>
         )}
-        <input
-          id={inputId}
-          className={cn(
-            'flex h-10 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50',
-            error && 'border-danger-text focus:ring-danger-text',
-            className,
+        <div className="relative">
+          <input
+            id={inputId}
+            type={isSecret && revealed ? 'text' : type}
+            className={cn(
+              'flex h-10 w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50',
+              error && 'border-danger-text focus:ring-danger-text',
+              // Room for the toggle, so a long secret does not run under it.
+              isSecret && 'pr-10',
+              className,
+            )}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            ref={ref}
+            {...props}
+          />
+          {isSecret && (
+            <button
+              type="button"
+              onClick={() => setRevealed((r) => !r)}
+              /**
+               * `aria-pressed` rather than two labels that swap: the control is one toggle with a
+               * state, and a name that changes under a screen reader reads as a different button
+               * appearing. `aria-controls` names the field so the pairing is not left to proximity.
+               */
+              aria-pressed={revealed}
+              aria-controls={inputId}
+              aria-label={label ? `Reveal ${label}` : 'Reveal the value'}
+              title={revealed ? 'Hide' : 'Reveal'}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+            >
+              {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           )}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy}
-          ref={ref}
-          {...props}
-        />
+        </div>
         {error && (
           <span id={errorId} className="text-xs text-danger-text" role="alert">
             {error}

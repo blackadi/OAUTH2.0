@@ -46,13 +46,24 @@ import { navigateTo } from '@/services/trace-store';
 export type McpStep =
   'Discover AS' | 'Fetch CIMD' | 'DCR Register' | 'Exchange Code' | 'Fetch UserInfo' | 'Introspect';
 
+/**
+ * The discovery members this wizard actually branches on.
+ *
+ * `resource_indicators_supported` was declared here and read by Step 1's capability line until
+ * 2026-09-10, and it is not a thing. Verified against the IANA OAuth Authorization Server Metadata
+ * registry — unregistered; the only resource-related member is `protected_resources`, RFC 9728 §4 —
+ * and against the MCP authorization specification (draft), which never mentions it and requires
+ * clients to send `resource` *"regardless of whether authorization servers support it."* Authlete
+ * has no flag for it either: the live service object carries 135 fields and none is one. So the
+ * field could only ever be `undefined`, and a badge that never appears is indistinguishable from a
+ * check that never ran.
+ */
 export interface AsMetadata {
   issuer?: string;
   authorization_endpoint?: string;
   token_endpoint?: string;
   userinfo_endpoint?: string;
   registration_endpoint?: string;
-  resource_indicators_supported?: boolean;
   code_challenge_methods_supported?: string[];
   scopes_supported?: string[];
   grant_types_supported?: string[];
@@ -458,6 +469,16 @@ export function useMcpFlow() {
       toast.error("Introspection needs this deployment's admin credentials — fill them in above");
       return;
     }
+    /**
+     * The discovered endpoint, falling back to the RFC 7662 path.
+     *
+     * A review flagged this as a likely defect — that the advertised `introspection_endpoint` would
+     * be the Authlete-shaped `/api/introspection` while the fallback names the RFC 7662
+     * `/api/introspection/standard`, so Step 6 would get *more* likely to fail once Step 1 had run.
+     * Measured 2026-09-10 against the live document: it advertises
+     * `https://…/api/introspection/standard`, the same path as the fallback. There is no mismatch,
+     * and the concern is recorded here so it is not re-raised from the same reasoning.
+     */
     const endpoint =
       (wizAsData?.introspection_endpoint as string | undefined) ||
       `${wizIssuer}/api/introspection/standard`;
