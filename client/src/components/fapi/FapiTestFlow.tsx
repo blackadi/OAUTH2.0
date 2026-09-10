@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { JsonBlock } from '@/components/ui/JsonBlock';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { stepState } from '@/utils/step-state';
 import { getJwkSetDisplay } from '@/services/client-assertion.service';
@@ -18,9 +17,13 @@ import type { FapiFlow } from './use-fapi-flow';
  */
 function FapiTestFlow({ flow }: { flow: FapiFlow }) {
   return (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>FAPI 2.0 SP Test Flow</CardTitle>
+    /* Same reasoning as the DPoP block in `FapiSection`: full width and stacked inside the same
+       `SectionPanel`, so the card chrome matched its container on background and radius with only
+       an invisible shadow between them. A rule and a heading do the separating, which is what this
+       component already does *inside* itself for its three steps. */
+    <section className="mt-6 pt-6 border-t border-border">
+      <div>
+        <h2 className="text-lg font-semibold text-card-foreground m-0">FAPI 2.0 SP Test Flow</h2>
         <p className="text-xs text-muted-foreground mt-1">
           Demonstrates a FAPI 2.0 Security Profile authorization code flow with{' '}
           <code className="text-foreground-muted">private_key_jwt</code> client authentication and
@@ -28,15 +31,15 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
           <code className="text-foreground-muted">PRIVATE_KEY_JWT</code> token auth method in
           Authlete Console.
         </p>
-      </CardHeader>
-      <CardContent className="space-y-6">
+      </div>
+      <div className="space-y-6 mt-4">
         {/* Was a bare red paragraph. A `[A157303]` here means a stored FAPI signing key silently
               rewired the exchange to `private_key_jwt` — which `AUTHLETE_NOTES` explains and a raw
               string does not. */}
         {!!flow.error && <ErrorExplainer error={String(flow.error)} />}
 
         <div id="fapi-setup" tabIndex={-1}>
-          <h2 className="text-sm font-medium mb-3">Setup: Client Configuration</h2>
+          <h3 className="text-sm font-medium mb-3">Setup: Client Configuration</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <Input
               label="Client ID"
@@ -121,7 +124,7 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
             'border-t border-border pt-4',
           )}
         >
-          <h2 className="text-sm font-medium mb-2">Step 1: Push Authorization Request (PAR)</h2>
+          <h3 className="text-sm font-medium mb-2">Step 1: Push Authorization Request (PAR)</h3>
           <p className="text-xs text-muted-foreground mb-2">
             Pushes authorization parameters with a{' '}
             <code className="text-foreground-muted">private_key_jwt</code> client assertion and DPoP
@@ -147,7 +150,7 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
           tabIndex={-1}
           {...stepState(Boolean(flow.parResult?.request_uri), 'border-t border-border pt-4')}
         >
-          <h2 className="text-sm font-medium mb-2">Step 2: Authorize</h2>
+          <h3 className="text-sm font-medium mb-2">Step 2: Authorize</h3>
           <p className="text-xs text-muted-foreground mb-2">
             Opens the authorization page. After login + consent, you are redirected to the callback
             page where the code is exchanged for tokens using{' '}
@@ -165,7 +168,7 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
         </div>
 
         <div id="fapi-step-3" tabIndex={-1} className="border-t border-border pt-4">
-          <h2 className="text-sm font-medium mb-2">Step 3: Call Userinfo with DPoP</h2>
+          <h3 className="text-sm font-medium mb-2">Step 3: Call Userinfo with DPoP</h3>
           <p className="text-xs text-muted-foreground mb-2">
             Uses the stored DPoP key and access token from the callback. The DPoP proof includes the{' '}
             <code className="text-foreground-muted">ath</code> claim (hash of the access token).
@@ -202,8 +205,8 @@ function FapiTestFlow({ flow }: { flow: FapiFlow }) {
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 

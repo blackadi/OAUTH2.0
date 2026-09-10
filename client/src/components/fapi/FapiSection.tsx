@@ -127,8 +127,24 @@ function FapiSection() {
       title="FAPI 2.0 Security Profile"
       description="FAPI 2.0 Security Profile compliance and test flow with private_key_jwt client auth and DPoP sender-constrained tokens"
     >
+      {/*
+        Four cards on this route sat inside the `SectionPanel`, and each matched it on **background
+        and radius** — `rgb(15,23,42)`/3px in dark, `rgb(255,255,255)`/3px in light — with a `0px`
+        border, so the only thing marking two nesting levels was `--shadow-card`. DESIGN.md measures
+        that shadow as "near-black against a near-black ground and almost invisible", which is
+        exactly what it is here.
+
+        **The answer differs by case, which is why this is not one sweeping change.** These two sit
+        side by side in a grid, where the box edge is what shows the reader where one column ends —
+        so they keep the chrome and get a hairline, and their position makes them unmistakable for
+        the container. The two full-width cards below were the ones reading as an identical box
+        inside an identical box, and those lose the box entirely.
+
+        `bordered` alone was tried on all four first and measured *worse*: it took them from matching
+        the panel on 2 of 4 properties to 4 of 4.
+      */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card variant="bordered">
           <CardHeader>
             <CardTitle>FAPI Configuration</CardTitle>
           </CardHeader>
@@ -166,7 +182,7 @@ function FapiSection() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card variant="bordered">
           <CardHeader>
             <CardTitle>Authlete Live Status</CardTitle>
           </CardHeader>
@@ -180,15 +196,16 @@ function FapiSection() {
         </Card>
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>DPoP Key Utilities</CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Standalone DPoP proof generation for testing with any endpoint. For the full FAPI flow,
-            use the wizard below.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      {/* Full width and stacked, so the box was the thing reading as a duplicate of the panel
+          around it. A rule and a heading separate it now — the pattern `FapiTestFlow` already uses
+          for its own three steps, and DESIGN.md's north star rather than a departure from it. */}
+      <section className="mt-6 pt-6 border-t border-border">
+        <h2 className="text-lg font-semibold text-card-foreground m-0">DPoP Key Utilities</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          Standalone DPoP proof generation for testing with any endpoint. For the full FAPI flow,
+          use the wizard below.
+        </p>
+        <div className="space-y-4 mt-4">
           <div>
             <Button onClick={handleGenerateKey} loading={loading} size="sm">
               Generate DPoP Key Pair (ES256)
@@ -262,8 +279,8 @@ function FapiSection() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <FapiTestFlow flow={flow} />
     </SectionPanel>
