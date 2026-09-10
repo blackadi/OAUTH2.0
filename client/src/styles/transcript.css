@@ -601,3 +601,144 @@
 .tx-doc svg {
   color: var(--t-rule-strong);
 }
+
+/* ── The payload well, and the last two accents the incumbents brought in ────
+   Same mechanism as `.tx-doc` above, and the same reason: override in this world's stylesheet rather
+   than at source, because seven sections still render in the incumbent world and would be left
+   unstyled. What has changed since that note was written is the ratio — 16 of 23 sections import
+   this file now, so it is no longer a pilot in one section. Fixing the shared components at source
+   is the move once the last seven convert, not before.
+
+   **Measured, not assumed.** `JsonBlock`'s `<pre>` carries `bg-code border-border`, which resolves
+   to `#020617` on a `#12110e` ground in the dark palette and `#f1f5f9` on `#fbfaf7` in the light
+   one — a cool slate slab in a warm paper world, in both themes, on the single most prominent
+   element these sections have. `--t-sunk` is the recessed ground this world already declares for
+   exactly that job, one step off `--t-paper` and the same temperature.
+
+   `--t-sunk` had **no** consumer before this: it was declared in all three palette blocks and
+   referenced nowhere, so the token that existed for a recessed surface was unused while the only
+   recessed surface in the world painted itself from another palette.
+
+   The other accent is indigo — `#6366f1` dark, `#4f46e5` light — on the `HelpPopover` trigger
+   inside `.tx-doc`. `.tx-doc svg` was already quieted; the button's own border and text were not,
+   so the trigger read as the one saturated thing on an otherwise ruled page.
+
+   Two things are deliberately left alone, and the second is a judgement rather than a clean pass.
+   `ErrorExplainer`'s fill is a semantic danger tint, and red-for-refused is what this world says too
+   (`--t-refused`), so it needs nothing.
+
+   `JsonBlock`'s header — the payload label and the Copy control — resolves to slate-400 in the dark
+   palette and `#55637a` in the light one, against `--t-graphite` `#a19a8c` / `#56524a`. Same
+   lightness, cooler temperature: measurably foreign, and left as it is. Both live in a wrapper with
+   no class of its own, so reaching them means either a `:has(> pre)` selector or a styling hook
+   added to the shared component — clever markup coupling or churn in a component seven incumbent
+   sections also render, for two words of 11px label above a well that now matches. It is recorded
+   here rather than fixed so the next person is choosing, not discovering.
+
+   Not `!important` anywhere, and not needed: these selectors are more specific than the single
+   utility classes they override. */
+
+.tx pre {
+  background: var(--t-sunk);
+  border-color: var(--t-rule);
+  border-radius: 1px;
+  color: var(--t-ink);
+  font-family: var(--t-mono);
+}
+
+.tx-doc button {
+  border-color: var(--t-rule-strong);
+  color: var(--t-graphite);
+}
+
+.tx-doc button:hover {
+  background: var(--t-rule);
+  color: var(--t-ink);
+}
+
+/* ── The tab bar, ruled rather than tinted ───────────────────────────────────
+   `TabBar` paints the selected tab `bg-tint-accent-strong text-accent-text border-edge-accent` —
+   measured at `rgba(99,102,241,.2)` fill over an indigo border in the dark palette and
+   `rgba(79,70,229,.13)` in the light one, with slate-800/`#d8dfe8` hairlines on the unselected
+   ones. It is the first thing a reader sees in every one of these sections and, once the payload
+   well above stopped being cool slate, the last saturated element on an otherwise ruled page.
+
+   **Emphasis, not colour, and deliberately not `--t-issued`.** That token means *the server
+   answered* — `transcript.css` opens by stating that a coloured pixel means the server spoke — and
+   a tab is a selector, so painting one green would claim an exchange that has not happened. Ink on
+   a recessed ground says "this one" without saying anything about a response.
+
+   `:focus-visible` is left to the world's shared rule below and the disabled treatment to the
+   utility, so neither is restated here. */
+
+.tx [role='tab'] {
+  border-radius: 1px;
+  font-family: var(--t-mono);
+  letter-spacing: 0.04em;
+  background: transparent;
+  border-color: var(--t-rule);
+  color: var(--t-graphite);
+}
+
+.tx [role='tab']:hover:not([aria-selected='true']):not(:disabled) {
+  border-color: var(--t-rule-strong);
+  color: var(--t-ink);
+}
+
+.tx [role='tab'][aria-selected='true'] {
+  background: var(--t-sunk);
+  border-color: var(--t-ink);
+  color: var(--t-ink);
+}
+
+/* ── The flow diagram's three states, in this world's own terms ──────────────
+   `FlowDiagram` marks a completed step `bg-tint-success-strong text-success-text`, the current one
+   `bg-tint-accent-strong text-accent-text ring-edge-accent`, and a pending one `bg-muted/30`. The
+   greens and greys survive translation — they mean the same thing here — but the current step was
+   the last indigo left inside `.tx`, measured on `/mcp`, `/dcr`, `/ciba` and `/device`.
+
+   **`--t-ink`, not `--t-issued`, and that distinction is the whole point of the token.** Completed
+   keeps the green because a completed step *is* an outcome: the server answered. "You are here" is
+   emphasis about the reader's position, and painting it with the outcome colour would claim an
+   exchange that has not happened yet — the same reason the selected tab above is ruled rather than
+   tinted. So: done is green, here is ink, not-yet is graphite.
+
+   The `ring` is dropped rather than recoloured. A 2px halo outside a 2px border is four strokes
+   around a 28px circle; a solid ink border against graphite hairlines carries "here" on its own in
+   a world whose whole grammar is stroke weight. */
+
+.tx [aria-current='step'] > div > div:first-child {
+  background: var(--t-sunk);
+  border-color: var(--t-ink);
+  color: var(--t-ink);
+  box-shadow: none;
+}
+
+.tx [aria-current='step'] span {
+  color: var(--t-ink);
+}
+
+/* ── RequestBuilder's header lines, with the emphasis the right way round ────
+   The last app-palette element inside `.tx`, on `/token-exchange`: `RequestBuilder` renders each
+   header key `text-accent-text` and its value `text-muted-foreground` — indigo on the name, muted
+   grey on the data.
+
+   That is this world's `tx-datum` convention **inverted**. `.tx-datum-key` is `--t-graphite` and
+   `.tx-datum-value` is `--t-ink`, because the value is the thing the reader came to read and the
+   key is only its label. So the two are swapped back here rather than merely de-indigoed: the fix
+   for the colour and the fix for the hierarchy are the same two declarations.
+
+   Only one of `RequestBuilder`'s four call sites is a transcript section, which is exactly why the
+   colours belong in this file and not in the component. The `data-headers` hook does live in the
+   component, because the structural selector that avoided it — `[class*='border-b'] > div > span` —
+   also matched the method/URL row and flattened `methodColors`, throwing away the GET/POST/DELETE
+   distinction. Note that `border-border` contains the substring `border-b`, so that selector was
+   one unlucky sibling away from repainting far more than it named. */
+
+.tx [data-headers] > div > span:first-child {
+  color: var(--t-graphite);
+}
+
+.tx [data-headers] > div > span:last-child {
+  color: var(--t-ink);
+}

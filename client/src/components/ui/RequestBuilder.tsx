@@ -91,7 +91,12 @@ function RequestBuilder({ method, url, headers, body, className }: RequestBuilde
         </button>
       </div>
       {headers && Object.keys(headers).length > 0 && (
-        <div className="px-3 py-2 border-b border-border space-y-0.5">
+        /* `data-headers` is a styling hook, not a behaviour: `transcript.css` recolours these two
+           spans inside `.tx`, where an indigo key over a muted value inverts that world's own
+           `tx-datum` hierarchy. A class was the alternative and this is the honest version of it —
+           the selector that reached them by structure also caught the method/URL row above and
+           flattened `methodColors`, which is real information about the verb. */
+        <div className="px-3 py-2 border-b border-border space-y-0.5" data-headers>
           {Object.entries(headers).map(([k, v]) => (
             <div key={k} className="flex gap-2 text-xs font-mono">
               <span className="text-accent-text shrink-0">{k}:</span>
