@@ -226,7 +226,8 @@ once, properly.
 > in memory; it makes requests carrying your cookies; it rewrites the DOM.
 
 Now apply that to PKCE. The verifier lives in the client's process between the two legs — in this repo,
-`sessionStorage` (`FapiSection.tsx:134`). An attacker with script in your origin **reads it**, and they do
+`sessionStorage` (`client/src/services/session-keys.ts:27`, the module that owns every one of
+these keys — five flows write this one). An attacker with script in your origin **reads it**, and they do
 not even need to: they can start a *fresh* authorization flow, generate their own verifier, and complete it
 silently against the AS session the user already has. To the authorization server that is the legitimate
 client doing legitimate things, because in every checkable sense it is.
