@@ -145,6 +145,12 @@ export const OAUTH_ERRORS: Record<string, ErrorDoc> = {
     fix: 'Start again. Stop polling — this one is terminal.',
     spec: 'RFC 8628 §3.5',
   },
+  invalid_client_metadata: {
+    cause:
+      'A client-identifying document was rejected — the JSON was malformed, a required field was missing or invalid, or (for CIMD specifically) the document\'s own `client_id` field did not match the URL it was fetched from.',
+    fix: "This code's home is RFC 7591 §3.2.2's client *registration* error response — but on this deployment it also surfaces from the *authorization* endpoint, because CIMD (see CIMD.md) validates the client's metadata inline during authorization rather than at a separate registration step. If you see this here, check the CIMD document your `client_id` URL serves: valid JSON, a path in the URL, and that JSON's `client_id` field equal to the exact fetch URL are the three most common misses.",
+    spec: 'RFC 7591 §3.2.2 (semantics) · applied here to CIMD (draft-ietf-oauth-client-id-metadata-document) — see A505302 below for a live example',
+  },
 };
 
 // ── Authlete result codes established live in this repo ──────────────────────────────────────────
@@ -326,6 +332,13 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
     cause: 'The user code does not exist — including because it was sent in the wrong case.',
     fix: 'User codes are case-sensitive here: a lowercased code that looks right yields `NOT_EXIST`.',
     spec: 'Verified live · RFC 8628',
+    verifiedHere: true,
+  },
+  A505302: {
+    cause:
+      "A CIMD `client_id` (an `https://` URL) was sent to the authorization endpoint, and Authlete's own fetch of that URL failed to parse as JSON. This is Authlete actually retrieving the document, live, at authorization time — not a check this server performs.",
+    fix: "Open the URL in a browser yourself first — if it doesn't render valid JSON, that's the whole problem. This code fires even for a URL that loads fine but returns HTML, XML, or a non-JSON error page (an expired Gist, a redirect to a login wall, a typo'd raw-file URL). It does not by itself tell you whether the self-consistency check (the document's `client_id` field matching the fetch URL) also passed — that failure is expected to arrive under the same `error: invalid_client_metadata` with different wording, not reproduced here.",
+    spec: "Verified live 2026-09-11 at /api/authorization, client_id=https://www.google.com/ · draft-ietf-oauth-client-id-metadata-document — see CIMD.md",
     verifiedHere: true,
   },
 };

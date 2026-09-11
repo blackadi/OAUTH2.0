@@ -1248,12 +1248,12 @@ const docs: Record<string, Record<string, OpDoc>> = {
       ],
       returns:
         'JSON with resource identifier, authorization_servers array (list of trusted AS issuers), scopes_supported, and bearer_methods_supported.',
-      tips: 'The Protected Resource Metadata tells the client which AS to use. If the MCP server returns multiple authorization_servers, the client can choose any of them. This is how MCP achieves trust without pre-configuration.',
+      tips: 'The Protected Resource Metadata tells the client which AS to use. If the MCP server returns multiple authorization_servers, the client can choose any of them. This is how MCP achieves trust without pre-configuration. On this server it is not an Authlete feature at all — unlike CIMD, Authlete has no RFC 9728 API; this document is built by this server\'s own code from its regular discovery data. Enter just the origin here (no path) — e.g. http://localhost:3000 — the well-known suffix is appended for you.',
     },
     cimd: {
       title: 'CIMD Metadata (Client ID Metadata Document)',
       description:
-        'Fetches a Client ID Metadata Document from an HTTPS URL. In MCP, clients register by providing a URL (the client_id itself) that points to their metadata. The server fetches this URL to learn the client name, redirect URIs, and other properties — no client_secret needed.',
+        'This button fetches the URL directly from your browser and shows you the JSON — nothing here reaches Authlete. It is a preview, for checking your document is well-formed before relying on it. The real mechanism happens later: in MCP, a client registers by using an HTTPS URL as its client_id itself, and Authlete — not this server, and not this preview — fetches and validates that same URL the moment it is used in an actual authorization request. No client_secret is involved either way; a CIMD client is necessarily public.',
       params: [
         {
           name: 'CIMD URL',
@@ -1262,7 +1262,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
       ],
       returns:
         'JSON with client_name, redirect_uris, grant_types, response_types, token_endpoint_auth_method, scope, and other client metadata fields per CIMD spec.',
-      tips: 'CIMD URLs must use HTTPS. The metadata document should include at minimum: client_name, redirect_uris, grant_types, response_types, and token_endpoint_auth_method. For MCP, set token_endpoint_auth_method to "none" (public client).',
+      tips: 'The single most common failure: the document\'s own "client_id" field must equal this exact URL, character for character — that self-consistency check is what stops one client\'s metadata being attributed to another. Beyond that: HTTPS required, a real path component, no client_secret_basic/post/jwt or client_secret field (CIMD clients are necessarily public), and set token_endpoint_auth_method to "none". To see Authlete actually enforce this, use the URL as client_id in the Full Flow Wizard\'s Authorize step (or see CIMD.md → How to Test It) — not this tab.',
     },
     'authorize-url': {
       title: 'Build Authorization URL',
