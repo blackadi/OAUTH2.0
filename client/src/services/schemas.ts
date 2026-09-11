@@ -158,6 +158,34 @@ export const asMetadataSchema = z.looseObject({
 });
 
 /**
+ * RFC 9728 §2 — Protected Resource Metadata. `resource` is the sole REQUIRED member.
+ *
+ * **The reason this schema exists at all, unlike most others here, is not shape drift.** It is that
+ * `mcp.service.ts`'s `fetchProtectedResourceMetadata()` used to call `http.getJson(url)` with no schema
+ * — the one lookup of the three that had none — so a 200 response whose body was not JSON at all (an
+ * SPA's `index.html`, served by a wrong host or a stray typo in the URL) was never rejected: `parseBody`
+ * falls back to the raw string, nothing here threw, and the "lookup" reported success with an HTML page
+ * as its "metadata". `asMetadataSchema` already prevented this for Step 1 by accident of having a
+ * schema for an unrelated reason (RFC 6749 §5.1 shape drift, see above); this document had no such
+ * schema and so no such protection, until now.
+ */
+export const protectedResourceMetadataSchema = z.looseObject({
+  resource: z.string(),
+});
+
+/**
+ * draft-ietf-oauth-client-id-metadata-document — `client_id` is not spec-labelled REQUIRED the way
+ * `resource` is above, but the draft's self-consistency check (§3: the document's own `client_id` must
+ * equal the URL it was fetched from) makes a document without one fail Authlete's own validation
+ * unconditionally. Modelling it as required here only moves that same, unavoidable failure earlier —
+ * from an authorization request's `[A505302]` back to this preview — and closes the same "got an HTML
+ * page back and called it success" gap `protectedResourceMetadataSchema` closes above. See `CIMD.md`.
+ */
+export const cimdMetadataSchema = z.looseObject({
+  client_id: z.string(),
+});
+
+/**
  * RFC 7662 §2.2 — the introspection response.
  *
  * **`active` is the only REQUIRED member**, and everything else is *"OPTIONAL"* — which is not a

@@ -1,5 +1,10 @@
 import { http } from './http';
-import { tokenResponseSchema, asMetadataSchema } from './schemas';
+import {
+  tokenResponseSchema,
+  asMetadataSchema,
+  protectedResourceMetadataSchema,
+  cimdMetadataSchema,
+} from './schemas';
 
 async function fetchAsMetadata(issuerUrl: string): Promise<unknown> {
   // Try RFC 8414 first, then fall back to OIDC Discovery
@@ -39,11 +44,11 @@ async function fetchAsMetadata(issuerUrl: string): Promise<unknown> {
 
 async function fetchProtectedResourceMetadata(resourceUrl: string): Promise<unknown> {
   const url = `${resourceUrl.replace(/\/$/, '')}/.well-known/oauth-protected-resource`;
-  return http.getJson(url);
+  return http.getJson(url, undefined, protectedResourceMetadataSchema);
 }
 
 async function fetchCimdMetadata(cimdUrl: string): Promise<unknown> {
-  return http.getJson(cimdUrl);
+  return http.getJson(cimdUrl, undefined, cimdMetadataSchema);
 }
 
 function buildAuthorizationUrl(params: {

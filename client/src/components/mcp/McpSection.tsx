@@ -67,7 +67,20 @@ const LOOKUPS: Lookup[] = [
     label: 'Protected Resource',
     inputLabel: 'Resource URL',
     placeholder: 'http://localhost:3000',
-    initial: 'http://localhost:3000',
+    /**
+     * `API_BASE_URL`, not a hardcoded `'http://localhost:3000'` literal — matching Discovery's own
+     * `initial` above.
+     *
+     * The hardcoded form defaulted to `localhost:3000` even when this app is the one deployed at
+     * `https://oauth2-0-ekh2.onrender.com` — a value meaningless to whoever is looking at that
+     * deployment's own page, since it names *their* machine, not the server they are looking at. That
+     * pushed a reader to go find "the real URL" some other way, which is exactly how a stale or
+     * altogether wrong host (a past Render service name, a typo) ends up pasted in here instead — and
+     * this deployment answers *any* unmatched path with its SPA's `index.html`, so the resulting "it
+     * returned HTML" report reads as this app's fault rather than as the wrong host. `API_BASE_URL`
+     * is this app's own origin, wherever it is actually running.
+     */
+    initial: API_BASE_URL,
     buttonLabel: 'Fetch Resource Metadata',
     success: 'Protected resource metadata loaded',
     run: (url) => mcpService.fetchProtectedResourceMetadata(url),
@@ -167,6 +180,15 @@ function McpSection() {
         Point these at any origin — this deployment, a third-party authorization server, or an MCP
         server of your own — and read the document exactly as it arrived. Nothing here starts a
         flow.
+      </p>
+      <p className="tx-hint">
+        Getting an HTML page back (starting <code>&lt;!doctype html&gt;</code>) instead of JSON means
+        the origin you pointed at has no matching route for that well-known path — a wrong host, a
+        typo, or a static site with no backend attached — and its own catch-all served its homepage
+        instead. It is not this deployment failing; it is a sign to double-check the origin. Open
+        <code> {'{origin}'}/.well-known/oauth-protected-resource</code> (or the AS metadata path) in a
+        plain new browser tab first — a working origin answers with JSON there, before you ever paste
+        it in here.
       </p>
 
       <div className="tx-body">
