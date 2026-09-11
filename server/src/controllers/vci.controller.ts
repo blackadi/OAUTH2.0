@@ -80,6 +80,21 @@ const SINGLE_ISSUE_MAP: Record<string, number> = {
   CALLER_ERROR: 400,
 };
 
+/**
+ * `/vci/single/parse`'s actions — the single-issue counterpart of `DEFERRED_PARSE_MAP`. Same shape,
+ * same reason for existing: until this fix, nothing on the single-issue path called `parse` at all, so
+ * `UNAUTHORIZED` (a bad or absent token) and `BAD_REQUEST` (a credential request Authlete cannot make
+ * sense of) were never reachable — every request instead reached `issue` with an invented
+ * `requestIdentifier` and failed there with `[A384206]`, regardless of the token.
+ */
+const SINGLE_PARSE_MAP: Record<string, number> = {
+  OK: 200,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  INTERNAL_SERVER_ERROR: 500,
+};
+
 const BATCH_ISSUE_MAP: Record<string, number> = {
   OK: 200,
   UNAUTHORIZED: 401,
@@ -200,6 +215,16 @@ export function createVciControllers(serviceInstance = new VciService()) {
       },
     },
     credential: {
+      /**
+       * `/vci/single/parse` first, then `/vci/single/issue` — the same two-call shape
+       * `handleIssueDeferred` below already uses, and for the identical reason: `requestIdentifier` on
+       * the issue call has to come from Authlete's own parse of the credential request, never from the
+       * caller (the same server-determined-fields rule `introspection.service.ts` and
+       * `userinfo.service.ts` follow elsewhere). Before this fix nothing here called `parse` at all, so
+       * every single-issue request reached `issue` with no real identifier and failed with
+       * `[A384206] The credential request identified by '…' is not found` — reproduced live 2026-09-12,
+       * regardless of whether the token was presented as `Bearer` or `DPoP`. See `VciService.parseSingle`.
+       */
       handleIssueSingle: async (req: Request, res: Response, next: NextFunction) => {
         try {
           const bearerToken = extractBearerToken(req);
@@ -209,7 +234,30 @@ export function createVciControllers(serviceInstance = new VciService()) {
             res.status(401).json({ error: "invalid_token", error_description: "Access token is required. Provide via Authorization: Bearer header or accessToken field in body." });
             return;
           }
-          const result = await serviceInstance.issueSingle(accessToken, order);
+
+          const requestContent = order?.credentialPayload;
+          if (!requestContent) {
+            res.status(400).json({ error: "invalid_request", error_description: "Missing order.credentialPayload — the credential request body (format, and any type-specific fields) to parse." });
+            return;
+          }
+
+          const parsed = await serviceInstance.parseSingle(accessToken, requestContent);
+          const parseStatus = statusForAction(parsed.action, SINGLE_PARSE_MAP);
+          if (parseStatus !== 200) {
+            // Same T1-11 treatment as the deferred path: on `UNAUTHORIZED` this is a `WWW-Authenticate`
+            // challenge string, not a JSON body.
+            sendChallenge(res, parseStatus, parsed);
+            return;
+          }
+
+          const callerOrder: Record<string, unknown> = {};
+          for (const key of CALLER_SETTABLE_ORDER_FIELDS) {
+            if (order[key] !== undefined) callerOrder[key] = order[key];
+          }
+          const result = await serviceInstance.issueSingle(accessToken, {
+            ...callerOrder,
+            requestIdentifier: parsed.info?.identifier,
+          });
           const status = statusForAction(result.action, SINGLE_ISSUE_MAP);
           res.status(status).json(result);
         } catch (err) {

@@ -111,6 +111,26 @@ describe("VciService", () => {
     })
   })
 
+  // `/vci/single/parse` is the only Authlete API on the single-issue path that accepts an access token —
+  // `VciSingleIssueRequest` has no `accessToken` field of its own significance beyond forwarding it, and
+  // more importantly `order.requestIdentifier` on `issue` names a request that only exists because `parse`
+  // created it. Mirrors `parseDeferred` below.
+  describe("parseSingle", () => {
+    it("calls verifiableCredentials.parse with the token and the request content", async () => {
+      const mockResponse = { action: "OK", info: { identifier: "req-1" } }
+      vi.mocked(mockApi.verifiableCredentials.parse).mockResolvedValue(mockResponse as any)
+
+      const result = await service.parseSingle("at-1", '{"format":"vc+sd-jwt"}')
+
+      expect(mockApi.verifiableCredentials.parse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vciSingleParseRequest: { accessToken: "at-1", requestContent: '{"format":"vc+sd-jwt"}' },
+        })
+      )
+      expect(result).toEqual(mockResponse)
+    })
+  })
+
   describe("issueSingle", () => {
     it("calls verifiableCredentials.issue", async () => {
       const mockResponse = { action: "OK", credential: "eyJ..." }
@@ -146,9 +166,9 @@ describe("VciService", () => {
     })
   })
 
-  // `/vci/deferred/parse` is the only Authlete API on the deferred path that accepts an access token —
-  // `VciDeferredIssueRequest` has no `accessToken` field, while `/vci/single/issue` and `/vci/batch/issue`
-  // both do. That is why this path makes two calls and its siblings make one.
+  // `/vci/deferred/parse` is the deferred-path counterpart of `parseSingle` above — same two-call shape,
+  // same reason: `VciDeferredIssueRequest` has no `accessToken` field of its own, and its
+  // `requestIdentifier` is equally something only `parse` can produce.
   describe("parseDeferred", () => {
     it("calls verifiableCredentials.deferredParse with the token and the request content", async () => {
       const mockResponse = { action: "OK", info: { identifier: "req-1" } }

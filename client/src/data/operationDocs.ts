@@ -213,7 +213,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
         },
       ],
       returns: 'JSON describing the grant: scopes, claims, and authorization details.',
-      tips: 'Present the token with the scheme it requires — a sender-constrained token must use `DPoP` and carry a proof, or Authlete refuses it with `[A281305]`. The ownership check runs *before* the vendor call, so a 403 means "not your grant" while a 401 means the token itself was not accepted.',
+      tips: 'How to actually get here, verified live end to end: (1) use a CONFIDENTIAL client — Authlete refuses `grant_management_action` for a public/PKCE client outright with `[A285311]`, no exceptions. (2) Add `grant_management_action=create` to the authorization request, and request the `grant_management_query`/`grant_management_revoke` scopes. (3) The resulting token response carries `grant_id` — that is what goes in Grant ID here. Present the token with the scheme it requires — a sender-constrained token must use `DPoP` and carry a proof. Omit the proof entirely and this is refused one step earlier than you might expect: the ownership check (`requireGrantOwnership`) runs its own introspection *before* the `/gm` call itself, so a token with no DPoP proof at all is refused there with `[A065308]`, not `[A281305]` — `[A281305]` is what the underlying `/gm` call itself would say, reached only if the first check\'s introspection succeeded (it never does for a token that carries no proof anywhere). A 403 means "not your grant"; a 401 means the token was not accepted.',
     },
     revoke: {
       title: 'Revoke a Grant',
@@ -224,7 +224,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
         { name: 'Grant ID', desc: 'The grant to delete.' },
       ],
       returns: '204 with no body on success.',
-      tips: 'Irreversible. After this the subject cannot find its own grant, and every refresh token under it is dead.',
+      tips: 'Irreversible. After this the subject cannot find its own grant, and every refresh token under it is dead. Same prerequisites as Query: a confidential client, `grant_management_action=create` at authorization time, and correct DPoP presentation if the token is bound.',
     },
   },
   'step-up': {
@@ -1138,7 +1138,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
         { name: 'MGMT Client Secret', desc: 'The admin client secret for Basic authentication.' },
         {
           name: 'Credential Configuration IDs',
-          desc: 'JSON array of credential type IDs the offer covers (e.g. ["VerifiedEmployee"]). These must match the credential_configurations_supported in the metadata.',
+          desc: 'JSON array of credential type IDs the offer covers. These must match a real key in credential_configurations_supported (check the Metadata tab first — on this deployment, live, that is ["IdentityCredential"], not the illustrative "VerifiedEmployee" seen in some examples).',
         },
         {
           name: 'Subject',
@@ -1182,7 +1182,7 @@ const docs: Record<string, Record<string, OpDoc>> = {
       ],
       returns:
         'JSON with format, credential (the signed credential JWT or SD-JWT), and optionally transaction_id (if deferred — use the Deferred endpoint). On 202 ACCEPTED, the response includes a transaction_id and a notification_id.',
-      tips: 'How to get an access token for VCI: (1) Go to Auth Flows > Authorization Code and log in as admin/password with scopes like openid, then copy the access_token from the vault. (2) Paste it in the Access Token field here and click Issue. If the server returns 202 Accepted, copy the transaction_id and use the Deferred tab to poll for completion.',
+      tips: 'A plain Auth Code token (scope=openid) will not work here — VCI needs a token tied to an actual credential offer. Verified live end to end, 2026-09-12: (1) Offers > Create (admin creds) with Credential Configuration IDs matching the Metadata tab, preAuthorizedCodeGrantIncluded=true. (2) Exchange the resulting preAuthorizedCode at the token endpoint with grant_type=urn:ietf:params:oauth:grant-type:pre-authorized_code — this does support DPoP sender-constraining (token_type came back "DPoP" when the token request carried a proof). (3) Put order.credentialPayload as a JSON string describing the request (e.g. {"format":"vc+sd-jwt"}) — this server now parses it via Authlete\'s /vci/single/parse first (fixed 2026-09-12; it previously skipped straight to issue with an invented requestIdentifier and always failed with [A384206]/[A384202], regardless of anything else being right) and only then issues, using the identifier Authlete\'s own parse assigned. A real, signed vc+sd-jwt credential comes back. One thing worth knowing rather than assuming: Authlete\'s VCI request types (VciSingleIssueRequest/VciSingleParseRequest) carry no DPoP field at all — unlike UserInfo\'s or Grant Management\'s request types, which do — so a DPoP-bound token presented here as plain Bearer is NOT refused (verified live: succeeded both ways). That is an Authlete-API-level fact about this endpoint, not something this app\'s code controls.',
     },
     'cred-batch': {
       title: 'Credential — Batch Credential Endpoint (OID4VCI §10)',

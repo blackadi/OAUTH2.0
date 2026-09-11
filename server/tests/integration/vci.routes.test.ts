@@ -190,6 +190,7 @@ describe("Integration: VCI routes", () => {
     })
 
     it.each(WITH_TOKEN)("POST $path accepts the token from the Authorization header", async (route) => {
+      vc().parse.mockResolvedValue({ action: "OK", info: { identifier: "req-1" } })
       route.call().mockResolvedValue({ action: "OK" })
 
       await request(app).post(route.path).set("Authorization", "Bearer at-1").send(route.body).expect(200)
@@ -205,12 +206,13 @@ describe("Integration: VCI routes", () => {
     it.each(["Bearer at-1", "bearer at-1", "DPoP at-1", "dpop at-1"])(
       "accepts the %s presentation",
       async (header) => {
+        vc().parse.mockResolvedValue({ action: "OK", info: { identifier: "req-1" } })
         vc().issue.mockResolvedValue({ action: "OK" })
 
         await request(app)
           .post("/api/vci/credential/issue")
           .set("Authorization", header)
-          .send({ order: {} })
+          .send({ order: { credentialPayload: "{}" } })
           .expect(200)
       },
     )
@@ -219,29 +221,64 @@ describe("Integration: VCI routes", () => {
       await request(app)
         .post("/api/vci/credential/issue")
         .set("Authorization", "Basic YWJjOmRlZg==")
+        .send({ order: { credentialPayload: "{}" } })
+        .expect(401)
+
+      expect(vc().parse).not.toHaveBeenCalled()
+      expect(vc().issue).not.toHaveBeenCalled()
+    })
+
+    it("still honours the JSON accessToken body fallback", async () => {
+      vc().parse.mockResolvedValue({ action: "OK", info: { identifier: "req-1" } })
+      vc().issue.mockResolvedValue({ action: "OK" })
+
+      await request(app)
+        .post("/api/vci/credential/issue")
+        .send({ accessToken: "at-body", order: { credentialPayload: "{}" } })
+        .expect(200)
+
+      expect(vc().parse).toHaveBeenCalledWith({
+        serviceId: "test-service",
+        vciSingleParseRequest: { accessToken: "at-body", requestContent: "{}" },
+      })
+      expect(vc().issue).toHaveBeenCalledWith({
+        serviceId: "test-service",
+        vciSingleIssueRequest: { accessToken: "at-body", order: { credentialPayload: "{}", requestIdentifier: "req-1" } },
+      })
+    })
+
+    it("rejects an order with no credentialPayload, without calling Authlete", async () => {
+      const res = await request(app)
+        .post("/api/vci/credential/issue")
+        .set("Authorization", "Bearer at-1")
         .send({ order: {} })
+        .expect(400)
+
+      expect(res.body.error).toBe("invalid_request")
+      expect(vc().parse).not.toHaveBeenCalled()
+      expect(vc().issue).not.toHaveBeenCalled()
+    })
+
+    it("stops at parse when Authlete rejects the token, and never issues", async () => {
+      vc().parse.mockResolvedValue({ action: "UNAUTHORIZED", responseContent: "{}" })
+
+      await request(app)
+        .post("/api/vci/credential/issue")
+        .set("Authorization", "Bearer at-1")
+        .send({ order: { credentialPayload: "{}" } })
         .expect(401)
 
       expect(vc().issue).not.toHaveBeenCalled()
     })
 
-    it("still honours the JSON accessToken body fallback", async () => {
-      vc().issue.mockResolvedValue({ action: "OK" })
+    it("maps ACCEPTED to 202 and UNAUTHORIZED to 401 from the issue call itself", async () => {
+      vc().parse.mockResolvedValue({ action: "OK", info: { identifier: "req-1" } })
 
-      await request(app).post("/api/vci/credential/issue").send({ accessToken: "at-body", order: {} }).expect(200)
-
-      expect(vc().issue).toHaveBeenCalledWith({
-        serviceId: "test-service",
-        vciSingleIssueRequest: { accessToken: "at-body", order: {} },
-      })
-    })
-
-    it("maps ACCEPTED to 202 and UNAUTHORIZED to 401", async () => {
       vc().issue.mockResolvedValue({ action: "ACCEPTED" })
-      await request(app).post("/api/vci/credential/issue").set("Authorization", "Bearer at-1").send({ order: {} }).expect(202)
+      await request(app).post("/api/vci/credential/issue").set("Authorization", "Bearer at-1").send({ order: { credentialPayload: "{}" } }).expect(202)
 
       vc().issue.mockResolvedValue({ action: "UNAUTHORIZED" })
-      await request(app).post("/api/vci/credential/issue").set("Authorization", "Bearer at-1").send({ order: {} }).expect(401)
+      await request(app).post("/api/vci/credential/issue").set("Authorization", "Bearer at-1").send({ order: { credentialPayload: "{}" } }).expect(401)
     })
 
     it("rejects a batch with neither orders nor credential_requests, without calling Authlete", async () => {

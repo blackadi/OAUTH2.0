@@ -8,6 +8,7 @@ const mockVciService = {
   getJwks: vi.fn(),
   createOffer: vi.fn(),
   getOfferInfo: vi.fn(),
+  parseSingle: vi.fn(),
   issueSingle: vi.fn(),
   batchIssue: vi.fn(),
   parseDeferred: vi.fn(),
@@ -244,11 +245,20 @@ describe("VCI controllers", () => {
     })
   })
 
+  // Two Authlete calls since this fix: `/vci/single/parse` authenticates and resolves a real
+  // `requestIdentifier`, `/vci/single/issue` issues against it. Before this, `issueSingle` was called
+  // directly with no parse step, so `order.requestIdentifier` — server-determined everywhere else in this
+  // file — was instead whatever the caller invented, and Authlete correctly refused it with
+  // `[A384206] The credential request identified by '…' is not found` regardless of token validity.
+  // Mirrors `credential.handleIssueDeferred`'s tests below, which already got this right.
   describe("credential.handleIssueSingle", () => {
-    it("returns 200 on OK action", async () => {
-      mockVciService.issueSingle.mockResolvedValue({ action: "OK" })
+    const parsedOk = { action: "OK", info: { identifier: "req-from-parse" } }
+
+    it("parses first, then issues with the identifier parse returned", async () => {
+      mockVciService.parseSingle.mockResolvedValue(parsedOk)
+      mockVciService.issueSingle.mockResolvedValue({ action: "OK", credential: "eyJ..." })
       const req = mockReq({
-        body: { accessToken: "token123", order: { requestIdentifier: "cred123" } },
+        body: { accessToken: "token123", order: { credentialPayload: '{"format":"vc+sd-jwt"}' } },
       })
       const res = mockRes()
       const next = mockNext()
@@ -256,13 +266,21 @@ describe("VCI controllers", () => {
       await credential.handleIssueSingle(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(200)
-      expect(mockVciService.issueSingle).toHaveBeenCalledWith("token123", { requestIdentifier: "cred123" })
+      expect(mockVciService.parseSingle).toHaveBeenCalledWith("token123", '{"format":"vc+sd-jwt"}')
+      expect(mockVciService.issueSingle).toHaveBeenCalledWith("token123", {
+        credentialPayload: '{"format":"vc+sd-jwt"}',
+        requestIdentifier: "req-from-parse",
+      })
     })
 
     it("returns 202 on ACCEPTED action", async () => {
+      mockVciService.parseSingle.mockResolvedValue(parsedOk)
       mockVciService.issueSingle.mockResolvedValue({ action: "ACCEPTED", transactionId: "txn123" })
       const req = mockReq({
-        body: { accessToken: "token123", order: { issuanceDeferred: true } },
+        body: {
+          accessToken: "token123",
+          order: { credentialPayload: '{"format":"vc+sd-jwt"}', issuanceDeferred: true },
+        },
       })
       const res = mockRes()
       const next = mockNext()
@@ -280,6 +298,84 @@ describe("VCI controllers", () => {
       await credential.handleIssueSingle(req, res, next)
 
       expect(res.status).toHaveBeenCalledWith(401)
+      expect(mockVciService.parseSingle).not.toHaveBeenCalled()
+      expect(mockVciService.issueSingle).not.toHaveBeenCalled()
+    })
+
+    it("returns 400 when order.credentialPayload is missing — nothing to parse", async () => {
+      const req = mockReq({ body: { accessToken: "token123", order: {} } })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueSingle(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(400)
+      expect(mockVciService.parseSingle).not.toHaveBeenCalled()
+    })
+
+    it("stops at parse when Authlete rejects the token, and never issues", async () => {
+      mockVciService.parseSingle.mockResolvedValue({ action: "UNAUTHORIZED" })
+      const req = mockReq({
+        body: { accessToken: "bad", order: { credentialPayload: '{"format":"vc+sd-jwt"}' } },
+      })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueSingle(req, res, next)
+
+      expect(res.status).toHaveBeenCalledWith(401)
+      expect(mockVciService.issueSingle).not.toHaveBeenCalled()
+    })
+
+    it("never lets the body choose the requestIdentifier", async () => {
+      mockVciService.parseSingle.mockResolvedValue(parsedOk)
+      mockVciService.issueSingle.mockResolvedValue({ action: "OK" })
+      const req = mockReq({
+        body: {
+          accessToken: "token123",
+          order: {
+            credentialPayload: '{"format":"vc+sd-jwt"}',
+            requestIdentifier: "someone-elses-request",
+          },
+        },
+      })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueSingle(req, res, next)
+
+      expect(mockVciService.issueSingle).toHaveBeenCalledWith("token123", {
+        credentialPayload: '{"format":"vc+sd-jwt"}',
+        requestIdentifier: "req-from-parse",
+      })
+    })
+
+    it("forwards the allowlisted order fields and nothing else", async () => {
+      mockVciService.parseSingle.mockResolvedValue(parsedOk)
+      mockVciService.issueSingle.mockResolvedValue({ action: "OK" })
+      const req = mockReq({
+        body: {
+          accessToken: "token123",
+          order: {
+            credentialPayload: '{"format":"vc+sd-jwt"}',
+            credentialDuration: 3600,
+            signingKeyId: "rsa-1",
+            issuanceDeferred: true,
+            somethingTheSdkAddsLater: "nope",
+          },
+        },
+      })
+      const res = mockRes()
+      const next = mockNext()
+
+      await credential.handleIssueSingle(req, res, next)
+
+      expect(mockVciService.issueSingle).toHaveBeenCalledWith("token123", {
+        credentialPayload: '{"format":"vc+sd-jwt"}',
+        credentialDuration: 3600,
+        signingKeyId: "rsa-1",
+        requestIdentifier: "req-from-parse",
+      })
     })
   })
 
@@ -466,24 +562,35 @@ describe("VCI controllers", () => {
       ["DPoP scheme (RFC 9449 §7.1)", "DPoP tok-1"],
       ["lower-case bearer (RFC 9110 §11.1)", "bearer tok-1"],
     ])("accepts %s", async (_label, header) => {
+      mockVciService.parseSingle.mockResolvedValue({ action: "OK", info: { identifier: "req-1" } })
       mockVciService.issueSingle.mockResolvedValue({ action: "OK" })
-      const req = mockReq({ headers: { authorization: header }, body: { order: {} } })
+      const req = mockReq({
+        headers: { authorization: header },
+        body: { order: { credentialPayload: '{"format":"vc+sd-jwt"}' } },
+      })
       const res = mockRes()
 
       await credential.handleIssueSingle(req, res, mockNext())
 
-      expect(mockVciService.issueSingle).toHaveBeenCalledWith("tok-1", {})
+      expect(mockVciService.parseSingle).toHaveBeenCalledWith("tok-1", '{"format":"vc+sd-jwt"}')
+      expect(mockVciService.issueSingle).toHaveBeenCalledWith("tok-1", {
+        credentialPayload: '{"format":"vc+sd-jwt"}',
+        requestIdentifier: "req-1",
+      })
       expect(res.status).toHaveBeenCalledWith(200)
     })
 
     it("still accepts the accessToken body field", async () => {
+      mockVciService.parseSingle.mockResolvedValue({ action: "OK", info: { identifier: "req-1" } })
       mockVciService.issueSingle.mockResolvedValue({ action: "OK" })
-      const req = mockReq({ body: { accessToken: "body-tok", order: {} } })
+      const req = mockReq({
+        body: { accessToken: "body-tok", order: { credentialPayload: '{"format":"vc+sd-jwt"}' } },
+      })
       const res = mockRes()
 
       await credential.handleIssueSingle(req, res, mockNext())
 
-      expect(mockVciService.issueSingle).toHaveBeenCalledWith("body-tok", {})
+      expect(mockVciService.parseSingle).toHaveBeenCalledWith("body-tok", '{"format":"vc+sd-jwt"}')
     })
   })
 })

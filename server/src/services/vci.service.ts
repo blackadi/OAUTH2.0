@@ -110,6 +110,29 @@ export class VciService {
     return response;
   }
 
+  /**
+   * `/vci/single/parse` — the single-issue sibling of `parseDeferred` below, and until now this repo had
+   * only the deferred half of the pair.
+   *
+   * **Why `issueSingle` cannot skip this.** `order.requestIdentifier` on the *issue* call names a
+   * credential request Authlete already knows about — and the only way Authlete comes to know about one
+   * is by parsing it here first. Calling `issue` with a caller-invented identifier is not a shortcut past
+   * this step; it is a request for something that was never created, which is exactly the
+   * `[A384206] The credential request identified by '…' is not found` this repo's own live probing hit on
+   * every attempt before this fix existed (verified 2026-09-12).
+   *
+   * `requestContent` is the message body of the credential request being parsed — same role as
+   * `parseDeferred`'s, one layer up the stack.
+   */
+  async parseSingle(accessToken: string, requestContent: string): Promise<any> {
+    const response = await this.authleteApi.verifiableCredentials.parse({
+      serviceId,
+      vciSingleParseRequest: { accessToken, requestContent },
+    });
+
+    return response;
+  }
+
   async issueSingle(accessToken: string, order?: any): Promise<any> {
     const response = await this.authleteApi.verifiableCredentials.issue({
       serviceId,

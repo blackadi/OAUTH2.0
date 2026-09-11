@@ -334,6 +334,13 @@ export const AUTHLETE_NOTES: Record<string, AuthleteNote> = {
     spec: 'Verified live · RFC 8628',
     verifiedHere: true,
   },
+  A285311: {
+    cause:
+      'The authorization request carried `grant_management_action` (the parameter that turns on Grant Management for that grant), but the client is public — Authlete restricts the Grant Management feature to confidential clients only, regardless of scope or anything else in the request.',
+    fix: "Use a confidential client (`tokenAuthMethod` other than `NONE` — e.g. `client_secret_basic`) for any authorization request that includes `grant_management_action`. A public, PKCE-only client can never use Grant Management on this service, by Authlete's own restriction, not a configuration flag you can flip.",
+    spec: "Verified live 2026-09-12 at /api/authorization, client_id=4277838306 (public) with grant_management_action=create · Authlete's own message",
+    verifiedHere: true,
+  },
   A505302: {
     cause:
       "A CIMD `client_id` (an `https://` URL) was sent to the authorization endpoint, and Authlete's own fetch of that URL failed to parse as JSON. This is Authlete actually retrieving the document, live, at authorization time — not a check this server performs.",
