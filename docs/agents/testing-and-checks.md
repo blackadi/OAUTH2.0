@@ -23,7 +23,7 @@
   - `tests/unit/config/` — 1 file, `app.config.test.ts`, which asserts **the default itself** (`NODE_ENV` absent ⇒ `production`) — the `development-only` tests mock the config module and so can never see it
   - `tests/unit/views/` — 2 files, `consent-rar.test.ts` and `login.test.ts`. Both render the **real** `.ejs` file, which is the only kind of test here that can see a template throw or silently drop what a controller passed it
 - **Integration tests**: 7 files (306 tests, measured 2026-09-12) — full Express stack with mocked SDK, via `createApp()`. `routes.test.ts` is the general one; the other six were written to drain the route-coverage backlog and each drives one module's routes **through its middleware chain**, asserting the auth posture first: `client.routes.test.ts` (16 routes), `admin-surfaces.routes.test.ts` (token/HSK/federation/JAR/device-consent/health/route-index, 16), `vci.routes.test.ts` (10), `backchannel-logout.routes.test.ts` (4), `native-sso.routes.test.ts` (2), `root.routes.test.ts` (2). **Prefer adding to these over a new controller test** when the thing under test is a gate, a status mapping or a route parameter — a controller test calls the handler directly and cannot see any of it
-- **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (**107 tests: 105 pass, 2 skipped outside development**) —
+- **E2E tests**: 1 file `tests/e2e/e2e.test.ts` (**106 tests: 104 pass, 2 skipped outside development**) —
   real Authlete API, 26 section headers fixed for sequential numbering. The two skips are the device-flow
   approval chain, which drives the development-only `POST /api/device/complete`.
 

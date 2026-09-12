@@ -34,7 +34,7 @@ a status mapping or a route parameter.
 
 ### E2E Tests
 
-- **File:** `tests/e2e/e2e.test.ts` — **107 tests: 105 exercised, 2 permanently skipped.** The two are the
+- **File:** `tests/e2e/e2e.test.ts` — **106 tests: 104 exercised, 2 permanently skipped.** The two are the
   device-flow completion pair behind `itInDevelopment`; Vitest sets `NODE_ENV=test` and the suite also
   asserts the other side of that gate, so they cannot both run in one pass. See `AGENTS.md`.
 - **Never run this without being asked.** It spends real Authlete API quota and trips the ~15-call rate
