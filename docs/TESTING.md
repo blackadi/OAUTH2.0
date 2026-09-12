@@ -14,19 +14,19 @@
 > **The per-category breakdown lives in
 > [`docs/agents/testing-and-checks.md`](agents/testing-and-checks.md), and only there.** This section
 > carried a second copy for months and every number in it was wrong by roughly 5x — it read *38 files,
-> 246 tests* against an actual 77 and 1130, and named six controller tests out of fourteen. A hand-kept
-> inventory in two places is one that drifts in at least one of them. What is left here is the shape and
-> the totals; re-measure before quoting either.
+> 246 tests* against an actual 77 and 1130 at the time, and named six controller tests out of
+> fourteen. A hand-kept inventory in two places is one that drifts in at least one of them. What is
+> left here is the shape and the totals; re-measure before quoting either.
 
-**Measured 2026-08-31** — `npm --prefix server run test`:
+**Measured 2026-09-12** — `npm --prefix server run test`:
 
 | Layer | Files | Tests | What it can see |
 |-------|-------|-------|-----------------|
-| Unit | 70 | 826 | One module with its collaborators mocked. **A controller test calls the handler directly and never touches the middleware chain**, so it cannot see an auth gate at all |
-| Integration | 7 | 304 | The full Express stack via `createApp()` + Supertest, mocked SDK. This is the layer that sees gates, status mappings and route parameters |
-| **Total** | **77** | **1130** | ~3s |
+| Unit | 73 | 873 | One module with its collaborators mocked. **A controller test calls the handler directly and never touches the middleware chain**, so it cannot see an auth gate at all |
+| Integration | 7 | 306 | The full Express stack via `createApp()` + Supertest, mocked SDK. This is the layer that sees gates, status mappings and route parameters |
+| **Total** | **80** | **1179** | ~3s |
 
-Unit tests are split across `services/` (27 files), `controllers/` (14), `utils/` (12), `middleware/` (7),
+Unit tests are split across `services/` (27 files), `controllers/` (16), `utils/` (13), `middleware/` (7),
 `routes/` (7), `views/` (2) and `config/` (1).
 
 **Prefer adding to an integration test over a new controller test** when the thing under test is a gate,
@@ -34,7 +34,7 @@ a status mapping or a route parameter.
 
 ### E2E Tests
 
-- **File:** `tests/e2e/e2e.test.ts` — **101 tests: 99 exercised, 2 permanently skipped.** The two are the
+- **File:** `tests/e2e/e2e.test.ts` — **107 tests: 105 exercised, 2 permanently skipped.** The two are the
   device-flow completion pair behind `itInDevelopment`; Vitest sets `NODE_ENV=test` and the suite also
   asserts the other side of that gate, so they cannot both run in one pass. See `AGENTS.md`.
 - **Never run this without being asked.** It spends real Authlete API quota and trips the ~15-call rate

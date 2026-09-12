@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "postinstall": "git config core.hooksPath \"$(git rev-parse --show-toplevel 2>/dev/null)/.githooks\" 2>/dev/null || true",
+    "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true",
     "dev": "NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "postbuild": "rm -rf dist/views dist/public && cp -r src/views dist/views && cp -r public dist/public",
