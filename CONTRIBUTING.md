@@ -68,14 +68,14 @@ Run the full check suite:
 # Server
 npm --prefix server run lint         # ESLint (0 errors)
 npm --prefix server run typecheck    # TypeScript (0 errors)
-npm --prefix server run test         # All tests (287 unit + 31 integration)
+npm --prefix server run test         # All tests (873 unit + 306 integration)
 
 # Client
 npm --prefix client run format       # Prettier --check (CI fails on this — see the pre-commit hook below)
 npm --prefix client run lint         # ESLint (0 errors)
 npm --prefix client run typecheck    # TypeScript (0 errors)
 npm --prefix client run build        # Vite production build
-npm --prefix client run test         # Client tests
+npm --prefix client run test         # Client tests (1526 tests, 107 files)
 ```
 
 All checks must pass before requesting review.

@@ -34,14 +34,14 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (1161 tests, 80 files)
+npm --prefix server run test              # unit + integration (1179 tests, 80 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (857 tests, 73 files)
-npm --prefix server run test:integration  # integration tests only (304 tests, 7 files)
+npm --prefix server run test:unit         # unit tests only (873 tests, 73 files)
+npm --prefix server run test:integration  # integration tests only (306 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
-npm --prefix server run test:e2e          # E2E (103 tests, requires real Authlete creds)
+npm --prefix server run test:e2e          # E2E (107 tests, requires real Authlete creds)
 
 # Client dev (Vite on :3001, proxies /api -> localhost:3000)
 npm --prefix client run dev
@@ -149,7 +149,8 @@ defect, a broken lab, or spent vendor quota.
   in `vitest.e2e.config.ts` is not the fix** — the suite also asserts the other side of that gate
   (*"complete is development-only and 404s outside development"*), so flipping it trades one skipped test
   for one failing one. Reaching them needs two runs at different `NODE_ENV`, or the production-safe
-  `POST /device/consent` path with a browser leg. So the honest count is **101 of 103 exercised**.
+  `POST /device/consent` path with a browser leg. So the honest count is **105 of 107 exercised**
+  (re-measured 2026-09-12).
 
   **Measured again 2026-09-03, and the answer was not staleness.** `check-e2e-staleness.mjs` named
   five behaviour-deciding files changed since `5e577a5f` — `authorization.controller.ts`,
@@ -172,8 +173,8 @@ defect, a broken lab, or spent vendor quota.
 
   **The revision was not run.** It was validated with `npx vitest list --config vitest.e2e.config.ts`,
   which collects and parses every case without executing one, spending no Authlete quota — and which
-  is also how the counts above were re-measured (`list` omits `it.skip`, so it reports 101 where the
-  suite holds 103).
+  is also how the counts above were re-measured (`list` omits `it.skip`, so it reported 101 where the
+  suite then held 103; two later commits, `ee52e8b` and `fee7c84`, have since taken it to 107).
 - **Use plan mode for any change whose *concern* is on the Security-critical surfaces list below**, not
   merely for changes to a file on it. A one-line change to token issuance needs a plan; a large refactor
   of `metrics.service.ts` does not. The only exemption is a **semantics-free** edit — renaming a local, a
