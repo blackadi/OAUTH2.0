@@ -182,13 +182,14 @@ function McpSection() {
         flow.
       </p>
       <p className="tx-hint">
-        Getting an HTML page back (starting <code>&lt;!doctype html&gt;</code>) instead of JSON means
-        the origin you pointed at has no matching route for that well-known path — a wrong host, a
-        typo, or a static site with no backend attached — and its own catch-all served its homepage
-        instead. It is not this deployment failing; it is a sign to double-check the origin. Open
-        <code> {'{origin}'}/.well-known/oauth-protected-resource</code> (or the AS metadata path) in a
-        plain new browser tab first — a working origin answers with JSON there, before you ever paste
-        it in here.
+        Getting an HTML page back (starting <code>&lt;!doctype html&gt;</code>) instead of JSON
+        means the origin you pointed at has no matching route for that well-known path — a wrong
+        host, a typo, or a static site with no backend attached — and its own catch-all served its
+        homepage instead. It is not this deployment failing; it is a sign to double-check the
+        origin. Open
+        <code> {'{origin}'}/.well-known/oauth-protected-resource</code> (or the AS metadata path) in
+        a plain new browser tab first — a working origin answers with JSON there, before you ever
+        paste it in here.
       </p>
 
       <div className="tx-body">
