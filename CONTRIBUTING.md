@@ -71,11 +71,24 @@ npm --prefix server run typecheck    # TypeScript (0 errors)
 npm --prefix server run test         # All tests (287 unit + 31 integration)
 
 # Client
+npm --prefix client run format       # Prettier --check (CI fails on this — see the pre-commit hook below)
+npm --prefix client run lint         # ESLint (0 errors)
+npm --prefix client run typecheck    # TypeScript (0 errors)
 npm --prefix client run build        # Vite production build
 npm --prefix client run test         # Client tests
 ```
 
 All checks must pass before requesting review.
+
+### Pre-commit hook
+
+`npm install` (in either `server/` or `client/`) wires up a `pre-commit` git hook — via
+`core.hooksPath`, not a dependency you need to install separately — that runs the fast checks
+above (format + lint + typecheck) for whichever of `client/`/`server/` you actually touched, before
+the commit is created. It does not run the test suites or the build; those stay CI's job.
+
+If you ever need to bypass it for a genuine reason, `git commit --no-verify` — but a formatting
+failure it catches locally is the exact failure CI will otherwise catch for you, later and slower.
 
 ## Pull Request Process
 

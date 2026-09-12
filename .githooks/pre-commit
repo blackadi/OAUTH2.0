@@ -1,0 +1,56 @@
+#!/bin/sh
+# Pre-commit checks — fast, local equivalent of what CI enforces.
+#
+# **Why a plain script instead of husky.** husky needs a package to install (postinstall/prepare
+# lifecycle) to wire itself in, and that install step is exactly the kind of thing that can fail
+# quietly in a restricted network environment. `core.hooksPath` is a built-in git mechanism —
+# nothing to install, nothing that can drift from what actually runs. `postinstall` in both
+# package.json files below points every contributor at this directory the same way husky's own
+# `prepare` script would, without adding a dependency for something git already does natively.
+#
+# **Scope, deliberately narrow.** This runs format + lint + typecheck — the fast, static checks —
+# for whichever of client/ or server/ has staged changes. It does not run the test suites or the
+# build: those are what CI is for, and running them on every commit would make committing slow
+# enough that people reach for --no-verify, which defeats the point of having this at all.
+#
+# **Known simplification.** This checks the *working tree*, not strictly the staged diff (the way
+# a tool like lint-staged would) — same class of check CI already does against the full tree, so
+# it is not weaker than CI, just not scoped to only-what-changed. Good enough without adding a
+# dependency to do better.
+
+set -e
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ -z "$staged_files" ]; then
+  exit 0
+fi
+
+run_client=false
+run_server=false
+
+for f in $staged_files; do
+  case "$f" in
+    client/*) run_client=true ;;
+    server/*) run_server=true ;;
+  esac
+done
+
+if [ "$run_client" = true ]; then
+  echo "pre-commit: client changed — format, lint, typecheck"
+  npm --prefix client run format || {
+    echo ""
+    echo "pre-commit: client formatting failed. Run 'npm --prefix client run format:fix' and re-stage."
+    exit 1
+  }
+  npm --prefix client run lint || exit 1
+  npm --prefix client run typecheck || exit 1
+fi
+
+if [ "$run_server" = true ]; then
+  echo "pre-commit: server changed — lint, typecheck"
+  npm --prefix server run lint || exit 1
+  npm --prefix server run typecheck || exit 1
+fi
+
+exit 0
