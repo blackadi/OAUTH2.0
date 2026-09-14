@@ -4,6 +4,8 @@ import { StepUpSection } from '@/components/oidc/StepUpSection';
 import { tokenService } from '@/services';
 import { HttpError } from '@/services/transport';
 import { getTraces, clearTraces } from '@/services/trace-store';
+import { SESSION_KEYS, readKey } from '@/services/session-keys';
+import { generateCodeChallenge } from '@/pkce';
 import {
   mountSection,
   fill,
@@ -223,6 +225,58 @@ describe('StepUpSection — the challenge, and what it builds', () => {
       ).toBeDefined();
       expect(hop!.direction).toBe('outbound');
     });
+  });
+
+  /**
+   * **Live-verified 2026-09-15**: this client has PKCE enforced, and the re-authorization URL used to
+   * omit `code_challenge` entirely. Authlete refused it with `[A124301]` — but only once a service-side
+   * ACR fix let the request reach the PKCE check at all, which is exactly the kind of ordering that lets
+   * a second defect hide behind a first one indefinitely. Asserting `code_challenge` alone (as
+   * `ParSection`'s test does) is not enough here: a value present but undecodable by `CallbackPage` would
+   * pass that check and still fail the exchange, so this recomputes the challenge from the *stored*
+   * verifier and requires them to match — the actual round trip `CallbackPage` depends on.
+   */
+  it('sends PKCE, and stores the verifier CallbackPage will need to redeem the code', async () => {
+    stubNavigation();
+    seedTokens({ access_token: 'at-stepup-01' });
+    vi.spyOn(tokenService, 'introspection').mockRejectedValue(
+      httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
+    );
+    mountSection(<StepUpSection />);
+    fillAdminCredentials();
+    press(/Introspect with Requirements/i);
+
+    await screen.findByRole('button', { name: /Re-Authenticate with Required ACR/i });
+    press(/Re-Authenticate with Required ACR/i);
+
+    const nav = await waitFor(() => {
+      const hop = getTraces().find((t) => t.navigation && t.url.includes('/api/authorization'));
+      expect(hop, 'the outbound trace hop from the previous test').toBeDefined();
+      return hop!;
+    });
+    const params = new URL(nav.url).searchParams;
+
+    expect(
+      params.get('code_challenge_method'),
+      'RFC 7636 §4.3 default is plain, S256 must be explicit',
+    ).toBe('S256');
+    const sentChallenge = params.get('code_challenge');
+    expect(sentChallenge, '[A124301] fires when this is entirely absent').toBeTruthy();
+
+    const storedVerifier = readKey(SESSION_KEYS.pkceVerifier);
+    expect(storedVerifier, 'CallbackPage reads this back to redeem the code').toBeTruthy();
+    expect(
+      await generateCodeChallenge(storedVerifier!),
+      'the sent challenge must derive from the stored verifier, not merely both be present',
+    ).toBe(sentChallenge);
+
+    expect(readKey(SESSION_KEYS.oauthState), 'CallbackPage refuses without a stored state').toBe(
+      params.get('state'),
+    );
+    // This re-authorization is always for the SPA's own default public client — a confidential
+    // client's secret or a resource left over from a different section must not leak into this exchange.
+    expect(readKey(SESSION_KEYS.authzClientSecret)).toBeNull();
+    expect(readKey(SESSION_KEYS.authzResource)).toBeNull();
   });
 
   /**

@@ -4,6 +4,8 @@ import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { AUTHORIZATION_ENDPOINT, CLIENT_ID, DEFAULT_SCOPES, getRedirectUri } from '@/config';
 import { navigateTo } from '@/services/trace-store';
+import { SESSION_KEYS, writeKey, removeKey } from '@/services/session-keys';
+import { createPkcePair } from '@/pkce';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -109,15 +111,38 @@ function StepUpSection() {
     }
   };
 
-  const reAuthUrl = (() => {
-    if (!challenge) return '';
+  /**
+   * Re-authorize with the challenge's requirements — and, unlike the rest of this section's build-a-URL
+   * helpers, this one cannot be a synchronous render-time value.
+   *
+   * **This client has PKCE enforced** (RFC 9700 §2.1.1 / BCP 240), and the re-authorization URL used to
+   * omit `code_challenge` entirely — Authlete refuses that with `[A124301]`. It went unnoticed because an
+   * ACR refusal (`[A021303]`/`[A021304]`) fired first and masked it; fixing the service's supported-ACR
+   * list is what let the request reach Authlete's PKCE check at all. A `code_challenge` needs an async
+   * `code_verifier` (Web Crypto's SHA-256), so building the URL moved into the click handler, matching
+   * `AuthorizationCodePanel.sendAuthorizeRequest`'s division: generate, persist what `CallbackPage` will
+   * read back, *then* navigate.
+   *
+   * `oauthState` and `pkceVerifier` are not optional here the way `AuthorizationCodePanel` treats them —
+   * this section always sends both, so both are always written. `authzClientId` is written and
+   * `authzClientSecret`/`authzResource` are cleared for the same reason `AuthorizationCodePanel` clears an
+   * emptied secret field: this re-authorization is always for the SPA's own default public client, and a
+   * stale confidential-client secret or resource left over from a different section must not leak into
+   * this exchange.
+   */
+  const handleReAuthenticate = async () => {
+    if (!challenge) return;
+    const { codeVerifier, codeChallenge } = await createPkcePair();
+    const state = crypto.randomUUID();
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: CLIENT_ID,
       redirect_uri: getRedirectUri(),
       scope: DEFAULT_SCOPES,
-      state: crypto.randomUUID(),
+      state,
       nonce: crypto.randomUUID(),
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
     });
     if (challenge.acr_values) {
       // Build claims request with essential ACR
@@ -135,8 +160,18 @@ function StepUpSection() {
       params.append('max_age', challenge.max_age);
     }
     params.append('prompt', 'login');
-    return `${AUTHORIZATION_ENDPOINT}?${params.toString()}`;
-  })();
+
+    writeKey(SESSION_KEYS.pkceVerifier, codeVerifier);
+    writeKey(SESSION_KEYS.oauthState, state);
+    writeKey(SESSION_KEYS.authzClientId, CLIENT_ID);
+    removeKey(SESSION_KEYS.authzClientSecret);
+    removeKey(SESSION_KEYS.authzResource);
+
+    navigateTo(
+      `${AUTHORIZATION_ENDPOINT}?${params.toString()}`,
+      'authorize (step-up) — front channel, browser leaves for the authorization endpoint',
+    );
+  };
 
   const settled = Boolean(result || challenge || error);
 
@@ -302,7 +337,7 @@ function StepUpSection() {
                 <span className="tx-turn-note">front channel</span>
               </div>
 
-              {challenge && reAuthUrl ? (
+              {challenge ? (
                 <div className="space-y-2">
                   <p className="tx-hint">
                     Re-authorize with stronger authentication requirements — the ACR travels as an{' '}
@@ -312,12 +347,7 @@ function StepUpSection() {
                   <button
                     type="button"
                     className="tx-btn tx-btn-primary"
-                    onClick={() =>
-                      navigateTo(
-                        reAuthUrl,
-                        'authorize (step-up) — front channel, browser leaves for the authorization endpoint',
-                      )
-                    }
+                    onClick={() => void handleReAuthenticate()}
                   >
                     <ArrowUpCircle className="h-4 w-4" style={{ marginRight: '0.4em' }} />
                     Re-Authenticate with Required ACR
