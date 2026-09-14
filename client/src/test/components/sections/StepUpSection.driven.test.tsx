@@ -3,12 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StepUpSection } from '@/components/oidc/StepUpSection';
 import { tokenService } from '@/services';
 import { HttpError } from '@/services/transport';
+import { getTraces, clearTraces } from '@/services/trace-store';
 import {
   mountSection,
   fill,
   fillAdminCredentials,
   press,
   seedTokens,
+  stubNavigation,
   expectCall,
   expectSends,
   expectReadsBack,
@@ -31,7 +33,10 @@ import {
  * verified, and on this deployment the error string is sometimes an HTML page.
  */
 
-beforeEach(resetSectionState);
+beforeEach(() => {
+  resetSectionState();
+  clearTraces();
+});
 afterEach(cleanup);
 
 /** What Authlete's introspection answers when the token's authentication is not strong enough. */
@@ -143,6 +148,7 @@ describe('StepUpSection — the challenge, and what it builds', () => {
    * an essential request.
    */
   it('asks for the ACR as an essential claim, not as a preference', async () => {
+    const nav = stubNavigation();
     seedTokens({ access_token: 'at-stepup-01' });
     vi.spyOn(tokenService, 'introspection').mockRejectedValue(
       httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
@@ -151,8 +157,10 @@ describe('StepUpSection — the challenge, and what it builds', () => {
     fillAdminCredentials();
     press(/Introspect with Requirements/i);
 
-    const link = await screen.findByRole('link', { name: /Re-Authenticate with Required ACR/i });
-    const url = new URL(link.getAttribute('href')!);
+    await screen.findByRole('button', { name: /Re-Authenticate with Required ACR/i });
+    press(/Re-Authenticate with Required ACR/i);
+    await waitFor(() => expect(nav.href).not.toBe(''));
+    const url = new URL(nav.href);
 
     const claims = JSON.parse(url.searchParams.get('claims')!) as {
       id_token: { acr: { essential: boolean; values: string[] } };
@@ -167,6 +175,7 @@ describe('StepUpSection — the challenge, and what it builds', () => {
   });
 
   it('carries max_age and prompt=login, so a cached session cannot satisfy the step-up', async () => {
+    const nav = stubNavigation();
     seedTokens({ access_token: 'at-stepup-01' });
     vi.spyOn(tokenService, 'introspection').mockRejectedValue(
       httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
@@ -175,14 +184,45 @@ describe('StepUpSection — the challenge, and what it builds', () => {
     fillAdminCredentials();
     press(/Introspect with Requirements/i);
 
-    const link = await screen.findByRole('link', { name: /Re-Authenticate with Required ACR/i });
-    const params = new URL(link.getAttribute('href')!).searchParams;
+    await screen.findByRole('button', { name: /Re-Authenticate with Required ACR/i });
+    press(/Re-Authenticate with Required ACR/i);
+    await waitFor(() => expect(nav.href).not.toBe(''));
+    const params = new URL(nav.href).searchParams;
     expect(params.get('max_age')).toBe('300');
     // Without `prompt=login` the OP may reuse the existing authentication event, which is the one thing
     // a step-up must not accept — the point is a *fresh* stronger authentication.
     expect(params.get('prompt')).toBe('login');
     expect(params.get('response_type')).toBe('code');
     expect(params.get('state'), 'RFC 9207 mix-up defence needs one').toBeTruthy();
+  });
+
+  /**
+   * The sixth site of the unrecorded-navigation defect — see `navigateTo` in `trace-store.ts`. This
+   * button used to be a plain `<a href>`, so the browser followed it without ever calling `navigateTo`,
+   * and the request trace had no record of the flow's most consequential hop: the one that either
+   * satisfies the step-up or, on this deployment, redirects straight into Authlete's `[A021303]`.
+   */
+  it('records the front-channel hop', async () => {
+    stubNavigation();
+    seedTokens({ access_token: 'at-stepup-01' });
+    vi.spyOn(tokenService, 'introspection').mockRejectedValue(
+      httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
+    );
+    mountSection(<StepUpSection />);
+    fillAdminCredentials();
+    press(/Introspect with Requirements/i);
+
+    await screen.findByRole('button', { name: /Re-Authenticate with Required ACR/i });
+    press(/Re-Authenticate with Required ACR/i);
+
+    await waitFor(() => {
+      const hop = getTraces().find((t) => t.navigation && t.url.includes('/api/authorization'));
+      expect(
+        hop,
+        'the browser left for the authorization endpoint and nothing recorded it',
+      ).toBeDefined();
+      expect(hop!.direction).toBe('outbound');
+    });
   });
 
   /**
@@ -200,9 +240,9 @@ describe('StepUpSection — the challenge, and what it builds', () => {
     press(/Introspect with Requirements/i);
 
     await waitFor(() =>
-      expect(screen.queryByRole('link', { name: /Re-Authenticate/i })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('button', { name: /Re-Authenticate/i })).not.toBeInTheDocument(),
     );
-    // The absence of the re-authorization link is the assertion. `insufficient_user_authentication`
+    // The absence of the re-authorization button is the assertion. `insufficient_user_authentication`
     // itself is unusable as one: it appears in this section's own explanatory copy, which is exactly
     // the sort of near-miss that makes a text-presence check look like it proved something.
     expect(
@@ -224,6 +264,6 @@ describe('StepUpSection — the challenge, and what it builds', () => {
 
     // The credential is wrong; the token's authentication strength is not in question at all.
     expect(await screen.findByText(/What does this mean\?|Hide explanation/i)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Re-Authenticate/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Re-Authenticate/i })).not.toBeInTheDocument();
   });
 });

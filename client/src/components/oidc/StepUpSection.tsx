@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { AUTHORIZATION_ENDPOINT, CLIENT_ID, DEFAULT_SCOPES, getRedirectUri } from '@/config';
+import { navigateTo } from '@/services/trace-store';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JsonBlock } from '@/components/ui/JsonBlock';
@@ -308,12 +309,19 @@ function StepUpSection() {
                     <code>essential</code> claim, not a preference, plus <code>prompt=login</code>{' '}
                     to force a fresh authentication event:
                   </p>
-                  <a href={reAuthUrl}>
-                    <button type="button" className="tx-btn tx-btn-primary">
-                      <ArrowUpCircle className="h-4 w-4" style={{ marginRight: '0.4em' }} />
-                      Re-Authenticate with Required ACR
-                    </button>
-                  </a>
+                  <button
+                    type="button"
+                    className="tx-btn tx-btn-primary"
+                    onClick={() =>
+                      navigateTo(
+                        reAuthUrl,
+                        'authorize (step-up) — front channel, browser leaves for the authorization endpoint',
+                      )
+                    }
+                  >
+                    <ArrowUpCircle className="h-4 w-4" style={{ marginRight: '0.4em' }} />
+                    Re-Authenticate with Required ACR
+                  </button>
                 </div>
               ) : (
                 <div className="tx-waiting">
