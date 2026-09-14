@@ -75,9 +75,16 @@ docker compose up -d prometheus grafana
 > is enough to check: the `issuer` string differed by a trailing slash, the endpoint hosts differed, and the
 > discovery document had **59 members against 62**.
 >
-> **`3693555522` is canonical** (ruled 2026-08-14). Compare
+> **Two services are in deliberate use, not one** (corrected 2026-09-14 — the 2026-08-14 ruling above named
+> only the general-purpose one). `3693555522` is canonical for RFC/OAuth/OIDC extension testing (PAR, RAR,
+> JAR, CIBA, Device, DCR, RFC 9470, …) and is **not** FAPI-enabled. `2147478188` is the FAPI-enabled service
+> (FAPI 2.0 Security Profile, CIMD) the `/fapi` and `/mcp` sections need — the same one
+> `authlete-service-config.md`'s `supportedClaims` finding was measured against. **Neither covers
+> everything, and that is a platform limit, not an oversight**: see that file's "Why this repo uses two
+> Authlete services" for which flags force the split and why. Compare
 > `GET /api/{serviceId}/service/configuration` against the document your deployment actually serves at
-> `/.well-known/openid-configuration` — **reading either alone proves nothing about the other.**
+> `/.well-known/openid-configuration` — **reading either alone proves nothing about the other, and neither
+> tells you which of the two known services you're looking at.**
 
 
 1. Copy `.env.example` → `.env` in both `server/` and `client/`

@@ -36,6 +36,27 @@ The Authlete service (configured via the [Authlete web console](https://console.
 | `requestObjectEncryptionAlgMatchRequired` | `true` | Enforce `alg` match in encrypted request objects |
 | `requestObjectEncryptionEncMatchRequired` | `true` | Enforce `enc` match in encrypted request objects |
 
+### Why this repo uses two Authlete services
+
+**Not every flag above can be set to its "correct" value for every demo on one service** — three have no
+per-client override in the SDK (present on `Service.java`, absent from `Client.java`): `refreshTokenKept`,
+`idTokenAudType`, `nbfOptional`. FAPI conformance needs one value on each (see the table above); the
+opposite value is what demonstrates refresh-token rotation, an array-valued `aud`, or a request object with
+no `nbf` — ordinary, spec-permitted OAuth/OIDC behavior this repo also has to show elsewhere. Whichever
+value a service is set to applies to **every** client on it, so both demos cannot live on one service.
+
+`fapiModes` itself is the exception, not the rule. `Client.setFapiModes()`'s javadoc states the per-client
+value only takes effect **when the service's own `fapiModes` is `null`** — so a FAPI-mode client can
+coexist with plain OAuth/OIDC clients on one service, *if* the service never sets `fapiModes` itself. It is
+the three flags above, not `fapiModes`, that actually force two services to exist.
+
+**This repo's two services, and what each is for** (recorded 2026-09-14): `3693555522` is canonical for
+RFC/OAuth/OIDC extension testing (PAR, RAR, JAR, CIBA, Device, DCR, RFC 9470, …) and leaves the three flags
+at their non-FAPI values. `2147478188` is FAPI-enabled (FAPI 2.0 Security Profile, CIMD) — the same service
+the `supportedClaims` finding below was measured against — and sets them for conformance instead. **Do not
+"align" one service's flags to the other's**; each is deliberately configured for what it tests, and
+aligning them would silently disable one side's demo.
+
 ### `supportedClaims` must match what the server can produce
 
 `supportedClaims` becomes `claims_supported` in the discovery document, and a client reads it to decide
