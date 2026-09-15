@@ -352,6 +352,14 @@ function StepUpSection() {
                     <ArrowUpCircle className="h-4 w-4" style={{ marginRight: '0.4em' }} />
                     Re-Authenticate with Required ACR
                   </button>
+                  <p className="tx-hint">
+                    This demo&apos;s login is password-only, so it can only ever assert{' '}
+                    <code>acr: pwd</code>. Expect either a refusal that the requested ACR isn&apos;t
+                    registered, or — if it is — <code>[A060305]</code>, because re-authenticating
+                    still can&apos;t produce anything stronger. Both are the server working
+                    correctly, not a bug — see the operation description above, or{' '}
+                    <code>docs/STEP-UP-AUTH-TUTORIAL.md</code>, for why.
+                  </p>
                 </div>
               ) : (
                 <div className="tx-waiting">

@@ -86,6 +86,36 @@ correction on 2026-09-08: this server's own `/api/introspection` was *also* beli
 for this scenario, and live testing proved that wrong too. Every step-up response in this repo is a `401`
 now; there is no 403 case left for this scenario at all.
 
+> ### Why "Re-Authenticate with Required ACR" can never succeed here for anything but `pwd`
+>
+> **Live-verified 2026-09-15, and worth knowing before you click the button.** This demo's login page has
+> exactly one authentication method — a password form — and `server/src/controllers/session.controller.ts`
+> hardcodes `acr: "pwd"` for every successful login. There is no second, stronger method to fall back to.
+> So the diagram above stops being reachable partway through: step 5 (*"Authenticate user with stronger
+> method"*) is not something this server can do, for any ACR other than `pwd`.
+>
+> Asking for a different ACR as *essential* (Part 6's re-authorization request) always ends one of two
+> ways, and **both are the server working correctly** — neither is a bug to chase:
+>
+> | What you'll see | Why | Meaning |
+> |---|---|---|
+> | `[A021303]` / `[A021304]` at the authorization redirect | the ACR isn't on the service's `acr_values_supported` list at all | refused before login is even attempted — RFC 9470 §4's own ACR-support check |
+> | `[A060305]` `unmet_authentication_requirements`, after a fresh `prompt=login` | the ACR *is* registered, but login can only ever produce `pwd` | `checkStepUpRequirements` (`server/src/utils/step-up.ts`) correctly refusing to assert an authentication event that never happened |
+>
+> Asking for `pwd` itself is the one case that succeeds — but the current token already has `acr: "pwd"`,
+> so introspection reports it as already sufficient and no challenge appears to re-authorize against in the
+> first place. **The "challenge → stronger login → success" path is therefore not reachable by clicking
+> through this UI, for any ACR value, on any of this repo's Authlete services** — only "challenge → refused"
+> and "no challenge needed" are. A real deployment reaches the success path by adding a second
+> authentication method (an OTP step, a hardware key) that can actually satisfy a stronger ACR; registering
+> more values in `acr_values_supported` alone does not, since the service can only ever advertise what the
+> login flow can prove happened.
+>
+> **The specific ACR values registered are per-service and can change** — this repo currently exercises two
+> Authlete services with different configurations (see `authlete-service-config.md`'s *"Why this repo uses
+> two Authlete services"* if you're working in this codebase), so don't trust a captured list below for your
+> deployment. Check `acr_values_supported` in your own `/.well-known/openid-configuration` instead.
+
 ---
 
 ## Part 2: Authentication Context Class References (ACR)
@@ -480,7 +510,10 @@ Clicking **Re-Authenticate with Required ACR** opens the authorization endpoint 
 - `claims` requesting the required ACR as essential
 - `prompt=login` to force fresh authentication
 
-> **Note:** This demo server always satisfies ACR `pwd`. Requesting other ACRs will always trigger a step-up challenge. In a real deployment, you'd configure multiple ACR values in Authlete.
+> **Note:** This demo server always satisfies ACR `pwd`, so requesting any other ACR always ends in a
+> refusal rather than a successful re-authentication — see [the callout after Part 1](#part-1-why-step-up-authentication-exists)
+> for exactly which refusal and why. Registering more ACR values on the service is not by itself enough to
+> fix that; a real deployment also needs a login method that can actually satisfy the stronger value.
 
 ### Testing max_age
 

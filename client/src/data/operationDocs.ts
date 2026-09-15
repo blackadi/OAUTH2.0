@@ -247,8 +247,8 @@ const docs: Record<string, Record<string, OpDoc>> = {
         },
       ],
       returns:
-        "On success, the token's introspection result. On a challenge, 403 with `insufficient_user_authentication` plus `acr_values` or `max_age`, and the token's current `acr` and `auth_time`.",
-      tips: 'This deployment only ever satisfies ACR `pwd`, so asking for anything else triggers a challenge. `max_age` can only genuinely fail on a non-interactive path — after an interactive login the user has just authenticated, so any maximum age is satisfied by construction. To make an ACR *essential* rather than merely preferred, request it through the `claims` parameter.',
+        "On success, the token's introspection result. On a challenge, 401 with `insufficient_user_authentication` plus `acr_values` or `max_age`, and the token's current `acr` and `auth_time`.",
+      tips: "This deployment only ever satisfies ACR `pwd`, so asking for anything else triggers a challenge — and clicking Re-Authenticate on it will not resolve it, either: this demo's login is password-only, so it can never assert anything but `pwd`, and Authlete correctly refuses to fake a stronger authentication event that never happened (`[A060305]` if the ACR is registered, `[A021303]`/`[A021304]` if it is not). See the Step-Up Auth tutorial for why. `max_age` can only genuinely fail on a non-interactive path — after an interactive login the user has just authenticated, so any maximum age is satisfied by construction. To make an ACR *essential* rather than merely preferred, request it through the `claims` parameter.",
     },
   },
   'token-ops': {
