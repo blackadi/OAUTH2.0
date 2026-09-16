@@ -129,3 +129,166 @@ describe("SessionController — how a user's refusal is reported", () => {
     expect(fail).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * RFC 9470 second factor — the OTP gate added to `handleLogin`, and `handleOtp` itself.
+ *
+ * The invariant under test throughout: `session.user` (which gates `/session/consent` and
+ * `AuthorizationService.issue()`) must never be set while an essential OTP ACR is outstanding, and must
+ * be set once it is satisfied. `finishAuthentication`'s own step-up/consent logic is exercised for real
+ * here (not mocked) — `checkStepUpRequirements` and `consentStore` are the actual modules — so these
+ * tests also pin the regression the whole feature was built around: a request with no `acr_values`, or
+ * essential `acr_values=["mfa"]`, must behave exactly as it did before this change.
+ */
+describe("SessionController — RFC 9470 OTP second factor", () => {
+  const SUBJECT = "sub-otp-1"
+
+  function otpAwareController(overrides: { verifyOtp?: boolean } = {}) {
+    const issue = vi.fn().mockResolvedValue({ action: "LOCATION", responseContent: "https://rp.example.com/cb?code=abc" })
+    const fail = vi.fn().mockResolvedValue({ action: "LOCATION", responseContent: "https://rp.example.com/cb?error=x" })
+    const validateUser = vi.fn().mockResolvedValue({ subject: SUBJECT, name: "Otp User" })
+    const verifyOtp = vi.fn().mockReturnValue(overrides.verifyOtp ?? true)
+    const otpEnrollmentInfo = vi.fn().mockReturnValue({ secret: "SECRET", otpauthUri: "otpauth://totp/x" })
+    const controller = createSessionController(
+      { validateUser, verifyOtp, otpEnrollmentInfo } as never,
+      { issue, fail } as never,
+    )
+    return { controller, issue, fail, validateUser, verifyOtp, otpEnrollmentInfo }
+  }
+
+  it("redirects to the OTP page instead of consent when acr_values=['otp'] is essential, without setting session.user", async () => {
+    const { controller } = otpAwareController()
+    const res = mockRes()
+    const reqSession: Record<string, unknown> = {
+      authorization: {
+        authorizationIssueRequest: { ticket: TICKET },
+        clientId: 9001,
+        acrs: ["otp"],
+        acrEssential: true,
+      },
+    }
+
+    await controller.handleLogin(
+      mockReq({ login: "submit", username: "admin", password: "password" }, reqSession) as never,
+      res,
+      vi.fn() as unknown as NextFunction,
+    )
+
+    expect(res.redirect).toHaveBeenCalledWith(expect.any(Number), expect.stringContaining("/session/otp"))
+    expect(reqSession.user).toBeUndefined()
+    expect(reqSession.otpPending).toEqual({ subject: SUBJECT })
+  })
+
+  it("falls through to the unchanged password-only path when no acr_values are requested (regression pin)", async () => {
+    const { controller } = otpAwareController()
+    const res = mockRes()
+    const reqSession: Record<string, unknown> = {
+      authorization: {
+        authorizationIssueRequest: { ticket: TICKET, scopes: [] },
+        clientId: 9002,
+      },
+    }
+
+    await controller.handleLogin(
+      mockReq({ login: "submit", username: "admin", password: "password" }, reqSession) as never,
+      res,
+      vi.fn() as unknown as NextFunction,
+    )
+
+    expect(reqSession.otpPending).toBeUndefined()
+    expect(reqSession.user).toBe(SUBJECT)
+    expect((reqSession.stepUp as { acr?: string })?.acr).toBe("pwd")
+    expect(res.redirect).toHaveBeenCalledWith(expect.any(Number), expect.stringContaining("/session/consent"))
+  })
+
+  it("still refuses essential acr_values=['mfa'] immediately, unaffected by the new 'otp' ACR (regression pin)", async () => {
+    const { controller, fail } = otpAwareController()
+    const res = mockRes()
+    const reqSession: Record<string, unknown> = {
+      authorization: {
+        authorizationIssueRequest: { ticket: TICKET, scopes: [] },
+        clientId: 9003,
+        acrs: ["mfa"],
+        acrEssential: true,
+      },
+    }
+
+    await controller.handleLogin(
+      mockReq({ login: "submit", username: "admin", password: "password" }, reqSession) as never,
+      res,
+      vi.fn() as unknown as NextFunction,
+    )
+
+    expect(reqSession.otpPending).toBeUndefined()
+    expect(fail).toHaveBeenCalledWith(TICKET, "ACR_NOT_SATISFIED")
+  })
+
+  it("showOtp requires a pending OTP state", () => {
+    const { controller } = otpAwareController()
+    const next = vi.fn()
+    controller.showOtp(mockReq({}, {}) as never, mockRes(), next as unknown as NextFunction)
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }))
+  })
+
+  it("handleOtp completes authentication on a correct code, satisfying the essential 'otp' ACR", async () => {
+    const { controller } = otpAwareController({ verifyOtp: true })
+    const res = mockRes()
+    const reqSession: Record<string, unknown> = {
+      otpPending: { subject: SUBJECT },
+      authorization: {
+        authorizationIssueRequest: { ticket: TICKET, scopes: [] },
+        clientId: 9004,
+        acrs: ["otp"],
+        acrEssential: true,
+      },
+    }
+
+    await controller.handleOtp(
+      mockReq({ otp: "submit", code: "123456" }, reqSession) as never,
+      res,
+      vi.fn() as unknown as NextFunction,
+    )
+
+    expect(reqSession.otpPending).toBeUndefined()
+    expect(reqSession.user).toBe(SUBJECT)
+    expect((reqSession.stepUp as { acr?: string })?.acr).toBe("otp")
+    expect(res.redirect).toHaveBeenCalledWith(expect.any(Number), expect.stringContaining("/session/consent"))
+  })
+
+  it("handleOtp re-renders with an error on a wrong code, without setting session.user", async () => {
+    const { controller } = otpAwareController({ verifyOtp: false })
+    const res = mockRes()
+    const reqSession: Record<string, unknown> = {
+      otpPending: { subject: SUBJECT },
+      authorization: { authorizationIssueRequest: { ticket: TICKET, scopes: [] } },
+    }
+
+    await controller.handleOtp(
+      mockReq({ otp: "submit", code: "000000" }, reqSession) as never,
+      res,
+      vi.fn() as unknown as NextFunction,
+    )
+
+    expect(res.render).toHaveBeenCalledWith("otp", expect.objectContaining({ error: "Invalid code" }))
+    expect(reqSession.user).toBeUndefined()
+    expect(reqSession.otpPending).toEqual({ subject: SUBJECT })
+  })
+
+  it("handleOtp reports DENIED on cancel, same as the login screen's Cancel", async () => {
+    const { controller, fail } = otpAwareController()
+    const res = mockRes()
+    const reqSession: Record<string, unknown> = {
+      otpPending: { subject: SUBJECT },
+      authorization: { authorizationIssueRequest: { ticket: TICKET } },
+    }
+
+    await controller.handleOtp(
+      mockReq({ otp: "cancel" }, reqSession) as never,
+      res,
+      vi.fn() as unknown as NextFunction,
+    )
+
+    expect(fail).toHaveBeenCalledWith(TICKET, "DENIED")
+    expect(reqSession.otpPending).toBeUndefined()
+  })
+})

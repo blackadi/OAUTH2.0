@@ -30,6 +30,13 @@ declare module "express-session" {
       acr?: string;
       authTime?: number;
     };
+    // RFC 9470: pending second-factor state. Set after the password check succeeds when the
+    // authorization request's essential `acr_values` names the OTP ACR; cleared once the code verifies
+    // or the user cancels. `user` (above) is deliberately NOT set while this is pending — see
+    // `session.controller.ts`'s `handleLogin` for why that ordering is the load-bearing part of this.
+    otpPending?: {
+      subject: string;
+    };
     secret?: string;
     saveUninitialized?: string;
     resave?: string;

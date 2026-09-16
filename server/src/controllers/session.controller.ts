@@ -8,7 +8,7 @@ import { AppError } from "../utils/app-error";
 import { sendAuthorizationIssueResponse } from "./authorization-response.handler";
 import { sendAuthorizationFailResponse } from "./authorization-fail-response.handler";
 import { checkStepUpRequirements } from "../utils/step-up";
-import { validateOrThrow, loginSchema } from "../utils/validation";
+import { validateOrThrow, loginSchema, otpSchema } from "../utils/validation";
 import consentStore from "../services/consent-store.service";
 import { claimsFromScopes, claimLabel } from "../utils/scope-claims";
 import { SERVED_CLAIMS } from "../utils/demo-claims";
@@ -17,6 +17,14 @@ import { AUTHORIZATION_REDIRECT_STATUS } from "../utils/http-utils";
 const loginAttempts = new Map<string, { count: number; banUntil: number }>()
 const MAX_LOGIN_ATTEMPTS = 5
 const BAN_DURATION_MS = 60_000
+
+/**
+ * RFC 9470 second-factor ACR this deployment can now actually satisfy, via a real (if toy-scope) TOTP
+ * step — see `docs/investigations/toy-otp-feasibility.md`. Deliberately distinct from `"mfa"`, which stays
+ * registered-but-unreachable so Module 09a's essential-ACR-refusal lab keeps teaching what it teaches
+ * (`docs/curriculum/modules/09a-interaction-extensions/lab.md`).
+ */
+const OTP_ACR = "otp"
 
 function checkBruteForce(ip: string): void {
   const record = loginAttempts.get(ip)
@@ -64,6 +72,100 @@ export function createSessionController(
   loginServiceInstance = new LoginService(),
   authorizationServiceInstance = new AuthorizationService(),
 ) {
+  /**
+   * The shared tail of authenticating — record `authTime`/`acr`, run `checkStepUpRequirements`, bind
+   * `session.stepUp`, then either auto-issue (persistent consent) or redirect to consent. Extracted so
+   * the password-only path and the OTP-success path (below) cannot drift: before this, only the
+   * password path existed and always asserted `acr: "pwd"`; now `acr` is a parameter, and it is the ONLY
+   * thing that differs between a login that needed a second factor and one that didn't.
+   *
+   * Callers must have already decided the authentication event genuinely happened with this `acr` at
+   * this `authTimeNow` — this function does not re-derive either. `req.session.user` is set here, not
+   * before; see `handleLogin`'s OTP-gate comment for why that ordering is the point.
+   */
+  const finishAuthentication = async (
+    req: Request & { session: Partial<session.SessionData> },
+    res: Response,
+    authz: session.SessionData["authorization"],
+    subject: string,
+    acr: string,
+    authTimeNow: number
+  ) => {
+    req.session.user = subject;
+
+    // Store authTime in session so subsequent authorizations can check maxAge
+    if (req.session.authorization) {
+      req.session.authorization.authTime = authTimeNow;
+    }
+
+    // RFC 9470 §4 / OIDC Core §3.1.2.1 — the same check the non-interactive `prompt=none` path runs, from
+    // the same function (`utils/step-up.ts`), so the two cannot drift. The authentication event here is the
+    // one that just completed (password alone, or password + a second factor), which is why `max_age`
+    // passes by construction on this path: the End-User has actively (re-)authenticated just now. The place
+    // `max_age` can genuinely fail is `authorization.controller.ts`'s `decideWithoutInteraction`, where
+    // nobody re-authenticated.
+    const stepUpFailure = checkStepUpRequirements(
+      { acrs: authz?.acrs, acrEssential: authz?.acrEssential, maxAge: authz?.maxAge },
+      { acr, authTime: authTimeNow },
+      authTimeNow
+    );
+    if (stepUpFailure) {
+      req.logger.info("RFC 9470: step-up requirements not satisfied at login", {
+        reason: stepUpFailure,
+        requested: authz?.acrs,
+        satisfied: acr,
+        maxAge: authz?.maxAge,
+      });
+      const failResponse = await authorizationServiceInstance.fail(
+        authz?.authorizationIssueRequest?.ticket ?? "",
+        stepUpFailure
+      );
+      delete req.session.authorization;
+      return sendAuthorizationFailResponse(res, failResponse);
+    }
+
+    // RFC 9470: Bind authentication context to the session so
+    // authorization.service.issue() can pass it to Authlete.
+    req.session.stepUp = {
+      acr,
+      authTime: authTimeNow,
+    };
+
+    // Check if persistent consent covers the requested scopes
+    const requiredScopes = authz?.authorizationIssueRequest?.scopes || [];
+    const clientId = authz?.clientId;
+    const prompt = authz?.prompt;
+
+    if (
+      clientId &&
+      prompt !== "consent" &&
+      consentStore.isConsentGranted(clientId, subject, requiredScopes)
+    ) {
+      req.logger.info("Persistent consent found, auto-approving", {
+        clientId,
+        subject,
+        scopes: requiredScopes,
+      });
+      const response = await authorizationServiceInstance.issue(req);
+      delete req.session.authorization;
+      return sendAuthorizationIssueResponse(res, response);
+    }
+
+    // After login, show consent page
+    const scopes = authz?.authorizationIssueRequest?.scopes?.join(",") || "";
+    req.logger.info("consent scopes", { scopes });
+    return res.redirect(
+      AUTHORIZATION_REDIRECT_STATUS,
+      appConfig.consentUrl +
+        "?clientId=" +
+        authz?.clientId +
+        "&clientName=" +
+        authz?.clientName +
+        "&scopes=" +
+        scopes
+    );
+  };
+
   return {
   showLogin: (
     req: Request & { session: Partial<session.SessionData> },
@@ -139,84 +241,88 @@ export function createSessionController(
 
       clearAttempts(ip)
 
-      // Save user subject in session (used as the Authlete subject parameter)
-      req.session.user = user.subject;
-
-      // RFC 9470: Record authentication time and ACR for step-up checks.
-      // For this demo server, password authentication satisfies ACR "pwd".
-      const authTimeNow = Math.floor(Date.now() / 1000);
-      const satisfiedAcr = "pwd";
-
-      // Store authTime in session so subsequent authorizations can check maxAge
-      if (req.session.authorization) {
-        req.session.authorization.authTime = authTimeNow;
-      }
-
-      // RFC 9470 §4 / OIDC Core §3.1.2.1 — the same check the non-interactive `prompt=none` path runs, from
-      // the same function (`utils/step-up.ts`), so the two cannot drift. The authentication event here is the
-      // one that just happened, which is why `max_age` passes by construction on this path: the End-User has
-      // actively re-authenticated, and that satisfies any maximum age. The place `max_age` can genuinely fail
-      // is `authorization.controller.ts`'s `decideWithoutInteraction`, where nobody re-authenticated.
-      const stepUpFailure = checkStepUpRequirements(
-        { acrs: authz?.acrs, acrEssential: authz?.acrEssential, maxAge: authz?.maxAge },
-        { acr: satisfiedAcr, authTime: authTimeNow },
-        authTimeNow
-      );
-      if (stepUpFailure) {
-        req.logger.info("RFC 9470: step-up requirements not satisfied at login", {
-          reason: stepUpFailure,
-          requested: authz?.acrs,
-          satisfied: satisfiedAcr,
-          maxAge: authz?.maxAge,
-        });
-        const failResponse = await authorizationServiceInstance.fail(
-          authz?.authorizationIssueRequest?.ticket ?? "",
-          stepUpFailure
-        );
-        delete req.session.authorization;
-        return sendAuthorizationFailResponse(res, failResponse);
-      }
-
-      // RFC 9470: Bind authentication context to the session so
-      // authorization.service.issue() can pass it to Authlete.
-      req.session.stepUp = {
-        acr: satisfiedAcr,
-        authTime: authTimeNow,
-      };
-
-      // Check if persistent consent covers the requested scopes
-      const requiredScopes = authz?.authorizationIssueRequest?.scopes || [];
-      const clientId = authz?.clientId;
-      const prompt = authz?.prompt;
-
-      if (
-        clientId &&
-        prompt !== "consent" &&
-        consentStore.isConsentGranted(clientId, user.subject, requiredScopes)
-      ) {
-        req.logger.info("Persistent consent found, auto-approving", {
-          clientId,
+      // RFC 9470: if the authorization request named the OTP ACR as essential, the password alone does
+      // not finish authenticating — hold the subject in a PENDING state and route to the OTP step,
+      // rather than the password-only tail below. This is checked, and `req.session.user` stays unset,
+      // BEFORE anything else: `req.session.user` is what gates `/session/consent` and
+      // `AuthorizationService.issue()` (`authorization.service.ts:87`), so setting it here and sorting
+      // out the second factor afterwards would let it be skipped by simply never entering a code.
+      if (authz?.acrEssential && (authz?.acrs ?? []).includes(OTP_ACR)) {
+        req.session.otpPending = { subject: user.subject };
+        delete req.session.user;
+        req.logger.info("RFC 9470: essential OTP ACR requested, routing to second factor", {
+          clientId: authz?.clientId,
           subject: user.subject,
-          scopes: requiredScopes,
         });
-        const response = await authorizationServiceInstance.issue(req);
-        delete req.session.authorization;
-        return sendAuthorizationIssueResponse(res, response);
+        return res.redirect(AUTHORIZATION_REDIRECT_STATUS, appConfig.otpUrl);
       }
 
-      // After login, show consent page
-      const scopes = authz?.authorizationIssueRequest?.scopes?.join(",") || "";
-      req.logger.info("consent scopes", { scopes });
-      return res.redirect(
-        AUTHORIZATION_REDIRECT_STATUS,
-        appConfig.consentUrl +
-          "?clientId=" +
-          authz?.clientId +
-          "&clientName=" +
-          authz?.clientName +
-          "&scopes=" +
-          scopes
-      );
+      // RFC 9470: for this demo server, password authentication alone satisfies ACR "pwd".
+      return finishAuthentication(req, res, authz, user.subject, "pwd", Math.floor(Date.now() / 1000));
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  showOtp: (
+    req: Request & { session: Partial<session.SessionData> },
+    res: Response,
+    next: NextFunction
+  ) => {
+    if (!req.session.otpPending) {
+      return next(new AppError("No pending second factor - session not found", 401));
+    }
+    const { secret, otpauthUri } = loginServiceInstance.otpEnrollmentInfo();
+    res.render("otp", { error: "", secret, otpauthUri });
+  },
+
+  handleOtp: async (
+    req: Request & { session: Partial<session.SessionData> },
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const ip = req.ip || req.socket.remoteAddress || "unknown"
+      checkBruteForce(ip)
+
+      const pending = req.session.otpPending;
+      const authz = req.session.authorization;
+      if (!pending || !authz || !authz.authorizationIssueRequest?.ticket) {
+        return next(new AppError("No pending second factor - session not found", 401));
+      }
+
+      const otpDecision = req.body.otp; // "submit" or "cancel"
+      if (otpDecision === "cancel") {
+        const log = req.logger || logger;
+        log.info("OTP step canceled for ticket", {
+          ticket: authz.authorizationIssueRequest?.ticket,
+        });
+        // Same DENIED semantics as Cancel on the login screen — see the long comment on that branch
+        // above for why DENIED (not NOT_LOGGED_IN) is the correct RFC 6749 §4.1.2.1 mapping for a user
+        // refusing on a screen they were actually shown.
+        const response = await authorizationServiceInstance.fail(
+          authz.authorizationIssueRequest?.ticket ?? "",
+          "DENIED"
+        );
+        delete req.session.otpPending;
+        delete req.session.authorization;
+        req.logger.info("OTP fail response", { content: response.responseContent });
+        return sendAuthorizationFailResponse(res, response);
+      }
+
+      const { code } = validateOrThrow(otpSchema, req.body);
+      const { secret, otpauthUri } = loginServiceInstance.otpEnrollmentInfo();
+
+      if (!loginServiceInstance.verifyOtp(code)) {
+        recordFailedAttempt(ip)
+        return res.render("otp", { error: "Invalid code", secret, otpauthUri });
+      }
+
+      clearAttempts(ip)
+      const subject = pending.subject;
+      delete req.session.otpPending;
+
+      return finishAuthentication(req, res, authz, subject, OTP_ACR, Math.floor(Date.now() / 1000));
     } catch (err) {
       next(err);
     }

@@ -129,7 +129,7 @@ npm --prefix client run dev    # SPA on :3001 (proxies /api → :3000)
 | JWT Bearer (RFC 7523) | Working | [JWT Bearer Tutorial](docs/JWT-BEARER-TUTORIAL.md) |
 | Token Exchange (RFC 8693) | Working | [Token Exchange Tutorial](docs/TOKEN-EXCHANGE-TUTORIAL.md) |
 | DCR (RFC 7591/7592) | Working | [API Reference](docs/API.md) |
-| Step-Up Auth (RFC 9470) | **Working, and its ceiling is by design** — this login is password-only, so re-authenticating can only ever assert `acr: "pwd"`. Requesting a stronger ACR always ends in a refusal (unregistered ACR, or registered but unsatisfiable — `[A060305]`), never a fabricated success. See the tutorial's callout after Part 1 before you go looking for a bug | [Step-Up Auth Tutorial](docs/STEP-UP-AUTH-TUTORIAL.md) |
+| Step-Up Auth (RFC 9470) | **Working, with one real success path** — login now supports a second factor (a toy-scope RFC 6238 TOTP step, one shared demo secret) gated on essential `acr_values=otp`. Requesting any *other* stronger ACR (`mfa` included — kept deliberately unsatisfiable for Module 09a's curriculum lab) still ends in a refusal (unregistered ACR, or registered but unsatisfiable — `[A060305]`), never a fabricated success. See the tutorial's callout after Part 1 | [Step-Up Auth Tutorial](docs/STEP-UP-AUTH-TUTORIAL.md) |
 
 ### Security & Logout
 

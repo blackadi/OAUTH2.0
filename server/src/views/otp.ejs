@@ -1,0 +1,49 @@
+<%- include('partials/head', { title: 'Enter code' }) %>
+<body>
+  <main>
+  <div class="card card-narrow">
+    <div class="login-header">
+      <h1>Enter your code</h1>
+      <p>This request asked for a stronger authentication method (RFC 9470). Enter the 6-digit code from
+        your authenticator app.</p>
+    </div>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="error-message" role="alert"><span class="error-icon" aria-hidden="true">!</span><%= error %></div>
+    <% } %>
+
+    <form method="POST" action="/api/session/otp" id="otp-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <label for="code">6-digit code</label>
+      <input id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+        placeholder="000000" autocomplete="one-time-code" required autofocus />
+      <div class="actions">
+        <button type="submit" name="otp" value="submit" class="primary" id="btn-submit">Verify</button>
+        <button type="submit" name="otp" value="cancel" class="secondary" formnovalidate>Cancel</button>
+      </div>
+    </form>
+    <div class="foot">
+      Demo secret (add to any TOTP authenticator app): <code><%= secret %></code><br />
+      <a href="<%= otpauthUri %>"><code><%= otpauthUri %></code></a>
+    </div>
+  </div>
+  </main>
+  <%- include('partials/footer') %>
+  <script>
+    (function(){
+      document.getElementById('code')?.focus();
+
+      var form = document.getElementById('otp-form');
+      var btn = document.getElementById('btn-submit');
+      if (form && btn) {
+        form.addEventListener('submit', function(e) {
+          var submitter = e.submitter;
+          if (submitter && submitter.value !== 'submit') return;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner"></span> Verifying…';
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

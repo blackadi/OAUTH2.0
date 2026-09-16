@@ -92,6 +92,10 @@ export const loginSchema = z.object({
   password: z.string().min(1, required("password")),
 });
 
+export const otpSchema = z.object({
+  code: z.string().min(1, required("code")),
+});
+
 export const federationRegistrationSchema = z.object({
   entityConfiguration: z.string().optional(),
   trustChain: z.string().optional(),

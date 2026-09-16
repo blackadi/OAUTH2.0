@@ -15,8 +15,8 @@
 > | What the file shows | Live status | What to do about it |
 > |---|---|---|
 > | [Part 4](#part-4-binding-auth-info-to-access-tokens)'s **JWT access-token payload** | **Not reproducible here, and now checked against a real specimen** — `accessTokenSignAlg` is **unset** by decision ([DR-09](../audit/05-decision-records.md#dr-09--jwt-access-tokens-rfc-9068), re-ruled 2026-08-17), so this deployment issues opaque access tokens (43 characters, no dots) and there is no JWT to decode | The claims are still recorded against the token: the SDK's `IntrospectionResponse` models `acr` and `authTime`, which is RFC 9470 §6.2's other route. **Setting `accessTokenSignAlg` really would make Part 4 literal** — verified 2026-08-17 by setting it, minting one token and unsetting it — **but do not**: the resulting token carries **no `aud`**, which RFC 9068 §2.2 makes REQUIRED. See Part 4 |
-> | `urn:mace:incommon:iap:silver`, used as the strong ACR throughout | **not a registered ACR here.** `supportedAcrs` is `["pwd", "mfa"]` | Use **`mfa`** to reproduce anything in this file. An *unregistered* value fails earlier and for a different reason than an unsatisfiable one — see [`modules/09a…/lab.md` 4b](curriculum/modules/09a-interaction-extensions/lab.md) |
-> | the essential-ACR refusal | **runnable** — `mfa` is registered and deliberately unsatisfiable, which is exactly what makes the refusal path reachable | Request `mfa` as an essential `acr` and watch `ACR_NOT_SATISFIED` |
+> | `urn:mace:incommon:iap:silver`, used as the strong ACR throughout | **not a registered ACR here.** `supportedAcrs` is `["pwd", "mfa", "otp"]` on a service where the second factor below has been enabled | Use **`mfa`** to reproduce anything in this file. An *unregistered* value fails earlier and for a different reason than an unsatisfiable one — see [`modules/09a…/lab.md` 4b](curriculum/modules/09a-interaction-extensions/lab.md) |
+> | the essential-ACR refusal | **runnable** — `mfa` is registered and *deliberately kept unsatisfiable*, which is exactly what makes the refusal path reachable | Request `mfa` as an essential `acr` and watch `ACR_NOT_SATISFIED`. **Do not use `otp` for this** — see the success-path callout after Part 1 |
 > | [Part 5](#part-5-the-step-up-challenge-response)'s **max-age challenge** | **reachable, but only on one path** | See the note directly below |
 >
 > **`max_age` cannot fail on the login path, and that is not a bug.** On a login POST the End-User has just
@@ -86,35 +86,40 @@ correction on 2026-09-08: this server's own `/api/introspection` was *also* beli
 for this scenario, and live testing proved that wrong too. Every step-up response in this repo is a `401`
 now; there is no 403 case left for this scenario at all.
 
-> ### Why "Re-Authenticate with Required ACR" can never succeed here for anything but `pwd`
+> ### Why "Re-Authenticate with Required ACR" can never succeed here for anything but `pwd` — **except one ACR, now**
 >
-> **Live-verified 2026-09-15, and worth knowing before you click the button.** This demo's login page has
-> exactly one authentication method — a password form — and `server/src/controllers/session.controller.ts`
-> hardcodes `acr: "pwd"` for every successful login. There is no second, stronger method to fall back to.
-> So the diagram above stops being reachable partway through: step 5 (*"Authenticate user with stronger
-> method"*) is not something this server can do, for any ACR other than `pwd`.
+> **Originally written 2026-09-15; revised the same day once a second factor shipped.** This demo's login
+> page used to have exactly one authentication method — a password form — and
+> `server/src/controllers/session.controller.ts` hardcoded `acr: "pwd"` for every successful login, so the
+> diagram above stopped being reachable partway through: step 5 (*"Authenticate user with stronger
+> method"*) was not something this server could do, for any ACR other than `pwd`.
 >
-> Asking for a different ACR as *essential* (Part 6's re-authorization request) always ends one of two
-> ways, and **both are the server working correctly** — neither is a bug to chase:
+> **It now can, for exactly one ACR: `otp`.** A real (if toy-scope — one shared demo TOTP secret, not
+> per-user enrollment) RFC 6238 second factor was added, gated on the incoming request naming `acr_values`
+> essential `otp` — see `docs/investigations/toy-otp-feasibility.md` for why `otp` and not `mfa`. Asking for
+> a different ACR as *essential* (Part 6's re-authorization request) still ends one of two ways, and **both
+> are still the server working correctly** — neither is a bug to chase:
 >
 > | What you'll see | Why | Meaning |
 > |---|---|---|
 > | `[A021303]` / `[A021304]` at the authorization redirect | the ACR isn't on the service's `acr_values_supported` list at all | refused before login is even attempted — RFC 9470 §4's own ACR-support check |
-> | `[A060305]` `unmet_authentication_requirements`, after a fresh `prompt=login` | the ACR *is* registered, but login can only ever produce `pwd` | `checkStepUpRequirements` (`server/src/utils/step-up.ts`) correctly refusing to assert an authentication event that never happened |
+> | `[A060305]` `unmet_authentication_requirements`, after a fresh `prompt=login` | the ACR *is* registered (e.g. `mfa`), but login can only ever produce `pwd` on its own | `checkStepUpRequirements` (`server/src/utils/step-up.ts`) correctly refusing to assert an authentication event that never happened |
+> | A `/session/otp` prompt, then success | you requested essential `acr_values=otp` and it *is* registered | `session.controller.ts`'s `handleLogin` routes to the second factor instead of finishing on `pwd` alone; entering the (displayed) demo TOTP code completes it |
 >
-> Asking for `pwd` itself is the one case that succeeds — but the current token already has `acr: "pwd"`,
-> so introspection reports it as already sufficient and no challenge appears to re-authorize against in the
-> first place. **The "challenge → stronger login → success" path is therefore not reachable by clicking
-> through this UI, for any ACR value, on any of this repo's Authlete services** — only "challenge → refused"
-> and "no challenge needed" are. A real deployment reaches the success path by adding a second
-> authentication method (an OTP step, a hardware key) that can actually satisfy a stronger ACR; registering
-> more values in `acr_values_supported` alone does not, since the service can only ever advertise what the
-> login flow can prove happened.
+> **`mfa` is deliberately kept in the first row's territory — do not "fix" it.** It stays registered and
+> unsatisfiable on purpose, because Module 09a's essential-ACR-refusal lab
+> (`docs/curriculum/modules/09a-interaction-extensions/lab.md`) is built on `mfa` refusing. `otp` is a
+> separate ACR value precisely so that lab keeps teaching what it teaches while this file gets a real
+> success path. Asking for `pwd` itself still succeeds trivially and uninterestingly, for the same reason
+> as before: the current token already has `acr: "pwd"`, so introspection reports it as already sufficient.
 >
-> **The specific ACR values registered are per-service and can change** — this repo currently exercises two
-> Authlete services with different configurations (see `authlete-service-config.md`'s *"Why this repo uses
-> two Authlete services"* if you're working in this codebase), so don't trust a captured list below for your
-> deployment. Check `acr_values_supported` in your own `/.well-known/openid-configuration` instead.
+> **The specific ACR values registered are per-service and can change**, and registering `otp` in
+> `acr_values_supported` is a manual Authlete-console step, not something this repo's code does for you —
+> this repo currently exercises two Authlete services with different configurations (see
+> `authlete-service-config.md`'s *"Why this repo uses two Authlete services"* if you're working in this
+> codebase), so don't trust a captured list below for your deployment. Check `acr_values_supported` in your
+> own `/.well-known/openid-configuration` instead; until `otp` is registered there, requesting it behaves
+> exactly like the `[A021303]`/`[A021304]` row above.
 
 ---
 
@@ -510,10 +515,34 @@ Clicking **Re-Authenticate with Required ACR** opens the authorization endpoint 
 - `claims` requesting the required ACR as essential
 - `prompt=login` to force fresh authentication
 
-> **Note:** This demo server always satisfies ACR `pwd`, so requesting any other ACR always ends in a
-> refusal rather than a successful re-authentication — see [the callout after Part 1](#part-1-why-step-up-authentication-exists)
-> for exactly which refusal and why. Registering more ACR values on the service is not by itself enough to
-> fix that; a real deployment also needs a login method that can actually satisfy the stronger value.
+> **Note:** Requesting `urn:mace:incommon:iap:silver` or `mfa` always ends in a refusal rather than a
+> successful re-authentication, and that is still correct — see
+> [the callout after Part 1](#part-1-why-step-up-authentication-exists) for exactly which refusal and why.
+> **`otp` is the one ACR that can now succeed here** (a real, if toy-scope, TOTP second factor): re-authorize
+> with `claims` requesting `otp` as essential, and instead of stopping at `pwd`, the login flow routes to
+> `/session/otp` — enter the code shown on that page and the re-authorization completes with `acr: "otp"`.
+
+### Step 5: The success path (`otp`), end to end
+
+This is the one path Steps 1-4 above cannot reach — a real "challenge → stronger login → success" run,
+requiring `otp` registered in `acr_values_supported` on the service you're testing against (a manual
+Authlete-console step; see the callout after Part 1).
+
+1. Build an authorization URL with an essential `otp` claim, same shape Module 09a's lab uses for `mfa`:
+   ```
+   GET /api/authorization?...
+     &claims={"id_token":{"acr":{"essential":true,"values":["otp"]}}}
+   ```
+2. Log in with the demo username/password. Instead of the consent screen, you land on `/api/session/otp`.
+3. The page shows a base32 secret and an `otpauth://` URI — add either to any TOTP authenticator app (or
+   any RFC 6238-compliant code generator), and enter the resulting 6-digit code.
+4. On a correct code, the flow proceeds to consent exactly as the password-only path does, and the issued
+   token's `acr` is `"otp"` — confirm via introspection (`acr: "otp"`), or by decoding the ID token if
+   `accessTokenSignAlg` is set on your service (see Part 4's caveat about opaque tokens on this deployment
+   otherwise).
+
+A wrong code re-renders the same page with an error; **Cancel** reports `access_denied` to the client, the
+same `DENIED` semantics as Cancel on the password screen.
 
 ### Testing max_age
 

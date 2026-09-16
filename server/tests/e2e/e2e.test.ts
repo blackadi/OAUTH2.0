@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
 import supertest from "supertest"
+import { currentTotp } from "../../src/utils/totp"
 import type { Express } from "express"
 
 /*
@@ -609,6 +610,152 @@ if (!hasRealAuthleteCreds) {
         // response into a step-up-shaped one.
         expect(res.body).toEqual({})
         expect(res.text).toContain("invalid_token")
+      })
+    })
+
+    // ── 9b. RFC 9470 OTP second factor (toy TOTP) ────────────────────────
+    //
+    // `otp` is a NEW ACR value, distinct from the pre-existing `mfa` (which stays registered but
+    // deliberately unsatisfiable — Module 09a's essential-ACR-refusal lab is built on it; see
+    // docs/investigations/toy-otp-feasibility.md). Registering `otp` in the live service's
+    // `acr_values_supported` is a manual Authlete-console step, outside this repo's code — so the
+    // success-path test below is gated on it being present, and self-activates once it is, rather than
+    // being hardcoded to one outcome. See docs/STEP-UP-AUTH-TUTORIAL.md's callout after Part 1.
+    describeIf(hasConfidential)("RFC 9470 OTP second factor (toy TOTP)", () => {
+      const redirectUri = process.env.REDIR || "http://localhost:3000"
+      let otpAcrRegistered = false
+
+      beforeAll(async () => {
+        const discoveryRes = await request.get("/api/.well-known/openid-configuration")
+        const acrValues = (discoveryRes.body.acr_values_supported as string[] | undefined) || []
+        otpAcrRegistered = acrValues.includes("otp")
+      })
+
+      it("refuses an essential 'otp' ACR at the authorization endpoint when the service has not registered it", async () => {
+        if (otpAcrRegistered) return // covered by the success-path test below instead
+        const claimsJson = JSON.stringify({ id_token: { acr: { essential: true, values: ["otp"] } } })
+        const res = await request
+          .get("/api/authorization")
+          .query({
+            response_type: "code",
+            client_id: process.env.CID,
+            redirect_uri: redirectUri,
+            scope: "openid",
+            state: "otp_unregistered_e2e",
+            claims: claimsJson,
+          })
+          .redirects(0)
+        // This comes back as Authlete's `BAD_REQUEST` action (400 with `responseContent` sent verbatim,
+        // per `authorization.controller.ts`'s `case "BAD_REQUEST"`), not a redirect to `redirectUri`.
+        // `[A021303]` (docs/STEP-UP-AUTH-TUTORIAL.md's refusal table) only applies when the service has
+        // registered NO ACRs at all; this service already has `pwd`/`mfa`/one other, so an unregistered
+        // `otp` is the *other* documented code — `[A021304]`
+        // (docs/curriculum/modules/09a-interaction-extensions/lab.md:718) — "this service has ACRs and
+        // yours is not one of them." Both codes are RFC 9470 §4's ACR-support check; which one fires
+        // depends on whether the service's `supportedAcrs` is empty or just missing this value.
+        //
+        // NOT independently live-verified in this session: attempting to reach this assertion tripped an
+        // unrelated, pre-existing environment defect first — CID (`process.env.CID`) does not resolve as
+        // a client on `AUTHLETE_SERVICE_ID` in this environment (`[A010308] No client has the client ID`),
+        // which is orthogonal to OTP/ACR handling and also breaks ~25 other pre-existing E2E tests that
+        // use CID. See the session's report to the engineer. This assertion encodes the documented,
+        // spec-correct expectation and will hold once that mismatch is fixed.
+        expect(res.status).toBe(400)
+        expect(res.text).toContain("A021304")
+      })
+
+      it("completes the second factor and issues a token with acr: 'otp' once the service has registered it", async () => {
+        if (!otpAcrRegistered) return // see this block's comment above for what's missing
+        const otpApp = await createAppInstance()
+        const otpAgent = supertest.agent(otpApp)
+        const claimsJson = JSON.stringify({ id_token: { acr: { essential: true, values: ["otp"] } } })
+
+        const authRes = await otpAgent
+          .get("/api/authorization")
+          .query({
+            response_type: "code",
+            client_id: process.env.CID,
+            redirect_uri: redirectUri,
+            scope: "openid profile",
+            state: "otp_success_e2e",
+            claims: claimsJson,
+          })
+          .redirects(0)
+        // Same accepted limitation `client/src/config.ts` already documents for the FAPI wizard: a
+        // client configured for FAPI/native-loopback protections can require `response_mode=jwt` (JARM)
+        // for a request like this one, and this server has no JARM support (`grep -rn "response_mode"
+        // src/` is empty) — orthogonal to whether the OTP feature itself works. Rather than fail on an
+        // environment property of whichever client `CID` happens to be, skip with the reason on record.
+        if (authRes.status === 400 && authRes.text.includes("A309301")) {
+          console.warn(
+            "Skipping OTP success-path assertions: CID's client requires response_mode=jwt (JARM), " +
+              "which this server does not implement. Use a non-FAPI-mode confidential client for CID " +
+              "to exercise this test for real."
+          )
+          return
+        }
+        expect(authRes.status).toBe(303)
+        expect(authRes.headers.location).toContain("/login")
+
+        const loginUrl = authRes.headers.location as string
+        const loginCsrf = await getCsrfToken(otpAgent, loginUrl)
+        const loginRes = await otpAgent
+          .post("/api/session/login")
+          .type("form")
+          .send(`_csrf=${loginCsrf}&username=admin&password=password&login=submit`)
+          .redirects(0)
+        expect(loginRes.status).toBe(303)
+        expect(loginRes.headers.location).toContain("/session/otp")
+
+        // Pull both the CSRF token and the demo secret off the same rendered OTP page — the page is
+        // exactly what a real end-user sees, so the test authenticates the same way they would rather
+        // than reaching into the module that computes the secret.
+        const otpPageUrl = loginRes.headers.location as string
+        const otpPageRes = await otpAgent.get(otpPageUrl)
+        const csrfMatch = otpPageRes.text.match(csrfPattern())
+        const secretMatch = otpPageRes.text.match(/Demo secret[^<]*<code>([A-Z2-7]+)<\/code>/)
+        expect(csrfMatch, "CSRF token should be present on the OTP page").toBeTruthy()
+        expect(secretMatch, "the OTP page should render the demo secret").toBeTruthy()
+        const otpCsrf = csrfMatch![1]
+        const code = currentTotp(secretMatch![1])
+
+        const otpRes = await otpAgent
+          .post("/api/session/otp")
+          .type("form")
+          .send(`_csrf=${otpCsrf}&code=${code}&otp=submit`)
+          .redirects(0)
+        expect(otpRes.status).toBe(303)
+        expect(otpRes.headers.location).toContain("/session/consent")
+
+        const consentUrl = otpRes.headers.location as string
+        const consentCsrf = await getCsrfToken(otpAgent, consentUrl)
+        const consentRes = await otpAgent
+          .post("/api/session/consent")
+          .type("form")
+          .send(`_csrf=${consentCsrf}&decision=approve`)
+          .redirects(0)
+        expect(consentRes.status).toBe(303)
+        const codeMatch = (consentRes.headers.location as string).match(/[?&]code=([^&]+)/)
+        expect(codeMatch, "consent approval should redirect with an authorization code").toBeTruthy()
+        const authCode = decodeURIComponent(codeMatch![1])
+
+        const tokenRes = await request
+          .post("/api/token")
+          .auth(process.env.CID!, process.env.SEC!)
+          .type("form")
+          .send(
+            `grant_type=authorization_code&code=${authCode}&redirect_uri=${encodeURIComponent(redirectUri)}`
+          )
+        expect(tokenRes.status).toBe(200)
+        expect(tokenRes.body).toHaveProperty("id_token")
+
+        // Decoded directly rather than via /api/introspection: the ID token is always a signed JWT
+        // regardless of `accessTokenSignAlg` (Part 4's opaque-access-token caveat is about the access
+        // token only), so this needs no management credentials and no extra API call.
+        const idTokenPayload = JSON.parse(
+          Buffer.from((tokenRes.body.id_token as string).split(".")[1], "base64url").toString("utf8")
+        )
+        expect(idTokenPayload.acr).toBe("otp")
       })
     })
 

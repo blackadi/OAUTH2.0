@@ -6,6 +6,7 @@ import { required } from "../utils/env";
 export const appConfig = {
   loginUrl: "/api/session/login",
   consentUrl: "/api/session/consent",
+  otpUrl: "/api/session/otp",
 };
 
 /**
