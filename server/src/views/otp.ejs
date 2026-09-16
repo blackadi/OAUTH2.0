@@ -23,8 +23,15 @@
       </div>
     </form>
     <div class="foot">
-      Demo secret (add to any TOTP authenticator app): <code><%= secret %></code><br />
-      <a href="<%= otpauthUri %>"><code><%= otpauthUri %></code></a>
+      <p class="base">Add this to any TOTP authenticator app (Google Authenticator, Authy, 2FAS, Aegis, ...):</p>
+      <div class="code-value-row">
+        <span class="base"><strong>Secret key:</strong> <i><%= secret %></i></span>
+        <button class="copy-btn" type="button" data-copy="<%= secret %>" aria-label="Copy TOTP secret">Copy</button>
+      </div>
+      <p class="base">Manual setup: Add account &rarr; enter setup key &rarr; time-based, SHA1, 6 digits, 30s.</p>
+      <p class="base">On a phone with an authenticator app installed, you can also
+        <a href="<%= otpauthUri %>">tap here to add it automatically</a> — this link does nothing on a
+        desktop browser, since there is no app registered to open it.</p>
     </div>
   </div>
   </main>
@@ -43,6 +50,19 @@
           btn.innerHTML = '<span class="spinner"></span> Verifying…';
         });
       }
+
+      // Same copy-to-clipboard behavior as views/index.ejs's authorization-code display.
+      document.querySelectorAll('[data-copy]').forEach(function(copyBtn) {
+        copyBtn.addEventListener('click', function() {
+          if (!navigator.clipboard) return;
+          navigator.clipboard.writeText(copyBtn.getAttribute('data-copy')).then(function() {
+            var orig = copyBtn.textContent;
+            copyBtn.textContent = 'Copied!';
+            copyBtn.classList.add('copied');
+            setTimeout(function() { copyBtn.textContent = orig; copyBtn.classList.remove('copied'); }, 1500);
+          });
+        });
+      });
     })();
   </script>
 </body>

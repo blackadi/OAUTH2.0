@@ -48,4 +48,27 @@ describe("otp.ejs", () => {
     expect(submit).toBeDefined()
     expect(submit).not.toContain("formnovalidate")
   })
+
+  /**
+   * Regression coverage for a real UX bug found testing the live deployment: the secret and the
+   * otpauth:// URI were both dumped as raw, unbroken `<code>` text inside `.foot`, which has no
+   * `word-break` rule of its own — the long URI overflowed the card on narrow viewports, and the link
+   * text (the entire query string) looked broken and did nothing when clicked on desktop, with no
+   * explanation why. Fixed by reusing the same `.code-value-row` + `.copy-btn` pattern `index.ejs`
+   * already uses for the authorization-code display (which does have `word-break: break-all`,
+   * `public/css/style.css:326`), and by making the otpauth link's visible text short and explicitly
+   * labeled as mobile-only rather than the raw URI.
+   */
+  it("shows the secret in a copyable code-value-row rather than dumping the raw otpauth URI as link text", async () => {
+    const html = await renderFile(OTP_VIEW, BASE_LOCALS)
+
+    expect(html).toContain("code-value-row")
+    expect(html).toContain(`data-copy="${BASE_LOCALS.secret}"`)
+    expect(html).toContain(`href="${BASE_LOCALS.otpauthUri}"`)
+    // The link's visible text must NOT be the raw URI — that's the bug being pinned.
+    const linkMatch = html.match(/<a href="otpauth:\/\/[^"]*">([^<]*)<\/a>/)
+    expect(linkMatch, "the otpauth link should be present").toBeTruthy()
+    expect(linkMatch![1]).not.toContain("otpauth://")
+    expect(linkMatch![1].length).toBeLessThan(60)
+  })
 })
