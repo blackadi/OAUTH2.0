@@ -323,6 +323,38 @@ describe('client authentication on the code exchange', () => {
     expect(screen.getByText('Basic <confidential-client:secret>')).toBeInTheDocument();
   });
 
+  /**
+   * The actual bug behind a live `[A157304]` on `/step-up`: this exchange succeeding is not enough by
+   * itself — `StepUpSection`'s later re-authorization depends on `activeClientId`/`activeClientSecret`/
+   * `activeClientAuthMethod` all being recorded here, and only `activeClientId` was. A `'basic'`
+   * exchange that does not also persist the secret leaves the *next* section able to see "this was a
+   * confidential client" but not able to prove it.
+   */
+  it('records activeClientId, activeClientSecret and activeClientAuthMethod after a Basic exchange', async () => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    sessionStorage.setItem('authz_client_id', 'confidential-client');
+    sessionStorage.setItem('authz_client_secret', 's3cr3t-for-real');
+    sessionStorage.setItem('authz_client_auth_method', 'basic');
+    at('?code=abc&state=same');
+    await waitFor(() => expect(screen.queryByText(/Successfully obtained/i)).toBeInTheDocument());
+
+    expect(sessionStorage.getItem('active_client_id')).toBe('confidential-client');
+    expect(sessionStorage.getItem('active_client_secret')).toBe('s3cr3t-for-real');
+    expect(sessionStorage.getItem('active_client_auth_method')).toBe('basic');
+  });
+
+  it('does not carry a stale activeClientSecret forward for a public-client exchange', async () => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    sessionStorage.setItem('active_client_secret', 'leftover-from-a-previous-confidential-client');
+    at('?code=abc&state=same');
+    await waitFor(() => expect(screen.queryByText(/Successfully obtained/i)).toBeInTheDocument());
+
+    expect(sessionStorage.getItem('active_client_secret')).toBeNull();
+    expect(sessionStorage.getItem('active_client_auth_method')).toBe('post');
+  });
+
   it('omits client_secret when authzClientAuthMethod is explicitly "none", same as no secret at all', async () => {
     const exchange = vi
       .spyOn(tokenService, 'exchangeCodeForToken')

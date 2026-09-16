@@ -35,6 +35,7 @@ import {
   readKey,
   readJsonKey,
   writeKey,
+  removeKey,
   type ClientAuthMethod,
 } from '@/services/session-keys';
 import { recordNavigation } from '@/services/trace-store';
@@ -493,6 +494,16 @@ const CallbackPage = () => {
         setTokenSet(body);
         writeKey(SESSION_KEYS.activeClientId, storedClientId);
         writeKey(SESSION_KEYS.activeClientAuthMethod, authMethod);
+        // This was the actual bug: `CallbackPage` never wrote `activeClientSecret` at all (only
+        // `AuthFlowsSection.tsx`'s `saveClientCredentials` did, for the other four grants), so
+        // `StepUpSection`'s re-authorization correctly picked up `activeClientAuthMethod: 'basic'` but
+        // had no secret to send with it — Authlete then reported `[A157304]` (method is
+        // client_secret_basic but the request carries no secret at all), live-verified.
+        if (authMethod !== 'none' && storedSecret) {
+          writeKey(SESSION_KEYS.activeClientSecret, storedSecret);
+        } else {
+          removeKey(SESSION_KEYS.activeClientSecret);
+        }
 
         setState({
           error: null,
