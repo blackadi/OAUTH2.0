@@ -9,13 +9,30 @@ import {
 } from '@/config';
 import { generateKeyPair } from '@/services/dpop.service';
 import { jwkThumbprint } from '@/services/crypto-utils';
-import { SESSION_KEYS, readKey, writeKey, removeKey, clearDpopKeys } from '@/services/session-keys';
+import {
+  SESSION_KEYS,
+  readKey,
+  writeKey,
+  removeKey,
+  clearDpopKeys,
+  type ClientAuthMethod,
+} from '@/services/session-keys';
 import { navigateTo } from '@/services/trace-store';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { AuthorizeRequestBuilder } from './AuthorizeRequestBuilder';
 import type { AuthorizeSendContext } from './use-authorize-params';
 import { Checkbox } from '@/components/ui/Checkbox';
+
+/** Matches `ParSection`'s selector (`client/src/components/oidc/ParSection.tsx`) — one vocabulary for
+ * "how does this client authenticate" across every section that asks the question, rather than each
+ * one inventing its own. */
+const AUTH_METHOD_OPTIONS = [
+  { value: 'post', label: 'client_secret_post — credentials in body' },
+  { value: 'basic', label: 'client_secret_basic — Authorization header' },
+  { value: 'none', label: 'none — public client (PKCE required)' },
+];
 
 /**
  * The authorization-code grant: the only one of the five that leaves this tab.
@@ -54,6 +71,9 @@ function AuthorizationCodePanel({ active }: { active: boolean }) {
 
   const [acId, setAcId] = useState(CLIENT_ID);
   const [acSecret, setAcSecret] = useState(CLIENT_SECRET);
+  // Default 'post' matches this panel's own historical behavior (and `ParSection`'s default), so
+  // nobody who ignores this new control sees anything change.
+  const [acAuthMethod, setAcAuthMethod] = useState<ClientAuthMethod>('post');
   const [acRedirectUri, setAcRedirectUri] = useState(getRedirectUri());
   // `scope` used to come straight from the build-time constant with no input at all, which made the
   // single most-edited parameter in OAuth the one parameter this panel could not change.
@@ -141,6 +161,7 @@ function AuthorizationCodePanel({ active }: { active: boolean }) {
      */
     if (acSecret) writeKey(SESSION_KEYS.authzClientSecret, acSecret);
     else removeKey(SESSION_KEYS.authzClientSecret);
+    writeKey(SESSION_KEYS.authzClientAuthMethod, acAuthMethod);
 
     navigateTo(url, 'authorize — front channel, browser leaves for the authorization endpoint');
   };
@@ -181,14 +202,23 @@ function AuthorizationCodePanel({ active }: { active: boolean }) {
           */
           hint="From your Authlete service, not chosen here. `VITE_CLIENT_ID` sets the default; Client Management lists the real ones."
         />
-        <Input
-          label="Client Secret"
-          type="password"
-          value={acSecret}
-          onChange={(e) => setAcSecret(e.target.value)}
-          placeholder="Used at the token endpoint, not here"
-        />
+        {acAuthMethod !== 'none' && (
+          <Input
+            label="Client Secret"
+            type="password"
+            value={acSecret}
+            onChange={(e) => setAcSecret(e.target.value)}
+            placeholder="Used at the token endpoint, not here"
+          />
+        )}
       </div>
+      <Select
+        label="Client Auth Method"
+        value={acAuthMethod}
+        onChange={(e) => setAcAuthMethod(e.target.value as ClientAuthMethod)}
+        options={AUTH_METHOD_OPTIONS}
+        hint="Must match the client's registered method — Authlete checks which channel the credentials arrive on, not just their value, and refuses a mismatch even with the right secret."
+      />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Input
           label="Redirect URI"

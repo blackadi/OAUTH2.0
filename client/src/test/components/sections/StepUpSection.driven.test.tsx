@@ -273,10 +273,46 @@ describe('StepUpSection — the challenge, and what it builds', () => {
     expect(readKey(SESSION_KEYS.oauthState), 'CallbackPage refuses without a stored state').toBe(
       params.get('state'),
     );
-    // This re-authorization is always for the SPA's own default public client — a confidential
-    // client's secret or a resource left over from a different section must not leak into this exchange.
+    // No client was ever tracked as "active" in this test, so this re-authorizes as the SPA's default
+    // public client — no secret, no resource. See the next test for the case where one was tracked.
     expect(readKey(SESSION_KEYS.authzClientSecret)).toBeNull();
     expect(readKey(SESSION_KEYS.authzResource)).toBeNull();
+  });
+
+  /**
+   * **The regression this section's client handling was fixed for.** `handleReAuthenticate` used to
+   * hardcode `client_id: CLIENT_ID` and unconditionally clear `authzClientSecret`, regardless of which
+   * client actually issued the token under test — correct only when that happened to be the SPA's own
+   * default public client, silently wrong for a token obtained via Client Credentials, Password, Refresh
+   * Token, or the Auth Code panel with a different client typed in. `SESSION_KEYS.activeClientId` /
+   * `activeClientSecret` / `activeClientAuthMethod` already track exactly this (written by
+   * `CallbackPage.tsx` and `AuthFlowsSection.tsx`'s `saveClientCredentials`); this asserts Step-Up now
+   * reads it back rather than assuming.
+   */
+  it('re-authorizes as whichever client actually holds the token, not always the SPA default', async () => {
+    const nav = stubNavigation();
+    seedTokens({ access_token: 'at-stepup-01' });
+    sessionStorage.setItem(SESSION_KEYS.activeClientId, 'confidential-client-99');
+    sessionStorage.setItem(SESSION_KEYS.activeClientSecret, 'active-secret');
+    sessionStorage.setItem(SESSION_KEYS.activeClientAuthMethod, 'basic');
+    vi.spyOn(tokenService, 'introspection').mockRejectedValue(
+      httpError(401, JSON.parse(CHALLENGE), CHALLENGE),
+    );
+    mountSection(<StepUpSection />);
+    fillAdminCredentials();
+    press(/Introspect with Requirements/i);
+
+    await screen.findByRole('button', { name: /Re-Authenticate with Required ACR/i });
+    press(/Re-Authenticate with Required ACR/i);
+    await waitFor(() => expect(nav.href).not.toBe(''));
+
+    const params = new URL(nav.href).searchParams;
+    expect(params.get('client_id'), 'must be the token’s own client, not the SPA default').toBe(
+      'confidential-client-99',
+    );
+    expect(readKey(SESSION_KEYS.authzClientId)).toBe('confidential-client-99');
+    expect(readKey(SESSION_KEYS.authzClientSecret)).toBe('active-secret');
+    expect(readKey(SESSION_KEYS.authzClientAuthMethod)).toBe('basic');
   });
 
   /**

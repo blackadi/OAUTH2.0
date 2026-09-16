@@ -15,12 +15,15 @@ import { SESSION_KEYS, readJsonKey } from './session-keys';
 import type { JWK } from './crypto-utils';
 import type { TokenRequest, TokenResponse, JwksResponse } from '@/types';
 
-async function exchangeCodeForToken(tokenRequest: TokenRequest): Promise<TokenResponse> {
+async function exchangeCodeForToken(
+  tokenRequest: TokenRequest,
+  extraHeaders?: Record<string, string>,
+): Promise<TokenResponse> {
   const params = new URLSearchParams(tokenRequest as unknown as Record<string, string>);
   return http.postForm(
     TOKEN_ENDPOINT,
     params,
-    undefined,
+    extraHeaders,
     tokenResponseSchema,
   ) as Promise<TokenResponse>;
 }
@@ -33,6 +36,7 @@ export interface TokenResponseWithNonce {
 async function exchangeCodeForTokenWithDpop(
   tokenRequest: TokenRequest,
   dpopProof: DpopProofSource,
+  extraHeaders?: Record<string, string>,
 ): Promise<TokenResponseWithNonce> {
   const params = new URLSearchParams(tokenRequest as unknown as Record<string, string>);
   // A `use_dpop_nonce` refusal happens *before* the authorization code is redeemed — verified live
@@ -43,6 +47,7 @@ async function exchangeCodeForTokenWithDpop(
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       DPoP: proof,
+      ...extraHeaders,
     },
     body: params.toString(),
   }));

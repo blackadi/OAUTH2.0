@@ -29,6 +29,14 @@ export const SESSION_KEYS = {
   authzClientId: 'authz_client_id',
   authzClientSecret: 'authz_client_secret',
   /**
+   * Which channel `authzClientSecret` should travel on at the token endpoint — `'post'` (body),
+   * `'basic'` (`Authorization` header) or `'none'` (public client, no credential at all). Authlete
+   * checks the channel, not just the value (`docs/agents/dpop-and-client-auth.md`), so this has to be
+   * remembered alongside the id/secret pair rather than inferred from "a secret is present" — `'basic'`
+   * and `'post'` both have one.
+   */
+  authzClientAuthMethod: 'authz_client_auth_method',
+  /**
    * RFC 8707 `resource`, carried from the authorization request to the token request.
    *
    * The two requests are separated by a full-page redirect, so a value typed into the authorization
@@ -43,6 +51,8 @@ export const SESSION_KEYS = {
   /** The client the most recent token belongs to — used to pre-fill revocation and introspection. */
   activeClientId: 'active_client_id',
   activeClientSecret: 'active_client_secret',
+  /** The auth method that client actually used — see the note on `authzClientAuthMethod` above. */
+  activeClientAuthMethod: 'active_client_auth_method',
 
   // ── proof-of-possession ──────────────────────────────────────────────────────────────────────────
   dpopPrivateKey: 'dpop_private_key',
@@ -98,6 +108,9 @@ export const SESSION_KEYS = {
 } as const;
 
 export type SessionKey = (typeof SESSION_KEYS)[keyof typeof SESSION_KEYS];
+
+/** The value shape of `authzClientAuthMethod`/`activeClientAuthMethod` — see the notes on those keys. */
+export type ClientAuthMethod = 'post' | 'basic' | 'none';
 
 export function readKey(key: SessionKey): string | null {
   try {

@@ -97,6 +97,10 @@ const AuthFlowsSection: React.FC = () => {
     writeKey(SESSION_KEYS.activeClientId, clientId);
     if (clientSecret) writeKey(SESSION_KEYS.activeClientSecret, clientSecret);
     else removeKey(SESSION_KEYS.activeClientSecret);
+    // These four grants all go through `token.service.ts`'s `postWithOptionalBasic` — Basic when a
+    // secret is present, `client_id` alone in the body when it isn't. Recording which one actually
+    // happened is what lets `StepUpSection` re-authorize as this same client correctly later.
+    writeKey(SESSION_KEYS.activeClientAuthMethod, clientSecret ? 'basic' : 'post');
   };
 
   const handleCall = async (

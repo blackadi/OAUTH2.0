@@ -380,6 +380,38 @@ describe('AuthFlowsSection — the authorization request', () => {
   });
 
   /**
+   * `client_secret_basic` is the channel `CallbackPage` previously could not send at all — Authlete
+   * checks which channel a credential arrives on, not just its value
+   * (`docs/agents/dpop-and-client-auth.md`), so this records the method alongside the id/secret pair
+   * rather than only the secret's presence, matching `ParSection.driven.test.tsx`'s coverage of the
+   * same selector.
+   */
+  it('records the chosen client auth method, so CallbackPage picks the matching channel', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    fill(/^Client ID$/i, '1523514379');
+    fill(/^Client Secret$/i, 'confidential-secret');
+    fill(/Client Auth Method/i, 'basic');
+    press(/Send authorization request/i);
+
+    await waitFor(() =>
+      expect(sessionStorage.getItem(SESSION_KEYS.authzClientAuthMethod)).toBe('basic'),
+    );
+  });
+
+  it('hides the Client Secret field once "none" (public client) is selected', async () => {
+    stubNavigation();
+    mountSection(<AuthFlowsSection />);
+    await builderReady();
+
+    expect(screen.getByLabelText(/^Client Secret$/i)).toBeInTheDocument();
+    fill(/Client Auth Method/i, 'none');
+    expect(screen.queryByLabelText(/^Client Secret$/i)).not.toBeInTheDocument();
+  });
+
+  /**
    * The front-channel hop, which no `fetch` interceptor can observe. `recordNavigation` exists for
    * exactly this, and without it the single most important request in OAuth never entered the trace.
    */

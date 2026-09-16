@@ -1,5 +1,6 @@
 import { forwardRef, useId, type SelectHTMLAttributes } from 'react';
 import { cn } from '@/utils/cn';
+import { Prose } from '@/components/ui/Prose';
 
 export interface SelectOption {
   value: string;
@@ -11,13 +12,17 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: string;
   options: SelectOption[];
   placeholder?: string;
+  /** Same contract as `Input`'s `hint` — persists past the first change, wired via `aria-describedby`. */
+  hint?: string;
 }
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, error, id, options, placeholder, ...props }, ref) => {
+  ({ className, label, error, hint, id, options, placeholder, ...props }, ref) => {
     const generatedId = useId();
     const selectId = id || generatedId;
     const errorId = error ? `${selectId}-error` : undefined;
+    const hintId = hint ? `${selectId}-hint` : undefined;
+    const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
 
     return (
       <div className="flex flex-col gap-1.5">
@@ -34,7 +39,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
             className,
           )}
           aria-invalid={error ? true : undefined}
-          aria-describedby={errorId}
+          aria-describedby={describedBy}
           ref={ref}
           {...props}
         >
@@ -49,6 +54,11 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <span id={errorId} className="text-xs text-danger-text" role="alert">
             {error}
           </span>
+        )}
+        {hint && (
+          <Prose id={hintId} as="p" className="text-2xs text-muted-foreground leading-relaxed m-0">
+            {hint}
+          </Prose>
         )}
       </div>
     );

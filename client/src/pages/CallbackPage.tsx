@@ -13,6 +13,7 @@ import {
 } from '@/config';
 import { tokenService } from '@/services';
 import type { TokenResponseWithNonce } from '@/services/token.service';
+import { basicAuthHeader } from '@/services/http';
 import { createProof } from '@/services/dpop.service';
 import type { JWK } from '@/services/crypto-utils';
 import { readJarmResponse } from '@/utils/jarm';
@@ -29,7 +30,13 @@ import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
 import { JwtInspector } from '@/components/ui/JwtInspector';
 import { Spinner } from '@/components/ui/Spinner';
 import type { TokenResponse } from '@/types';
-import { SESSION_KEYS, readKey, readJsonKey, writeKey } from '@/services/session-keys';
+import {
+  SESSION_KEYS,
+  readKey,
+  readJsonKey,
+  writeKey,
+  type ClientAuthMethod,
+} from '@/services/session-keys';
 import { recordNavigation } from '@/services/trace-store';
 
 interface CallbackState {
@@ -51,6 +58,8 @@ interface CallbackState {
    * verifier, wrong `iss`) all return before a request is built, and there is genuinely nothing to show.
    */
   sentRequest: Record<string, string>;
+  /** Set when the exchange authenticated via `Authorization: Basic` — see `TokenRequestPanel`'s prop. */
+  basicAuthClientId: string | null;
 }
 
 /**
@@ -96,6 +105,7 @@ const CallbackPage = () => {
     tokenResponse: null,
     issWarning: null,
     sentRequest: {},
+    basicAuthClientId: null,
   });
 
   /**
@@ -189,6 +199,7 @@ const CallbackPage = () => {
             tokenResponse: null,
             issWarning: null,
             sentRequest: {},
+            basicAuthClientId: null,
           });
           return;
         }
@@ -205,6 +216,7 @@ const CallbackPage = () => {
             tokenResponse: null,
             issWarning: null,
             sentRequest: {},
+            basicAuthClientId: null,
           });
           return;
         }
@@ -231,6 +243,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest: {},
+          basicAuthClientId: null,
         });
         return;
       }
@@ -242,6 +255,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest: {},
+          basicAuthClientId: null,
         });
         return;
       }
@@ -266,6 +280,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest: {},
+          basicAuthClientId: null,
         });
         return;
       }
@@ -277,6 +292,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest: {},
+          basicAuthClientId: null,
         });
         return;
       }
@@ -287,6 +303,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest: {},
+          basicAuthClientId: null,
         });
         return;
       }
@@ -327,6 +344,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest: {},
+          basicAuthClientId: null,
         });
         return;
       }
@@ -339,6 +357,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest: {},
+          basicAuthClientId: null,
         });
         return;
       }
@@ -346,6 +365,7 @@ const CallbackPage = () => {
       // Declared outside the `try` so the `catch` can report it: a failed exchange is the request people
       // most need to read, and scoping it inside would have hidden exactly that case.
       let sentRequest: Record<string, string> = {};
+      let basicAuthClientId: string | null = null;
 
       try {
         const storedClientId = readKey(SESSION_KEYS.authzClientId) || CLIENT_ID;
@@ -366,33 +386,41 @@ const CallbackPage = () => {
         let body: TokenResponse;
 
         /**
-         * A public client authenticates with nothing, and "nothing" means the parameter is absent.
+         * Which channel the client's credential travels on, per `authzClientAuthMethod` — `'post'`
+         * (body, this flow's historical and still-default behavior), `'basic'` (`Authorization` header,
+         * mirroring `ParSection.tsx`'s selector and `par.service.ts`'s `basicHeader`), or `'none'`
+         * (RFC 6749 §2.3.1: a public client presents no credential at all). Defaulting to `'post'` when
+         * the key is absent keeps every caller that only ever wrote `authzClientId`/`authzClientSecret`
+         * — no method — working exactly as before (e.g. `StepUpSection`, before it is updated too).
          *
-         * RFC 6749 §2.3.1 identifies a public client by `client_id` alone. Authlete refuses a client whose
-         * method is `none` for carrying client authentication data — `[A157303]`. The SPA's own client is
-         * public, and `client_secret` used to go into the body unconditionally, which broke the headline
-         * authorization-code + PKCE flow with a misleading `invalid_client`.
+         * Authlete checks the **channel** a credential arrives on, not just its value — a body-only
+         * secret refuses a `client_secret_basic` client and Basic refuses a `client_secret_post` one
+         * (`docs/agents/dpop-and-client-auth.md`).
          *
-         * Measured at the live token endpoint 2026-08-22, because the boundary is not where it looks:
-         * `client_secret=your_client_secret` and `client_secret=undefined` are both refused with
-         * `[A157303]`, while `client_secret=` (**empty**) and an omitted parameter both pass client
-         * authentication and go on to fail on the code. So an empty value would in fact work here — and
-         * omission is still what this sends, because §2.3.1 describes a public client as presenting no
-         * credentials, and "the vendor tolerates an empty one" is not a thing to build on.
-         *
-         * It must be an omitted **key** rather than an undefined value: `new URLSearchParams({...})`
-         * stringifies, so `client_secret: undefined` puts the literal string "undefined" on the wire —
-         * which is the refused case above, not the tolerated one. `secretOrEmpty` in `config.ts` is what
-         * stops the `.env` placeholder arriving here as a secret in the first place.
+         * `'post'` with no secret sends nothing rather than an empty string, matching RFC 6749 §2.3.1's
+         * description of a public client as presenting no credential. Measured at the live token
+         * endpoint 2026-08-22: `client_secret=your_client_secret` and `client_secret=undefined` are both
+         * refused with `[A157303]`; an empty or omitted value both pass client auth and fail on the code
+         * instead — so omission, not an empty string, is the deliberate choice here, and
+         * `secretOrEmpty` in `config.ts` is what keeps the `.env` placeholder from ever reaching this
+         * point as a secret. It must be an omitted **key**, not an `undefined` value:
+         * `new URLSearchParams({...})` stringifies `client_secret: undefined` to the literal string
+         * "undefined", which is the refused shape above.
          */
         const storedSecret = readKey(SESSION_KEYS.authzClientSecret) || CLIENT_SECRET;
-        // Typed as a record so the *omission* survives: `{ client_secret: string } | {}` widens the
-        // absent case to `client_secret?: undefined`, and an explicitly-undefined key is not the same
-        // thing as no key — `new URLSearchParams` would stringify it to the literal "undefined", which is
-        // the refused shape rather than the tolerated one.
-        const clientAuth: Record<string, string> = storedSecret
-          ? { client_secret: storedSecret }
-          : {};
+        const authMethod: ClientAuthMethod =
+          (readKey(SESSION_KEYS.authzClientAuthMethod) as ClientAuthMethod | null) || 'post';
+
+        const clientAuth: Record<string, string> =
+          authMethod === 'post' && storedSecret ? { client_secret: storedSecret } : {};
+
+        // With Basic the secret travels in the header, so it must stay out of the body entirely — the
+        // same rule `ParSection.tsx`'s `doParRequest` follows for PAR.
+        const extraHeaders: Record<string, string> | undefined =
+          authMethod === 'basic' && storedSecret
+            ? { Authorization: basicAuthHeader(storedClientId, storedSecret) }
+            : undefined;
+        if (extraHeaders) basicAuthClientId = storedClientId;
 
         /**
          * The parameters common to all three shapes, built once.
@@ -453,16 +481,18 @@ const CallbackPage = () => {
           const result: TokenResponseWithNonce = await tokenService.exchangeCodeForTokenWithDpop(
             request,
             dpopProof,
+            extraHeaders,
           );
           body = result.tokenResponse;
         } else {
           const request = { ...baseRequest, ...clientAuth };
           sentRequest = request;
-          body = await tokenService.exchangeCodeForToken(request);
+          body = await tokenService.exchangeCodeForToken(request, extraHeaders);
         }
 
         setTokenSet(body);
         writeKey(SESSION_KEYS.activeClientId, storedClientId);
+        writeKey(SESSION_KEYS.activeClientAuthMethod, authMethod);
 
         setState({
           error: null,
@@ -470,6 +500,7 @@ const CallbackPage = () => {
           tokenResponse: body,
           issWarning,
           sentRequest,
+          basicAuthClientId,
         });
         toast.success('Tokens obtained successfully');
       } catch (e: unknown) {
@@ -481,6 +512,7 @@ const CallbackPage = () => {
           tokenResponse: null,
           issWarning: null,
           sentRequest,
+          basicAuthClientId,
         });
         toast.error(msg);
       }
@@ -551,7 +583,11 @@ const CallbackPage = () => {
             <p className="text-xs font-semibold text-foreground mb-1.5">
               The request that redeemed the code
             </p>
-            <TokenRequestPanel body={state.sentRequest} endpoint={TOKEN_ENDPOINT} />
+            <TokenRequestPanel
+              body={state.sentRequest}
+              endpoint={TOKEN_ENDPOINT}
+              basicAuthClientId={state.basicAuthClientId ?? undefined}
+            />
           </div>
         )}
         {!state.loading && state.issWarning && (

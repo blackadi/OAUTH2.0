@@ -284,6 +284,59 @@ describe('client authentication on the code exchange', () => {
 
     expect(exchange.mock.calls[0][0]).toMatchObject({ client_secret: 's3cr3t-for-real' });
   });
+
+  /**
+   * `client_secret_basic`: the secret travels in the `Authorization` header, never in the body —
+   * Authlete checks the channel a credential arrives on, not just its value
+   * (`docs/agents/dpop-and-client-auth.md`), so a `client_secret_basic` client refuses a body-only
+   * secret exactly as a `client_secret_post` client refuses a Basic-only one.
+   */
+  it('authenticates via Authorization: Basic when authzClientAuthMethod is "basic"', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    sessionStorage.setItem('authz_client_id', 'confidential-client');
+    sessionStorage.setItem('authz_client_secret', 's3cr3t-for-real');
+    sessionStorage.setItem('authz_client_auth_method', 'basic');
+    at('?code=abc&state=same');
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+
+    const [sent, extraHeaders] = exchange.mock.calls[0];
+    expect('client_secret' in sent).toBe(false);
+    expect(extraHeaders).toEqual({
+      Authorization: `Basic ${btoa('confidential-client:s3cr3t-for-real')}`,
+    });
+  });
+
+  it('shows the redacted Authorization header on the token request panel after a Basic exchange', async () => {
+    vi.spyOn(tokenService, 'exchangeCodeForToken').mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    sessionStorage.setItem('authz_client_id', 'confidential-client');
+    sessionStorage.setItem('authz_client_secret', 's3cr3t-for-real');
+    sessionStorage.setItem('authz_client_auth_method', 'basic');
+    at('?code=abc&state=same');
+    await waitFor(() => expect(screen.queryByText(/Successfully obtained/i)).toBeInTheDocument());
+
+    // `TokenRequestPanel` redacts the value itself — this is `basicAuthClientId:secret` as a literal
+    // placeholder string, never the real header — so this also proves the secret never renders.
+    expect(screen.getByText('Basic <confidential-client:secret>')).toBeInTheDocument();
+  });
+
+  it('omits client_secret when authzClientAuthMethod is explicitly "none", same as no secret at all', async () => {
+    const exchange = vi
+      .spyOn(tokenService, 'exchangeCodeForToken')
+      .mockResolvedValue({ access_token: 'at-1' });
+    ready();
+    sessionStorage.setItem('authz_client_secret', 'should-be-ignored');
+    sessionStorage.setItem('authz_client_auth_method', 'none');
+    at('?code=abc&state=same');
+    await waitFor(() => expect(exchange).toHaveBeenCalled());
+
+    const [sent, extraHeaders] = exchange.mock.calls[0];
+    expect('client_secret' in sent).toBe(false);
+    expect(extraHeaders).toBeUndefined();
+  });
 });
 
 /**

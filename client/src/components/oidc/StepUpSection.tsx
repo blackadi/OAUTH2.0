@@ -4,7 +4,7 @@ import { useToken } from '@/context/TokenContext';
 import { tokenService } from '@/services';
 import { AUTHORIZATION_ENDPOINT, CLIENT_ID, DEFAULT_SCOPES, getRedirectUri } from '@/config';
 import { navigateTo } from '@/services/trace-store';
-import { SESSION_KEYS, writeKey, removeKey } from '@/services/session-keys';
+import { SESSION_KEYS, readKey, writeKey, removeKey } from '@/services/session-keys';
 import { createPkcePair } from '@/pkce';
 import { useAsyncCall } from '@/hooks/useAsyncCall';
 import { ErrorExplainer } from '@/components/ui/ErrorExplainer';
@@ -123,20 +123,27 @@ function StepUpSection() {
    * `AuthorizationCodePanel.sendAuthorizeRequest`'s division: generate, persist what `CallbackPage` will
    * read back, *then* navigate.
    *
-   * `oauthState` and `pkceVerifier` are not optional here the way `AuthorizationCodePanel` treats them —
-   * this section always sends both, so both are always written. `authzClientId` is written and
-   * `authzClientSecret`/`authzResource` are cleared for the same reason `AuthorizationCodePanel` clears an
-   * emptied secret field: this re-authorization is always for the SPA's own default public client, and a
-   * stale confidential-client secret or resource left over from a different section must not leak into
-   * this exchange.
+   * **Re-authorizes as whichever client the introspected token actually belongs to, not always the SPA's
+   * default.** This used to hardcode `client_id: CLIENT_ID` and unconditionally clear
+   * `authzClientSecret` — correct only when the token under test happened to come from the SPA's own
+   * public client, and silently wrong for anything obtained via Client Credentials, Password, Refresh
+   * Token or the Auth Code panel with a *different* client typed in. `SESSION_KEYS.activeClientId` /
+   * `activeClientSecret` / `activeClientAuthMethod` already track exactly that — written by
+   * `CallbackPage.tsx` and `AuthFlowsSection.tsx`'s `saveClientCredentials` after every grant that
+   * produces a token, and already read correctly by `TokenOpsSection.tsx`. Reusing it here (rather than
+   * adding a fourth client-id/secret input panel) means one source of truth for "which client am I
+   * acting as", not one per section.
    */
   const handleReAuthenticate = async () => {
     if (!challenge) return;
     const { codeVerifier, codeChallenge } = await createPkcePair();
     const state = crypto.randomUUID();
+    const activeClientId = readKey(SESSION_KEYS.activeClientId) || CLIENT_ID;
+    const activeClientSecret = readKey(SESSION_KEYS.activeClientSecret);
+    const activeAuthMethod = readKey(SESSION_KEYS.activeClientAuthMethod) || 'post';
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: CLIENT_ID,
+      client_id: activeClientId,
       redirect_uri: getRedirectUri(),
       scope: DEFAULT_SCOPES,
       state,
@@ -163,8 +170,10 @@ function StepUpSection() {
 
     writeKey(SESSION_KEYS.pkceVerifier, codeVerifier);
     writeKey(SESSION_KEYS.oauthState, state);
-    writeKey(SESSION_KEYS.authzClientId, CLIENT_ID);
-    removeKey(SESSION_KEYS.authzClientSecret);
+    writeKey(SESSION_KEYS.authzClientId, activeClientId);
+    if (activeClientSecret) writeKey(SESSION_KEYS.authzClientSecret, activeClientSecret);
+    else removeKey(SESSION_KEYS.authzClientSecret);
+    writeKey(SESSION_KEYS.authzClientAuthMethod, activeAuthMethod);
     removeKey(SESSION_KEYS.authzResource);
 
     navigateTo(
