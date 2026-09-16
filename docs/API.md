@@ -148,6 +148,19 @@ Validates credentials, sets session. Rate-limited (5/min/IP). Brute-force: 5 fai
 
 **Body:** `username`, `password`, `_csrf`
 
+### `GET /api/session/otp`
+RFC 9470 second factor. Only reachable after a successful login when the authorization request named
+`otp` as an essential `acr` — otherwise the flow goes straight to consent instead. Renders a TOTP entry
+form (EJS), showing the demo secret and its `otpauth://` URI for enrollment.
+
+### `POST /api/session/otp`
+Verifies a 6-digit TOTP code (RFC 6238) against the deployment's shared demo secret. On success, binds
+`acr: "otp"` to the session and continues to consent. Rate-limited (5/min/IP), same brute-force ban as
+login.
+
+**Body:** `code`, `_csrf` — or `otp=cancel` to decline, which reports `access_denied` to the client, same
+as Cancel on the login screen.
+
 ### `GET /api/session/consent`
 Renders consent form (EJS) showing scopes and client name. Generates CSRF token.
 

@@ -131,6 +131,7 @@ MGMT_CLIENT_SECRET=Yk3n8...              # openssl rand -base64 32
 | `REDIS_URL` | No | — | Redis connection string (e.g., `redis://localhost:6379`) |
 | `ALLOWED_ORIGINS` | No | `http://localhost:3000,http://localhost:3001` | CORS allowed origins |
 | `AUTH_USERS` | No | `admin:admin:password:Administrator` | Demo users: `subject:username:password:name;...` |
+| `AUTH_OTP_SECRET` | No | `IF2XI2DMMV2GKICEMVWW6ICPKRICCII` | RFC 9470 second factor: one shared demo TOTP secret (base32, RFC 4648 §6) for every demo user — not per-user enrollment. Triggered by requesting `acr_values=otp` as essential. See [Step-Up Auth Tutorial](STEP-UP-AUTH-TUTORIAL.md) |
 | `MGMT_CLIENT_ID` | No | — | Admin API Basic auth username. **You choose this — not from Authlete.** **Fails closed** — unset means every admin route 401s. See [Admin credentials](#admin-credentials--you-invent-these) |
 | `MGMT_CLIENT_SECRET` | No | — | Admin API Basic auth password. **You generate this** (`openssl rand -base64 32`). Same fail-closed behaviour |
 | `JWKS_URI` | No | — | JWKS URI for backchannel logout token verification |
@@ -261,8 +262,8 @@ Ordered as applied in `app.ts`:
 |---------|------|------------|----------------|
 | `tokenLimiter` | 20/min | `POST /api/token` | Skipped when Basic auth present |
 | `authLimiter` | 60/min | `GET /api/authorization` | — |
-| `loginLimiter` | 5/min | `POST /api/session/login` | — |
-| `generalLimiter` | 60/min | Session, DCR, CIBA, PAR, VCI, federation, device browser routes, **`GET`/`POST /api/logout`** | — |
+| `loginLimiter` | 5/min | `POST /api/session/login`, `POST /api/session/otp` | — |
+| `generalLimiter` | 60/min | Session (incl. `GET /api/session/otp`), DCR, CIBA, PAR, VCI, federation, device browser routes, **`GET`/`POST /api/logout`** | — |
 
 Rate limiting uses `express-rate-limit` with in-memory store.
 
@@ -276,6 +277,9 @@ Rate limiting uses `express-rate-limit` with in-memory store.
 - Cleared on successful login
 - 429 "Too many login attempts" response when banned
 - Distinct from rate limiter — this is per-IP, per-brute-force, not per-time-window
+- **Shared with OTP verification** — a wrong TOTP code at `POST /api/session/otp` records against the
+  same per-IP map as a wrong password, and clears the same way on success. There is no separate OTP
+  attempt counter.
 
 ---
 
@@ -517,6 +521,31 @@ All logging uses `const log = req.logger || logger;`, and `log` is a plain Winst
 ### Login Page
 
 Credentials are never hardcoded in source. The login template passes empty strings. `AUTH_USERS` env var provides demo users (defaults to `admin:password`).
+
+### Step-Up OTP (RFC 9470 second factor)
+
+`server/src/utils/totp.ts` implements RFC 6238 TOTP by hand against Node's `crypto` — **no `otplib` or
+similar dependency**, because the sandbox this was built in could not reach `registry.npmjs.org`
+(`ENOTFOUND`, confirmed, not merely slow). The algorithm is small enough that hand-rolling it is not a
+burden, but it is pinned against the specifications' own published test vectors rather than trusted on
+sight — see `tests/unit/utils/totp.test.ts`, checked against RFC 6238 Appendix B and RFC 4648 §10.
+
+**Known, deliberate limitations — this is a toy, not a real MFA implementation:**
+- **One shared secret for every demo user**, not per-user enrollment. There is no signup/enrollment flow
+  and no per-user secret storage — `AUTH_OTP_SECRET` (or its baked-in default) is the only secret that
+  will ever verify.
+- **The ACR value is `"otp"`, deliberately not `"mfa"`.** `"mfa"` stays registered-but-unsatisfiable on
+  the Authlete service on purpose — Module 09a's essential-ACR-refusal curriculum lab
+  (`docs/curriculum/modules/09a-interaction-extensions/`) is built on `mfa` refusing, and reusing it here
+  would have broken that lab. Do not wire a real second factor to satisfy `"mfa"`.
+- **Registering `otp` in a service's `acr_values_supported` is a manual Authlete-console step**, not
+  something this repo's code does. Until it is done on a given service, requesting essential
+  `acr_values=otp` correctly refuses (`[A021303]`/`[A021304]`) — that is RFC 9470 §4's own ACR-support
+  check working as intended, not a bug. See the callout after Part 1 of
+  [`STEP-UP-AUTH-TUTORIAL.md`](STEP-UP-AUTH-TUTORIAL.md).
+- **See also** [`docs/investigations/mfa-feasibility.md`](investigations/mfa-feasibility.md) and
+  [`toy-otp-feasibility.md`](investigations/toy-otp-feasibility.md) for the read-only investigations
+  this was scoped from, including why a full MFA implementation was not pursued instead.
 
 ### E2E Dependencies
 

@@ -544,6 +544,16 @@ Authlete-console step; see the callout after Part 1).
 A wrong code re-renders the same page with an error; **Cancel** reports `access_denied` to the client, the
 same `DENIED` semantics as Cancel on the password screen.
 
+**Live-verified 2026-09-16, including for a confidential client.** The steps above, driven end to end
+through the client dashboard's `/step-up` section against a `client_secret_basic`-registered client, work
+correctly: introspect → `401 insufficient_user_authentication` naming `otp` → re-authorize → the OTP page
+→ a correct code → a token with `acr: "otp"`. This needed two fixes along the way, both about *client
+authentication*, not about OTP itself — see `docs/agents/dpop-and-client-auth.md` for the detail:
+`/auth-flows?op=authorization_code` could previously only authenticate via `client_secret_post`, and
+`/step-up`'s re-authorization always assumed the SPA's own default public client regardless of which
+client's token was actually under test. Neither is specific to `otp` — they would have blocked *any*
+confidential client's step-up flow, essential ACR or not.
+
 ### Testing max_age
 
 1. Enter a max age value (e.g. `1` second)
