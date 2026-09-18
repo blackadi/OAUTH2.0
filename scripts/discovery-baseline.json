@@ -1,8 +1,9 @@
 {
   "captured": "2026-09-03",
   "issuer": "https://oauth2-0-ekh2.onrender.com",
+  "service": "3693555522",
   "count": 67,
-  "note": "Member LIST, not just a count. A count tells you something changed; only a list tells you what. Recaptured 2026-09-03: native_sso_supported appeared when Native SSO was enabled (DR-04 reversed), taking the document from 66 members to 67.",
+  "note": "Member LIST, not just a count. A count tells you something changed; only a list tells you what. `service` names the Authlete service this list was captured from \u2014 two are in deliberate use (AGENTS.md -> Dev setup) and a discovery document carries no service id, so without this field a cross-service comparison reads as drift.",
   "members": [
     "acr_values_supported",
     "authorization_details_types_supported",

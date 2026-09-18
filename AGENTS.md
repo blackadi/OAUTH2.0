@@ -247,7 +247,8 @@ node scripts/check-route-coverage.mjs    # every route is named by some test
 node scripts/check-e2e-staleness.mjs     # which server files changed since the E2E suite was revised
 node scripts/check-client-server-contract.mjs   # every SPA endpoint resolves to a mounted server route
 node scripts/check-discovery.mjs         # the discovery baseline, BY NAME rather than by count
-node scripts/check-claims-supported.mjs  # claims_supported vs what the server can actually serve
+node scripts/check-claims-supported.mjs  # claims_supported, prompt_values_supported and display_values_supported
+                                         # vs what the server can actually do (ISSUER=… to retarget)
 ```
 
 **What they cannot see, in one place**, because every one of these has let a real defect through:
@@ -266,10 +267,19 @@ node scripts/check-claims-supported.mjs  # claims_supported vs what the server c
   conformance run to find. It reads the **live** document, so it measures the deployment rather than the
   repo: a change to `SERVED_CLAIMS` shows up only once it has been applied to the service *and*
   deployed. Like `check-discovery.mjs` it is **not in CI** — a service configuration change is somebody
-  else's action and is not a reason to fail somebody's pull request. It cannot see the other metadata
-  members, only this one.
+  else's action and is not a reason to fail somebody's pull request. **Since 2026-09-17 it also covers
+  `prompt_values_supported` and `display_values_supported`**, which were the same defect in a different
+  member: four `display` values advertised against one rendering, and `prompt=create` against no
+  registration UI. Those have no `SERVED_*` array to read, so the implemented set is **declared** in the
+  script with a marker from the code that implements it — a marker that stops matching is reported as a
+  stale declaration rather than silently believed. It still cannot see the remaining metadata members.
 - **A count is not evidence.** `check-discovery.mjs` exists because the discovery document's member
-  *count* changed and nobody could say which member. Keep the list, not the number.
+  *count* changed and nobody could say which member. Keep the list, not the number. **It cannot tell you
+  *which service* it is looking at** (2026-09-17): a discovery document carries no service id, and the
+  `issuer` is unreliable in both directions — it gave a false match when two services had been served at
+  one host in turn, and a false mismatch when one service's issuer changed. The baseline now records
+  `service`, the run prints both issuers, and a mismatch names the two opposite causes instead of
+  guessing. `DISCOVERY_ORIGIN=…` aims it at whichever host serves the baseline's service.
 - **An auth gate added on the server is a client change too**, and the documentation being right is not
   the client being right. `check-client-server-contract.mjs` now asks half of this — every SPA endpoint
   resolves to a mounted route, and no service assembles a URL of its own — and **flags** the other half,
