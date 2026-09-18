@@ -68,6 +68,21 @@ Trimmed to the truth on 2026-09-01. **Omitting a claim you have no value for is 
 §5.1, *"If a Claim is not returned, that Claim Name SHOULD be omitted"* — so the responses were right
 all along; the advertisement was not.
 
+**Closed from the other side on 2026-09-18, and the two services now differ on purpose.** The gap has
+two honest fixes — narrow the advertisement, or widen the profile — and `3693555522` took the second:
+`SERVED_CLAIMS` is now all **20** §5.1 standard claims, so its `claims_supported` is true without
+trimming. The reason is curricular rather than technical: those nine are where the remaining claim
+*shapes* live, and `address` (§5.1.1) is the only structured claim in OIDC Core — a JSON object of six
+members. Measured through a real flow the same day: `scope=openid address phone email` returns
+`address` as a nested object with its newlines intact, and `phone_number_verified: false` beside
+`email_verified: true`.
+
+`2147478188` is still at 11 and **has not been realigned** — it needs
+`fapi2-align-supported-claims.mjs --apply` run against it, which is a US-instance credential this repo
+does not hold. Until then `check-claims-supported.mjs` reports the *reverse* gap there: nine claims the
+server can serve that the service does not advertise. That is the benign direction — no client asks for
+what it was not told about — but it is a real divergence, not noise.
+
 | | where |
 |---|---|
 | the list | `SERVED_CLAIMS` in `server/src/utils/demo-claims.ts` |

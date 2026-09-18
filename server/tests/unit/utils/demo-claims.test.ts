@@ -76,13 +76,34 @@ describe("SERVED_CLAIMS", () => {
     }
   })
 
-  it("does not list a claim this deployment has never served", () => {
-    for (const name of [
-      "address", "birthdate", "gender", "middle_name", "phone_number",
-      "phone_number_verified", "picture", "profile", "website",
-    ]) {
-      expect(SERVED_CLAIMS as readonly string[]).not.toContain(name)
+  /**
+   * Inverted on 2026-09-18. This used to assert the nine were **absent** — the state that made
+   * `claims_supported` a lie in the other direction. They are served now, so what is worth pinning is
+   * the rule that survived the change: every name here is an OIDC Core §5.1 standard claim. Advertising
+   * a claim nothing produces was the original defect; advertising one the spec does not define would be
+   * a different flavour of the same thing, and `claims_supported` is where a client goes to find out.
+   */
+  it("lists only OIDC Core §5.1 standard claims", () => {
+    const STANDARD = [
+      "sub", "name", "given_name", "family_name", "middle_name", "nickname", "preferred_username",
+      "profile", "picture", "website", "email", "email_verified", "gender", "birthdate", "zoneinfo",
+      "locale", "phone_number", "phone_number_verified", "address", "updated_at",
+    ]
+    for (const name of SERVED_CLAIMS) {
+      expect(STANDARD, `"${name}" is not a §5.1 standard claim`).toContain(name)
     }
+  })
+
+  it("serves every §5.1 standard claim, so claims_supported can name them all", () => {
+    // The whole point of the 2026-09-18 enrichment. If a claim is dropped from the profile, either this
+    // fails or the service starts advertising something it cannot produce.
+    expect([...SERVED_CLAIMS].sort()).toEqual(
+      [
+        "address", "birthdate", "email", "email_verified", "family_name", "gender", "given_name",
+        "locale", "middle_name", "name", "nickname", "phone_number", "phone_number_verified",
+        "picture", "preferred_username", "profile", "sub", "updated_at", "website", "zoneinfo",
+      ].sort(),
+    )
   })
 })
 
@@ -139,15 +160,40 @@ describe("claimValuesFor", () => {
    * suite reads a null claim as present-but-invalid, which is why it said "differs" rather than
    * "missing".
    */
+  /**
+   * The §5.1 omit rule, still pinned — with names that are genuinely unserved rather than the nine
+   * standard claims this used to use, which the 2026-09-18 enrichment gave values to. The rule is the
+   * asset, not the example: *"If a Claim is not returned, that Claim Name SHOULD be omitted"*, never
+   * `null`. A `null` is present-but-invalid, which is what made the id_token disagree with userinfo.
+   */
   it("omits claims it has no value for, rather than nulling them", () => {
-    const unserved = [
-      "gender", "birthdate", "address", "phone_number", "phone_number_verified",
-      "website", "picture", "profile", "middle_name",
-    ]
+    const unserved = ["custom_claim", "https://example.com/ns/role", "not_a_claim"]
     const values = claimValuesFor("admin", unserved)
 
     expect(values).toEqual({})
     for (const name of unserved) expect(name in values).toBe(false)
+  })
+
+  /**
+   * `address` is the only claim in OIDC Core with structure (§5.1.1) — a JSON object of six members,
+   * not a string. It is asserted separately because every other claim here is a scalar, and a future
+   * "simplification" that made all values strings would pass every other test in this file.
+   */
+  it("returns address as a structured object, not a string", () => {
+    const { address } = claimValuesFor("admin", ["address"]) as { address: Record<string, string> }
+
+    expect(typeof address).toBe("object")
+    expect(Object.keys(address).sort()).toEqual(
+      ["country", "formatted", "locality", "postal_code", "region", "street_address"].sort(),
+    )
+    // It has to survive the same serialisation the authorization-issue path uses.
+    expect(JSON.parse(JSON.stringify({ address })).address.locality).toBe("Springfield")
+  })
+
+  it("gives phone_number_verified as false, not a decorative true", () => {
+    // Nothing in this deployment verifies a phone number. See the `case` in demo-claims.ts.
+    expect(claimValuesFor("admin", ["phone_number_verified"])).toEqual({ phone_number_verified: false })
+    expect(claimValuesFor("admin", ["email_verified"])).toEqual({ email_verified: true })
   })
 
   it("returns only the claims asked for", () => {

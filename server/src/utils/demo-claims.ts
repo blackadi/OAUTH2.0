@@ -93,6 +93,16 @@ const PROFILE_UPDATED_AT = 1735689600; // 2025-01-01T00:00:00Z
  * `phone_number_verified`, `picture`, `profile`, `website` — were never served by anything. Omitting a
  * claim you have no value for is right (OIDC Core §5.1); advertising it is not.
  *
+ * **Those nine were given values on 2026-09-18, closing the gap from the other side.** Narrowing the
+ * advertisement and widening the profile both make `claims_supported` true; widening was chosen because
+ * this repo is a teaching deployment and those nine are where the remaining §5.1 shapes live — `address`
+ * is the only **structured** claim in OIDC Core (§5.1.1, a JSON object of six members), `birthdate`
+ * carries a date format, `phone_number_verified` is a second verification boolean to set beside
+ * `email_verified`, and `profile`/`picture`/`website` are URL-valued. A learner who only ever sees
+ * strings has not seen the claim model. The omit rule itself is unchanged and still pinned by a test —
+ * `claimValuesFor` drops any name it has no value for, there is just no longer a *standard* claim in
+ * that state.
+ *
  * **Adding a claim means three edits, in this order:** a `case` below, this list, then
  * `node scripts/fapi2-align-supported-claims.mjs --apply`. `check-claims-supported.mjs` catches it if
  * you stop after two, and `demo-claims.test.ts` catches it if you stop after one.
@@ -112,10 +122,19 @@ export const SERVED_CLAIMS = [
   "name",
   "given_name",
   "family_name",
+  "middle_name",
   "nickname",
   "preferred_username",
+  "profile",
+  "picture",
+  "website",
+  "gender",
+  "birthdate",
   "email",
   "email_verified",
+  "address",
+  "phone_number",
+  "phone_number_verified",
   "zoneinfo",
   "locale",
   "updated_at",
@@ -145,6 +164,66 @@ export function claimValuesFor(
       case "email_verified":
         claims[name] = true;
         break;
+      case "middle_name":
+        // A fixed literal rather than the subject: "admin admin admin" reads as a bug, not a profile.
+        claims[name] = "Demo";
+        break;
+
+      // §5.1 gives these three as URLs. `example.com` is IANA-reserved for documentation (RFC 2606
+      // §3), so nothing here resolves to a real person's page or avatar.
+      case "profile":
+        claims[name] = `https://example.com/u/${subject}`;
+        break;
+      case "picture":
+        claims[name] = `https://example.com/u/${subject}/avatar.png`;
+        break;
+      case "website":
+        claims[name] = `https://example.com/~${subject}`;
+        break;
+
+      // §5.1 defines `female` and `male` and permits other values. Arbitrary fixture data for a
+      // fictional user — it carries no meaning beyond making the claim servable.
+      case "gender":
+        claims[name] = "female";
+        break;
+
+      // §5.1: ISO 8601 `YYYY-MM-DD`. Fixed, for the same reason `updated_at` is — a demo profile that
+      // changes between the id_token and the userinfo call is what the conformance suite caught.
+      case "birthdate":
+        claims[name] = "1990-01-01";
+        break;
+
+      // §5.1.1 — the ONLY structured claim in OIDC Core: a JSON object, not a string. It reaches
+      // Authlete through the same `JSON.stringify` as every other value, which nests it correctly.
+      case "address":
+        claims[name] = {
+          formatted: "100 Example Street\nSpringfield, EX 12345\nUS",
+          street_address: "100 Example Street",
+          locality: "Springfield",
+          region: "EX",
+          postal_code: "12345",
+          country: "US",
+        };
+        break;
+
+      // 555-0100 through 555-0199 is the North American range reserved for fiction, written in E.164.
+      case "phone_number":
+        claims[name] = "+15555550100";
+        break;
+
+      /**
+       * **`false`, deliberately, and it is the more useful answer.**
+       *
+       * Nothing in this deployment verifies a phone number, so `true` would be an assertion with no
+       * event behind it — the exact habit Module 09b's misconception table calls out for
+       * `email_verified` (*"The issuer's word is good enough … A regulator asks how you established
+       * that, when, and against what evidence"*). It also puts a `false` beside `email_verified: true`,
+       * so a client sees that the two booleans are independent rather than decorative.
+       */
+      case "phone_number_verified":
+        claims[name] = false;
+        break;
+
       case "zoneinfo":
         claims[name] = "UTC";
         break;

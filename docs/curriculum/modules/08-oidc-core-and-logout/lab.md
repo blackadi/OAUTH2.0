@@ -753,8 +753,11 @@ curl -s "$API/userinfo" -H "Authorization: Bearer $AT"
 ```
 
 ```json
-{"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","nickname":"admin",
- "preferred_username":"admin","zoneinfo":"UTC","locale":"en-US","updated_at":…}
+{"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","middle_name":"Demo",
+ "nickname":"admin","preferred_username":"admin","profile":"https://example.com/u/admin",
+ "picture":"https://example.com/u/admin/avatar.png","website":"https://example.com/~admin",
+ "gender":"female","birthdate":"1990-01-01","zoneinfo":"UTC","locale":"en-US",
+ "updated_at":1735689600}
 ```
 
 OIDC Core §5.3.2 requires the client to verify that this `sub` matches the `sub` from the ID token. It looks
