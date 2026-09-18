@@ -14,7 +14,7 @@
 - `app.ts` exports `createApp()` factory — tests build fresh app instances without `listen()`
 - Integration tests use `vi.hoisted()` + `vi.mock()` to replace `authlete.service` module at import time
 - Mock API defined in `tests/helpers/mock-authlete.ts` covers every SDK method
-- **Unit tests**: 75 files across 7 categories (918 tests, measured 2026-09-16). **Counts are re-measured, not carried** — they read 62/662 until 2026-08-18, four months of growth behind the actual tree:
+- **Unit tests**: 75 files across 7 categories (931 tests, measured 2026-09-18). **Counts are re-measured, not carried** — they read 62/662 until 2026-08-18, four months of growth behind the actual tree:
   - `tests/unit/services/` — 27 files, each service in isolation with mocked SDK (includes consent-store, device, hsk, metrics, par, userinfo). One file is a cross-service invariant rather than a service: `credential-logging.test.ts` asserts no request body reaches a log line (see **Quirks & gotchas**)
   - `tests/unit/controllers/` — 16 files, token/authorization/authorization-fail-response/DCR/backchannel-logout/device/hsk/introspection/vci/native-sso-response and others
   - `tests/unit/middleware/` — 7 files, error handler, session, audit-log, csrf, request-id, require-basic-auth, require-grant-ownership (plus `development-only.ts`, covered via `tests/unit/routes/device.routes.test.ts`)
@@ -50,7 +50,7 @@
   > It also hid a genuine test bug for far longer: the DCR update had **never** sent a conformant RFC 7592
   > §2.2 request — the metadata document must contain `client_id`, and sending only the changed field earns
   > `[A214301]`.
-- Run with `npm --prefix server run test` — **1224 tests across 82 files** (measured 2026-09-16), completes in ~4s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — **1536 tests across 107 files** (measured 2026-09-16), plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
+- Run with `npm --prefix server run test` — **1237 tests across 82 files** (measured 2026-09-18), completes in ~4s. **Do not carry these numbers forward from memory; re-run and read them.** Client: `npm --prefix client run test` — **1536 tests across 107 files** (measured 2026-09-18), plus `test:coverage` (ratcheted thresholds), `check:theme`, `check:codes`, `check:docs`
 - E2E uses `vitest.e2e.config.ts` — run via `npm --prefix server run test:e2e` or `npx vitest run --config vitest.e2e.config.ts`
 - E2E tests conditionally skip blocks based on env vars: `CID`/`SEC` (confidential), `PUB_CID` (public), `MGMT_CLIENT_ID`/`MGMT_CLIENT_SECRET` (management)
 

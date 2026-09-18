@@ -34,10 +34,10 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (1179 tests, 80 files)
+npm --prefix server run test              # unit + integration (1237 tests, 82 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (873 tests, 73 files)
+npm --prefix server run test:unit         # unit tests only (931 tests, 75 files)
 npm --prefix server run test:integration  # integration tests only (306 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
