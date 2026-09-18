@@ -264,9 +264,13 @@ node scripts/check-claims-supported.mjs  # claims_supported, prompt_values_suppo
 - **Advertising a capability is not having it.** `check-claims-supported.mjs` exists because
   `claims_supported` listed **20** claims while the server could produce **11**, and nothing connected
   the two — the gap survived typecheck, lint, the whole suite and every other check here, and took a
-  conformance run to find. It reads the **live** document, so it measures the deployment rather than the
-  repo: a change to `SERVED_CLAIMS` shows up only once it has been applied to the service *and*
-  deployed. Like `check-discovery.mjs` it is **not in CI** — a service configuration change is somebody
+  conformance run to find. **It compares the live *service configuration* against your *local working
+  tree*, and neither of those is the deployed code** — so a green result says the service and your
+  checkout agree, not that the running deployment can serve what is advertised. That distinction bit on
+  2026-09-18: the align script widened service `2147478188` to 20 claims from a branch where
+  `SERVED_CLAIMS` was already 20, while the deployment ran `main`, which serves 11 — discovery is a
+  passthrough, so the advertisement moved instantly and this check reported no gap. **Deploy the code
+  first, widen the service second; narrow in the reverse order.** Like `check-discovery.mjs` it is **not in CI** — a service configuration change is somebody
   else's action and is not a reason to fail somebody's pull request. **Since 2026-09-17 it also covers
   `prompt_values_supported` and `display_values_supported`**, which were the same defect in a different
   member: four `display` values advertised against one rendering, and `prompt=create` against no

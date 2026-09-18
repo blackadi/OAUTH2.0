@@ -221,14 +221,34 @@ for (const surface of SURFACES) {
   }
 }
 
+/**
+ * Printed on BOTH paths, and the success path is the one it is for.
+ *
+ * It used to print only on failure, which is precisely backwards: a green result is when somebody stops
+ * reading, and a green result is what the 2026-09-18 incident below produced. A caveat that only appears
+ * when you already know something is wrong is decoration.
+ */
+const printScopeCaveat = () =>
+  console.log(
+  `\n${yellow("What this compares, and what it cannot see")} — it reads the live SERVICE CONFIGURATION and\n` +
+    "your LOCAL working tree. Neither of those is the deployed code, so a green result means the service\n" +
+    "and your checkout agree — NOT that the running deployment can serve what the service advertises.\n" +
+    "\n" +
+    "  This is not hypothetical. On 2026-09-18 `fapi2-align-supported-claims.mjs --apply` widened service\n" +
+    "  2147478188 to 20 claims from a branch where SERVED_CLAIMS was already 20, while the deployment ran\n" +
+    "  `main`, which serves 11. Discovery is a passthrough, so the advertisement changed instantly. This\n" +
+    "  check reported no claims gap — the exact defect it exists to catch, invisible to it, because the\n" +
+    "  half it calls 'servable' came from a file the deployment had never seen.\n" +
+    "\n" +
+    "  ORDER MATTERS: deploy the code first, widen the service second. Narrowing is the reverse.\n" +
+    "  `/api/health` carries no version, so this cannot be detected here — check what the deployment runs.",
+  );
+
 if (!unservable.length && !unadvertised.length && !surfaceProblems) {
-  console.log(`\n✅ every advertised capability is implemented — ${advertised.length} claims, and both interaction surfaces.`);
+  console.log(`\n✅ service configuration and this checkout agree — ${advertised.length} claims, and both interaction surfaces.`);
+  printScopeCaveat();
   process.exit(0);
 }
 
-console.log(
-  "\nThis reads the live document, so it measures the deployment rather than the repo: a change to\n" +
-    "SERVED_CLAIMS or to a prompt/display behaviour shows up here only once it has been applied to the\n" +
-    "service AND deployed.",
-);
+printScopeCaveat();
 process.exit(STRICT ? 1 : 0);
