@@ -8,6 +8,23 @@ import { tokenService } from '@/services';
 import { CredentialProvider } from '@/context/CredentialContext';
 
 /**
+ * These cases are the **no-secret** cases, so the absence has to be stated rather than inherited.
+ *
+ * Until 2026-09-17 they read the ambient `CLIENT_SECRET`, which is built from `VITE_CLIENT_SECRET` in
+ * whatever `.env` the developer happens to have. That made them pass in CI (no `.env`, so the value is
+ * empty) and fail on any machine configured to exercise a confidential client — a gate whose colour
+ * depended on a file it never mentions. `useState(CLIENT_SECRET)` seeds the secret fields in
+ * `BackChannelGrantPanels`/`AuthorizationCodePanel`, so an ambient value is what the panel then sends.
+ *
+ * The cases that need a secret set one explicitly (sessionStorage, or typing into the field), so this
+ * pins only the baseline and nothing else in the file changes meaning.
+ */
+vi.mock('@/config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config')>()),
+  CLIENT_SECRET: '',
+}));
+
+/**
  * The callback page had no tests at all, and it is the most security-relevant file in the client: it
  * checks `state`, holds the PKCE verifier, and decides which of three client-authentication shapes to
  * use for the token exchange. The `state` check used to be `if (expected && received && expected !==
