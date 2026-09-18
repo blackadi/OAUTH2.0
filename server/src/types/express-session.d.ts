@@ -18,6 +18,13 @@ declare module "express-session" {
       acrs?: string[];
       acrEssential?: boolean;
       maxAge?: number;
+      // The end-user the client demanded, from Authlete's `subject` response parameter (the `sub` claim of
+      // the `claims` request parameter). NOT the subject this OP authenticated — that is
+      // `authorizationIssueRequest.subject`. Authlete does not enforce the match; `utils/step-up.ts` does.
+      requestedSubject?: string;
+      // Authlete's `loginHint`/`prompts` response parameters, for the login screen to act on.
+      loginHint?: string;
+      prompts?: string[];
       // Track when the current session authentication occurred (epoch seconds)
       authTime?: number;
       // Claim names the client asked to have in the ID token, from the `claims` request parameter's

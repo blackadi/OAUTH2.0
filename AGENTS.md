@@ -34,10 +34,10 @@ npm --prefix server run dev
 npm --prefix server run build && npm --prefix server run start
 
 # Server tests
-npm --prefix server run test              # unit + integration (1179 tests, 80 files)
+npm --prefix server run test              # unit + integration (1237 tests, 82 files)
 npm --prefix server run test:watch        # watch mode
 npm --prefix server run test:coverage     # run with coverage report
-npm --prefix server run test:unit         # unit tests only (873 tests, 73 files)
+npm --prefix server run test:unit         # unit tests only (931 tests, 75 files)
 npm --prefix server run test:integration  # integration tests only (306 tests, 7 files)
 npm --prefix server run lint               # ESLint (flat config, 0 errors)
 npm --prefix server run typecheck          # TypeScript check (tsc --noEmit, 0 errors)
@@ -247,7 +247,8 @@ node scripts/check-route-coverage.mjs    # every route is named by some test
 node scripts/check-e2e-staleness.mjs     # which server files changed since the E2E suite was revised
 node scripts/check-client-server-contract.mjs   # every SPA endpoint resolves to a mounted server route
 node scripts/check-discovery.mjs         # the discovery baseline, BY NAME rather than by count
-node scripts/check-claims-supported.mjs  # claims_supported vs what the server can actually serve
+node scripts/check-claims-supported.mjs  # claims_supported, prompt_values_supported and display_values_supported
+                                         # vs what the server can actually do (ISSUER=… to retarget)
 ```
 
 **What they cannot see, in one place**, because every one of these has let a real defect through:
@@ -263,13 +264,26 @@ node scripts/check-claims-supported.mjs  # claims_supported vs what the server c
 - **Advertising a capability is not having it.** `check-claims-supported.mjs` exists because
   `claims_supported` listed **20** claims while the server could produce **11**, and nothing connected
   the two — the gap survived typecheck, lint, the whole suite and every other check here, and took a
-  conformance run to find. It reads the **live** document, so it measures the deployment rather than the
-  repo: a change to `SERVED_CLAIMS` shows up only once it has been applied to the service *and*
-  deployed. Like `check-discovery.mjs` it is **not in CI** — a service configuration change is somebody
-  else's action and is not a reason to fail somebody's pull request. It cannot see the other metadata
-  members, only this one.
+  conformance run to find. **It compares the live *service configuration* against your *local working
+  tree*, and neither of those is the deployed code** — so a green result says the service and your
+  checkout agree, not that the running deployment can serve what is advertised. That distinction bit on
+  2026-09-18: the align script widened service `2147478188` to 20 claims from a branch where
+  `SERVED_CLAIMS` was already 20, while the deployment ran `main`, which serves 11 — discovery is a
+  passthrough, so the advertisement moved instantly and this check reported no gap. **Deploy the code
+  first, widen the service second; narrow in the reverse order.** Like `check-discovery.mjs` it is **not in CI** — a service configuration change is somebody
+  else's action and is not a reason to fail somebody's pull request. **Since 2026-09-17 it also covers
+  `prompt_values_supported` and `display_values_supported`**, which were the same defect in a different
+  member: four `display` values advertised against one rendering, and `prompt=create` against no
+  registration UI. Those have no `SERVED_*` array to read, so the implemented set is **declared** in the
+  script with a marker from the code that implements it — a marker that stops matching is reported as a
+  stale declaration rather than silently believed. It still cannot see the remaining metadata members.
 - **A count is not evidence.** `check-discovery.mjs` exists because the discovery document's member
-  *count* changed and nobody could say which member. Keep the list, not the number.
+  *count* changed and nobody could say which member. Keep the list, not the number. **It cannot tell you
+  *which service* it is looking at** (2026-09-17): a discovery document carries no service id, and the
+  `issuer` is unreliable in both directions — it gave a false match when two services had been served at
+  one host in turn, and a false mismatch when one service's issuer changed. The baseline now records
+  `service`, the run prints both issuers, and a mismatch names the two opposite causes instead of
+  guessing. `DISCOVERY_ORIGIN=…` aims it at whichever host serves the baseline's service.
 - **An auth gate added on the server is a client change too**, and the documentation being right is not
   the client being right. `check-client-server-contract.mjs` now asks half of this — every SPA endpoint
   resolves to a mounted route, and no service assembles a URL of its own — and **flags** the other half,

@@ -842,8 +842,11 @@ node /tmp/spend.mjs /tmp/dpopkey-oidc.json
 
 ```
 HTTP/1.1 200 OK
-{"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","nickname":"admin",
- "preferred_username":"admin","zoneinfo":"UTC","locale":"en-US","updated_at":1735689600}
+{"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","middle_name":"Demo",
+ "nickname":"admin","preferred_username":"admin","profile":"https://example.com/u/admin",
+ "picture":"https://example.com/u/admin/avatar.png","website":"https://example.com/~admin",
+ "gender":"female","birthdate":"1990-01-01","zoneinfo":"UTC","locale":"en-US",
+ "updated_at":1735689600}
 ```
 
 > `updated_at` is now a **fixed** `1735689600` (2025-01-01Z) rather than the moment of the call, so this

@@ -18,7 +18,7 @@
 
 - [ ] `npm --prefix server run lint` passes (0 errors)
 - [ ] `npm --prefix server run typecheck` passes (0 errors)
-- [ ] `npm --prefix server run test` passes (all 1179 tests)
+- [ ] `npm --prefix server run test` passes (re-measure the count; do not carry one forward)
 - [ ] `npm --prefix client run build` succeeds
 - [ ] New tests added (if applicable)
 - [ ] Documentation updated (if applicable)

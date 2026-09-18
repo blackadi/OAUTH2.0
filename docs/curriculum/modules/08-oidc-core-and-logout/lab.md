@@ -744,7 +744,7 @@ the fix that activates them arrives labelled as an improvement.
 
 ## Exercise 6 — Logout, and two more findings
 
-### 6a — UserInfo, and the check people skip
+### 6a — UserInfo, the claim shapes, and the check people skip
 
 ```bash
 R=$(/tmp/flow.sh "$CLIENT_ID" "$REDIRECT_URI" "scope=openid%20profile&state=u1&nonce=nu1" "$CLIENT_SECRET")
@@ -753,14 +753,97 @@ curl -s "$API/userinfo" -H "Authorization: Bearer $AT"
 ```
 
 ```json
-{"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","nickname":"admin",
- "preferred_username":"admin","zoneinfo":"UTC","locale":"en-US","updated_at":…}
+{"sub":"admin","name":"admin","given_name":"admin","family_name":"admin","middle_name":"Demo",
+ "nickname":"admin","preferred_username":"admin","profile":"https://example.com/u/admin",
+ "picture":"https://example.com/u/admin/avatar.png","website":"https://example.com/~admin",
+ "gender":"female","birthdate":"1990-01-01","zoneinfo":"UTC","locale":"en-US",
+ "updated_at":1735689600}
 ```
 
 OIDC Core §5.3.2 requires the client to verify that this `sub` matches the `sub` from the ID token. It looks
 redundant — same provider, same flow — and it is not: the access token and the ID token are separate
 artefacts, and a mismatch means they describe different people. Add the check to your mental template; it is
 two lines and it is the difference between "I fetched a profile" and "I fetched *this user's* profile."
+
+Now change one thing — the scope — and look again.
+
+```bash
+R=$(/tmp/flow.sh "$CLIENT_ID" "$REDIRECT_URI" "scope=openid%20address%20phone%20email&state=u2&nonce=nu2" "$CLIENT_SECRET")
+AT=$(echo "$R" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).access_token))')
+curl -s "$API/userinfo" -H "Authorization: Bearer $AT"
+```
+
+```json
+{"sub":"admin","email":"admin@example.com","email_verified":true,
+ "phone_number":"+15555550100","phone_number_verified":false,
+ "address":{"formatted":"100 Example Street\nSpringfield, EX 12345\nUS",
+            "street_address":"100 Example Street","locality":"Springfield",
+            "region":"EX","postal_code":"12345","country":"US"}}
+```
+
+**Not one claim from the previous response survives except `sub`.** You did not ask for different data —
+you asked for different *scopes*, and OIDC Core §5.4 defines the mapping: `profile` buys fourteen claims,
+`email` buys two, `address` buys one, `phone` buys two. The scope is the request; the claims are what it
+resolves to. Write down which scope bought each field above before reading on.
+
+**`address` is an object, and it is the only one in the specification.** Every other claim in §5.1 is a
+string, a number or a boolean. §5.1.1 defines `address` as a JSON object with six members — `formatted`,
+`street_address`, `locality`, `region`, `postal_code`, `country` — and `formatted` carries embedded
+newlines, because it is *"formatted for display or use on a mailing label."*
+
+That matters more than it looks. A client written `profile.address.toUpperCase()` compiles, ships, and
+throws the first time a user has an address. So does a naive flattening into form fields. **Check the shape
+of a claim before you consume it.** This deployment happens to send all six members — confirm what *your*
+provider sends before indexing into any of them, the same way you normalised `aud` in Exercise 2 rather
+than trusting one observed shape.
+
+Now prove the shape survives a JWT, not just a JSON endpoint:
+
+```bash
+CLAIMS=$(node -e 'process.stdout.write(encodeURIComponent(JSON.stringify({id_token:{address:null,phone_number:null,phone_number_verified:null}})))')
+R=$(/tmp/flow.sh "$CLIENT_ID" "$REDIRECT_URI" "scope=openid%20address%20phone&state=u3&nonce=nu3&claims=$CLAIMS" "$CLIENT_SECRET")
+echo "$R" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+  const p=JSON.parse(Buffer.from(JSON.parse(s).id_token.split(".")[1],"base64url").toString());
+  console.log(JSON.stringify({sub:p.sub,address:p.address,phone_number:p.phone_number,
+    phone_number_verified:p.phone_number_verified},null,2));})'
+```
+
+```json
+{
+  "sub": "admin",
+  "address": {
+    "formatted": "100 Example Street\nSpringfield, EX 12345\nUS",
+    "street_address": "100 Example Street",
+    "locality": "Springfield",
+    "region": "EX",
+    "postal_code": "12345",
+    "country": "US"
+  },
+  "phone_number": "+15555550100",
+  "phone_number_verified": false
+}
+```
+
+Two things happened there. The `claims` request parameter (§5.5) asked for those three **in the ID token**
+specifically — scopes alone put identity claims at UserInfo, per §5.4 — and a nested object rode inside a
+signed JWT unchanged. `null` in that syntax means *"no special requirements for this claim"*, not "the
+value is null"; it is the plainest way to name a claim you want.
+
+**Now the quietest line in the output: `"phone_number_verified": false`.**
+
+`email_verified` is `true` and `phone_number_verified` is `false`, on the same user, in the same response.
+Nothing in this deployment verifies either one — the profile is static configuration. So ask the question
+the pair is there to provoke: *what would have to be true for you to rely on either boolean?* §5.1 says of
+`phone_number_verified` that verification occurs when the End-User authenticates, which tells you the OP
+asserts it and tells you nothing about how. You are trusting the issuer's word, and the claim carries no
+record of *how* it was established, *when*, or *against what evidence*. Module 09b takes exactly this
+apart; notice here that the protocol gives you no place to put that record.
+
+**One last thing — ask for a claim this server has no value for.** Add `"custom_claim":null` to the
+`claims` parameter above and re-run. It comes back absent, not `null`. §5.1: *"If a Claim is not returned,
+that Claim Name SHOULD be omitted from the JSON object representing the Claims."* A `null` would be
+present-but-invalid, and a client checking `"custom_claim" in profile` would get the wrong answer. Absence
+is the signal.
 
 ### 6b — RP-initiated logout, and an open redirect
 
@@ -1205,6 +1288,12 @@ to actually end it, and which of the four logout specs (if any) covers it.
 - [ ] You can say where this deployment keeps its registered URIs, why they are not in Authlete, and what you
       would write in a finding about a MUST the vendor gives you no way to satisfy.
 - [ ] You can list, from the code, two things the back-channel logout handler fails to validate.
+- [ ] Changing only the **scope** changed the whole UserInfo response, and you can say which of
+      `profile`/`email`/`address`/`phone` bought each claim you received.
+- [ ] You saw `address` arrive as a six-member **object** — in UserInfo *and* inside a signed ID token —
+      and can name a line of client code that a string-shaped assumption would break.
+- [ ] You can say what `email_verified: true` beside `phone_number_verified: false` actually tells you
+      about how either was established, and what the protocol gives you no place to record.
 
 ## Clean up
 

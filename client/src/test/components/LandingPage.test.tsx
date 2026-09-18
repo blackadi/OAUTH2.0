@@ -4,7 +4,24 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import LandingPage from '@/pages/LandingPage';
 import { Input } from '@/components/ui/Input';
 import { PREFERENCE_KEYS, shouldSkipLanding, setSkipLanding } from '@/services/preferences';
-import { CLIENT_ID, CLIENT_SECRET, PLACEHOLDER_CLIENT_SECRET } from '@/config';
+import { CLIENT_ID, PLACEHOLDER_CLIENT_SECRET } from '@/config';
+
+/**
+ * These cases are the **no-secret** cases, so the absence has to be stated rather than inherited.
+ *
+ * Until 2026-09-17 they read the ambient `CLIENT_SECRET`, which is built from `VITE_CLIENT_SECRET` in
+ * whatever `.env` the developer happens to have. That made them pass in CI (no `.env`, so the value is
+ * empty) and fail on any machine configured to exercise a confidential client — a gate whose colour
+ * depended on a file it never mentions. `useState(CLIENT_SECRET)` seeds the secret fields in
+ * `BackChannelGrantPanels`/`AuthorizationCodePanel`, so an ambient value is what the panel then sends.
+ *
+ * The cases that need a secret set one explicitly (sessionStorage, or typing into the field), so this
+ * pins only the baseline and nothing else in the file changes meaning.
+ */
+vi.mock('@/config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config')>()),
+  CLIENT_SECRET: '',
+}));
 
 /**
  * The on-ramp (Q1(b)).
@@ -86,7 +103,8 @@ describe('the configuration block reads this build, not the README', () => {
    */
   it('reports an empty client_secret as correct rather than as unfinished', () => {
     mount();
-    expect(CLIENT_SECRET, 'this build should have no secret configured').toBe('');
+    // Not `expect(CLIENT_SECRET).toBe('')` — the mock above makes that a test of the mock. What is
+    // worth pinning is that the page reads the empty value as *correct* rather than as unfinished.
     expect(screen.getByText(/none — public client/i)).toBeInTheDocument();
     expect(screen.getByText(/its own client is public/i)).toBeInTheDocument();
 

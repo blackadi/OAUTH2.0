@@ -22,6 +22,14 @@
  * **Not wired into CI, deliberately** — same reasoning as `check-discovery.mjs`: a service
  * configuration change is somebody else's action and is not a reason to fail somebody's pull request.
  * Run it after touching `SERVED_CLAIMS` or the service, and on the same cadence as the discovery check.
+ *
+ * **`prompt_values_supported` and `display_values_supported` were added 2026-09-17, same defect class.**
+ * The service advertised four `display` values while the server renders one identical page for all four,
+ * and `prompt=create` while no registration UI exists anywhere. Neither is a claim, so the check above
+ * could not see them — but the failure is the one this file was written for: metadata promising
+ * behaviour nothing implements. Unlike claims there is no single `SERVED_*` array to read, so the
+ * implemented set is DECLARED below and each entry carries a marker from the code that implements it.
+ * A marker that stops matching means the declaration went stale, which is reported rather than assumed.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -103,13 +111,144 @@ if (unadvertised.length) {
   console.log("\n  No client will request a claim it was never told about. Same fix, same script.");
 }
 
-if (!unservable.length && !unadvertised.length) {
-  console.log(`\n✅ claims_supported matches what the server serves — ${advertised.length} claims, both ways.`);
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// The same question for the two interaction surfaces.
+//
+// `implemented` is a declaration, not a measurement — there is no `SERVED_PROMPTS` to read. `marker`
+// is what keeps it honest: a literal that must still appear in the named file for the claim of
+// implementation to stand. Add a value here only alongside the code that makes it true.
+const SURFACES = [
+  {
+    member: "prompt_values_supported",
+    label: "prompt",
+    spec: "OIDC Core §3.1.2.1",
+    implemented: [
+      {
+        value: "none",
+        file: "server/src/controllers/authorization.controller.ts",
+        marker: 'prompt === "none"',
+        how: "decided without interaction, then issued or failed per §3.1.2.6",
+      },
+      {
+        value: "login",
+        file: "server/src/controllers/authorization.controller.ts",
+        marker: "appConfig.loginUrl",
+        how: "satisfied by construction — this OP re-authenticates on every authorization request",
+      },
+      {
+        value: "consent",
+        file: "server/src/controllers/session.controller.ts",
+        marker: 'prompt !== "consent"',
+        how: "bypasses stored consent so the screen is shown again",
+      },
+      {
+        value: "select_account",
+        file: "server/src/controllers/session.controller.ts",
+        marker: '"SELECT_ACCOUNT"',
+        how: "login form asks for an account and suppresses any login_hint prefill",
+      },
+    ],
+  },
+  {
+    member: "display_values_supported",
+    label: "display",
+    spec: "OIDC Core §3.1.2.1",
+    // `page` only, and deliberately so. The OP renders one full-page UI for every value, which OIDC
+    // permits ("the Authorization Server MAY also attempt to detect the capabilities of the User
+    // Agent"), so the honest posture is to advertise `page` alone rather than build three more chromes
+    // nobody asked for. If a rendering variant is ever added, declare it here with its marker.
+    implemented: [
+      {
+        value: "page",
+        file: "server/src/controllers/session.controller.ts",
+        marker: 'res.render("login"',
+        how: "full-page render, the default and the only mode this OP has",
+      },
+    ],
+  },
+];
+
+let surfaceProblems = 0;
+for (const surface of SURFACES) {
+  const live = doc[surface.member];
+  console.log(`\n── ${surface.member} (${surface.spec})`);
+  if (!Array.isArray(live)) {
+    console.log(yellow(`  ⚠ absent from the discovery document — nothing is being promised, nothing to check`));
+    continue;
+  }
+
+  // A stale declaration is worse than no declaration, so check the markers before trusting them.
+  const live_ = live.map((v) => String(v).toLowerCase());
+  const proven = [];
+  for (const entry of surface.implemented) {
+    let source = "";
+    try {
+      source = readFileSync(join(repoRoot, entry.file), "utf8");
+    } catch {
+      /* falls through to the stale-marker report below */
+    }
+    if (source.includes(entry.marker)) {
+      proven.push(entry.value);
+    } else {
+      surfaceProblems++;
+      console.log(
+        red(`  ✗ "${entry.value}" is declared implemented, but \`${entry.marker}\` is no longer in ${entry.file}`),
+      );
+      console.log("    Either the implementation moved (update the marker) or it went away (drop the value).");
+    }
+  }
+
+  const unimplemented = live_.filter((v) => !proven.includes(v)).sort();
+  const unadvertisedHere = proven.filter((v) => !live_.includes(v)).sort();
+
+  if (unimplemented.length) {
+    surfaceProblems++;
+    console.log(red(`  ✗ advertised but not implemented (${unimplemented.length}): ${unimplemented.join(", ")}`));
+    console.log(
+      `    A client may send these and will get no ${surface.label} behaviour for them. Narrow the\n` +
+        `    service's supported ${surface.label} values, or implement them and declare them here.`,
+    );
+  }
+  if (unadvertisedHere.length) {
+    console.log(
+      yellow(`  ⚠ implemented but not advertised (${unadvertisedHere.length}): ${unadvertisedHere.join(", ")}`),
+    );
+    console.log("    No client will send a value it was never told about.");
+  }
+  if (!unimplemented.length && !unadvertisedHere.length) {
+    console.log(`  ✓ ${live_.length} advertised, all implemented: ${live_.join(", ")}`);
+    for (const e of surface.implemented) console.log(`      ${e.value} — ${e.how}`);
+  }
+}
+
+/**
+ * Printed on BOTH paths, and the success path is the one it is for.
+ *
+ * It used to print only on failure, which is precisely backwards: a green result is when somebody stops
+ * reading, and a green result is what the 2026-09-18 incident below produced. A caveat that only appears
+ * when you already know something is wrong is decoration.
+ */
+const printScopeCaveat = () =>
+  console.log(
+  `\n${yellow("What this compares, and what it cannot see")} — it reads the live SERVICE CONFIGURATION and\n` +
+    "your LOCAL working tree. Neither of those is the deployed code, so a green result means the service\n" +
+    "and your checkout agree — NOT that the running deployment can serve what the service advertises.\n" +
+    "\n" +
+    "  This is not hypothetical. On 2026-09-18 `fapi2-align-supported-claims.mjs --apply` widened service\n" +
+    "  2147478188 to 20 claims from a branch where SERVED_CLAIMS was already 20, while the deployment ran\n" +
+    "  `main`, which serves 11. Discovery is a passthrough, so the advertisement changed instantly. This\n" +
+    "  check reported no claims gap — the exact defect it exists to catch, invisible to it, because the\n" +
+    "  half it calls 'servable' came from a file the deployment had never seen.\n" +
+    "\n" +
+    "  ORDER MATTERS: deploy the code first, widen the service second. Narrowing is the reverse.\n" +
+    "  `/api/health` carries no version, so this cannot be detected here — check what the deployment runs.",
+  );
+
+if (!unservable.length && !unadvertised.length && !surfaceProblems) {
+  console.log(`\n✅ service configuration and this checkout agree — ${advertised.length} claims, and both interaction surfaces.`);
+  printScopeCaveat();
   process.exit(0);
 }
 
-console.log(
-  "\nThis reads the live document, so it measures the deployment rather than the repo: a change to\n" +
-    "SERVED_CLAIMS shows up here only once it has been applied to the service AND deployed.",
-);
+printScopeCaveat();
 process.exit(STRICT ? 1 : 0);

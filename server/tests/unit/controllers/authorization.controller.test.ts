@@ -204,6 +204,33 @@ describe("authorizationController.handleAuthorization", () => {
       expect(mocks.mockIssue).not.toHaveBeenCalled()
     })
 
+    // Authlete: *"When the value of `subject` response parameter is not `null`, the end-user authentication
+    // must be performed for the subject"*. A stored session belonging to somebody else is exactly the case
+    // `prompt=none` would otherwise wave through silently, since nobody is present to notice.
+    it("fails with DIFFERENT_SUBJECT when the session belongs to someone other than the requested subject", async () => {
+      mocks.mockProcess.mockResolvedValue(noInteraction({ subject: "somebody-else" }))
+      const req = mockReq({
+        session: { user: "admin", stepUp: { acr: "pwd", authTime: Math.floor(Date.now() / 1000) } },
+      } as Partial<Request>)
+
+      await authorizationController.handleAuthorization(req, mockRes(), mockNext())
+
+      expect(mocks.mockFail).toHaveBeenCalledWith("ticket-none", "DIFFERENT_SUBJECT")
+      expect(mocks.mockIssue).not.toHaveBeenCalled()
+    })
+
+    it("issues when the session subject is the requested one", async () => {
+      mocks.mockProcess.mockResolvedValue(noInteraction({ subject: "admin" }))
+      const req = mockReq({
+        session: { user: "admin", stepUp: { acr: "pwd", authTime: Math.floor(Date.now() / 1000) } },
+      } as Partial<Request>)
+
+      await authorizationController.handleAuthorization(req, mockRes(), mockNext())
+
+      expect(mocks.mockIssue).toHaveBeenCalled()
+      expect(mocks.mockFail).not.toHaveBeenCalled()
+    })
+
     // EXCEEDS_MAX_AGE is reachable for the first time here: on the login POST the user has just
     // authenticated, so max_age passes by construction. This is the path where nobody re-authenticated.
     it("fails with EXCEEDS_MAX_AGE when the recorded authentication is too old", async () => {

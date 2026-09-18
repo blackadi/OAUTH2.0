@@ -58,10 +58,19 @@ function loginViewLocals(
   authz: session.SessionData["authorization"],
   overrides: { username?: string; password?: string; error?: string } = {}
 ) {
+  // Authlete's `/auth/authorization` INTERACTION guidance: *"if `SELECT_ACCOUNT`, show account selection"*,
+  // and OIDC Core §3.1.2.1 — the OP *"SHOULD prompt the End-User to select a user account"*. This OP has no
+  // account chooser because it holds no concurrent sessions; typing the username IS the selection, so what
+  // `select_account` changes here is that the form asks for one rather than assuming.
+  const selectAccount = (authz?.prompts ?? []).includes("SELECT_ACCOUNT");
   return {
-    username: "",
+    // Authlete: the `loginHint` response parameter *"should be referred to as a hint to determine the value
+    // of the login ID"*. Suppressed under `select_account` — prefilling an account is the opposite of
+    // asking the End-User to choose one, and the two parameters can legitimately arrive together.
+    username: selectAccount ? "" : authz?.loginHint || "",
     password: "",
     error: "",
+    selectAccount,
     clientName: authz?.clientName || "",
     clientId: authz?.clientId || "",
     ...overrides,
@@ -105,16 +114,22 @@ export function createSessionController(
     // `max_age` can genuinely fail is `authorization.controller.ts`'s `decideWithoutInteraction`, where
     // nobody re-authenticated.
     const stepUpFailure = checkStepUpRequirements(
-      { acrs: authz?.acrs, acrEssential: authz?.acrEssential, maxAge: authz?.maxAge },
-      { acr, authTime: authTimeNow },
+      {
+        subject: authz?.requestedSubject,
+        acrs: authz?.acrs,
+        acrEssential: authz?.acrEssential,
+        maxAge: authz?.maxAge,
+      },
+      { subject, acr, authTime: authTimeNow },
       authTimeNow
     );
     if (stepUpFailure) {
-      req.logger.info("RFC 9470: step-up requirements not satisfied at login", {
+      req.logger.info("authentication requirements not satisfied at login", {
         reason: stepUpFailure,
         requested: authz?.acrs,
         satisfied: acr,
         maxAge: authz?.maxAge,
+        subjectRequested: !!authz?.requestedSubject,
       });
       const failResponse = await authorizationServiceInstance.fail(
         authz?.authorizationIssueRequest?.ticket ?? "",

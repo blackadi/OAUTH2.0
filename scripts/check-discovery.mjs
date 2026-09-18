@@ -34,9 +34,17 @@ const UPDATE = argv.has("--update");
 // The document is served in three places that must agree. Reading one proves nothing about the
 // others — that is how this repo discovered it had been auditing a different Authlete service
 // than the one the public deployment used (SERVICE-CONFIG-PROBE.md §21.1).
+//
+// Overridable, because which host serves the baseline's service is an infrastructure decision that
+// changes: on 2026-09-17 the Render deployment was repointed to the FAPI service (2147478188) and the
+// curriculum service (3693555522) moved behind a local ngrok tunnel, whose hostname rotates. Set
+// `DISCOVERY_ORIGIN` to check whichever host currently serves the service the baseline describes.
+//
+//   DISCOVERY_ORIGIN=https://<tunnel>.ngrok-free.dev node scripts/check-discovery.mjs --live
+const ORIGIN = process.env.DISCOVERY_ORIGIN || "https://oauth2-0-ekh2.onrender.com";
 const SOURCES = [
-  "https://oauth2-0-ekh2.onrender.com/api/.well-known/openid-configuration",
-  "https://oauth2-0-ekh2.onrender.com/.well-known/oauth-authorization-server",
+  `${ORIGIN}/api/.well-known/openid-configuration`,
+  `${ORIGIN}/.well-known/oauth-authorization-server`,
 ];
 
 // The mapping the proposal asks for: a README feature status and the discovery member that would
@@ -154,6 +162,42 @@ if (!failures) pass(`all ${docs.length} sources serve the same ${memberSets[0].l
 const live = docs[0].doc;
 const liveMembers = memberSets[0];
 
+// ---- job 0: is this even the same service? ----
+//
+// The baseline has always recorded `issuer` and never compared it, and on 2026-09-17 that cost an
+// afternoon. The deployment was repointed at the other Authlete service mid-session; this script
+// dutifully reported "ADDED (1) / REMOVED (8)" and the reader spent the next hour hunting a service
+// flag that had never been touched. The member list had not drifted — it belonged to a different
+// service. Two services are in deliberate use here (`AGENTS.md` → Dev setup), so "which one am I
+// looking at?" is the FIRST question, not a footnote to the diff.
+//
+// `issuer` is the only discriminator a discovery document carries; the Authlete service id is not in
+// it. That is enough, because one service has exactly one issuer.
+const crossService = Boolean(baseline?.issuer && live.issuer && baseline.issuer !== live.issuer);
+console.log("\nService identity");
+console.log(`  baseline describes service ${baseline?.service ?? yellow("(unrecorded)")}, issuer ${baseline?.issuer ?? "—"}`);
+console.log(`  live document issuer        ${live.issuer ?? "—"}`);
+if (crossService) {
+  fail(`issuer differs from the baseline — resolve this before reading the diff below`);
+  console.log(
+    `    ${yellow("→")} two things produce this and they need opposite responses: a DIFFERENT service (the\n` +
+      `      diff below is that service's feature set, not a regression — repoint the deployment), or the\n` +
+      `      SAME service whose issuer was changed (the diff is real — re-baseline with --live --update\n` +
+      `      once you have explained it). A discovery document carries no service id, so this script\n` +
+      `      cannot tell you which. Check the service id in the Authlete console.`
+  );
+} else if (!baseline?.issuer) {
+  console.log(`  ${yellow("not checked")}: the baseline records no issuer`);
+} else {
+  // Deliberately NOT a ✓. A matching issuer is weak evidence and this check has already been fooled:
+  // on 2026-09-17 both services had been served at this host at different times, so the FAPI service
+  // inherited the issuer string the baseline had recorded from the curriculum service and the check
+  // read "matches" while the member list below belonged to somebody else entirely. An issuer MISMATCH
+  // proves two services; an issuer match proves nothing, because a discovery document carries no
+  // service id. Read the line above and decide.
+  console.log(`  ${yellow("~")} issuers agree, which is weak evidence — confirm the service id if the diff surprises you`);
+}
+
 // ---- job 1: member drift, BY NAME ----
 console.log(`\nMember drift (baseline captured ${baseline?.captured ?? "—"})`);
 if (baseline) {
@@ -166,13 +210,23 @@ if (baseline) {
     if (removed.length) fail(`REMOVED (${removed.length}): ${removed.join(", ")}`);
     console.log(
       `    ${yellow("→")} a member changed without a paired doc change is the DR-03 failure. Find what enabled it,\n` +
-        `      update the docs the flag gated, then re-baseline with --live --update.`
+        `      update the docs the flag gated, then re-baseline with --live --update.` +
+        (crossService ? `\n      ${yellow("!")} the issuer above does not match either — settle that first, it may be all of this.` : "")
     );
   }
 }
 
 // ---- job 2: claim drift ----
+//
+// The README describes the curriculum service. Run against the other one and every row it does not
+// implement reads as a broken promise, which is a sentence about the wrong service.
 console.log(`\nREADME claims vs the live document`);
+if (crossService) {
+  console.log(
+    `  ${yellow("read with the issuer line above in mind")}: if that is a different service, the README is\n` +
+      `      being held to promises it never made about it.`
+  );
+}
 const readme = readFileSync(README, "utf8");
 for (const { feature, member, expect } of CLAIMS) {
   const present = member in live && live[member] !== false;

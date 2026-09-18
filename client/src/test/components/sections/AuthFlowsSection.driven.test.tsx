@@ -19,6 +19,15 @@ import {
 } from '@/test/helpers/drive-section';
 
 /**
+ * The secret-less cases below state the absence rather than inheriting it from the developer's `.env`.
+ * See the identical note in `CallbackPage.test.tsx` for what reading the ambient value cost.
+ */
+vi.mock('@/config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config')>()),
+  CLIENT_SECRET: '',
+}));
+
+/**
  * Grant Flows — the headline section, and the one where the client-authentication rule is subtlest.
  *
  * **A public client authenticates with nothing, and "nothing" means the parameter is absent.** The

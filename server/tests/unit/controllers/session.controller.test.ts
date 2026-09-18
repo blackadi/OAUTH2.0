@@ -292,3 +292,115 @@ describe("SessionController — RFC 9470 OTP second factor", () => {
     expect(reqSession.otpPending).toBeUndefined()
   })
 })
+
+/**
+ * The three `/auth/authorization` response parameters this controller read and discarded until 2026-09-17.
+ *
+ * Authlete's INTERACTION documentation names all three, and the first is the one that matters:
+ * *"When the value of `subject` response parameter is not `null`, the end-user authentication must be
+ * performed for the subject"*. Authlete does not enforce it — `/auth/authorization/issue` takes whatever
+ * subject this OP supplies — so before this, a client that asked to authorize one specific user via
+ * `claims={"id_token":{"sub":{"value":"…"}}}` received a code for **whoever logged in**.
+ */
+describe("SessionController — the subject and hints Authlete returns", () => {
+  const SUBJECT = "sub-hints-1"
+
+  function hintAwareController() {
+    const issue = vi.fn().mockResolvedValue({ action: "LOCATION", responseContent: "https://rp.example.com/cb?code=abc" })
+    const fail = vi.fn().mockResolvedValue({ action: "LOCATION", responseContent: "https://rp.example.com/cb?error=x" })
+    const validateUser = vi.fn().mockResolvedValue({ subject: SUBJECT, name: "Hint User" })
+    const controller = createSessionController(
+      { validateUser } as never,
+      { issue, fail } as never,
+    )
+    return { controller, issue, fail, validateUser }
+  }
+
+  async function login(reqSession: Record<string, unknown>) {
+    const { controller, issue, fail } = hintAwareController()
+    const res = mockRes()
+    await controller.handleLogin(
+      mockReq({ login: "submit", username: "admin", password: "password" }, reqSession) as never,
+      res,
+      vi.fn() as unknown as NextFunction,
+    )
+    return { res, issue, fail }
+  }
+
+  it("refuses with DIFFERENT_SUBJECT when someone other than the requested subject authenticates", async () => {
+    const reqSession: Record<string, unknown> = {
+      authorization: {
+        authorizationIssueRequest: { ticket: TICKET, scopes: [] },
+        clientId: 9101,
+        requestedSubject: "somebody-else",
+      },
+    }
+
+    const { res, issue, fail } = await login(reqSession)
+
+    expect(fail).toHaveBeenCalledWith(TICKET, "DIFFERENT_SUBJECT")
+    expect(issue).not.toHaveBeenCalled()
+    expect(res.redirect).not.toHaveBeenCalledWith(expect.any(Number), expect.stringContaining("/session/consent"))
+  })
+
+  it("proceeds when the authenticated subject is the one the client asked for", async () => {
+    const reqSession: Record<string, unknown> = {
+      authorization: {
+        authorizationIssueRequest: { ticket: TICKET, scopes: [] },
+        clientId: 9102,
+        requestedSubject: SUBJECT,
+      },
+    }
+
+    const { res, fail } = await login(reqSession)
+
+    expect(fail).not.toHaveBeenCalled()
+    expect(reqSession.user).toBe(SUBJECT)
+    expect(res.redirect).toHaveBeenCalledWith(expect.any(Number), expect.stringContaining("/session/consent"))
+  })
+
+  it("leaves a request that named no subject completely unaffected (regression pin)", async () => {
+    const reqSession: Record<string, unknown> = {
+      authorization: { authorizationIssueRequest: { ticket: TICKET, scopes: [] }, clientId: 9103 },
+    }
+
+    const { res, fail } = await login(reqSession)
+
+    expect(fail).not.toHaveBeenCalled()
+    expect(res.redirect).toHaveBeenCalledWith(expect.any(Number), expect.stringContaining("/session/consent"))
+  })
+
+  it("prefills the username from login_hint", () => {
+    const { controller } = hintAwareController()
+    const res = mockRes()
+
+    controller.showLogin(
+      mockReq({}, { authorization: { clientId: 9104, loginHint: "jane@example.com" } }) as never,
+      res,
+    )
+
+    expect(res.render).toHaveBeenCalledWith(
+      "login",
+      expect.objectContaining({ username: "jane@example.com", selectAccount: false }),
+    )
+  })
+
+  // Prefilling an account is the opposite of asking the End-User to choose one, and OIDC Core §3.1.2.1
+  // permits both parameters on the same request — so the two have to be resolved rather than merged.
+  it("drops the login_hint prefill and asks for an account under prompt=select_account", () => {
+    const { controller } = hintAwareController()
+    const res = mockRes()
+
+    controller.showLogin(
+      mockReq({}, {
+        authorization: { clientId: 9105, loginHint: "jane@example.com", prompts: ["SELECT_ACCOUNT"] },
+      }) as never,
+      res,
+    )
+
+    expect(res.render).toHaveBeenCalledWith(
+      "login",
+      expect.objectContaining({ username: "", selectAccount: true }),
+    )
+  })
+})

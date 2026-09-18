@@ -76,4 +76,21 @@ describe("login.ejs", () => {
     expect(html).toContain('value="admin"')
     expect(html).not.toContain("Enter your credentials")
   })
+
+  /**
+   * Authlete's INTERACTION guidance: *"if `SELECT_ACCOUNT`, show account selection"*. This OP holds one
+   * session at a time and has no chooser, so the username field IS the selection — what the flag changes
+   * is that the form asks for one. `selectAccount` is read through `locals.`, so its absence must degrade
+   * to the ordinary form rather than throwing, which is the defect the top of this file exists for.
+   */
+  it("asks for an account only when select_account was requested", async () => {
+    const withFlag = await renderFile(LOGIN_VIEW, {
+      csrfToken: "csrf-token-value",
+      selectAccount: true,
+    })
+    expect(withFlag).toContain("Choose the account you want to use.")
+
+    const without = await renderFile(LOGIN_VIEW, { csrfToken: "csrf-token-value" })
+    expect(without).not.toContain("Choose the account you want to use.")
+  })
 })
