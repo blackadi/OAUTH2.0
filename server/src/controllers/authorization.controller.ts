@@ -82,6 +82,24 @@ function buildAuthorizationContext(
     acrEssential: result.acrEssential,
     maxAge: result.maxAge,
     /**
+     * The three things Authlete's `INTERACTION` documentation tells the OP to act on, which this server
+     * read off the response and threw away until 2026-09-17.
+     *
+     * - `requestedSubject` — *"When the value of `subject` response parameter is not `null`, the end-user
+     *   authentication must be performed for the subject"*. Sourced only from the `sub` claim of the
+     *   `claims` parameter, and **not enforced by Authlete**, so `utils/step-up.ts` is the only thing
+     *   standing between a client asking for one user and being handed a code for another.
+     * - `loginHint` — *"should be referred to as a hint to determine the value of the login ID"*.
+     * - `prompts` — *"if `SELECT_ACCOUNT`, show account selection"*.
+     *
+     * Renamed to `requestedSubject` rather than `subject`: `authorizationIssueRequest.subject` already
+     * exists on this object and means the opposite — the subject this OP *authenticated*, not the one the
+     * client demanded. Two fields called `subject` on one session object is a defect waiting for a reader.
+     */
+    requestedSubject: result.subject,
+    loginHint: result.loginHint,
+    prompts: result.prompts,
+    /**
      * The claim **names** the client asked to have in the ID token — not the claims request itself.
      *
      * `authorizationIssueRequest.claims` used to be set to `result.idTokenClaims` here, and that is the
@@ -110,7 +128,14 @@ async function decideWithoutInteraction(
   const clientId = result.client?.clientId;
   const requiredScopes = result.scopes?.map((scope: Scope) => scope.name as string) ?? [];
 
-  const fail = async (reason: "NOT_LOGGED_IN" | "CONSENT_REQUIRED" | "ACR_NOT_SATISFIED" | "EXCEEDS_MAX_AGE") => {
+  const fail = async (
+    reason:
+      | "NOT_LOGGED_IN"
+      | "CONSENT_REQUIRED"
+      | "DIFFERENT_SUBJECT"
+      | "ACR_NOT_SATISFIED"
+      | "EXCEEDS_MAX_AGE"
+  ) => {
     log.info("prompt=none cannot be satisfied silently", { reason, clientId, hasSubject: !!subject });
     const failResponse = await authorizationService.fail(ticket, reason);
     delete req.session.authorization;
@@ -125,11 +150,18 @@ async function decideWithoutInteraction(
     return fail("CONSENT_REQUIRED");
   }
 
-  // RFC 9470. This is the only path where these can genuinely fail: on the login POST the End-User has just
-  // actively authenticated, so any `max_age` is satisfied by construction. Here nobody re-authenticated.
+  // RFC 9470, plus Authlete's `subject` check. This is the only path where `maxAge` can genuinely fail: on
+  // the login POST the End-User has just actively authenticated, so it is satisfied by construction. Here
+  // nobody re-authenticated. `DIFFERENT_SUBJECT` can fail on either path — a stored session belonging to
+  // somebody other than the `sub` the client asked for is wrong however it was established.
   const stepUpFailure = checkStepUpRequirements(
-    { acrs: result.acrs, acrEssential: result.acrEssential, maxAge: result.maxAge },
-    req.session.stepUp ?? {},
+    {
+      subject: result.subject,
+      acrs: result.acrs,
+      acrEssential: result.acrEssential,
+      maxAge: result.maxAge,
+    },
+    { ...(req.session.stepUp ?? {}), subject },
     Math.floor(Date.now() / 1000)
   );
   if (stepUpFailure) return fail(stepUpFailure);

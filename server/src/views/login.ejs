@@ -9,6 +9,13 @@
       <% } else { %>
         <p>Enter your credentials to authorize this request.</p>
       <% } %>
+      <%# OIDC Core §3.1.2.1 `prompt=select_account`. No account chooser exists — this OP holds one session
+          at a time — so the selection IS the username field, and this line is what makes the form ask for
+          it rather than assume. `session.controller.ts`'s `loginViewLocals` also drops any `login_hint`
+          prefill when this is set. %>
+      <% if (locals.selectAccount) { %>
+        <p class="login-client-info">Choose the account you want to use.</p>
+      <% } %>
     </div>
 
     <% if (typeof error !== 'undefined' && error) { %>

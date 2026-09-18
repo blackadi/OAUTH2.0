@@ -14,6 +14,46 @@ describe("checkStepUpRequirements", () => {
     expect(checkStepUpRequirements({}, {}, NOW)).toBeNull()
   })
 
+  /**
+   * Authlete's `/auth/authorization` INTERACTION guidance: *"When the value of `subject` response parameter
+   * is not `null`, the end-user authentication must be performed for the subject"*. Authlete does **not**
+   * enforce it — `/auth/authorization/issue` accepts whatever subject this OP supplies — so if these cases
+   * do not hold, a client asking to authorize one user is handed a code for whoever logged in.
+   */
+  describe("subject", () => {
+    it("passes when the authenticated subject is the one the client asked for", () => {
+      expect(checkStepUpRequirements({ subject: "user-a" }, { subject: "user-a" }, NOW)).toBeNull()
+    })
+
+    it("fails when a different subject authenticated", () => {
+      expect(checkStepUpRequirements({ subject: "user-a" }, { subject: "user-b" }, NOW)).toBe(
+        "DIFFERENT_SUBJECT"
+      )
+    })
+
+    // Same fail-closed rule as an unknown `acr`: a subject we cannot name is one we cannot match.
+    it("fails when no subject was authenticated at all", () => {
+      expect(checkStepUpRequirements({ subject: "user-a" }, {}, NOW)).toBe("DIFFERENT_SUBJECT")
+    })
+
+    it("does not fail when the client asked for no particular subject", () => {
+      expect(checkStepUpRequirements({}, { subject: "user-b" }, NOW)).toBeNull()
+      expect(checkStepUpRequirements({}, {}, NOW)).toBeNull()
+    })
+
+    // The most specific failure wins: the other two ask whether the right person authenticated well enough,
+    // this one asks whether it was the right person at all.
+    it("reports DIFFERENT_SUBJECT ahead of an unsatisfied acr and an exceeded max_age", () => {
+      expect(
+        checkStepUpRequirements(
+          { subject: "user-a", acrs: ["mfa"], acrEssential: true, maxAge: 60 },
+          { subject: "user-b", acr: "pwd", authTime: NOW - 600 },
+          NOW
+        )
+      ).toBe("DIFFERENT_SUBJECT")
+    })
+  })
+
   describe("acr", () => {
     it("passes when an essential acr is satisfied", () => {
       expect(

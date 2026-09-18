@@ -213,7 +213,7 @@ export const AUTH_PARAMS: AuthParamSpec[] = [
     requirement: 'OPTIONAL',
     threat:
       'A high-value operation authorised by a password alone is the whole reason step-up exists. Requesting a stronger context is how a client refuses to accept weaker evidence than the action warrants.',
-    note: 'Space-separated authentication context classes, in preference order. This deployment authenticates with `pwd` and nothing else, so asking for anything else is how you trigger a step-up challenge. As a *voluntary* request an unmet value is merely not satisfied; to make it essential, use the `claims` parameter instead.',
+    note: 'Space-separated authentication context classes, in preference order. OIDC Core §3.1.2.1: *"The `acr` Claim is requested as a Voluntary Claim by this parameter"* — so an unmet value is merely not satisfied, and you get back whatever was actually performed. This deployment can satisfy `pwd` and, via a second factor, `otp`; `mfa` is registered but deliberately unsatisfiable. To make a value binding, request it through the `claims` parameter instead — that is the only difference between this panel ignoring it and the Step-Up panel enforcing it. RFC 9470 §5 recommends the stricter reading for access tokens; this deployment follows OIDC Core.',
     kind: 'text',
     placeholder: 'pwd urn:mace:incommon:iap:silver',
     group: 'oidc',
@@ -235,7 +235,7 @@ export const AUTH_PARAMS: AuthParamSpec[] = [
     label: 'login_hint',
     spec: 'OIDC Core §3.1.2.1',
     requirement: 'OPTIONAL',
-    note: 'A hint about which identifier the user will log in with, to pre-fill the login page.',
+    note: 'A hint about which identifier the user will log in with. This server pre-fills the sign-in form with it, per Authlete’s guidance that `loginHint` *"should be referred to as a hint to determine the value of the login ID"*. Suppressed when `prompt=select_account` is also sent — prefilling an account contradicts asking the user to choose one.',
     kind: 'text',
     placeholder: 'admin',
     group: 'oidc',
